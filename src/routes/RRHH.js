@@ -1035,6 +1035,59 @@ router.post(
   },
 );
 
+router.post(
+  "/areas/:id/miembros/:userId/mover",
+  requireRole.administrador(),
+  async (req, res) => {
+    const areaId = parsePositiveInt(req.params.id);
+    const userId = parsePositiveInt(req.params.userId);
+    const targetAreaId = parsePositiveInt(req.body.target_area_id);
+    if (!areaId || !userId || !targetAreaId) {
+      return redirectAreasError(res, "Datos inválidos.");
+    }
+    if (targetAreaId === areaId) {
+      return redirectAreasError(res, "Selecciona un área distinta.");
+    }
+
+    try {
+      const [targetResult, userResult] = await Promise.all([
+        db.query("SELECT id, area_name FROM work_areas WHERE id = $1", [
+          targetAreaId,
+        ]),
+        db.query(
+          "SELECT id, work_area_id FROM users WHERE id = $1",
+          [userId],
+        ),
+      ]);
+      if (!targetResult.rows.length) {
+        return redirectAreasError(res, "El área destino no existe.");
+      }
+      const user = userResult.rows[0];
+      if (!user) {
+        return redirectAreasError(res, "Colaborador no encontrado.");
+      }
+      if (Number(user.work_area_id) !== areaId) {
+        return redirectAreasError(res, "Colaborador no encontrado en esta área.");
+      }
+
+      await db.query("UPDATE users SET work_area_id = $1 WHERE id = $2", [
+        targetAreaId,
+        userId,
+      ]);
+      const destName = targetResult.rows[0].area_name;
+      return redirectAreasOk(
+        res,
+        destName
+          ? `Colaborador movido a «${destName}».`
+          : "Colaborador movido de área.",
+      );
+    } catch (err) {
+      console.error("Error moviendo colaborador:", err);
+      return redirectAreasError(res, "No se pudo mover el colaborador.");
+    }
+  },
+);
+
 // Sub-módulo de vacaciones montado bajo /RRHH/vacaciones
 const vacationsRouter = require("./vacations");
 router.use("/vacaciones", vacationsRouter);

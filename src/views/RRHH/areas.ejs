@@ -8,7 +8,7 @@
 %>
 
 <link rel="stylesheet" href="/css/personal.css?v=20260902">
-<link rel="stylesheet" href="/css/areas.css?v=20260903">
+<link rel="stylesheet" href="/css/areas.css?v=20260907">
 
 <div id="popup" class="popup-notification <%= successMsg ? 'success show' : errorMsg ? 'error show' : '' %>" role="status">
   <span><%= successMsg || errorMsg || '' %></span>
@@ -88,10 +88,22 @@
                 <% } %>
                 <span class="area-member__name" title="<%= m.nombreCompleto %>"><%= m.nombreLista %></span>
                 <% if (puedeEditar) { %>
-                <form action="/RRHH/areas/<%= area.id %>/miembros/<%= m.id %>/quitar" method="POST" class="area-inline-form"
-                      data-quitar-miembro="<%= m.nombreLista %>">
-                  <button type="submit" class="area-member__remove" title="Quitar del área" aria-label="Quitar a <%= m.nombreLista %>">×</button>
-                </form>
+                <div class="area-member__actions">
+                  <button type="button" class="area-member__swap" data-mover-miembro
+                          data-user-id="<%= m.id %>"
+                          data-nombre="<%= m.nombreLista %>"
+                          data-area-id="<%= area.id %>"
+                          data-area-name="<%= area.area_name %>"
+                          <%= listado.length < 2 ? 'disabled' : '' %>
+                          title="<%= listado.length < 2 ? 'No hay otras áreas para mover' : 'Cambiar de área' %>"
+                          aria-label="Cambiar de área a <%= m.nombreLista %>">
+                    <%- include('../partials/icon', { name: 'repeat' }) %>
+                  </button>
+                  <form action="/RRHH/areas/<%= area.id %>/miembros/<%= m.id %>/quitar" method="POST" class="area-inline-form"
+                        data-quitar-miembro="<%= m.nombreLista %>">
+                    <button type="submit" class="area-member__remove" title="Quitar del área" aria-label="Quitar a <%= m.nombreLista %>">×</button>
+                  </form>
+                </div>
                 <% } %>
               </li>
             <% }) %>
@@ -135,6 +147,20 @@
                   <span class="avatar-fallback <%= m.paletaAvatar %> area-member__avatar" aria-hidden="true"><%= m.inicial %></span>
                 <% } %>
                 <span class="area-member__name" title="<%= m.nombreCompleto %>"><%= m.nombreLista %></span>
+                <% if (puedeEditar) { %>
+                <div class="area-member__actions">
+                  <button type="button" class="area-member__swap" data-mover-miembro
+                          data-user-id="<%= m.id %>"
+                          data-nombre="<%= m.nombreLista %>"
+                          data-area-id=""
+                          data-area-name=""
+                          <%= listado.length < 1 ? 'disabled' : '' %>
+                          title="<%= listado.length < 1 ? 'Crea un área para asignar colaboradores' : 'Asignar área' %>"
+                          aria-label="Asignar área a <%= m.nombreLista %>">
+                    <%- include('../partials/icon', { name: 'repeat' }) %>
+                  </button>
+                </div>
+                <% } %>
               </li>
             <% }) %>
           </ul>
@@ -145,6 +171,27 @@
 </div>
 
 <% if (puedeEditar) { %>
+<div id="modalMoverMiembro" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalMoverTitle" aria-hidden="true">
+  <div class="modal-content">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <h2 id="modalMoverTitle" class="modal-title">Cambiar de área</h2>
+    <p class="area-mover-subtitle" id="modalMoverSubtitle"></p>
+    <form id="formMoverMiembro" method="POST" action="#">
+      <input type="hidden" name="user_id" id="mover_user_id" value="">
+      <div class="campo">
+        <label for="target_area_id">Área destino <span class="required-mark">*</span></label>
+        <select id="target_area_id" name="target_area_id" required>
+          <option value="">Selecciona un área…</option>
+        </select>
+      </div>
+      <div class="modal-form-actions">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario" id="modalMoverSubmit">Mover</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="modalArea" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalAreaTitle" aria-hidden="true">
   <div class="modal-content">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
@@ -180,5 +227,6 @@
 <script type="application/json" id="areas-config"><%- JSON.stringify({
   puedeEditar,
   defaultColor: defaultColor || '#5a6879',
+  areas: listado.map((a) => ({ id: a.id, area_name: a.area_name })),
 }).replace(/</g, '\\u003c') %></script>
-<script src="/js/areas.js?v=20260902" defer></script>
+<script src="/js/areas.js?v=20260907b" defer></script>

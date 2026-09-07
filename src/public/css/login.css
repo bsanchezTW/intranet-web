@@ -411,8 +411,8 @@ body.login-split-page {
 }
 
 .login-register-photo .profile-photo-preview--dark {
-  border-color: var(--color-border-strong, rgba(0, 58, 112, 0.12));
-  background: rgba(255, 255, 255, 0.65);
+  --photo-ring: var(--color-border-strong, rgba(0, 58, 112, 0.12));
+  --photo-fill: rgba(255, 255, 255, 0.65);
 }
 
 .login-register-photo .profile-photo-preview--dark .profile-photo-placeholder svg {

@@ -173,11 +173,94 @@
     });
   }
 
+  function initMoverMiembro(config) {
+    var overlay = document.getElementById('modalMoverMiembro');
+    var form = document.getElementById('formMoverMiembro');
+    var select = document.getElementById('target_area_id');
+    var subtitle = document.getElementById('modalMoverSubtitle');
+    var titulo = document.getElementById('modalMoverTitle');
+    var submit = document.getElementById('modalMoverSubmit');
+    var hiddenUser = document.getElementById('mover_user_id');
+    if (!overlay || !form || !select) return;
+
+    var areas = Array.isArray(config.areas) ? config.areas : [];
+    var estado = { nombre: '', areaName: '', areaId: '', userId: '' };
+
+    function llenarDestinos(areaActualId) {
+      var actual = String(areaActualId || '');
+      select.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Selecciona un área…';
+      select.appendChild(placeholder);
+      areas.forEach(function (area) {
+        if (String(area.id) === actual) return;
+        var option = document.createElement('option');
+        option.value = area.id;
+        option.textContent = area.area_name || ('Área ' + area.id);
+        select.appendChild(option);
+      });
+    }
+
+    document.addEventListener('click', function (evento) {
+      var btn = evento.target && evento.target.closest
+        ? evento.target.closest('[data-mover-miembro]')
+        : null;
+      if (!btn || btn.disabled) return;
+      var userId = btn.dataset.userId;
+      if (!userId) return;
+
+      estado.userId = userId;
+      estado.areaId = btn.dataset.areaId || '';
+      estado.nombre = btn.dataset.nombre || 'este colaborador';
+      estado.areaName = btn.dataset.areaName || '';
+      if (hiddenUser) hiddenUser.value = userId;
+
+      if (estado.areaId) {
+        form.action = '/RRHH/areas/' + encodeURIComponent(estado.areaId) +
+          '/miembros/' + encodeURIComponent(userId) + '/mover';
+        if (titulo) titulo.textContent = 'Cambiar de área';
+        if (submit) submit.textContent = 'Mover';
+      } else {
+        form.action = '#';
+        if (titulo) titulo.textContent = 'Asignar área';
+        if (submit) submit.textContent = 'Asignar';
+      }
+
+      llenarDestinos(estado.areaId);
+      if (subtitle) {
+        subtitle.textContent = estado.areaName
+          ? estado.nombre + ' está en «' + estado.areaName + '». Elige el área de destino.'
+          : 'Elige el área para ' + estado.nombre + '.';
+      }
+      if (window.IntranetModal) window.IntranetModal.open(overlay);
+      select.focus();
+    });
+
+    form.addEventListener('submit', function (evento) {
+      var option = select.selectedOptions && select.selectedOptions[0];
+      if (!option || !option.value) return;
+      var destino = option.textContent || 'esa área';
+      if (!estado.areaId) {
+        form.action = '/RRHH/areas/' + encodeURIComponent(option.value) + '/miembros';
+      }
+      var mensaje = estado.areaName
+        ? '¿Mover a ' + estado.nombre + ' de «' + estado.areaName + '» a «' + destino + '»?'
+        : '¿Asignar a ' + estado.nombre + ' a «' + destino + '»?';
+      if (!window.confirm(mensaje)) {
+        evento.preventDefault();
+      }
+    });
+  }
+
   function init() {
     var config = leerConfig();
     initPopup();
     initConfirmaciones();
-    if (config.puedeEditar) initModal(config);
+    if (config.puedeEditar) {
+      initModal(config);
+      initMoverMiembro(config);
+    }
   }
 
   if (document.readyState === 'loading') {
