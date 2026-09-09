@@ -50,3 +50,837 @@
     max-height: 92vh;
   }
 }
+
+/* ══════════ Tarjeta de ticket: cabecera, cuerpo y pie ══════════ */
+
+/*
+ * Vive aquí y no en tickets.css porque el modal de "abrir ticket" se renderiza
+ * en layout.ejs y se abre desde cualquier página; tickets.css sólo se carga en
+ * /sistemas/tickets. El detalle y el alta comparten esta misma estructura.
+ */
+
+/* ── Estado del ticket (píldora; la usan el listado y la cabecera) ── */
+.ticket-estado {
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.ticket-estado--open {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: rgba(15, 76, 129, 0.18);
+}
+
+.ticket-estado--in_progress,
+.ticket-estado--pending_close {
+  background: rgba(224, 163, 60, 0.14);
+  color: #8a5d09;
+  border-color: rgba(224, 163, 60, 0.32);
+}
+
+.ticket-estado--closed {
+  background: var(--surface2);
+  color: var(--color-text-subtle);
+  border-color: var(--color-border-strong);
+}
+
+/* ══════════ Detalle de ticket (modal y página completa) ══════════ */
+
+.ticket-detail-view {
+  color: var(--color-text);
+}
+
+.ticket-detail-back {
+  margin-bottom: 16px;
+}
+
+.ticket-detail-view .link-volver {
+  color: var(--color-link);
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.ticket-detail-view .link-volver:hover {
+  text-decoration: underline;
+}
+
+.ticket-container {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/*
+ * Dentro del modal el panel deja de scrollear como bloque único: la cabecera y
+ * el pie quedan fijos y sólo el cuerpo se desplaza. Así el botón de cerrar no
+ * se va con el scroll ni se monta sobre el título.
+ */
+.modal-content2.modal-ticket-detail-content,
+.modal-content2.modal-ticket-create-content {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Cadena de contenedores hasta el cuerpo scrolleable: el panel, el hueco donde
+   se inyecta el detalle, la vista y la tarjeta (y el <form> cuando el
+   formulario es quien contiene cuerpo y pie, como al crear un ticket). */
+.modal-ticket-detail-content > #modalVerTicketDetalleBody,
+.ticket-detail-view--modal,
+.ticket-detail-view--modal > .ticket-container,
+.ticket-detail-view--modal > .ticket-container > .ticket-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.ticket-detail-view--modal > .ticket-container {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* ── Cabecera fija ── */
+.ticket-head {
+  flex-shrink: 0;
+  padding: 20px 24px 16px;
+  /* Deja libre la esquina del botón de cerrar del modal. */
+  padding-right: 60px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.ticket-head__tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.ticket-head__id {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-head__asignado {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--color-text-subtle);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.ticket-head__asignado--activo {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+.ticket-head__titulo {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--color-heading);
+  overflow-wrap: anywhere;
+}
+
+.ticket-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.ticket-head__sep {
+  color: var(--color-text-subtle);
+}
+
+/* Píldora de prioridad, hermana de .ticket-estado del listado. */
+.ticket-prio {
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.ticket-prio--high {
+  background: rgba(208, 92, 92, 0.14);
+  color: #a33b3b;
+  border-color: rgba(208, 92, 92, 0.3);
+}
+
+.ticket-prio--medium {
+  background: rgba(224, 163, 60, 0.14);
+  color: #8a5d09;
+  border-color: rgba(224, 163, 60, 0.32);
+}
+
+.ticket-prio--low {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: rgba(15, 76, 129, 0.18);
+}
+
+/* ── Cuerpo con scroll ── */
+.ticket-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 24px 22px;
+}
+
+.ticket-bloque + .ticket-bloque,
+.ticket-bloque + .ticket-confirmar {
+  margin-top: 22px;
+}
+
+.ticket-bloque__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.ticket-bloque__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+.ticket-descripcion {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+}
+
+.ticket-descripcion__texto {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+/* ── Hilo de mensajes ── */
+.ticket-hilo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ticket-msg {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  /* Franja de color que distingue de un vistazo quién escribió. */
+  border-left: 3px solid var(--color-border-strong);
+}
+
+.ticket-msg--soporte {
+  border-left-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.ticket-msg--usuario {
+  border-left-color: var(--green-deep);
+}
+
+.ticket-msg__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.ticket-msg__autor {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-heading);
+}
+
+.ticket-msg__fecha {
+  font-size: 0.76rem;
+  color: var(--color-text-subtle);
+}
+
+.ticket-msg__texto {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.ticket-hilo-vacio {
+  margin: 0;
+  padding: 18px;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px dashed var(--color-border-strong);
+  color: var(--color-text-subtle);
+  font-size: 0.88rem;
+}
+
+/* ── Confirmación del solicitante (tickets heredados) ── */
+.ticket-confirmar {
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(224, 163, 60, 0.35);
+  background: rgba(224, 163, 60, 0.1);
+}
+
+.ticket-confirmar__title {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-heading);
+}
+
+.ticket-confirmar__text {
+  margin: 0 0 12px;
+  font-size: 0.86rem;
+  color: var(--color-text-muted);
+}
+
+.ticket-confirmar__acciones {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Pie de acciones fijo ── */
+.ticket-foot {
+  flex-shrink: 0;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.ticket-foot--cerrado {
+  padding: 18px 24px;
+  text-align: center;
+}
+
+.ticket-foot__cerrado-txt {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+
+.ticket-gestion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ticket-gestion__campos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ticket-campo {
+  display: block;
+  min-width: 0;
+}
+
+.ticket-campo__label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.ticket-campo__opt {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.ticket-body > .ticket-campo + .ticket-campo,
+.ticket-body > .ticket-campo + .ticket-gestion__campos,
+.ticket-body > .ticket-gestion__campos + .ticket-campo {
+  margin-top: 14px;
+}
+
+.ticket-detail-view textarea,
+.ticket-detail-view select,
+.ticket-detail-view input[type="text"] {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.ticket-detail-view textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.ticket-detail-view textarea:focus,
+.ticket-detail-view select:focus,
+.ticket-detail-view input[type="text"]:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.char-counter {
+  margin-top: 4px;
+  text-align: right;
+  font-size: 0.74rem;
+  color: var(--color-text-subtle);
+}
+
+.char-counter.limit-reached {
+  color: #d05c5c;
+  font-weight: 700;
+}
+
+.ticket-gestion__barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ticket-adjuntar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ticket-adjuntar__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ticket-adjuntar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s;
+}
+
+.ticket-adjuntar:hover .ticket-adjuntar__btn,
+.ticket-adjuntar__input:focus-visible + .ticket-adjuntar__btn {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.ticket-upload-status {
+  font-size: 0.78rem;
+  color: var(--color-text-subtle);
+  overflow-wrap: anywhere;
+}
+
+.ticket-gestion__acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Botones ── */
+.ticket-btn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.18s, background 0.18s, border-color 0.18s;
+  white-space: nowrap;
+}
+
+.ticket-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.ticket-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ticket-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.ticket-btn--primary {
+  background: var(--ink);
+  color: var(--color-bg);
+}
+
+.ticket-btn--ghost {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.ticket-btn--ghost:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.ticket-btn--ok {
+  background: var(--green-deep);
+  color: #ffffff;
+}
+
+/*
+ * Cerrar es la acción que termina el ticket: se destaca en verde corporativo,
+ * no compite en gris con el resto de la barra.
+ *
+ * El verde no sale de --green-deep (#5c8f1d) porque contra blanco se queda en
+ * 3.9:1 y la etiqueta del botón no llega al tamaño de "texto grande"; este tono
+ * mantiene la familia y sube a ~5:1.
+ */
+.ticket-btn--cerrar {
+  --cerrar-bg: #4f7a19;
+  --cerrar-bg-hover: #3d5f12;
+  --cerrar-fg: #ffffff;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--cerrar-bg);
+  color: var(--cerrar-fg);
+  box-shadow: 0 1px 2px rgba(13, 31, 51, 0.12);
+}
+
+.ticket-btn--cerrar:hover:not(:disabled) {
+  background: var(--cerrar-bg-hover);
+}
+
+/* En oscuro se invierte: verde claro con tinta oscura. */
+html[data-theme="dark"] .ticket-btn--cerrar {
+  --cerrar-bg: var(--corp-green);
+  --cerrar-bg-hover: #bce36e;
+  --cerrar-fg: #0d1f33;
+}
+
+/* ── Paso de asignación ── */
+/* Cubre la tarjeta completa (el ancestro posicionado es .ticket-container),
+   no sólo el pie, para que la elección quede por encima de todo el ticket. */
+.ticket-asignar {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  background: var(--color-overlay);
+  animation: fadeIn 0.16s ease both;
+}
+
+/* `display: flex` de la clase gana al `display: none` del atributo `hidden`,
+   así que el ocultamiento se declara explícitamente. */
+.ticket-asignar[hidden] {
+  display: none;
+}
+
+.ticket-asignar__card {
+  width: 100%;
+  max-width: 460px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ticket-asignar__title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-heading);
+}
+
+.ticket-asignar__hint {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.ticket-asignar__ops {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ticket-asignar__op {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.ticket-asignar__op:hover {
+  border-color: var(--brand);
+}
+
+.ticket-asignar__op:has(input:checked) {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.ticket-asignar__op:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ticket-asignar__op input {
+  margin-top: 2px;
+  accent-color: var(--brand);
+}
+
+.ticket-asignar__op-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 0.86rem;
+}
+
+.ticket-asignar__op-txt span {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.ticket-asignar__select:disabled {
+  opacity: 0.55;
+}
+
+.ticket-asignar__error {
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #d05c5c;
+}
+
+.ticket-asignar__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ── Estado de subida ── */
+.ticket-status-text { color: var(--color-link); }
+.ticket-status-text--success { color: var(--green-ink); }
+.ticket-status-text--warning { color: #8a5d09; }
+.ticket-status-text--error { color: #d05c5c; }
+
+
+.adjuntos-wrapper {
+  margin-top: 15px;
+  border-top: 1px solid #eeeeee;
+  padding-top: 10px;
+}
+
+.adjuntos-wrapper--reply {
+  border-top-color: #dddddd;
+}
+
+.seccion-adjunto {
+  margin-bottom: 15px;
+}
+
+.titulo-adjunto {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: inherit;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.grid-imagenes {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.thumb-imagen {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #cccccc;
+  transition: transform 0.2s;
+}
+
+.thumb-imagen--small {
+  width: 80px;
+  height: 80px;
+}
+
+.thumb-imagen:hover {
+  transform: scale(1.05);
+}
+
+.lista-archivos {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.lista-archivos li {
+  margin-bottom: 5px;
+}
+
+.lista-archivos a {
+  text-decoration: none;
+  color: #0056b3;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.lista-archivos a:hover {
+  text-decoration: underline;
+}
+
+/* ── Modo oscuro: sólo lo que no sale de tokens ── */
+html[data-theme="dark"] .ticket-estado--in_progress,
+html[data-theme="dark"] .ticket-estado--pending_close,
+html[data-theme="dark"] .ticket-prio--medium,
+html[data-theme="dark"] .ticket-status-text--warning {
+  color: #e8b860;
+}
+
+html[data-theme="dark"] .ticket-prio--high {
+  color: #e88f8f;
+}
+
+@media (max-width: 768px) {
+  /* Detalle: menos aire lateral y acciones a lo ancho. */
+  .ticket-head {
+    padding: 16px 16px 14px;
+    padding-right: 54px;
+  }
+
+  .ticket-body {
+    padding: 16px;
+  }
+
+  .ticket-foot {
+    padding: 12px 16px 14px;
+  }
+
+  .ticket-gestion__campos {
+    grid-template-columns: 1fr;
+  }
+
+  /* El pie no puede comerse la pantalla: el hilo tiene que seguir visible. */
+  .ticket-foot textarea {
+    height: 58px;
+  }
+
+  .ticket-gestion__barra {
+    align-items: stretch;
+  }
+
+  .ticket-gestion__acciones {
+    width: 100%;
+  }
+
+  .ticket-gestion__acciones .ticket-btn {
+    flex: 1 1 auto;
+  }
+
+  .ticket-confirmar__acciones,
+  .ticket-confirmar__acciones form {
+    flex: 1 1 auto;
+  }
+
+  .ticket-confirmar__acciones .ticket-btn {
+    width: 100%;
+  }
+
+  .ticket-asignar {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .ticket-asignar__card {
+    max-width: none;
+    border-radius: 14px 14px 0 0;
+    align-self: flex-end;
+  }
+}
