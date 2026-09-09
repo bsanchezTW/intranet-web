@@ -11,6 +11,15 @@ const { getIndicadores } = require("../services/usdService");
 const { getWeather } = require("../services/weatherService");
 const linkedinService = require("../services/linkedinService");
 const { ROLES, isAdministrador, normalizeRole } = require("../constants/roles");
+const {
+  APP_CATALOGS,
+  normalizeAppCatalog,
+  appCatalogPath,
+} = require("../constants/appCatalogs");
+const {
+  listAppsByCatalog,
+  reorderAppsInCatalog,
+} = require("../services/appCatalogService");
 const { getLocale, getCountryConfig } = require("../config/country");
 const { isFeatureEnabled } = require("../config/features");
 const requireRole = require("../middlewares/requireRole");
@@ -407,7 +416,7 @@ router.get("/", async (req, res) => {
         : null;
     }
 
-    res.render("home", {
+    await res.render("home", {
       // El sufijo por país lo añade formatPageTitle en la vista.
       titulo: "Home",
       finanzas: dataFinanciera,
@@ -1429,20 +1438,10 @@ router.get("/apps/qr", requireRole.intranetActivo(), async (req, res) => {
 
 router.get("/apps", requireRole.intranetActivo(), async (req, res) => {
     try {
-      const { rows } = await db.query(
-        "SELECT * FROM applications ORDER BY created_at DESC",
-      );
       res.render("ver-apps", {
         titulo: "Aplicaciones | Transworld",
-        apps: rows.map((app) => ({
-          ...app,
-          nombre: app.name ?? app.nombre,
-          descripcion: app.description ?? app.descripcion,
-          fecha_creacion: app.created_at ?? app.fecha_creacion,
-          ultima_actualizacion: app.updated_at ?? app.ultima_actualizacion,
-          cambios: app.changelog ?? app.cambios,
-          notificado: app.notified ?? app.notificado,
-        })),
+        apps: await listAppsByCatalog(APP_CATALOGS.CORPORATE),
+        appCatalog: APP_CATALOGS.CORPORATE,
         user: req.session.user,
         ok: req.query.ok,
       });
@@ -1452,6 +1451,24 @@ router.get("/apps", requireRole.intranetActivo(), async (req, res) => {
     }
   },
 );
+
+/** Guarda el orden manual de las tarjetas de un catálogo. */
+router.post("/apps/orden", requireRole.administrador(), async (req, res) => {
+  const catalog = normalizeAppCatalog(req.body.catalog);
+  const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+
+  if (ids.length === 0) {
+    return res.status(400).json({ ok: false, error: "No se recibió el orden." });
+  }
+
+  try {
+    const actualizadas = await reorderAppsInCatalog(catalog, ids);
+    res.json({ ok: true, actualizadas });
+  } catch (err) {
+    console.error("Error al guardar el orden de aplicaciones:", err);
+    res.status(500).json({ ok: false, error: "No se pudo guardar el orden." });
+  }
+});
 
 const uploadFileLocally = async (buffer, folder, fileName) => {
   return fileStorage.saveFile(buffer, folder, fileName);
@@ -1496,6 +1513,7 @@ router.post(
     const name = req.body.name ?? req.body.nombre;
     const description = req.body.description ?? req.body.descripcion;
     const { url_pc, url_apk, url_web } = req.body;
+    const catalog = normalizeAppCatalog(req.body.catalog);
     let icon_url = null;
     let url_ios = null;
 
@@ -1515,8 +1533,8 @@ router.post(
       }
 
       await db.queryRetryIdCollision(
-        `INSERT INTO applications (name, description, url_pc, url_apk, url_ios, url_web, icon_url, notified) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, false)`,
+        `INSERT INTO applications (name, description, url_pc, url_apk, url_ios, url_web, icon_url, catalog, notified)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)`,
         [
           name,
           description,
@@ -1525,10 +1543,13 @@ router.post(
           url_ios,
           url_web || null,
           icon_url,
+          catalog,
         ],
       );
 
-      res.redirect("/apps?ok=Aplicación+registrada+correctamente");
+      res.redirect(
+        `${appCatalogPath(catalog)}?ok=Aplicación+registrada+correctamente`,
+      );
     } catch (err) {
       console.error("Error al guardar aplicación:", err);
       if (err.statusCode === 400) {
@@ -1552,10 +1573,13 @@ router.post(
 
     try {
       const { rows: existingRows } = await db.query(
-        "SELECT icon_url, url_ios FROM applications WHERE id = $1",
+        "SELECT icon_url, url_ios, catalog FROM applications WHERE id = $1",
         [id],
       );
       const existing = existingRows[0] || {};
+      // El catálogo no se edita desde el formulario: la app vuelve a la vista
+      // desde la que se abrió el modal.
+      const catalog = normalizeAppCatalog(existing.catalog);
 
       let updateQuery = `UPDATE applications SET name = $1, description = $2, url_pc = $3, url_apk = $4, url_web = $5, updated_at = NOW(), notified = false`;
       let queryParams = [
@@ -1599,7 +1623,9 @@ router.post(
         });
       }
 
-      res.redirect("/apps?ok=Aplicación+actualizada+correctamente");
+      res.redirect(
+        `${appCatalogPath(catalog)}?ok=Aplicación+actualizada+correctamente`,
+      );
     } catch (err) {
       console.error("Error al editar aplicación:", err);
       if (err.statusCode === 400) {
@@ -1617,10 +1643,11 @@ router.post(
     const { id } = req.params;
     try {
       const { rows } = await db.query(
-        "SELECT icon_url, url_ios FROM applications WHERE id = $1",
+        "SELECT icon_url, url_ios, catalog FROM applications WHERE id = $1",
         [id],
       );
       const app = rows[0];
+      const catalog = normalizeAppCatalog(app && app.catalog);
 
       await db.query("DELETE FROM applications WHERE id = $1", [id]);
 
@@ -1632,7 +1659,7 @@ router.post(
           });
       }
 
-      res.redirect("/apps?ok=Aplicación+eliminada+con+éxito");
+      res.redirect(`${appCatalogPath(catalog)}?ok=Aplicación+eliminada+con+éxito`);
     } catch (err) {
       console.error("Error al eliminar aplicación:", err);
       res.status(500).send("Error al eliminar la aplicación.");
@@ -1660,12 +1687,15 @@ router.post("/apps/notificar/:id", requireRole.administrador(), async (req, res)
 
   try {
     const { rows: appRows } = await db.query(
-      "UPDATE applications SET changelog = $1, notified = true WHERE id = $2 RETURNING name AS nombre",
+      "UPDATE applications SET changelog = $1, notified = true WHERE id = $2 RETURNING name AS nombre, catalog",
       [cambios_texto, id],
     );
 
     if (appRows.length === 0) return res.status(404).send("App no encontrada");
     const nombreApp = appRows[0].nombre;
+    const catalog = normalizeAppCatalog(appRows[0].catalog);
+    const esSoporte = catalog === APP_CATALOGS.SUPPORT;
+    const rutaCatalogo = appCatalogPath(catalog);
 
     const { rows: usuarios } = await db.query(
       `SELECT email FROM users
@@ -1678,7 +1708,7 @@ router.post("/apps/notificar/:id", requireRole.administrador(), async (req, res)
       const htmlCorreo = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
           <div style="background-color: #003a70; padding: 20px; text-align: center;">
-            <h2 style="color: white; margin: 0;">Actualización de Aplicación</h2>
+            <h2 style="color: white; margin: 0;">${esSoporte ? "Actualización de Herramienta de Soporte" : "Actualización de Aplicación"}</h2>
           </div>
           <div style="padding: 25px; background-color: #ffffff;">
             <h3 style="color: #003a70; margin-top: 0;">${nombreApp}</h3>
@@ -1687,9 +1717,9 @@ router.post("/apps/notificar/:id", requireRole.administrador(), async (req, res)
               ${cambios_texto.replace(/\n/g, "<br>")}
             </div>
             <div style="text-align: center; margin-top: 35px; margin-bottom: 10px;">
-              <a href="${process.env.APP_BASE_URL || "http://localhost:3000"}/apps" 
+              <a href="${process.env.APP_BASE_URL || "http://localhost:3000"}${rutaCatalogo}"
                  style="display: inline-block; background-color: #ffffff; color: #003a70; border: 3px solid #003a70; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                Ir a Descargas
+                ${esSoporte ? "Ir a Autoayuda" : "Ir a Descargas"}
               </a>
             </div>
           </div>
@@ -1704,7 +1734,7 @@ router.post("/apps/notificar/:id", requireRole.administrador(), async (req, res)
       });
     }
 
-    res.redirect("/apps?ok=Notificación+enviada+con+éxito");
+    res.redirect(`${rutaCatalogo}?ok=Notificación+enviada+con+éxito`);
   } catch (err) {
     console.error("Error al notificar app:", err);
     res.status(500).send("Error al enviar la notificación.");

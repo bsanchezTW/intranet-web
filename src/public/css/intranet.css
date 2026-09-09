@@ -588,6 +588,11 @@ html[data-theme="dark"] .mobile-sidebar .sub-menu {
 .mobile-sidebar a.mobile-sidebar__profile .nav-user-photo,
 .mobile-sidebar a.mobile-sidebar__profile .nav-user-avatar {
   flex-shrink: 0;
+}
+
+/* Sólo la foto va como bloque: el avatar de inicial necesita conservar su
+   `display: flex`, que es lo que centra la letra dentro del círculo. */
+.mobile-sidebar a.mobile-sidebar__profile .nav-user-photo {
   display: block;
 }
 

@@ -158,6 +158,9 @@ async function ensureWorkAreaSchema() {
          AND (w.color IS NULL OR lower(w.color) = lower($3))`,
       [names, colors, DEFAULT_COLOR],
     );
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
   } finally {
     client.release();
   }

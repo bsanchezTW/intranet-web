@@ -61,6 +61,12 @@
   display: block;
 }
 
+/* `display: block` de la regla anterior gana al `display: none` del atributo
+   `hidden`, así que sin esto la imagen vacía tapa el placeholder. */
+.profile-photo-preview img[hidden] {
+  display: none;
+}
+
 /* ── Oculta el placeholder cuando hay foto ── */
 .profile-photo-preview img:not([hidden]) ~ .profile-photo-placeholder {
   display: none;

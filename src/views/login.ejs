@@ -30,6 +30,10 @@
 
         <div class="login-auth-stage login-auth-stage--enter" id="loginAuthStage">
 
+        <!-- Todo salvo la ayuda va aquí dentro: así el bloque se centra
+             verticalmente y los teléfonos quedan anclados abajo. -->
+        <div class="login-auth-main" id="loginAuthMain">
+
         <div class="login-split__brand" id="loginAuthBrand"<% if (activeView === 'register') { %> hidden<% } %>>
           <img src="/img/favicon.png" alt="Transworld" class="login-split__logo">
         </div>
@@ -153,17 +157,21 @@
 
           <form action="/register" method="POST" enctype="multipart/form-data" novalidate id="register-form">
             <input type="file" id="foto_file" name="foto_file" accept="image/*" hidden>
+            <p class="login-form-section">Datos personales</p>
             <div class="login-form-grid-2">
               <div class="login-field">
                 <label class="login-field__label" for="first_name">Nombre</label>
                 <input type="text" id="first_name" name="first_name" class="login-field__input" value="<%= fd.first_name || '' %>" required<% if (activeView === 'register') { %> autofocus<% } %>>
+                <p class="login-field__error" data-error-for="first_name" hidden></p>
               </div>
               <div class="login-field">
                 <label class="login-field__label" for="last_name">Apellido</label>
                 <input type="text" id="last_name" name="last_name" class="login-field__input" value="<%= fd.last_name || '' %>" required>
+                <p class="login-field__error" data-error-for="last_name" hidden></p>
               </div>
             </div>
 
+            <p class="login-form-section">Acceso</p>
             <div class="login-field login-field--username">
               <label class="login-field__label" for="reg-username">Usuario</label>
               <div class="login-username-row">
@@ -199,6 +207,7 @@
                   </button>
                 </div>
               </div>
+              <p class="login-field__error" data-error-for="reg-username" hidden></p>
             </div>
 
             <div class="login-form-grid-2">
@@ -208,6 +217,7 @@
                 <button type="button" class="login-field__toggle" tabindex="-1" onclick="toggleVisibility('reg-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
+                <p class="login-field__error" data-error-for="reg-password" hidden></p>
               </div>
               <div class="login-field login-field--password">
                 <label class="login-field__label" for="reg-password2">Repetir contraseña</label>
@@ -215,6 +225,7 @@
                 <button type="button" class="login-field__toggle" tabindex="-1" onclick="toggleVisibility('reg-password2', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
+                <p class="login-field__error" data-error-for="reg-password2" hidden></p>
               </div>
             </div>
 
@@ -238,6 +249,7 @@
 
             <div class="login-password-match" id="password-match-msg" hidden></div>
 
+            <p class="login-form-section">Contacto</p>
             <div class="login-form-grid-2">
               <div class="login-field login-field--phone">
                 <label class="login-field__label" for="telefono_local">Teléfono</label>
@@ -246,17 +258,16 @@
                   <input type="tel" id="telefono_local" class="login-field__input phone-field__local" required placeholder="<%= countryConfig.phone.example %>" maxlength="<%= countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1 %>" inputmode="numeric" autocomplete="tel-national" aria-label="Número celular sin código de país">
                   <input type="hidden" name="phone" id="telefono" value="<%= fd.phone || '' %>">
                 </div>
+                <p class="login-field__error" data-error-for="telefono_local" hidden></p>
               </div>
               <div class="login-field">
                 <label class="login-field__label" for="fecha_nacimiento">Fecha de nacimiento</label>
                 <input type="date" id="fecha_nacimiento" name="birth_date" class="login-field__input" value="<%= fd.birth_date || '' %>" required>
+                <p class="login-field__error" data-error-for="fecha_nacimiento" hidden></p>
               </div>
             </div>
 
-            <p class="login-register-submit-hint" id="register-submit-hint" role="status">
-              Completa los datos requeridos para activar el registro.
-            </p>
-            <button type="submit" class="login-split__submit" id="register-submit-btn" disabled aria-describedby="register-submit-hint">Registrarse</button>
+            <button type="submit" class="login-split__submit" id="register-submit-btn" disabled>Registrarse</button>
           </form>
 
           <div class="login-split__links">
@@ -382,6 +393,8 @@
             <button type="submit" class="login-split__submit">Guardar y entrar</button>
           </form>
         </div>
+
+        </div><!-- /.login-auth-main -->
 
         <% const showAuthHelp = activeView === 'login' || activeView === 'forgot'; %>
         <aside class="login-split__help" id="loginAuthHelp"<% if (!showAuthHelp) { %> hidden<% } %>>
@@ -1176,11 +1189,24 @@
       const strengthSegments = document.querySelectorAll('.login-password-strength-segment');
       const ruleItems = document.querySelectorAll('#password-rules li');
       const matchMsg = document.getElementById('password-match-msg');
-      const submitHint = document.getElementById('register-submit-hint');
       const firstNameInput = document.getElementById('first_name');
       const lastNameInput = document.getElementById('last_name');
       const usernameInput = document.getElementById('reg-username');
       const birthDateInput = document.getElementById('fecha_nacimiento');
+      const telefonoLocalInput = document.getElementById('telefono_local');
+
+      /**
+       * Validación campo por campo.
+       *
+       * Cada campo dice qué le falta justo debajo, en vez de acumular una lista
+       * al final del formulario. El mensaje aparece cuando el campo ya se tocó
+       * (salió el foco o se escribió en él), para no recibir al usuario con todo
+       * en rojo antes de haber escrito nada.
+       *
+       * Se declara antes que nada porque PhoneField.initField llama a su
+       * `onChange` durante la inicialización, y ese camino ya consulta este Set.
+       */
+      const tocados = new Set();
 
       if (!passwordInput || !password2Input || !submitBtn || !strengthBox || !matchMsg) return;
 
@@ -1270,51 +1296,58 @@
         }
       }
 
+      function marcarCampo(input, mensaje) {
+        if (!input) return;
+        const contenedor = input.closest('.login-field');
+        const slot = document.querySelector('[data-error-for="' + input.id + '"]');
+        const mostrar = Boolean(mensaje) && tocados.has(input.id);
+
+        if (contenedor) contenedor.classList.toggle('login-field--invalid', mostrar);
+        input.setAttribute('aria-invalid', mostrar ? 'true' : 'false');
+
+        if (!slot) return;
+        slot.textContent = mostrar ? mensaje : '';
+        slot.hidden = !mostrar;
+      }
+
+      function ejemploTelefono() {
+        const cfg = window.__PHONE_CONFIG__ || {};
+        return cfg.example ? 'Ingresa un celular válido, por ejemplo ' + cfg.example + '.' : 'Ingresa un celular válido.';
+      }
+
       function updateSubmitState() {
         const strongEnough = PasswordStrength.isPasswordStrongEnough(passwordInput.value);
         const passwordsMatch = passwordInput.value === password2Input.value && password2Input.value.length > 0;
         const hasTelefono = PhoneField.isFieldValid(telefonoField);
-        const hasName = Boolean(firstNameInput?.value.trim() && lastNameInput?.value.trim());
+        const hasFirstName = Boolean(firstNameInput?.value.trim());
+        const hasLastName = Boolean(lastNameInput?.value.trim());
         const hasUsername = Boolean(usernameInput?.value.trim());
         const hasBirthDate = Boolean(birthDateInput?.value);
-        const canSubmit = strongEnough && passwordsMatch && hasTelefono && hasName && hasUsername && hasBirthDate;
+
+        marcarCampo(firstNameInput, hasFirstName ? '' : 'Ingresa tu nombre.');
+        marcarCampo(lastNameInput, hasLastName ? '' : 'Ingresa tu apellido.');
+        marcarCampo(usernameInput, hasUsername ? '' : 'Ingresa tu usuario de correo.');
+        marcarCampo(
+          passwordInput,
+          strongEnough ? '' : 'Usa al menos 8 caracteres, con mayúscula, minúscula, número y símbolo.',
+        );
+        marcarCampo(
+          password2Input,
+          password2Input.value.length === 0
+            ? 'Repite la contraseña.'
+            : passwordsMatch
+              ? ''
+              : 'Las contraseñas no coinciden.',
+        );
+        marcarCampo(telefonoLocalInput, hasTelefono ? '' : ejemploTelefono());
+        marcarCampo(birthDateInput, hasBirthDate ? '' : 'Selecciona tu fecha de nacimiento.');
+
+        const canSubmit =
+          strongEnough && passwordsMatch && hasTelefono &&
+          hasFirstName && hasLastName && hasUsername && hasBirthDate;
 
         submitBtn.disabled = !canSubmit;
         submitBtn.setAttribute('aria-disabled', canSubmit ? 'false' : 'true');
-
-        if (!submitHint) return;
-        if (canSubmit) {
-          submitHint.hidden = true;
-          submitHint.textContent = '';
-          return;
-        }
-
-        const missing = [];
-        if (!hasName) missing.push('Nombre y apellido');
-        if (!hasUsername) missing.push('Usuario de correo');
-        if (!strongEnough) {
-          missing.push('Contraseña con mayúscula, minúscula, número y símbolo (mínimo 8 caracteres)');
-        }
-        if (password2Input.value.length > 0 && !passwordsMatch) {
-          missing.push('Que ambas contraseñas coincidan');
-        } else if (!password2Input.value.length) {
-          missing.push('Repetir la contraseña');
-        }
-        if (!hasTelefono) {
-          const phoneExample = (window.__PHONE_CONFIG__ && window.__PHONE_CONFIG__.example) || '';
-          missing.push(
-            phoneExample
-              ? 'Celular válido, por ejemplo ' + phoneExample
-              : 'Celular válido'
-          );
-        }
-        if (!hasBirthDate) missing.push('Fecha de nacimiento');
-
-        submitHint.hidden = false;
-        submitHint.innerHTML =
-          'El botón se activa cuando completes:<ul>' +
-          missing.map((item) => '<li>' + item + '</li>').join('') +
-          '</ul>';
       }
 
       function onPasswordChange() {
@@ -1325,11 +1358,37 @@
 
       passwordInput.addEventListener('input', onPasswordChange);
       password2Input.addEventListener('input', onPasswordChange);
-      [firstNameInput, lastNameInput, usernameInput, birthDateInput].forEach(function (el) {
+
+      // Un campo se considera "tocado" al salir de él o al escribir dentro; a
+      // partir de ahí su mensaje puede mostrarse.
+      const camposRegistro = [
+        firstNameInput, lastNameInput, usernameInput,
+        passwordInput, password2Input, telefonoLocalInput, birthDateInput,
+      ];
+
+      camposRegistro.forEach(function (el) {
         if (!el) return;
-        el.addEventListener('input', updateSubmitState);
+        el.addEventListener('blur', function () {
+          tocados.add(el.id);
+          updateSubmitState();
+        });
+        el.addEventListener('input', function () {
+          if (el.value) tocados.add(el.id);
+          updateSubmitState();
+        });
         el.addEventListener('change', updateSubmitState);
       });
+
+      // Al enviar sin completar, se marcan todos para que no quede ninguno mudo.
+      registerForm?.addEventListener('submit', function (e) {
+        camposRegistro.forEach(function (el) { if (el) tocados.add(el.id); });
+        updateSubmitState();
+        if (submitBtn.disabled) {
+          e.preventDefault();
+          document.querySelector('.login-field--invalid')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      });
+
       updateSubmitState();
     })();
   </script>

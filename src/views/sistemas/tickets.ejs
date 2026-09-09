@@ -1,111 +1,202 @@
-<div class="contenedor" data-ticket-list-admin="<%= (typeof isAdministrador !== 'undefined' && isAdministrador) ? 'true' : 'false' %>">
-<div class="page-header page-header--toolbar">
-  <div class="page-header__text">
-    <h2 class="page-title"><%= titulo || 'Soporte de TI' %></h2>
-    <p class="page-description">Listado de tickets recibidos por soporte.</p>
+<%
+  const esAdmin = (typeof isAdministrador !== 'undefined' && isAdministrador);
+  // Ver todos los tickets sigue siendo de administrador; gestionarlos es del
+  // área de Informática, y el aviso de "no leído" acompaña a quien atiende.
+  const puedeGestionar = (typeof canManageTickets !== 'undefined' && canManageTickets);
+  const apps = (typeof supportApps !== 'undefined' && Array.isArray(supportApps)) ? supportApps : [];
+  const listaTickets = (typeof tickets !== 'undefined' && Array.isArray(tickets)) ? tickets : [];
+
+  const estadoLabels = { open: 'Abierto', in_progress: 'En curso', pending_close: 'Pendiente de cierre', closed: 'Cerrado' };
+  const prioridadLabels = { low: 'Baja', medium: 'Media', high: 'Alta' };
+
+  const abiertos = listaTickets.filter((t) => t.status !== 'closed').length;
+  const cerrados = listaTickets.length - abiertos;
+%>
+
+<% if (esAdmin) { %>
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+<% } %>
+
+<div class="contenedor soporte-page" data-ticket-list-admin="<%= esAdmin ? 'true' : 'false' %>">
+
+  <div class="page-header page-header--toolbar">
+    <div class="page-header__text">
+      <h2 class="page-title">Soporte</h2>
+      <p class="page-description">Resuélvelo tú mismo con las herramientas de autoayuda, o abre un ticket con el equipo de TI.</p>
+    </div>
+
+    <div class="page-header-actions">
+      <a href="/sistemas/tickets/nuevo" class="page-header-btn js-open-ticket-modal">
+        <span aria-hidden="true">+</span> Abrir Nuevo Ticket
+      </a>
+    </div>
   </div>
 
-  <div class="page-header-actions">
-    <% if (typeof isAdministrador !== 'undefined' && isAdministrador) { %>
-    <button id="btnToggleCerrados" type="button" class="btn-toggle-cerrados" data-toggle-closed-tickets>
-      <span id="eyeIcon" class="ticket-icon-inline" data-ticket-closed-icon>
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7.028 7.028 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486z"/><path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z"/><path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7.029 7.029 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .707-.707 12 12-.708.707z"/></svg>
-      </span>
-      <span id="eyeText" data-ticket-closed-text>Mostrar Cerrados</span>
-    </button>
-    <% } %>
+  <% if (typeof ok !== 'undefined' && ok) { %>
+    <div class="apps-flash"><%= ok %></div>
+  <% } %>
 
-    <a href="/sistemas/tickets/nuevo" class="page-header-btn js-open-ticket-modal">
-      <span aria-hidden="true">+</span> Abrir Nuevo Ticket
-    </a>
-  </div>
-</div><!-- /.page-header -->
+  <!-- ═══════════ Autoayuda ═══════════ -->
+  <section class="soporte-seccion" aria-labelledby="soporte-autoayuda-titulo">
+    <div class="soporte-seccion__head">
+      <div class="soporte-seccion__heading">
+        <h3 class="soporte-seccion__title" id="soporte-autoayuda-titulo">
+          <span class="soporte-seccion__icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          </span>
+          Autoayuda
+        </h3>
+        <p class="soporte-seccion__desc">Herramientas para resolver los problemas más comunes sin esperar a un técnico.</p>
+      </div>
 
-<div class="tabla-tickets-scroll">
-<table class="tabla-tickets" id="ticketsTable">
-  <thead>
-    <tr>
-      <% let cIdx = 0; %>
-      <th class="col-id col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">ID <span class="sort-icon"></span></th>
-      <th class="col-titulo" data-sort-column="<%= cIdx++ %>">Título <span class="sort-icon"></span></th>
-      <th class="col-categoria col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">Categoría <span class="sort-icon"></span></th>
-      <th class="col-importancia" data-sort-column="<%= cIdx++ %>">Importancia <span class="sort-icon"></span></th>
-      <th class="col-estado" data-sort-column="<%= cIdx++ %>">Estado <span class="sort-icon"></span></th>
-      <% if (user && typeof isAdministrador !== 'undefined' && isAdministrador) { %>
-        <th class="col-asignado col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">Tomado por <span class="sort-icon"></span></th>
+      <% if (esAdmin) { %>
+      <div class="soporte-seccion__acciones">
+        <% if (apps.length > 1) { %><%- include('../partials/app-orden-boton') %><% } %>
+        <button type="button" class="apps-add-btn" onclick="toggleFormulario()">
+          <span aria-hidden="true">+</span> Agregar herramienta
+        </button>
+      </div>
       <% } %>
-      <th class="col-solicitante col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">Solicitante <span class="sort-icon"></span></th>
-      <th class="col-correo col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">Correo <span class="sort-icon"></span></th>
-      <th class="col-creado col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">Creado <span class="sort-icon"></span></th>
-      <th class="col-ult-respuesta col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">Últ. Respuesta <span class="sort-icon"></span></th>
-      <th class="col-t-respuesta col-ocultar-mobile" data-sort-column="<%= cIdx++ %>">T. Respuesta <span class="sort-icon"></span></th>
-    </tr>
-  </thead>
-  <tbody>
-    <% if (tickets && tickets.length > 0) { %>
-      <% tickets.forEach(t => { 
-         const estadoLabels = { open: 'Abierto', in_progress: 'En curso', pending_close: 'Pendiente de cierre', closed: 'Cerrado' };
-         const prioridadLabels = { low: 'Baja', medium: 'Media', high: 'Alta' };
+    </div>
 
-         let esNoLeido = false;
-         if (typeof user !== 'undefined' && typeof isAdministrador !== 'undefined' && isAdministrador && t.read_by_admin === false) {
-            esNoLeido = true;
-         } else if (typeof user !== 'undefined' && !(typeof isAdministrador !== 'undefined' && isAdministrador) && t.read_by_user === false) {
-            esNoLeido = true;
-         }
+    <% if (esAdmin && apps.length > 1) { %><%- include('../partials/app-orden-barra') %><% } %>
 
-         let badgePrioridad = 'bg-secondary';
-         if (t.priority === 'high') badgePrioridad = 'bg-danger';
-         else if (t.priority === 'medium') badgePrioridad = 'bg-success';
-         else if (t.priority === 'low') badgePrioridad = 'bg-primary';
-
-         let badgeEstado = 'bg-secondary';
-         if (t.status === 'open') badgeEstado = 'bg-primary';
-         else if (t.status === 'in_progress') badgeEstado = 'bg-warning';
-         else if (t.status === 'pending_close') badgeEstado = 'bg-warning';
-         else if (t.status === 'closed') badgeEstado = 'bg-success';
-
-         const options = { year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: 'numeric', second: 'numeric' };
-         const strCreado = t.created_at ? new Date(t.created_at).toLocaleDateString(countryConfig.locale, options) : '-';
-         const strUltima = t.fecha_ultima_respuesta ? new Date(t.fecha_ultima_respuesta).toLocaleDateString(countryConfig.locale, options) : '-';
-         
-         const tRespuesta = t.tiempo_respuesta || '-';
-      %>
-        <tr class="clickable-row <%= esNoLeido ? 'fila-no-leida' : '' %>" data-href="/sistemas/tickets/<%= t.id %>" data-estado="<%= t.status %>">
-          
-          <td class="col-id col-ocultar-mobile" data-sort="<%= t.id %>"><%= t.id %></td>
-          <td class="col-titulo" title="<%= t.title %>">
-            <% if (esNoLeido) { %><span class="badge-nuevo-ticket">Nuevo</span><% } %>
-            <div class="ticket-title-clamp">
-              <%= t.title %>
-            </div>
-          </td>
-          <td class="col-categoria col-ocultar-mobile"><%= t.category || '-' %></td>
-          <td class="col-importancia" data-sort="<%= t.priority %>"><span class="badge <%= badgePrioridad %>"><%= prioridadLabels[t.priority] || t.priority %></span></td>
-          <td class="col-estado" data-sort="<%= t.status %>"><span class="badge <%= badgeEstado %>"><%= estadoLabels[t.status] || t.status %></span></td>
-          
-          <% if (user && typeof isAdministrador !== 'undefined' && isAdministrador) { %>
-            <td class="col-asignado col-ocultar-mobile ticket-assigned <%= t.assigned_to ? 'ticket-assigned--active' : '' %>">
-                <%= t.assigned_to || 'Sin asignar' %>
-            </td>
-          <% } %>
-
-          <td class="col-solicitante col-ocultar-mobile"><%= t.requester_name %></td>
-          <td class="col-correo col-ocultar-mobile ticket-table-muted"><%= t.requester_email %></td>
-          <td class="col-creado col-ocultar-mobile ticket-table-date" data-sort="<%= t.created_at ? new Date(t.created_at).getTime() : 0 %>"><%= strCreado %></td>
-          <td class="col-ult-respuesta col-ocultar-mobile ticket-table-date" data-sort="<%= t.fecha_ultima_respuesta ? new Date(t.fecha_ultima_respuesta).getTime() : 0 %>"><%= strUltima %></td>
-          <td class="col-t-respuesta col-ocultar-mobile ticket-response-time" data-sort="<%= t.tiempo_respuesta_minutos != null ? t.tiempo_respuesta_minutos : -1 %>"><%= tRespuesta %></td>
-          
-        </tr>
-      <% }) %>
+    <% if (apps.length > 0) { %>
+      <div class="apps-grid apps-grid--soporte" data-orden-grid data-orden-catalogo="<%= appCatalog %>">
+        <% apps.forEach((app, index) => { %>
+          <%- include('../partials/app-card', { app: app, index: index, allowNotify: true, reorderable: esAdmin && apps.length > 1 }) %>
+        <% }) %>
+      </div>
     <% } else { %>
-      <tr>
-        <td colspan="<%= (user && typeof isAdministrador !== 'undefined' && isAdministrador) ? 11 : 10 %>" class="ticket-empty-table">No hay tickets registrados actualmente.</td>
-      </tr>
+      <div class="apps-empty-state">
+        <% if (esAdmin) { %>
+          Aún no hay herramientas de autoayuda. Agrega la primera con el botón de arriba.
+        <% } else { %>
+          Aún no hay herramientas de autoayuda publicadas.
+        <% } %>
+      </div>
     <% } %>
-  </tbody>
-</table>
-</div>
+  </section>
+
+  <!-- ═══════════ Ticketera ═══════════ -->
+  <section class="soporte-seccion" aria-labelledby="soporte-tickets-titulo">
+    <div class="soporte-seccion__head">
+      <div class="soporte-seccion__heading">
+        <h3 class="soporte-seccion__title" id="soporte-tickets-titulo">
+          <span class="soporte-seccion__icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z"/><path d="M14 5v14" stroke-dasharray="2 3"/></svg>
+          </span>
+          <%= esAdmin ? 'Tickets de soporte' : 'Mis tickets' %>
+        </h3>
+        <p class="soporte-seccion__desc">
+          <%= abiertos %> <%= abiertos === 1 ? 'ticket activo' : 'tickets activos' %> · <%= cerrados %> <%= cerrados === 1 ? 'cerrado' : 'cerrados' %>
+        </p>
+      </div>
+    </div>
+
+    <div class="tickets-panel">
+      <div class="tickets-toolbar">
+        <div class="tickets-search">
+          <svg class="tickets-search__icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input type="search" id="ticketsBuscar" class="tickets-search__input" placeholder="Buscar por título, categoría<%= esAdmin ? ' o solicitante' : '' %>…" aria-label="Buscar tickets" autocomplete="off">
+        </div>
+
+        <div class="tickets-filtros" role="group" aria-label="Filtrar por estado">
+          <button type="button" class="tickets-chip is-active" data-filtro-estado="activos">Activos</button>
+          <button type="button" class="tickets-chip" data-filtro-estado="open">Abiertos</button>
+          <button type="button" class="tickets-chip" data-filtro-estado="in_progress">En curso</button>
+          <button type="button" class="tickets-chip" data-filtro-estado="closed">Cerrados</button>
+          <button type="button" class="tickets-chip" data-filtro-estado="todos">Todos</button>
+        </div>
+
+        <label class="tickets-orden">
+          <span class="sr-only">Ordenar tickets</span>
+          <select id="ticketsOrden" class="tickets-orden__select">
+            <option value="recientes">Más recientes</option>
+            <option value="antiguos">Más antiguos</option>
+            <option value="prioridad">Mayor prioridad</option>
+            <option value="respuesta">Última respuesta</option>
+          </select>
+        </label>
+      </div>
+
+      <ul class="tickets-lista" id="ticketsLista">
+        <% listaTickets.forEach((t) => {
+             let esNoLeido = false;
+             if (puedeGestionar && t.read_by_admin === false) esNoLeido = true;
+             else if (!puedeGestionar && t.read_by_user === false) esNoLeido = true;
+
+             const opciones = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+             const strCreado = t.created_at ? new Date(t.created_at).toLocaleDateString(countryConfig.locale, opciones) : '—';
+             const strUltima = t.fecha_ultima_respuesta ? new Date(t.fecha_ultima_respuesta).toLocaleDateString(countryConfig.locale, opciones) : '—';
+             const buscable = [t.title, t.category, esAdmin ? t.requester_name : '', esAdmin ? t.requester_email : '', String(t.id)]
+               .filter(Boolean).join(' ').toLowerCase();
+        %>
+          <li class="ticket-item<%= esNoLeido ? ' ticket-item--nuevo' : '' %>"
+              data-href="/sistemas/tickets/<%= t.id %>"
+              data-estado="<%= t.status %>"
+              data-prioridad="<%= t.priority %>"
+              data-creado="<%= t.created_at ? new Date(t.created_at).getTime() : 0 %>"
+              data-respuesta="<%= t.fecha_ultima_respuesta ? new Date(t.fecha_ultima_respuesta).getTime() : 0 %>"
+              data-buscar="<%= buscable %>">
+            <button type="button" class="ticket-item__btn">
+              <span class="ticket-item__prioridad ticket-item__prioridad--<%= t.priority %>" title="Importancia: <%= prioridadLabels[t.priority] || t.priority %>" aria-hidden="true"></span>
+
+              <span class="ticket-item__main">
+                <span class="ticket-item__top">
+                  <span class="ticket-item__id">#<%= t.id %></span>
+                  <% if (esNoLeido) { %><span class="ticket-item__nuevo">Nuevo</span><% } %>
+                  <span class="ticket-item__titulo"><%= t.title %></span>
+                </span>
+
+                <span class="ticket-item__meta">
+                  <% if (t.category) { %><span class="ticket-item__categoria"><%= t.category %></span><% } %>
+                  <% if (esAdmin && t.requester_name) { %>
+                    <span class="ticket-item__dato" title="<%= t.requester_email %>"><%= t.requester_name %></span>
+                  <% } %>
+                  <span class="ticket-item__dato">Creado <%= strCreado %></span>
+                  <% if (t.fecha_ultima_respuesta) { %>
+                    <span class="ticket-item__dato ticket-item__dato--sec">Últ. respuesta <%= strUltima %></span>
+                  <% } %>
+                  <% if (t.tiempo_respuesta && t.tiempo_respuesta !== '-') { %>
+                    <span class="ticket-item__sla" title="Tiempo hábil hasta la primera respuesta"><%= t.tiempo_respuesta %></span>
+                  <% } %>
+                </span>
+              </span>
+
+              <span class="ticket-item__lado">
+                <% if (esAdmin) { %>
+                  <span class="ticket-item__asignado<%= t.assigned_to ? ' ticket-item__asignado--activo' : '' %>">
+                    <%= t.assigned_to || 'Sin asignar' %>
+                  </span>
+                <% } %>
+                <span class="ticket-estado ticket-estado--<%= t.status %>"><%= estadoLabels[t.status] || t.status %></span>
+                <span class="ticket-item__prioridad-txt ticket-item__prioridad-txt--<%= t.priority %>"><%= prioridadLabels[t.priority] || t.priority %></span>
+              </span>
+
+              <svg class="ticket-item__chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </li>
+        <% }) %>
+      </ul>
+
+      <p class="tickets-vacio" id="ticketsVacio" hidden>No hay tickets que coincidan con el filtro.</p>
+
+      <% if (listaTickets.length === 0) { %>
+        <p class="tickets-vacio">No hay tickets registrados actualmente.</p>
+      <% } %>
+    </div>
+  </section>
+
+  <%- include('../partials/app-modals', {
+    appCatalog: (typeof appCatalog !== 'undefined' ? appCatalog : 'support'),
+    allowNotify: true,
+    modalNewTitle: 'Agregar herramienta de autoayuda',
+    modalNewSubtitle: 'Publica una utilidad que el equipo pueda usar para resolver problemas por su cuenta.',
+    modalNamePlaceholder: 'Ej: Reparador de impresoras',
+    modalDescPlaceholder: 'Describe qué problema resuelve y cuándo usarla...'
+  }) %>
 
 </div>
 

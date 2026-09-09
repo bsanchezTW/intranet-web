@@ -236,6 +236,15 @@
   color: var(--muted);
 }
 
+/*
+ * El bloque de descargas se ancla abajo: las tarjetas de una misma fila tienen
+ * el mismo alto, así que sin esto los botones quedaban a distinta altura según
+ * lo larga que fuera cada descripción.
+ */
+.app-card__downloads {
+  margin-top: auto;
+}
+
 /* ── Bloque descargas ── */
 .app-card__downloads-label {
   font-size: 10.5px;
@@ -329,13 +338,14 @@
 }
 
 /* ── Footer de acciones ── */
+/* Sin `margin-top: auto`: el espacio sobrante ya lo absorbe .app-card__downloads
+   y dos márgenes automáticos se lo repartirían, abriendo un hueco entre ambos. */
 .app-card__footer {
   display: flex;
   align-items: center;
   gap: 10px;
   border-top: 1px solid var(--color-border);
   padding-top: 14px;
-  margin-top: auto;
 }
 
 .app-action {
@@ -742,3 +752,195 @@
   }
 }
 
+
+/* ══════════ Reordenar tarjetas ══════════ */
+/* Lo comparten la vista Apps y la autoayuda de Soporte. */
+
+.apps-orden-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
+}
+
+.apps-orden-btn:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.apps-orden-btn.is-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #ffffff;
+}
+
+.apps-orden-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.apps-orden-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px dashed var(--brand);
+  border-radius: 12px;
+  background: var(--brand-soft);
+}
+
+.apps-orden-barra[hidden] {
+  display: none;
+}
+
+.apps-orden-barra__txt {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-heading);
+}
+
+.apps-orden-barra__acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.apps-orden-barra__estado {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.apps-orden-barra__estado--ok { color: var(--green-ink); }
+.apps-orden-barra__estado--error { color: var(--down); }
+
+.apps-orden-accion {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+  transition: border-color 0.18s, color 0.18s, opacity 0.18s;
+}
+
+.apps-orden-accion:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.apps-orden-accion--primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--color-bg);
+}
+
+.apps-orden-accion--primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.apps-orden-accion:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.apps-orden-accion:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Los controles de orden sólo existen en modo reordenar. */
+.app-card__orden {
+  display: none;
+}
+
+.apps-grid--ordenando .app-card {
+  position: relative;
+  cursor: grab;
+  border-color: var(--brand);
+  /* Sin elevación al pasar el cursor: distrae mientras se arrastra. */
+  transform: none;
+}
+
+.apps-grid--ordenando .app-card__orden {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow);
+}
+
+.apps-grid--ordenando .app-card.is-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.app-card__orden-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.app-card__orden-btn:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.app-card__orden-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.app-card__orden-asa {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-subtle);
+  cursor: grab;
+}
+
+/*
+ * `hidden` frente a reglas con `display`.
+ *
+ * El atributo `hidden` sólo aporta `display: none` desde la hoja del navegador,
+ * así que cualquier clase que declare `display` lo anula. Estos tres elementos
+ * se ocultan y muestran por JS y necesitan la regla explícita.
+ */
+.app-icon-preview img[hidden],
+.app-field-hint[hidden],
+.app-ios-current[hidden] {
+  display: none;
+}

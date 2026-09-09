@@ -29,10 +29,18 @@ const upload = multer({
 });
 
 function createSlug(text) {
-  return text.toString().toLowerCase().trim()
+  return String(text || '')
+    .toLowerCase()
+    .trim()
     .replace(/\s+/g, '-')
     .replace(/[^\w\-]+/g, '')
     .replace(/\-\-+/g, '-');
+}
+
+function eventFieldsFromBody(body = {}) {
+  const name = String(body.name ?? body.nombre ?? '').trim();
+  const description = body.description ?? body.descripcion ?? null;
+  return { name, description };
 }
 
 // Normaliza imágenes enviadas desde el front
@@ -78,14 +86,31 @@ router.get('/eventos/nuevo', requireRole(...WRITE_ROLES), (req, res) => {
 });
 
 router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
-  const { nombre, descripcion } = req.body;
-  const slug = createSlug(nombre);
+  const { name, description } = eventFieldsFromBody(req.body);
 
   try {
-    await db.queryRetryIdCollision('INSERT INTO events (name, slug, description) VALUES ($1, $2, $3)',
-      [nombre, slug, descripcion]);
+    if (!name) {
+      return res.render('marketing/eventos_nuevo', {
+        titulo: 'Crear Nuevo Evento',
+        error: 'El nombre del evento es obligatorio.',
+      });
+    }
+
+    const slug = createSlug(name);
+    if (!slug) {
+      return res.render('marketing/eventos_nuevo', {
+        titulo: 'Crear Nuevo Evento',
+        error: 'El nombre no genera un identificador válido. Usa letras o números.',
+      });
+    }
+
+    await db.queryRetryIdCollision(
+      'INSERT INTO events (name, slug, description) VALUES ($1, $2, $3)',
+      [name, slug, description],
+    );
     res.redirect('/marketing/eventos');
   } catch (err) {
+    console.error(err);
     const errorMsg = err.code === '23505' ? 'Ya existe un evento con ese nombre.' : 'Error al crear.';
     res.render('marketing/eventos_nuevo', { titulo: 'Crear Nuevo Evento', error: errorMsg });
   }
@@ -272,9 +297,12 @@ router.get('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, res
 
 router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, res) => {
   const { slug } = req.params;
-  const { nombre, descripcion } = req.body;
+  const { name, description } = eventFieldsFromBody(req.body);
   try {
-    await db.query('UPDATE events SET name = $1, description = $2 WHERE slug = $3', [nombre, descripcion, slug]);
+    if (!name) {
+      return res.status(400).send('El nombre del evento es obligatorio');
+    }
+    await db.query('UPDATE events SET name = $1, description = $2 WHERE slug = $3', [name, description, slug]);
     if (req.session.user && req.session.user.id) {
       await db.query('INSERT INTO change_log (user_id, action, section, link_path) VALUES ($1, $2, $3, $4)',
         [req.session.user.id, 'editó información del evento', 'Galería de Eventos', `/marketing/eventos/${slug}`]);

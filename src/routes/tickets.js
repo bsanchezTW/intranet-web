@@ -2,11 +2,9 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { sendMail } = require("../services/mailer");
-const requireRole = require("../middlewares/requireRole");
 const { isAdministrador } = require("../constants/roles");
 const multer = require('multer');
 const {
-  ticketStatusToDb,
   ticketStatusFromDb,
   ticketPriorityToDb,
   mapTicketReplyForView,
@@ -21,6 +19,15 @@ const {
 } = require("../utils/businessHours");
 const { getCurrentCountry, getCountryConfig } = require("../config/country");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
+const { APP_CATALOGS } = require("../constants/appCatalogs");
+const { listAppsByCatalog } = require("../services/appCatalogService");
+const requireSupportAgent = require("../middlewares/requireSupportAgent");
+const { safeTicketRedirect } = require("../utils/ticketRedirect");
+const {
+  listSupportAgents,
+  isSupportAgent,
+  getAgentById,
+} = require("../services/tickets/supportTeam");
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -65,9 +72,9 @@ function ticketListSql() {
 const EMAIL_SUPPORT = getCountryConfig().supportEmail;
 const NOTIFICATION_COUNT_TTL_MS = 30 * 1000;
 
-function getNotificationCacheKey(user) {
-  const scope = isAdministrador(user.role) ? "admin" : user.email || user.username;
-  return `${isAdministrador(user.role) ? "admin" : "user"}:${scope || "anonymous"}`;
+function getNotificationCacheKey(user, esAgente) {
+  const scope = esAgente ? "soporte" : user.email || user.username;
+  return `${esAgente ? "soporte" : "user"}:${scope || "anonymous"}`;
 }
 
 function invalidateNotificationCount(req) {
@@ -148,6 +155,45 @@ function generarTextoCorreo(mensaje, adjuntosJSON) {
 }
 
 // ==========================================
+// HELPERS: ASIGNACIÓN Y REDIRECCIÓN
+// ==========================================
+
+/**
+ * Traduce la decisión del modal ("¿tomar este ticket?") a un nombre para
+ * `assigned_to`.
+ *
+ * - `yo`        → el agente que está guardando
+ * - `otro`      → otro integrante de Informática, validado contra el equipo
+ * - `mantener`  → no se toca la columna (devuelve null)
+ *
+ * Asignar a alguien fuera del área se rechaza aquí y no sólo en el <select>:
+ * el formulario es editable desde el navegador.
+ */
+async function resolveAssignment(req) {
+  const modo = String(req.body.assign_mode || "").trim();
+
+  if (modo === "mantener") return { assignedTo: null };
+
+  if (modo === "otro") {
+    const agente = await getAgentById(req.body.assign_to);
+    if (!agente) {
+      return { error: "La persona seleccionada no pertenece a Informática." };
+    }
+    return { assignedTo: agente.name };
+  }
+
+  if (modo === "yo") {
+    const agente = await getAgentById(req.session.user.id);
+    if (!agente) {
+      return { error: "Tu usuario ya no pertenece a Informática." };
+    }
+    return { assignedTo: agente.name };
+  }
+
+  return { error: "Debes indicar quién se hace cargo del ticket." };
+}
+
+// ==========================================
 // RUTAS DEL MÓDULO
 // ==========================================
 
@@ -161,7 +207,17 @@ router.get("/tickets/notificaciones/count", async (req, res) => {
 
   res.set("Cache-Control", "no-store");
   const userEmail = user.email || user.username;
-  const cacheKey = getNotificationCacheKey(user);
+
+  // El contador de la mesa de ayuda es para quien la atiende (Informática);
+  // el resto sólo cuenta sus propios tickets sin leer.
+  let esAgente = false;
+  try {
+    esAgente = await isSupportAgent(user);
+  } catch (err) {
+    console.error("Error resolviendo equipo de soporte:", err);
+  }
+
+  const cacheKey = getNotificationCacheKey(user, esAgente);
   const cached = req.session.ticketNotifications;
   if (
     cached &&
@@ -175,7 +231,7 @@ router.get("/tickets/notificaciones/count", async (req, res) => {
     let sql = "";
     let params = [];
 
-    if (isAdministrador(user.role)) {
+    if (esAgente) {
       sql = `SELECT COUNT(*) FROM support_tickets WHERE read_by_admin = FALSE`;
     } else {
       sql = `SELECT COUNT(*) FROM support_tickets WHERE (requester_email = $1 OR requester_name = $1) AND read_by_user = FALSE`;
@@ -213,7 +269,16 @@ router.get("/tickets", async (req, res) => {
   }
 
   try {
-    const { rows: results } = await db.query(sql, params);
+    // La autoayuda encabeza la página, así que se pide en paralelo con los
+    // tickets: si el catálogo falla, la ticketera sigue cargando.
+    const [{ rows: results }, supportApps, puedeGestionar] = await Promise.all([
+      db.query(sql, params),
+      listAppsByCatalog(APP_CATALOGS.SUPPORT).catch((err) => {
+        console.error("Error al cargar apps de autoayuda:", err);
+        return [];
+      }),
+      isSupportAgent(user).catch(() => false),
+    ]);
 
     let holidaySet = new Set();
     const ticketsWithResponse = results.filter(
@@ -255,8 +320,12 @@ router.get("/tickets", async (req, res) => {
     res.render("sistemas/tickets", {
       titulo: "Soporte",
       tickets,
+      supportApps,
+      appCatalog: APP_CATALOGS.SUPPORT,
+      canManageTickets: puedeGestionar,
       user: user,
-      extraCss: ["/css/tickets.css"],
+      ok: req.query.ok,
+      extraCss: ["/css/apps.css", "/css/tickets.css"],
       extraJs: ["/js/tickets-list.js"],
     });
   } catch (err) {
@@ -355,62 +424,86 @@ router.post('/tickets/upload', upload.single('file'), async (req, res) => {
 });
 
 // ADMIN: ACTUALIZAR TICKET
+/**
+ * Gestión de un ticket por parte de Informática.
+ *
+ * Antes el estado era un desplegable libre y la asignación un botón aparte, así
+ * que se podía gestionar un ticket dejándolo "sin asignar". Ahora la asignación
+ * es parte del guardado —el modal obliga a resolver quién lo toma— y el estado
+ * lo deduce la acción: guardar deja el ticket En curso y cerrar lo cierra. No se
+ * produce `pending_close`; las filas históricas en ese estado siguen viviendo su
+ * ciclo con /confirmar y /rechazar.
+ */
 router.post(
   "/tickets/:id/actualizar",
-  requireRole.administrador(),
+  requireSupportAgent(),
   async (req, res) => {
     const { id } = req.params;
     const category = req.body.category ?? req.body.categoria;
     const priority = ticketPriorityToDb(req.body.priority ?? req.body.prioridad);
-    const status = ticketStatusToDb(req.body.status ?? req.body.estado);
     const { mensaje_respuesta, adjuntos_data } = req.body;
-
-    let sql = `UPDATE support_tickets SET category = $1, priority = $2, status = $3`;
-    if (status === "pending_close") sql += `, resolved_at = NOW()`;
-    else if (status === "closed") sql += `, closed_at = NOW()`;
-    else if (status === "open")
-      sql += `, resolved_at = NULL, closed_at = NULL`;
-    sql += ` WHERE id = $4`;
+    const cerrar = String(req.body.accion || "") === "cerrar";
+    const status = cerrar ? "closed" : "in_progress";
 
     try {
-      await db.query(sql, [category, priority, status, id]);
+      const asignacion = await resolveAssignment(req);
+      if (asignacion.error) return res.status(400).send(asignacion.error);
+
+      let sql = `UPDATE support_tickets SET category = $1, priority = $2, status = $3`;
+      const params = [category, priority, status];
+
+      if (asignacion.assignedTo !== null) {
+        params.push(asignacion.assignedTo);
+        sql += `, assigned_to = $${params.length}`;
+      }
+      // Cerrar deja fecha de cierre; reactivar limpia el pendiente heredado.
+      sql += cerrar
+        ? `, closed_at = NOW(), auto_closed = FALSE`
+        : `, resolved_at = NULL, closed_at = NULL`;
+      params.push(id);
+      sql += ` WHERE id = $${params.length}`;
+
+      await db.query(sql, params);
 
       const tieneMensaje =
         mensaje_respuesta && mensaje_respuesta.trim().length > 0;
       const tieneAdjuntos = adjuntos_data && adjuntos_data.length > 2;
 
-      if (tieneMensaje || tieneAdjuntos || status === "pending_close") {
-        if (tieneMensaje || tieneAdjuntos) {
-          await db.query(
-            `INSERT INTO ticket_replies (ticket_id, message, sender, attachments, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-            [id, mensaje_respuesta, "Support", adjuntos_data || "[]"],
-          );
-        }
-
+      if (tieneMensaje || tieneAdjuntos) {
         await db.query(
-          "UPDATE support_tickets SET read_by_user = FALSE WHERE id = $1",
-          [id],
+          `INSERT INTO ticket_replies (ticket_id, message, sender, attachments, created_at) VALUES ($1, $2, $3, $4, NOW())`,
+          [id, mensaje_respuesta, "Support", adjuntos_data || "[]"],
         );
-
-        const { rows: ticket } = await db.query(
-          "SELECT requester_email, title FROM support_tickets WHERE id = $1",
-          [id],
-        );
-        if (ticket.length > 0) {
-          let asunto = `Actualización Ticket #${id}: ${ticket[0].title}`;
-          let cuerpo = `Hola,\n\nSe ha actualizado tu ticket. Nuevo estado: ${ticketStatusFromDb(status).toUpperCase()}.\n`;
-          if (tieneMensaje) cuerpo += `\nMensaje: "${mensaje_respuesta}"`;
-
-          sendMail({
-            to: ticket[0].requester_email,
-            subject: asunto,
-            text: generarTextoCorreo(cuerpo, adjuntos_data),
-            html: generarHtmlCorreo(cuerpo, adjuntos_data),
-            bcc: EMAIL_SUPPORT,
-          }).catch(console.error);
-        }
       }
-      res.redirect(`/sistemas/tickets/${id}`);
+
+      await db.query(
+        "UPDATE support_tickets SET read_by_user = FALSE WHERE id = $1",
+        [id],
+      );
+
+      const { rows: ticket } = await db.query(
+        "SELECT requester_email, title FROM support_tickets WHERE id = $1",
+        [id],
+      );
+      if (ticket.length > 0) {
+        const asunto = `Actualización Ticket #${id}: ${ticket[0].title}`;
+        let cuerpo = `Hola,\n\nSe ha actualizado tu ticket. Nuevo estado: ${ticketStatusFromDb(status).toUpperCase()}.\n`;
+        if (asignacion.assignedTo) {
+          cuerpo += `\nResponsable: ${asignacion.assignedTo}.`;
+        }
+        if (tieneMensaje) cuerpo += `\n\nMensaje: "${mensaje_respuesta}"`;
+
+        sendMail({
+          to: ticket[0].requester_email,
+          subject: asunto,
+          text: generarTextoCorreo(cuerpo, adjuntos_data),
+          html: generarHtmlCorreo(cuerpo, adjuntos_data),
+          bcc: EMAIL_SUPPORT,
+        }).catch(console.error);
+      }
+
+      invalidateNotificationCount(req);
+      res.redirect(safeTicketRedirect(req.body.redirect_to, id));
     } catch (err) {
       console.error(err);
       res.status(500).send("Error actualizando ticket");
@@ -500,24 +593,26 @@ router.post("/tickets/:id/responder", async (req, res) => {
       return res.status(404).send("Ticket no encontrado");
     const ticket = results[0];
 
-    const isAdmin = isAdministrador(user.role);
+    // Quien firma como "Soporte" es el área de Informática, no cualquier
+    // administrador: un admin de otra área que comente lo hace como usuario.
+    const isAgent = await isSupportAgent(user);
     const isOwner = user.email === ticket.requester_email;
-    if (!isAdmin && !isOwner) return res.status(403).send("Sin permiso.");
+    if (!isAgent && !isOwner) return res.status(403).send("Sin permiso.");
 
-    let remitenteNombre = isAdmin
+    let remitenteNombre = isAgent
       ? "Soporte"
-      : user.username || user.first_name;
-    let emailDestino = isAdmin
+      : user.nombre || user.username || user.first_name;
+    let emailDestino = isAgent
       ? ticket.requester_email
       : process.env.ADMIN_NOTIFY_EMAIL;
     let asuntoEmail = `Nueva respuesta Ticket #${id}: ${ticket.title}`;
 
     await db.query(
       `INSERT INTO ticket_replies (ticket_id, message, sender, attachments, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-      [id, mensaje_respuesta, isAdmin ? "Support" : remitenteNombre, adjuntos_data || "[]"],
+      [id, mensaje_respuesta, isAgent ? "Support" : remitenteNombre, adjuntos_data || "[]"],
     );
 
-    if (isAdmin) {
+    if (isAgent) {
       await db.query("UPDATE support_tickets SET read_by_user = FALSE WHERE id = $1", [
         id,
       ]);
@@ -538,41 +633,17 @@ router.post("/tickets/:id/responder", async (req, res) => {
       }).catch(console.error);
     }
 
-    res.redirect(`/sistemas/tickets/${id}`);
+    invalidateNotificationCount(req);
+    res.redirect(safeTicketRedirect(req.body.redirect_to, id));
   } catch (err) {
     console.error(err);
     res.status(500).send("Error procesando respuesta.");
   }
 });
 
-// ADMIN: TOMAR TICKET
-router.post("/tickets/:id/tomar", requireRole.administrador(), async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const { rows: userRows } = await db.query(
-      "SELECT first_name, last_name FROM users WHERE id = $1",
-      [req.session.user.id],
-    );
-    let adminName = "Soporte TI";
-    if (userRows.length > 0) {
-      adminName =
-        userRows[0].first_name +
-        (userRows[0].last_name ? " " + userRows[0].last_name : "");
-    }
-
-    await db.query("UPDATE support_tickets SET assigned_to = $1 WHERE id = $2", [
-      adminName,
-      id,
-    ]);
-    res.json({ success: true, asignado_a: adminName });
-  } catch (err) {
-    console.error(err);
-    res
-      .status(500)
-      .json({ success: false, error: "Error al asignar el ticket" });
-  }
-});
+// Ya no hay ruta "tomar ticket": la asignación dejó de ser un botón suelto y
+// forma parte de /actualizar, para que no se pueda gestionar un ticket sin
+// dejarlo asignado.
 
 // DETALLE TICKET
 router.get("/tickets/:id", async (req, res) => {
@@ -602,20 +673,24 @@ router.get("/tickets/:id", async (req, res) => {
     if (ticketResults.length === 0)
       return res.status(404).render("404", { titulo: "No encontrado" });
 
-    const userEmail = user.email || user.username;
     if (
       !isAdministrador(user.role) &&
       ticketResults[0].requester_email !== user.email
     )
       return res.status(403).send("No tienes permisos.");
 
+    // Gestionar es del área, no del rol: el panel de TI sólo aparece para
+    // Informática. Un administrador de otra área ve el ticket, no lo opera.
+    const puedeGestionar = await isSupportAgent(user);
+    const agentes = puedeGestionar ? await listSupportAgents() : [];
+
     const { rows: respuestasResults } = await db.query(sqlRespuestas, [id]);
 
-    if (isAdministrador(user.role)) {
+    if (puedeGestionar) {
       await db.query("UPDATE support_tickets SET read_by_admin = TRUE WHERE id = $1", [
         id,
       ]);
-    } else {
+    } else if (ticketResults[0].requester_email === user.email) {
       await db.query("UPDATE support_tickets SET read_by_user = TRUE WHERE id = $1", [
         id,
       ]);
@@ -629,6 +704,9 @@ router.get("/tickets/:id", async (req, res) => {
       ticket: ticketResults[0],
       respuestas: respuestasResults.map(mapTicketReplyForView),
       user: user,
+      canManageTickets: puedeGestionar,
+      supportAgents: agentes,
+      backTo: safeTicketRedirect(req.query.volver, id),
       layout: isModal ? false : "layout",
       isModal: isModal,
       extraCss: isModal ? [] : ["/css/tickets.css"],

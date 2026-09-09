@@ -1,0 +1,103 @@
+<%
+  /**
+   * Tarjeta de aplicación, compartida por la vista Apps y la autoayuda de
+   * Soporte. Espera: app, index y (opcional) allowNotify.
+   */
+  const cardAllowNotify = (typeof allowNotify === 'undefined') ? true : allowNotify;
+  const cardIsAdmin = (typeof isAdministrador !== 'undefined' && isAdministrador);
+  const cardIndex = (typeof index === 'undefined') ? 0 : index;
+  const cardReorderable = (typeof reorderable !== 'undefined') && reorderable;
+
+  function cardInitials(name) {
+    if (!name) return '?';
+    const parts = String(name).trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  function cardJsSafe(str) {
+    return String(str == null ? '' : str)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\r?\n/g, ' ');
+  }
+
+  const cardIniciales = cardInitials(app.name);
+  const cardTileGreen = (cardIndex % 2 === 1);
+  const cardNombreJs = cardJsSafe(app.name);
+  const cardIconUrl = app.icon_url || '';
+%>
+<article class="app-card" data-orden-item="<%= app.id %>">
+  <% if (cardReorderable) { %>
+  <div class="app-card__orden">
+    <button type="button" class="app-card__orden-btn" data-orden-mover="-1"
+            aria-label="Mover <%= app.name %> antes" title="Mover antes" tabindex="-1">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+    </button>
+    <span class="app-card__orden-asa" data-orden-asa title="Arrastra para reordenar" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+    </span>
+    <button type="button" class="app-card__orden-btn" data-orden-mover="1"
+            aria-label="Mover <%= app.name %> después" title="Mover después" tabindex="-1">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+  </div>
+  <% } %>
+
+  <div class="app-card__header">
+    <% if (cardIconUrl) { %>
+      <div class="app-card__tile app-card__tile--image" aria-hidden="true">
+        <img src="<%= cardIconUrl %>" alt="">
+      </div>
+    <% } else { %>
+      <div class="app-card__tile<%= cardTileGreen ? ' app-card__tile--green' : '' %>" aria-hidden="true"><%= cardIniciales %></div>
+    <% } %>
+    <div class="app-card__heading">
+      <h3 class="app-card__name"><%= app.name %></h3>
+      <p class="app-card__meta">Última actualización · <%= app.updated_at ? new Date(app.updated_at).toLocaleDateString(countryConfig.locale) : '—' %></p>
+    </div>
+  </div>
+
+  <p class="app-card__desc"><%= app.description %></p>
+
+  <div class="app-card__downloads">
+    <span class="app-card__downloads-label">Links para</span>
+    <% if (app.url_pc || app.url_apk || app.url_ios || app.url_web) { %>
+      <div class="app-card__badges">
+        <% if (app.url_pc) { %>
+          <a href="<%= app.url_pc %>" target="_blank" rel="noopener noreferrer" class="app-badge app-badge--windows" title="Descargar para Windows"><%- include('platform-logo', { name: 'windows' }) %> Windows</a>
+        <% } %>
+        <% if (app.url_apk) { %>
+          <button type="button" class="app-badge app-badge--android" title="Descargar para Android" onclick="manejarDescargaConQR('<%= cardJsSafe(app.url_apk) %>', '<%= cardNombreJs %> · Android')"><%- include('platform-logo', { name: 'android' }) %> Android</button>
+        <% } %>
+        <% if (app.url_ios) { %>
+          <button type="button" class="app-badge app-badge--ios" title="Ver instructivo iOS/iPad" onclick="abrirModalPdf('<%= cardJsSafe(app.url_ios) %>', '<%= cardNombreJs %> · Instructivo iOS/iPad')"><%- include('platform-logo', { name: 'apple' }) %> iOS/iPad</button>
+        <% } %>
+        <% if (app.url_web) { %>
+          <a href="<%= app.url_web %>" target="_blank" rel="noopener noreferrer" class="app-badge app-badge--web" title="Abrir versión WEB"><%- include('platform-logo', { name: 'web' }) %> WEB</a>
+        <% } %>
+      </div>
+    <% } else { %>
+      <span class="app-card__no-files">Sin archivos disponibles</span>
+    <% } %>
+  </div>
+
+  <% if (cardIsAdmin) { %>
+  <div class="app-card__footer">
+    <% if (cardAllowNotify) { %>
+    <button type="button" class="app-action app-action--notify"
+            title="<%= app.notified === false ? 'Enviar cambios por correo a los equipos' : 'No hay cambios pendientes' %>"
+            onclick="abrirModalNotificar('<%= app.id %>', '<%= cardNombreJs %>')"
+            <%= app.notified === false ? '' : 'disabled' %>>
+      Notificar
+    </button>
+    <% } %>
+    <button type="button" class="app-action app-action--edit" title="Editar app"
+            onclick="abrirModalEditar('<%= app.id %>', '<%= cardNombreJs %>', '<%= cardJsSafe(app.description) %>', '<%= cardJsSafe(app.url_pc || '') %>', '<%= cardJsSafe(app.url_apk || '') %>', '<%= cardJsSafe(app.url_ios || '') %>', '<%= cardJsSafe(app.url_web || '') %>', '<%= cardJsSafe(cardIconUrl) %>')">
+      Editar
+    </button>
+    <form action="/apps/eliminar/<%= app.id %>" method="POST" class="app-card__delete-form" onsubmit="return confirm('¿Estás seguro que deseas eliminar la aplicación? Esta acción es irreversible.');">
+      <button type="submit" class="app-action app-action--delete" title="Eliminar app">Eliminar</button>
+    </form>
+  </div>
+  <% } %>
+</article>

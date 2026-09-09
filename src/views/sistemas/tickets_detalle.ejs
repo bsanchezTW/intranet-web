@@ -1,265 +1,328 @@
-<div class="contenedor contenedor--narrow ticket-detail-view <%= (typeof isModal !== 'undefined' && isModal) ? 'ticket-detail-view--modal' : '' %>">
-  <% if (typeof isModal === 'undefined' || !isModal) { %>
+<%
+  const esModal = (typeof isModal !== 'undefined' && isModal);
+  const puedeGestionar = (typeof canManageTickets !== 'undefined' && canManageTickets);
+  const agentes = (typeof supportAgents !== 'undefined' && Array.isArray(supportAgents)) ? supportAgents : [];
+  const volverA = (typeof backTo !== 'undefined' && backTo) ? backTo : '/sistemas/tickets';
+
+  const estadoLabels = { open: 'Abierto', in_progress: 'En curso', pending_close: 'Pendiente de cierre', closed: 'Cerrado' };
+  const prioridadLabels = { low: 'Baja', medium: 'Media', high: 'Alta' };
+
+  const esCerrado = ticket.status === 'closed';
+  const esPropio = user && user.email === ticket.requester_email;
+  // `pending_close` ya no se produce; sobrevive en tickets antiguos y conserva
+  // su confirmación por parte del solicitante hasta que se resuelvan.
+  const esperandoConfirmacion = ticket.status === 'pending_close';
+
+  const yo = agentes.find((a) => user && a.id === user.id);
+  const nombreYo = yo ? yo.name : (user && (user.nombre || user.username)) || 'mí';
+
+  const fmt = (valor) => valor ? new Date(valor).toLocaleString(countryConfig.locale, {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  }) : '—';
+
+  let ticketAdjuntos = [];
+  try { if (ticket.attachments) ticketAdjuntos = JSON.parse(ticket.attachments); } catch (e) {}
+  const imagenesOrig = ticketAdjuntos.filter((a) => a.tipo === 'image');
+  const otrosOrig = ticketAdjuntos.filter((a) => a.tipo !== 'image');
+%>
+
+<div class="ticket-detail-view <%= esModal ? 'ticket-detail-view--modal' : 'contenedor' %>">
+  <% if (!esModal) { %>
   <div class="ticket-detail-back">
-    <a href="/sistemas/tickets" class="link-volver">← Volver al Listado</a>
+    <a href="<%= volverA %>" class="link-volver">← Volver al listado</a>
   </div>
   <% } %>
 
 <div class="ticket-container">
 
-  <% 
-    const estadoLabels = { open: 'Abierto', in_progress: 'En curso', pending_close: 'Pendiente de cierre', closed: 'Cerrado' };
-    const prioridadLabels = { low: 'Baja', medium: 'Media', high: 'Alta' };
-
-    let badgeEstado = 'bg-secondary';
-    if (ticket.status === 'open') badgeEstado = 'bg-primary';
-    else if (ticket.status === 'in_progress') badgeEstado = 'bg-warning';
-    else if (ticket.status === 'pending_close') badgeEstado = 'bg-success';
-    else if (ticket.status === 'closed') badgeEstado = 'bg-secondary';
-
-    let badgePrioridad = 'bg-secondary';
-    if (ticket.priority === 'high') badgePrioridad = 'bg-danger';
-    else if (ticket.priority === 'medium') badgePrioridad = 'bg-success';
-    else if (ticket.priority === 'low') badgePrioridad = 'bg-primary';
-  %>
-
-  <div class="cabecera-detalle">
-    <div>
-      <div class="ticket-header-main">
-        <h2 class="ticket-detail-heading">Ticket #<%= ticket.id %></h2>
-        <span class="badge <%= badgeEstado %>"><%= estadoLabels[ticket.status] || ticket.status %></span>
-        
-        <% if (user && typeof isAdministrador !== 'undefined' && isAdministrador) { %>
-            <button
-              id="btnTomarTicket"
-              type="button"
-              data-take-ticket="<%= ticket.id %>"
-              class="btn-tomar-ticket <%= ticket.assigned_to ? 'is-assigned' : '' %>"
-            >
-                <%= ticket.assigned_to ? 'Ticket tomado por ' + ticket.assigned_to : 'Tomar Ticket' %>
-            </button>
+  <!-- ═══════════ Cabecera fija ═══════════ -->
+  <div class="ticket-head">
+    <div class="ticket-head__tags">
+      <span class="ticket-head__id">#<%= ticket.id %></span>
+      <span class="ticket-estado ticket-estado--<%= ticket.status %>"><%= estadoLabels[ticket.status] || ticket.status %></span>
+      <span class="ticket-prio ticket-prio--<%= ticket.priority %>"><%= prioridadLabels[ticket.priority] || ticket.priority %></span>
+      <span class="ticket-head__asignado<%= ticket.assigned_to ? ' ticket-head__asignado--activo' : '' %>">
+        <% if (ticket.assigned_to) { %>
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <%= ticket.assigned_to %>
+        <% } else { %>
+          Sin asignar
         <% } %>
-
-      </div>
-      <h3 class="ticket-detail-subtitle"><%= ticket.title %></h3>
+      </span>
     </div>
-    <div class="ticket-detail-meta">
-      <p><strong>Creado:</strong> <%= new Date(ticket.created_at).toLocaleString(countryConfig.locale) %></p>
-      <% if (ticket.fecha_resolucion) { %>
-        <p><strong>Pendiente de cierre:</strong> <%= new Date(ticket.fecha_resolucion).toLocaleString(countryConfig.locale) %></p>
-      <% } %>
+
+    <h2 class="ticket-head__titulo"><%= ticket.title %></h2>
+
+    <div class="ticket-head__meta">
+      <span><strong><%= ticket.requester_name %></strong> · <%= ticket.requester_email %></span>
+      <span class="ticket-head__sep" aria-hidden="true">·</span>
+      <span><%= ticket.category || 'Sin clasificar' %></span>
+      <span class="ticket-head__sep" aria-hidden="true">·</span>
+      <span>Creado <%= fmt(ticket.created_at) %></span>
       <% if (ticket.fecha_cierre) { %>
-        <p><strong>Cerrado:</strong> <%= new Date(ticket.fecha_cierre).toLocaleString(countryConfig.locale) %></p>
+        <span class="ticket-head__sep" aria-hidden="true">·</span>
+        <span>Cerrado <%= fmt(ticket.fecha_cierre) %></span>
       <% } %>
     </div>
   </div>
 
-  <div class="seccion-info">
-    <p><strong>Solicitante:</strong> <%= ticket.requester_name %> (<%= ticket.requester_email %>)</p>
-    <p>
-      <strong>Categoría:</strong> <%= ticket.category || 'Sin clasificar' %> | 
-      <strong>Prioridad:</strong> <span class="badge <%= badgePrioridad %>"><%= prioridadLabels[ticket.priority] || ticket.priority %></span>
-    </p>
-    <div class="ticket-description-box">
-      <strong class="ticket-description-label">Descripción del requerimiento:</strong>
-      <p class="ticket-description-text"><%= ticket.description %></p>
-      
-      <% 
-        let ticketAdjuntos = [];
-        try { if(ticket.attachments) ticketAdjuntos = JSON.parse(ticket.attachments); } catch(e) {}
-      %>
-      <% if(ticketAdjuntos && ticketAdjuntos.length > 0) { %>
-        <div class="adjuntos-wrapper">
-          
-          <% const imagenesOrig = ticketAdjuntos.filter(a => a.tipo === 'image'); %>
-          <% if(imagenesOrig.length > 0) { %>
-            <div class="seccion-adjunto">
-              <div class="titulo-adjunto">Imágenes adjuntas</div>
-              <div class="grid-imagenes">
-                <% imagenesOrig.forEach(img => { %>
-                  <a href="<%= img.url %>" target="_blank" title="<%= img.nombre %>">
-                    <img src="<%= img.url %>" alt="Adjunto" class="thumb-imagen">
-                  </a>
-                <% }) %>
-              </div>
-            </div>
-          <% } %>
+  <!-- ═══════════ Cuerpo con scroll ═══════════ -->
+  <div class="ticket-body">
 
-          <% const otrosOrig = ticketAdjuntos.filter(a => a.tipo !== 'image'); %>
-          <% if(otrosOrig.length > 0) { %>
-            <div class="seccion-adjunto">
-              <div class="titulo-adjunto">Otros archivos adjuntos</div>
-              <ul class="lista-archivos">
-                <% otrosOrig.forEach(arc => { %>
-                  <li>
-                    <a href="<%= arc.url %>" target="_blank">
-                      <%= arc.nombre %>
+    <section class="ticket-bloque">
+      <h3 class="ticket-bloque__title">Descripción del requerimiento</h3>
+      <div class="ticket-descripcion">
+        <p class="ticket-descripcion__texto"><%= ticket.description %></p>
+
+        <% if (ticketAdjuntos.length > 0) { %>
+          <div class="adjuntos-wrapper">
+            <% if (imagenesOrig.length > 0) { %>
+              <div class="seccion-adjunto">
+                <div class="titulo-adjunto">Imágenes adjuntas</div>
+                <div class="grid-imagenes">
+                  <% imagenesOrig.forEach((img) => { %>
+                    <a href="<%= img.url %>" target="_blank" rel="noopener" title="<%= img.nombre %>">
+                      <img src="<%= img.url %>" alt="Adjunto" class="thumb-imagen">
                     </a>
-                  </li>
-                <% }) %>
-              </ul>
-            </div>
-          <% } %>
-
-        </div>
-      <% } %>
-
-    </div>
-  </div>
-
-  <div class="historial-container">
-    <h3 class="ticket-section-title">Historial de Mensajes</h3>
-    
-    <% if (respuestas && respuestas.length > 0) { %>
-      <% respuestas.forEach(r => { 
-           const esSoporte = r.remitente === 'Soporte' || r.remitente === 'Sistema';
-      %>
-        <div class="mensaje-card <%= esSoporte ? 'soporte' : 'usuario' %>">
-          <div class="mensaje-header">
-            <strong><%= r.remitente %></strong>
-            <span><%= new Date(r.fecha).toLocaleString(countryConfig.locale) %></span>
+                  <% }) %>
+                </div>
+              </div>
+            <% } %>
+            <% if (otrosOrig.length > 0) { %>
+              <div class="seccion-adjunto">
+                <div class="titulo-adjunto">Otros archivos adjuntos</div>
+                <ul class="lista-archivos">
+                  <% otrosOrig.forEach((arc) => { %>
+                    <li><a href="<%= arc.url %>" target="_blank" rel="noopener"><%= arc.nombre %></a></li>
+                  <% }) %>
+                </ul>
+              </div>
+            <% } %>
           </div>
-          <p class="ticket-message-text"><%= r.mensaje %></p>
-          
-          <% 
-            let respAdjuntos = [];
-            try { if(r.attachments) respAdjuntos = JSON.parse(r.attachments); } catch(e) {}
-            if(r.file_url && respAdjuntos.length === 0) {
-                respAdjuntos.push({ url: r.file_url, nombre: r.archivo_nombre || 'Archivo adjunto', tipo: r.archivo_tipo || 'doc' });
-            }
+        <% } %>
+      </div>
+    </section>
+
+    <section class="ticket-bloque">
+      <h3 class="ticket-bloque__title">
+        Historial
+        <% if (respuestas && respuestas.length > 0) { %>
+          <span class="ticket-bloque__count"><%= respuestas.length %></span>
+        <% } %>
+      </h3>
+
+      <% if (respuestas && respuestas.length > 0) { %>
+        <ol class="ticket-hilo">
+          <% respuestas.forEach((r) => {
+               const esSoporte = r.remitente === 'Soporte' || r.remitente === 'Sistema';
+               let respAdjuntos = [];
+               try { if (r.attachments) respAdjuntos = JSON.parse(r.attachments); } catch (e) {}
+               if (r.file_url && respAdjuntos.length === 0) {
+                 respAdjuntos.push({ url: r.file_url, nombre: r.archivo_nombre || 'Archivo adjunto', tipo: r.archivo_tipo || 'doc' });
+               }
+               const imagenes = respAdjuntos.filter((a) => a.tipo === 'image');
+               const otros = respAdjuntos.filter((a) => a.tipo !== 'image');
           %>
-          <% if(respAdjuntos && respAdjuntos.length > 0) { %>
-            <div class="adjuntos-wrapper adjuntos-wrapper--reply">
-              
-              <% const imagenes = respAdjuntos.filter(a => a.tipo === 'image'); %>
-              <% if(imagenes.length > 0) { %>
-                <div class="seccion-adjunto">
-                  <div class="titulo-adjunto">Imágenes:</div>
-                  <div class="grid-imagenes">
-                    <% imagenes.forEach(img => { %>
-                      <a href="<%= img.url %>" target="_blank" title="<%= img.nombre %>">
-                        <img src="<%= img.url %>" alt="Adjunto" class="thumb-imagen thumb-imagen--small">
-                      </a>
-                    <% }) %>
-                  </div>
-                </div>
-              <% } %>
+            <li class="ticket-msg <%= esSoporte ? 'ticket-msg--soporte' : 'ticket-msg--usuario' %>">
+              <div class="ticket-msg__head">
+                <span class="ticket-msg__autor"><%= r.remitente %></span>
+                <span class="ticket-msg__fecha"><%= fmt(r.fecha) %></span>
+              </div>
+              <p class="ticket-msg__texto"><%= r.mensaje %></p>
 
-              <% const otros = respAdjuntos.filter(a => a.tipo !== 'image'); %>
-              <% if(otros.length > 0) { %>
-                <div class="seccion-adjunto">
-                  <div class="titulo-adjunto">Archivos:</div>
-                  <ul class="lista-archivos">
-                    <% otros.forEach(arc => { %>
-                      <li>
-                        <a href="<%= arc.url %>" target="_blank">
-                          <%= arc.nombre %>
+              <% if (respAdjuntos.length > 0) { %>
+                <div class="adjuntos-wrapper adjuntos-wrapper--reply">
+                  <% if (imagenes.length > 0) { %>
+                    <div class="grid-imagenes">
+                      <% imagenes.forEach((img) => { %>
+                        <a href="<%= img.url %>" target="_blank" rel="noopener" title="<%= img.nombre %>">
+                          <img src="<%= img.url %>" alt="Adjunto" class="thumb-imagen thumb-imagen--small">
                         </a>
-                      </li>
-                    <% }) %>
-                  </ul>
+                      <% }) %>
+                    </div>
+                  <% } %>
+                  <% if (otros.length > 0) { %>
+                    <ul class="lista-archivos">
+                      <% otros.forEach((arc) => { %>
+                        <li><a href="<%= arc.url %>" target="_blank" rel="noopener"><%= arc.nombre %></a></li>
+                      <% }) %>
+                    </ul>
+                  <% } %>
                 </div>
               <% } %>
+            </li>
+          <% }) %>
+        </ol>
+      <% } else { %>
+        <p class="ticket-hilo-vacio">Aún no hay respuestas en este ticket.</p>
+      <% } %>
+    </section>
 
-            </div>
-          <% } %>
-
-        </div>
-      <% }) %>
-    <% } else { %>
-      <p class="ticket-empty-message">Aún no hay respuestas en este ticket.</p>
-    <% } %>
-  </div>
-
-  <% if (ticket.status === 'pending_close' && user.email === ticket.requester_email) { %>
-    <div class="acciones-rapidas">
-      <div class="acciones-rapidas__body">
-        <h4 class="acciones-rapidas__title">El equipo de TI ha marcado este ticket como Pendiente de cierre.</h4>
-        <p class="acciones-rapidas__text">Por favor, confirma si tu problema fue solucionado para cerrar el ticket, o recházalo si aún necesitas ayuda.</p>
-        <div class="acciones-rapidas__forms">
+    <% if (esperandoConfirmacion && esPropio) { %>
+      <section class="ticket-confirmar">
+        <h4 class="ticket-confirmar__title">TI marcó este ticket como pendiente de cierre</h4>
+        <p class="ticket-confirmar__text">Confirma si tu problema quedó resuelto, o recházalo si aún necesitas ayuda.</p>
+        <div class="ticket-confirmar__acciones">
           <form action="/sistemas/tickets/<%= ticket.id %>/confirmar" method="POST">
-            <button type="submit" class="btn btn-success">Confirmar Solución</button>
+            <button type="submit" class="ticket-btn ticket-btn--ok">Confirmar solución</button>
           </form>
           <form action="/sistemas/tickets/<%= ticket.id %>/rechazar" method="POST">
-            <button type="submit" class="btn btn-danger" data-confirm-message="¿Estás seguro de reabrir el ticket?">Aún tengo problemas</button>
+            <button type="submit" class="ticket-btn ticket-btn--ghost" data-confirm-message="¿Estás seguro de reabrir el ticket?">Aún tengo problemas</button>
           </form>
         </div>
-      </div>
-    </div>
-  <% } %>
+      </section>
+    <% } %>
+  </div>
 
-  <% if (ticket.status !== 'closed') { %>
-    
-    <% if (typeof isAdministrador !== 'undefined' && isAdministrador) { %>
-      <div class="form-respuesta form-respuesta--admin">
-        <h3 class="ticket-detail-subtitle">Panel de Gestión (TI)</h3>
-        
-        <form id="form-upload-admin" action="/sistemas/tickets/<%= ticket.id %>/actualizar" method="POST">
-          <div class="ticket-form-grid">
-            <div>
-              <label>Categoría:</label>
-              <select name="category">
-                <option value="SAP" <%= ticket.category==='SAP'?'selected':'' %>>SAP</option>
-                <option value="Salesforce" <%= ticket.category==='Salesforce'?'selected':'' %>>Salesforce</option>
-                <option value="Intranet" <%= ticket.category==='Intranet'?'selected':'' %>>Intranet</option>
-                <option value="Hardware" <%= ticket.category==='Hardware'?'selected':'' %>>Hardware </option>
-                <option value="Otro" <%= ticket.category==='Otro'?'selected':'' %>>Otro</option>
+  <!-- ═══════════ Pie de acciones ═══════════ -->
+  <% if (esCerrado) { %>
+    <div class="ticket-foot ticket-foot--cerrado">
+      <p class="ticket-foot__cerrado-txt">Este ticket está cerrado. Si el problema se repite, abre uno nuevo.</p>
+    </div>
+
+  <% } else if (puedeGestionar) { %>
+    <div class="ticket-foot">
+      <form id="form-upload-admin" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/actualizar" method="POST">
+        <input type="hidden" name="redirect_to" value="<%= volverA %>">
+        <input type="hidden" name="accion" id="ticketAccion" value="guardar">
+        <input type="hidden" name="assign_mode" id="ticketAssignMode" value="">
+        <input type="hidden" name="assign_to" id="ticketAssignTo" value="">
+        <input type="hidden" name="adjuntos_data" id="adjuntos_data_admin">
+
+        <div class="ticket-gestion__campos">
+          <label class="ticket-campo">
+            <span class="ticket-campo__label">Categoría</span>
+            <select name="category">
+              <% ['SAP','Salesforce','Intranet','Hardware','Otro'].forEach((c) => { %>
+                <option value="<%= c %>" <%= ticket.category === c ? 'selected' : '' %>><%= c %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="ticket-campo">
+            <span class="ticket-campo__label">Prioridad</span>
+            <select name="priority">
+              <option value="low" <%= ticket.priority === 'low' ? 'selected' : '' %>>Baja</option>
+              <option value="medium" <%= ticket.priority === 'medium' ? 'selected' : '' %>>Media</option>
+              <option value="high" <%= ticket.priority === 'high' ? 'selected' : '' %>>Alta</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="ticket-campo">
+          <span class="ticket-campo__label">Mensaje al usuario <span class="ticket-campo__opt">(opcional)</span></span>
+          <textarea id="mensajeAdmin" name="mensaje_respuesta" rows="3" maxlength="2000"
+                    placeholder="Escribe aquí para notificar al solicitante…"></textarea>
+          <div id="charCountAdmin" class="char-counter">0 / 2000 caracteres</div>
+        </div>
+
+        <div class="ticket-gestion__barra">
+          <label class="ticket-adjuntar">
+            <input type="file" id="archivos_admin" class="ticket-adjuntar__input" multiple
+                   accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+            <span class="ticket-adjuntar__btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              Adjuntar
+            </span>
+            <span id="upload-status-admin" class="ticket-upload-status"></span>
+          </label>
+
+          <div class="ticket-gestion__acciones">
+            <button type="button" class="ticket-btn ticket-btn--cerrar" data-ticket-accion="cerrar" id="btn-cerrar-admin">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+              Guardar y cerrar ticket
+            </button>
+            <button type="button" class="ticket-btn ticket-btn--primary" data-ticket-accion="guardar" id="btn-submit-admin">
+              Guardar y poner En curso
+            </button>
+          </div>
+        </div>
+
+        <!-- Paso de asignación: se despliega al guardar -->
+        <div class="ticket-asignar" id="ticketAsignar" hidden>
+          <div class="ticket-asignar__card" role="group" aria-labelledby="ticketAsignarTitulo">
+            <h4 class="ticket-asignar__title" id="ticketAsignarTitulo">¿Tomar este ticket?</h4>
+            <p class="ticket-asignar__hint" id="ticketAsignarHint">Todo ticket gestionado queda con un responsable.</p>
+
+            <div class="ticket-asignar__ops">
+              <label class="ticket-asignar__op">
+                <input type="radio" name="assign_choice" value="yo" checked>
+                <span class="ticket-asignar__op-txt">
+                  <strong>Tomarlo yo</strong>
+                  <span><%= nombreYo %></span>
+                </span>
+              </label>
+
+              <label class="ticket-asignar__op">
+                <input type="radio" name="assign_choice" value="otro" <%= agentes.length <= 1 ? 'disabled' : '' %>>
+                <span class="ticket-asignar__op-txt">
+                  <strong>Asignárselo a otra persona</strong>
+                  <span><%= agentes.length <= 1 ? 'No hay más personal de Informática registrado' : 'Personal de Informática' %></span>
+                </span>
+              </label>
+
+              <select id="ticketAsignarSelect" class="ticket-asignar__select" disabled>
+                <option value="">Selecciona a quién asignar…</option>
+                <% agentes.filter((a) => !user || a.id !== user.id).forEach((a) => { %>
+                  <option value="<%= a.id %>"><%= a.name %></option>
+                <% }) %>
               </select>
+
+              <% if (ticket.assigned_to) { %>
+              <label class="ticket-asignar__op">
+                <input type="radio" name="assign_choice" value="mantener">
+                <span class="ticket-asignar__op-txt">
+                  <strong>Mantener responsable</strong>
+                  <span><%= ticket.assigned_to %></span>
+                </span>
+              </label>
+              <% } %>
             </div>
-            <div>
-              <label>Prioridad:</label>
-              <select name="priority">
-                <option value="low" <%= ticket.priority==='low'?'selected':'' %>>Baja</option>
-                <option value="medium" <%= ticket.priority==='medium'?'selected':'' %>>Media</option>
-                <option value="high" <%= ticket.priority==='high'?'selected':'' %>>Alta</option>
-              </select>
-            </div>
-            <div>
-              <label>Estado:</label>
-              <select name="status" class="ticket-status-select">
-                <option value="open" <%= ticket.status==='open'?'selected':'' %>>Abierto</option>
-                <option value="in_progress" <%= ticket.status==='in_progress'?'selected':'' %>>En curso</option>
-                <option value="pending_close" <%= ticket.status==='pending_close'?'selected':'' %>>Marcar como Pendiente de cierre</option>
-                <option value="closed" <%= ticket.status==='closed'?'selected':'' %>>Cerrar directamente</option>
-              </select>
+
+            <p class="ticket-asignar__error" id="ticketAsignarError" role="alert" hidden></p>
+
+            <div class="ticket-asignar__acciones">
+              <button type="button" class="ticket-btn ticket-btn--ghost" id="btnAsignarCancelar">Cancelar</button>
+              <button type="button" class="ticket-btn ticket-btn--primary" id="btnAsignarConfirmar">Confirmar y guardar</button>
             </div>
           </div>
-          
-          <label>Mensaje al usuario (Opcional):</label>
-          <textarea id="mensajeAdmin" name="mensaje_respuesta" rows="4" placeholder="Escribe aquí para notificar al usuario..." maxlength="2000"></textarea>
-          <div id="charCountAdmin" class="char-counter">0 / 2000 caracteres</div>
+        </div>
+      </form>
+    </div>
 
-          <label class="ticket-files-label">Adjuntar archivos (opcional):</label>
-          <input type="file" id="archivos_admin" class="ticket-file-input" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
-          <input type="hidden" name="adjuntos_data" id="adjuntos_data_admin">
-          <div id="upload-status-admin" class="ticket-upload-status"></div>
+  <% } else if (esPropio) { %>
+    <div class="ticket-foot">
+      <form id="form-upload-user" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/responder" method="POST">
+        <input type="hidden" name="redirect_to" value="<%= volverA %>">
+        <input type="hidden" name="adjuntos_data" id="adjuntos_data_user">
 
-          <button type="submit" class="btn btn-primario ticket-submit-full" id="btn-submit-admin">Actualizar Ticket</button>
-        </form>
-      </div>
-
-    <% } else { %>
-      
-      <div class="form-respuesta">
-        <h3 class="ticket-detail-subtitle">Añadir un comentario</h3>
-        <form id="form-upload-user" action="/sistemas/tickets/<%= ticket.id %>/responder" method="POST">
-          <textarea id="mensajeUser" name="mensaje_respuesta" rows="4" placeholder="Escribe tu mensaje aquí..." required maxlength="2000"></textarea>
+        <div class="ticket-campo">
+          <span class="ticket-campo__label">Añadir un comentario</span>
+          <textarea id="mensajeUser" name="mensaje_respuesta" rows="3" required maxlength="2000"
+                    placeholder="Escribe tu mensaje aquí…"></textarea>
           <div id="charCountUser" class="char-counter">0 / 2000 caracteres</div>
-          
-          <label class="ticket-files-label">Adjuntar archivos (opcional):</label>
-          <input type="file" id="archivos_user" class="ticket-file-input" multiple accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
-          <input type="hidden" name="adjuntos_data" id="adjuntos_data_user">
-          <div id="upload-status-user" class="ticket-upload-status"></div>
+        </div>
 
-          <button type="submit" class="btn btn-primario" id="btn-submit-user">Enviar Mensaje</button>
-        </form>
-      </div>
-    <% } %>
+        <div class="ticket-gestion__barra">
+          <label class="ticket-adjuntar">
+            <input type="file" id="archivos_user" class="ticket-adjuntar__input" multiple
+                   accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+            <span class="ticket-adjuntar__btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              Adjuntar
+            </span>
+            <span id="upload-status-user" class="ticket-upload-status"></span>
+          </label>
+
+          <div class="ticket-gestion__acciones">
+            <button type="submit" class="ticket-btn ticket-btn--primary" id="btn-submit-user">Enviar mensaje</button>
+          </div>
+        </div>
+      </form>
+    </div>
 
   <% } else { %>
-    <div class="ticket-closed-box">
-      <h3>Este ticket se encuentra cerrado.</h3>
-      <p>Si tienes un problema similar, por favor abre un nuevo ticket.</p>
+    <div class="ticket-foot ticket-foot--cerrado">
+      <p class="ticket-foot__cerrado-txt">Sólo el personal de Informática puede gestionar este ticket.</p>
     </div>
   <% } %>
 

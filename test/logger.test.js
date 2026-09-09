@@ -28,6 +28,18 @@ describe("logger — errores de Postgres", () => {
     assert.match(described.message, /espera 1–2 min/i);
   });
 
+  it("explica ECONNREFUSED de Node como firewall de cPanel", () => {
+    const described = logger.describeError({
+      code: "ECONNREFUSED",
+      message: "AggregateError",
+      address: "54.1.2.3",
+      port: 5432,
+    });
+    assert.equal(described.kind, "refused");
+    assert.match(described.message, /5432/);
+    assert.match(described.message, /cPanel no alcanza/);
+  });
+
   it("explica econnrefused del pooler Elixir", () => {
     const described = logger.describeError({
       code: "08006",
@@ -58,5 +70,19 @@ describe("logger — errores de Postgres", () => {
     assert.equal(errors.length, 1);
     assert.match(errors[0], /^\[db\] /);
     assert.match(errors[0], /intranet_peru/);
+  });
+
+  it("guarda las líneas recientes para el diagnóstico de BD", () => {
+    logger.info("db", "conectado intranet_peru schema=peru");
+    logger.error("db", {
+      code: "42P01",
+      message: 'relation "users" does not exist',
+    });
+    const recent = logger.recentEntries("db");
+    assert.equal(recent.length, 2);
+    assert.equal(recent[0].level, "info");
+    assert.match(recent[0].message, /intranet_peru/);
+    assert.equal(recent[1].level, "error");
+    assert.match(recent[1].message, /does not exist/);
   });
 });

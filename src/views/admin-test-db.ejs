@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <%- include('partials/theme-head') %>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title><%= formatPageTitle(titulo) %></title>
+  <style>
+    .dbtest {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 0 1.25rem 3rem;
+      font-family: var(--font-sans);
+      color: var(--color-text);
+    }
+    .dbtest__head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1rem;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+    .dbtest__title { margin: 0 0 0.35rem; color: var(--color-heading); font-size: 1.5rem; }
+    .dbtest__meta { margin: 0; color: var(--color-text-muted); font-size: 0.9rem; }
+    .dbtest__badge {
+      display: inline-block;
+      padding: 0.2rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .dbtest__badge--ok { background: var(--green-soft); color: var(--green-ink); }
+    .dbtest__badge--fail { background: #fde8e8; color: #8b1e1e; }
+    .dbtest__actions { display: flex; gap: 0.5rem; }
+    .dbtest__btn {
+      appearance: none;
+      border: 1px solid var(--color-border-strong);
+      background: var(--color-surface);
+      color: var(--color-text);
+      border-radius: 8px;
+      padding: 0.45rem 0.85rem;
+      font: inherit;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .dbtest__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.65rem;
+      margin-bottom: 1.25rem;
+    }
+    .dbtest__card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 0.75rem 0.9rem;
+    }
+    .dbtest__card dt { margin: 0; color: var(--color-text-subtle); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .dbtest__card dd { margin: 0.2rem 0 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86rem; word-break: break-all; }
+    .dbtest__log {
+      background: #0b1624;
+      color: #d7e4f5;
+      border-radius: 14px;
+      padding: 1rem 1.1rem;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+    }
+    .dbtest__log h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8fb0d4;
+      font-family: var(--font-sans);
+    }
+    .dbtest__line { display: grid; grid-template-columns: 5.5rem 4.2rem 1fr; gap: 0.65rem; padding: 0.28rem 0; border-top: 1px solid rgba(255,255,255,0.06); }
+    .dbtest__line:first-of-type { border-top: 0; }
+    .dbtest__status { font-weight: 700; }
+    .dbtest__status--ok { color: #9be15d; }
+    .dbtest__status--fail { color: #ff7b7b; }
+    .dbtest__status--warn { color: #ffd36a; }
+    .dbtest__status--info { color: #8ec5ff; }
+    .dbtest__ms { color: #6f87a3; }
+    .dbtest__title-line { color: #fff; font-weight: 600; }
+    .dbtest__detail { color: #b7c9dc; white-space: pre-wrap; }
+    .dbtest__section { margin-top: 1.25rem; }
+  </style>
+</head>
+<body>
+  <% const env = report.env || {}; const pool = report.pool || {}; %>
+  <main class="dbtest">
+    <header class="dbtest__head">
+      <div>
+        <h1 class="dbtest__title">Diagnóstico de base de datos</h1>
+        <p class="dbtest__meta">
+          <%= generatedAt %>
+          · instancia <strong><%= env.country %></strong>
+          ·
+          <span class="dbtest__badge dbtest__badge--<%= report.ok ? 'ok' : 'fail' %>">
+            <%= report.ok ? "BD operativa" : "Hay fallos" %>
+          </span>
+        </p>
+      </div>
+      <div class="dbtest__actions">
+        <a class="dbtest__btn" href="/admin-test-db">Volver a probar</a>
+        <a class="dbtest__btn" href="/login">Ir al login</a>
+      </div>
+    </header>
+
+    <section class="dbtest__grid" aria-label="Entorno de esta instancia">
+      <div class="dbtest__card"><dl><dt>COUNTRY</dt><dd><%= env.country %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>Schema / rol esperados</dt><dd><%= env.expectedSchema || "?" %> / <%= env.expectedRole || "?" %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>DB_USER</dt><dd><%= env.dbUser %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>Rol leído</dt><dd><%= env.dbRole %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>Host</dt><dd><%= env.dbHost %>:<%= pool.actualPort || env.dbPort %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>Base / SSL</dt><dd><%= env.dbName %> / <%= env.dbSsl %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>APP_BASE_URL</dt><dd><%= env.appBaseUrl %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>NODE_ENV / TZ</dt><dd><%= env.nodeEnv %> / <%= env.tz %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>forceSearchPath</dt><dd><%= String(pool.forceSearchPath) %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>Pool</dt><dd>total=<%= pool.totalCount %> idle=<%= pool.idleCount %> waiting=<%= pool.waitingCount %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>Startup options</dt><dd><%= pool.startupOptions || "(ninguna)" %></dd></dl></div>
+      <div class="dbtest__card"><dl><dt>SET del país</dt><dd><%= pool.searchPathSql %></dd></dl></div>
+      <% if (env.databaseUrl) { %>
+        <div class="dbtest__card"><dl><dt>DATABASE_URL</dt><dd><%= env.databaseUrl %></dd></dl></div>
+      <% } %>
+      <% if (env.passengerAppEnv) { %>
+        <div class="dbtest__card"><dl><dt>Passenger</dt><dd><%= env.passengerAppEnv %></dd></dl></div>
+      <% } %>
+    </section>
+
+    <section class="dbtest__log" aria-label="Log de la prueba">
+      <h2>Prueba en vivo</h2>
+      <% (report.steps || []).forEach((step) => { %>
+        <div class="dbtest__line">
+          <span class="dbtest__status dbtest__status--<%= step.status %>"><%= step.status.toUpperCase() %></span>
+          <span class="dbtest__ms"><%= step.ms != null ? step.ms + " ms" : "" %></span>
+          <div>
+            <div class="dbtest__title-line"><%= step.title %></div>
+            <div class="dbtest__detail"><%= step.detail %></div>
+          </div>
+        </div>
+      <% }) %>
+    </section>
+
+    <section class="dbtest__log dbtest__section" aria-label="Log del proceso">
+      <h2>Log del proceso ([db] desde el arranque)</h2>
+      <% const recent = report.recent || []; %>
+      <% if (!recent.length) { %>
+        <div class="dbtest__detail">Todavía no hay líneas [db] en memoria. Recarga esta página.</div>
+      <% } %>
+      <% recent.forEach((entry) => { %>
+        <div class="dbtest__line">
+          <span class="dbtest__status dbtest__status--<%= entry.level === 'error' ? 'fail' : entry.level %>"><%= entry.level.toUpperCase() %></span>
+          <span class="dbtest__ms"><%= String(entry.at).slice(11, 19) %></span>
+          <div class="dbtest__detail">[<%= entry.scope %>] <%= entry.message %></div>
+        </div>
+      <% }) %>
+    </section>
+  </main>
+</body>
+</html>

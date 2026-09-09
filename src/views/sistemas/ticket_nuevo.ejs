@@ -1,21 +1,24 @@
-<div class="contenedor contenedor--narrow">
-  <% const ticketCreateUser = (typeof usuario !== 'undefined' && usuario) ? usuario : ((typeof user !== 'undefined' && user) ? user : {}); %>
+<% const ticketCreateUser = (typeof usuario !== 'undefined' && usuario) ? usuario : ((typeof user !== 'undefined' && user) ? user : {}); %>
+
+<div class="ticket-detail-view contenedor contenedor--narrow">
   <div class="ticket-detail-back">
-    <a href="/sistemas/tickets" class="link-volver">← Volver a la Soporte de TI</a>
+    <a href="/sistemas/tickets" class="link-volver">← Volver a Soporte</a>
   </div>
 
-  <div class="page-header">
-    <h2 class="page-title">Abrir Nuevo Ticket de Soporte</h2>
-    <p class="page-description">Describe tu problema o requerimiento técnico a continuación.</p>
-  </div>
+  <div class="ticket-container">
+    <div class="ticket-head">
+      <div class="ticket-head__tags">
+        <span class="ticket-head__id">Nuevo ticket</span>
+        <span class="ticket-estado ticket-estado--open">Soporte TI</span>
+      </div>
 
-  <div class="ticket-create-card">
-    <div class="ticket-modal-user-box">
-      <p>
-        <strong>Solicitante:</strong>
-        <%= ticketCreateUser.nombre || ticketCreateUser.username || 'Usuario' %>
-        <span>(<%= ticketCreateUser.email || 'Sin correo' %>)</span>
-      </p>
+      <h2 class="ticket-head__titulo">Abrir un ticket de soporte</h2>
+
+      <div class="ticket-head__meta">
+        <span><strong><%= ticketCreateUser.nombre || ticketCreateUser.username || 'Usuario' %></strong> · <%= ticketCreateUser.email || 'Sin correo' %></span>
+        <span class="ticket-head__sep" aria-hidden="true">·</span>
+        <span>Describe tu problema o requerimiento técnico</span>
+      </div>
     </div>
 
     <%- include('../partials/ticket-create-form', {

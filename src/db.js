@@ -1,5 +1,13 @@
 const dns = require("dns");
+const net = require("net");
 const { Pool } = require("pg");
+
+if (typeof dns.setDefaultResultOrder === "function") {
+  dns.setDefaultResultOrder("ipv4first");
+}
+if (typeof net.setDefaultAutoSelectFamily === "function") {
+  net.setDefaultAutoSelectFamily(false);
+}
 
 const {
   postgresStartupOptions,
@@ -62,6 +70,17 @@ function poolLimits() {
   };
 }
 
+function currentPoolPort() {
+  if (process.env.DATABASE_URL?.trim()) {
+    try {
+      return Number(new URL(process.env.DATABASE_URL.trim()).port || 5432);
+    } catch {
+      return 5432;
+    }
+  }
+  return process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432;
+}
+
 function createPool() {
   const ssl = resolveSsl();
   const options = postgresOptionsForCountry();
@@ -81,7 +100,7 @@ function createPool() {
 
   return new Pool({
     host: process.env.DB_HOST,
-    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 5432,
+    port: currentPoolPort(),
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD || process.env.DB_PASS,
     database: process.env.DB_NAME,
@@ -92,38 +111,159 @@ function createPool() {
   });
 }
 
+function isNetworkUnreachable(err) {
+  if (!err) return false;
+  const code = err.code;
+  if (
+    code === "ECONNREFUSED" ||
+    code === "ETIMEDOUT" ||
+    code === "ENETUNREACH" ||
+    code === "EHOSTUNREACH" ||
+    code === "EAI_AGAIN"
+  ) {
+    return true;
+  }
+  if (Array.isArray(err.errors) && err.errors.some(isNetworkUnreachable)) {
+    return true;
+  }
+  return /ECONNREFUSED|connection timeout|AggregateError/i.test(
+    String(err.message || err),
+  );
+}
+
+function setPoolPort(port) {
+  if (process.env.DATABASE_URL?.trim()) {
+    try {
+      const parsed = new URL(process.env.DATABASE_URL.trim());
+      parsed.port = String(port);
+      process.env.DATABASE_URL = parsed.toString();
+    } catch {
+      // DB_PORT cubre el caso de URL ilegible.
+    }
+  }
+  process.env.DB_PORT = String(port);
+}
+
+function attachPoolHandlers(target) {
+  target.on("connect", (client) => {
+    client
+      .query(
+        "SELECT current_user AS db_user, current_schema() AS schema, inet_server_port() AS port",
+      )
+      .then((result) => {
+        if (firstConnectLogged) return;
+        firstConnectLogged = true;
+        const row = result.rows[0] || {};
+        logger.info(
+          "db",
+          `conectado ${row.db_user || "?"} schema=${row.schema || "?"} puerto=${row.port || "?"} en ${Date.now() - poolCreatedAt}ms`,
+        );
+      })
+      .catch((error) => {
+        if (firstConnectLogged) return;
+        firstConnectLogged = true;
+        logger.error("db", error);
+      });
+  });
+
+  target.on("error", (error) => {
+    logger.error("db", error);
+  });
+}
+
+function replacePool(next) {
+  const previous = pool;
+  pool = next;
+  attachPoolHandlers(pool);
+  previous.removeAllListeners();
+  previous.end().catch(() => {});
+}
+
+async function withPoolerPortFallback(operation) {
+  try {
+    return await operation();
+  } catch (err) {
+    const from = currentPoolPort();
+    const to = from === 5432 ? 6543 : from === 6543 ? 5432 : null;
+    if (alternatePortTried || !to || !looksLikeSupabaseHost() || !isNetworkUnreachable(err)) {
+      throw err;
+    }
+    alternatePortTried = true;
+    firstConnectLogged = false;
+    logger.warn(
+      "db",
+      `puerto ${from} inalcanzable (${err.code || "sin code"}); reintentando pooler en ${to}`,
+    );
+    setPoolPort(to);
+    replacePool(createPool());
+    return operation();
+  }
+}
+
 async function applySearchPath(client, country = process.env.COUNTRY) {
   await client.query(searchPathStatement(country));
 }
 
-const pool = createPool();
+let pool = createPool();
 const poolCreatedAt = Date.now();
 let firstConnectLogged = false;
+let alternatePortTried = false;
+// El pooler en modo transacción (cPanel → :6543) ignora `options=-c search_path`.
+// Si una consulta choca con "relation does not exist", pasamos a SET explícito.
+let forceSearchPath = false;
 
-pool.on("connect", () => {
-  if (firstConnectLogged) return;
-  firstConnectLogged = true;
-  logger.info("db", `conectado en ${Date.now() - poolCreatedAt}ms`);
-});
-
-// Sin este handler, un cliente idle que muere (Supabase corta a ~60s) tumba
-// el proceso Node. Passenger lo reinicia en bucle y cPanel sirve 503 eterno.
-pool.on("error", (error) => {
-  logger.error("db", error);
-});
+attachPoolHandlers(pool);
 
 function warmPool() {
-  pool.query("SELECT 1").catch((error) => {
+  withPoolerPortFallback(() => pool.query("SELECT 1")).catch((error) => {
     logger.error("db", error);
   });
 }
 
 async function getClient() {
-  return pool.connect();
+  return withPoolerPortFallback(async () => {
+    const client = await pool.connect();
+    try {
+      await applySearchPath(client);
+    } catch (error) {
+      client.release();
+      throw error;
+    }
+    return client;
+  });
+}
+
+function isMissingRelationError(err) {
+  return Boolean(err && (err.code === "42P01" || err.code === "3F000"));
+}
+
+async function queryWithSearchPath(text, params) {
+  const client = await pool.connect();
+  try {
+    await applySearchPath(client);
+    return await client.query(text, params);
+  } finally {
+    client.release();
+  }
 }
 
 async function query(text, params) {
-  return pool.query(text, params);
+  return withPoolerPortFallback(async () => {
+    if (forceSearchPath) {
+      return queryWithSearchPath(text, params);
+    }
+    try {
+      return await pool.query(text, params);
+    } catch (err) {
+      if (!isMissingRelationError(err)) throw err;
+      forceSearchPath = true;
+      logger.warn(
+        "db",
+        "el pooler no aplicó search_path; se fija el schema del país en cada consulta",
+      );
+      return queryWithSearchPath(text, params);
+    }
+  });
 }
 
 async function queryRetryIdCollision(text, params, maxAttempts = 8) {
@@ -141,14 +281,40 @@ async function queryRetryIdCollision(text, params, maxAttempts = 8) {
   throw lastErr;
 }
 
+function getPoolDiagnostics() {
+  let searchPathSql = null;
+  try {
+    searchPathSql = searchPathStatement(process.env.COUNTRY);
+  } catch {
+    searchPathSql = null;
+  }
+  return {
+    forceSearchPath,
+    firstConnectLogged,
+    totalCount: pool.totalCount,
+    idleCount: pool.idleCount,
+    waitingCount: pool.waitingCount,
+    startupOptions: postgresOptionsForCountry() || null,
+    searchPathSql,
+    actualPort: currentPoolPort(),
+    alternatePortTried,
+  };
+}
+
 module.exports = {
   query,
   queryRetryIdCollision,
   isIdPrimaryKeyCollision,
+  isMissingRelationError,
+  isNetworkUnreachable,
   getClient,
-  pool,
+  get pool() {
+    return pool;
+  },
   applySearchPath,
   searchPathStatement,
   postgresOptionsForCountry,
+  currentPoolPort,
+  getPoolDiagnostics,
   warmPool,
 };

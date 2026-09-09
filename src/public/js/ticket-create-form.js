@@ -1,13 +1,21 @@
 (function () {
   const MAX_CHARS = 2000;
-  const DEFAULT_STATUS_CLASS = 'ticket-modal-upload-status';
+  const DEFAULT_STATUS_CLASS = 'ticket-upload-status';
 
   function setStatus(statusEl, text, modifier) {
     if (!statusEl) return;
     statusEl.className = modifier
-      ? `${DEFAULT_STATUS_CLASS} ${DEFAULT_STATUS_CLASS}--${modifier}`
+      ? `${DEFAULT_STATUS_CLASS} ticket-status-text--${modifier}`
       : DEFAULT_STATUS_CLASS;
     statusEl.textContent = text;
+  }
+
+  /**
+   * El texto del botón vive en un <span> propio: escribir sobre el botón
+   * borraría el icono que lo acompaña.
+   */
+  function submitLabelEl(submit) {
+    return submit?.querySelector('[data-ticket-submit-label]') || submit;
   }
 
   function resetForm(form) {
@@ -25,8 +33,9 @@
       counter.classList.remove('limit-reached');
     }
     if (submit) {
+      const label = submitLabelEl(submit);
       submit.disabled = false;
-      submit.textContent = submit.dataset.defaultText || submit.textContent;
+      label.textContent = submit.dataset.defaultText || label.textContent;
     }
     setStatus(statusEl, 'Sin archivos seleccionados');
   }
@@ -90,7 +99,10 @@
     const hiddenInput = form.querySelector('[data-ticket-attachments]');
     const statusEl = form.querySelector('[data-ticket-upload-status]');
     const submit = form.querySelector('[data-ticket-submit]');
-    if (!submit.dataset.defaultText) submit.dataset.defaultText = submit.textContent;
+    const label = submitLabelEl(submit);
+    if (!submit.dataset.defaultText) {
+      submit.dataset.defaultText = label.textContent.trim();
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -111,7 +123,7 @@
 
       try {
         submit.disabled = true;
-        submit.textContent = 'Subiendo archivos...';
+        label.textContent = 'Subiendo archivos...';
         setStatus(statusEl, 'Iniciando subida...', 'warning');
 
         hiddenInput.value = JSON.stringify(await uploadFiles(files, statusEl));
@@ -121,7 +133,7 @@
         console.error(err);
         setStatus(statusEl, 'Error', 'error');
         submit.disabled = false;
-        submit.textContent = submit.dataset.defaultText;
+        label.textContent = submit.dataset.defaultText;
       }
     });
   }

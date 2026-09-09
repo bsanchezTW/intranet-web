@@ -89,15 +89,15 @@
     </div>
 
     <div class="home-hero__indicators" role="list" aria-label="Indicadores financieros">
-      <a href="<%= dolarUrl %>" target="_blank" rel="noopener noreferrer" class="home-indicator <%= financeTrendClass(finanzas.dolar.tendencia) %>" role="listitem">
+      <a href="<%= dolarUrl %>" target="_blank" rel="noopener noreferrer" class="home-indicator <%= financeTrendClass(finanzas && finanzas.dolar && finanzas.dolar.tendencia) %>" role="listitem">
         <span class="home-indicator__label">USD</span>
-        <span class="home-indicator__value"><%= (finanzas.dolar && finanzas.dolar.valor) ? finanzas.dolar.valor : '---' %></span>
-        <span class="home-indicator__trend" aria-hidden="true"><%= financeTrendSymbol(finanzas.dolar.tendencia) %></span>
+        <span class="home-indicator__value"><%= (finanzas && finanzas.dolar && finanzas.dolar.valor) ? finanzas.dolar.valor : '---' %></span>
+        <span class="home-indicator__trend" aria-hidden="true"><%= financeTrendSymbol(finanzas && finanzas.dolar && finanzas.dolar.tendencia) %></span>
       </a>
-      <a href="<%= euroUrl %>" target="_blank" rel="noopener noreferrer" class="home-indicator <%= financeTrendClass(finanzas.euro.tendencia) %>" role="listitem">
+      <a href="<%= euroUrl %>" target="_blank" rel="noopener noreferrer" class="home-indicator <%= financeTrendClass(finanzas && finanzas.euro && finanzas.euro.tendencia) %>" role="listitem">
         <span class="home-indicator__label">EUR</span>
-        <span class="home-indicator__value"><%= (finanzas.euro && finanzas.euro.valor) ? finanzas.euro.valor : '---' %></span>
-        <span class="home-indicator__trend" aria-hidden="true"><%= financeTrendSymbol(finanzas.euro.tendencia) %></span>
+        <span class="home-indicator__value"><%= (finanzas && finanzas.euro && finanzas.euro.valor) ? finanzas.euro.valor : '---' %></span>
+        <span class="home-indicator__trend" aria-hidden="true"><%= financeTrendSymbol(finanzas && finanzas.euro && finanzas.euro.tendencia) %></span>
       </a>
       <% if (features.chileUfIndicator) { %>
       <a href="<%= ufUrl %>" target="_blank" rel="noopener noreferrer" class="home-indicator <%= financeTrendClass(finanzas.uf.tendencia) %>" role="listitem">

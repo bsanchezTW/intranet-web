@@ -1,4 +1,6 @@
-/* Ticket modals — layout-only on shared modal.css */
+/* Modales de ticket — sólo ancho y capa; la estructura (cabecera fija, cuerpo
+   scrolleable y pie de acciones) vive en tickets.css y la comparten el detalle
+   y el alta de ticket. */
 
 .modal-overlay.modal-ticket-navbar {
   z-index: 2600;
@@ -9,8 +11,11 @@
 }
 
 .modal-ticket-detail-content {
-  max-width: 960px;
-  padding: 28px;
+  max-width: 900px;
+}
+
+.modal-ticket-create-content {
+  max-width: 720px;
 }
 
 .ticket-modal-title--sr {
@@ -25,58 +30,9 @@
   border: 0 !important;
 }
 
-.ticket-modal-user-box {
-  background: var(--modal-input-bg, #f5f8fc);
-  border: 1px solid var(--modal-border, #dbe5ef);
-  border-radius: var(--modal-radius-sm, 8px);
-  padding: 10px 12px;
-  margin-bottom: 14px;
-}
-
-.ticket-modal-user-box p {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.ticket-modal-user-box span {
-  color: var(--modal-heading, #0f4c81);
-}
-
-.ticket-modal-counter {
-  font-size: 0.8rem;
-  color: #666;
-  text-align: right;
-  margin-top: -4px;
-}
-
-.ticket-modal-counter.limit-reached {
-  color: #dc3545;
-  font-weight: 700;
-}
-
-.ticket-modal-files-label {
-  margin-top: 8px;
-}
-
-.ticket-modal-upload-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.ticket-modal-upload-status {
-  color: #666;
-  font-size: 0.86rem;
-  font-style: italic;
-}
-
-.ticket-modal-upload-status--warning { color: #e67e22; }
-.ticket-modal-upload-status--success { color: green; }
-.ticket-modal-upload-status--error { color: red; }
-
+/* Estado mientras se carga el detalle por fetch. */
 .ticket-modal-state {
-  color: var(--modal-muted, #555);
+  color: var(--color-text-muted, #555);
   font-size: 1rem;
   padding: 42px 18px;
   text-align: center;
@@ -86,19 +42,11 @@
   color: #b42318;
 }
 
-html[data-theme="dark"] .ticket-modal-user-box {
-  background: #243147;
-  border-color: #3b4a65;
-}
-
-html[data-theme="dark"] .ticket-modal-counter {
-  color: #94a3b8;
-}
-
 @media (max-width: 768px) {
-  .modal-ticket-navbar-content,
-  .modal-ticket-detail-content {
-    max-height: none;
-    padding: 22px 16px;
+  /* El alto acotado es lo que mantiene el scroll dentro del cuerpo: si el panel
+     creciera libre, la cabecera —con el botón de cerrar— se perdería al bajar. */
+  .modal-ticket-detail-content,
+  .modal-ticket-create-content {
+    max-height: 92vh;
   }
 }

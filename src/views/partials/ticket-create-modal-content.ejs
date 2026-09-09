@@ -1,16 +1,27 @@
-<p class="ticket-modal-description">Describe tu problema o requerimiento tecnico a continuacion.</p>
+<div class="ticket-detail-view ticket-detail-view--modal">
+  <div class="ticket-container">
 
-<div class="ticket-modal-user-box">
-  <p>
-    <strong>Solicitante:</strong>
-    <%= currentUser ? displayName : 'Usuario' %>
-    <span>(<%= currentUser && currentUser.email ? currentUser.email : 'Sin correo' %>)</span>
-  </p>
+    <div class="ticket-head">
+      <div class="ticket-head__tags">
+        <span class="ticket-head__id">Nuevo ticket</span>
+        <span class="ticket-estado ticket-estado--open">Soporte TI</span>
+      </div>
+
+      <h2 class="ticket-head__titulo">Abrir un ticket de soporte</h2>
+
+      <div class="ticket-head__meta">
+        <span><strong><%= currentUser ? displayName : 'Usuario' %></strong> · <%= currentUser && currentUser.email ? currentUser.email : 'Sin correo' %></span>
+        <span class="ticket-head__sep" aria-hidden="true">·</span>
+        <span>Describe tu problema o requerimiento técnico</span>
+      </div>
+    </div>
+
+    <%- include('ticket-create-form', {
+      formId: 'formCrearTicketNavbar',
+      fieldPrefix: 'ticketModal',
+      modalId: 'modalNuevoTicketNavbar',
+      showCancel: true
+    }) %>
+
+  </div>
 </div>
-
-<%- include('ticket-create-form', {
-  formId: 'formCrearTicketNavbar',
-  fieldPrefix: 'ticketModal',
-  modalId: 'modalNuevoTicketNavbar',
-  showCancel: true
-}) %>

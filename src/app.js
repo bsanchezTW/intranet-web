@@ -24,19 +24,24 @@ db.warmPool();
 // Importación de Rutas
 // ================================
 const authRoutes = require("./routes/auth");
+const adminDbTestRoutes = require("./routes/adminDbTest");
 const indexRoutes = require("./routes/index");
 const procesosRoutes = require("./routes/procesos");
 const personasRoutes = require("./routes/RRHH");
-const ticketsRoutes = require("./routes/tickets");
 const marketingRoutes = require("./routes/marketing");
 const docsRoutes = require("./routes/docs");
 const noticiasRoutes = require("./routes/noticias");
-const claudeRoutes = require("./routes/claude");
 const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
 const { phoneClientConfig } = require("./utils/phone");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
+const ticketsRoutes = isFeatureEnabled("supportTickets")
+  ? require("./routes/tickets")
+  : null;
+const claudeRoutes = isFeatureEnabled("claudeAssistant")
+  ? require("./routes/claude")
+  : null;
 const { syncUnverifiedUsersToDisabled } = require("./utils/syncDisabledUsers");
 const storageService = require("./services/storage/storageService");
 const {
@@ -46,6 +51,10 @@ const {
 const signedMedia = require("./services/media/signedMedia");
 const { ensureVacationSchema } = require("./services/vacations/vacationSchema");
 const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
+const {
+  APP_CATALOG_VALUES,
+  DEFAULT_APP_CATALOG,
+} = require("./constants/appCatalogs");
 const vacationRequestService = require("./services/vacations/vacationRequestService");
 
 // ================================
@@ -349,30 +358,54 @@ function requireAuth(req, res, next) {
 // Montaje de Rutas
 // ================================
 app.use("/", authRoutes); // Login/Registro (Públicas)
+app.use("/", adminDbTestRoutes); // Diagnóstico BD (sin sesión: el login puede estar en 500)
 // Rutas Protegidas
 app.use("/", requireAuth, indexRoutes);
 app.use("/procesos", requireAuth, procesosRoutes);
 app.use("/RRHH", requireAuth, personasRoutes);
-app.use("/sistemas", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
+if (ticketsRoutes) {
+  app.use("/sistemas", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
+}
 app.use("/marketing", requireAuth, marketingRoutes);
 app.use("/docs", requireAuth, docsRoutes);
 app.use("/noticias", requireAuth, noticiasRoutes);
-app.use("/claude", requireAuth, requireFeature("claudeAssistant"), claudeRoutes);
+if (claudeRoutes) {
+  app.use("/claude", requireAuth, requireFeature("claudeAssistant"), claudeRoutes);
+}
 
 // Multer corta el body antes de entrar al handler cuando supera el límite.
 // Convertimos ese error en 413 para evitar que termine como un 500 genérico.
 app.use((err, req, res, next) => {
-  if (err?.code !== "LIMIT_FILE_SIZE") return next(err);
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    const message = "El archivo excede el límite de subida permitido.";
+    const acceptsJson =
+      req.xhr ||
+      req.get("accept")?.includes("application/json") ||
+      req.originalUrl.includes("/upload") ||
+      req.originalUrl.startsWith("/noticias");
 
-  const message = "El archivo excede el límite de subida permitido.";
+    if (acceptsJson) return res.status(413).json({ error: message });
+    return res.status(413).send(message);
+  }
+
+  logger.error("http", err);
+  if (err?.stack) console.error(err.stack);
+  if (res.headersSent) return next(err);
+
+  const isLocal =
+    process.env.NODE_ENV !== "production" ||
+    /localhost|127\.0\.0\.1/i.test(String(process.env.APP_BASE_URL || ""));
+  const message = isLocal && err?.message
+    ? `Error interno del servidor: ${err.message}`
+    : "Error interno del servidor";
+
   const acceptsJson =
     req.xhr ||
     req.get("accept")?.includes("application/json") ||
-    req.originalUrl.includes("/upload") ||
-    req.originalUrl.startsWith("/noticias");
+    req.originalUrl.includes("/api/");
 
-  if (acceptsJson) return res.status(413).json({ error: message });
-  return res.status(413).send(message);
+  if (acceptsJson) return res.status(500).json({ error: message });
+  return res.status(500).send(message);
 });
 
 // Manejo de 404
@@ -540,6 +573,68 @@ async function asegurarColumnaAppsUrlWeb() {
   }
 }
 
+/**
+ * Separa el catálogo comercial (vista Apps) del de autoayuda (vista Soporte).
+ * Las filas existentes quedan en el catálogo corporativo por el DEFAULT, así que
+ * la migración no toca lo ya publicado en /apps.
+ */
+async function asegurarColumnaAppsCatalog() {
+  try {
+    await db.query(`
+      ALTER TABLE applications
+        ADD COLUMN IF NOT EXISTS catalog VARCHAR(20) NOT NULL
+        DEFAULT '${DEFAULT_APP_CATALOG}'
+    `);
+    await db.query(`
+      DO $do$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint con
+          JOIN pg_class c ON c.oid = con.conrelid
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE con.conname = 'applications_catalog_check'
+            AND c.relname = 'applications'
+            AND n.nspname = current_schema()
+        ) THEN
+          ALTER TABLE applications
+            ADD CONSTRAINT applications_catalog_check
+            CHECK (catalog IN (${APP_CATALOG_VALUES.map((v) => `'${v}'`).join(", ")}));
+        END IF;
+      END
+      $do$;
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_applications_catalog
+        ON applications (catalog)
+    `);
+  } catch (err) {
+    logger.error("apps", err);
+  }
+}
+
+/**
+ * Orden manual de las tarjetas dentro de cada catálogo.
+ *
+ * Nace en NULL a propósito: mientras nadie reordene, el listado conserva el
+ * orden por fecha que tenía, y las apps nuevas caen al final hasta que se las
+ * coloque a mano.
+ */
+async function asegurarColumnaAppsOrden() {
+  try {
+    await db.query(`
+      ALTER TABLE applications
+        ADD COLUMN IF NOT EXISTS sort_order INTEGER
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_applications_catalog_orden
+        ON applications (catalog, sort_order)
+    `);
+  } catch (err) {
+    logger.error("apps", err);
+  }
+}
+
 // ================================
 // INICIAR SERVIDOR
 // ================================
@@ -572,6 +667,8 @@ function startBackgroundJobs() {
     asegurarColumnaAppsIconUrl(),
     asegurarColumnaAppsUrlIos(),
     asegurarColumnaAppsUrlWeb(),
+    asegurarColumnaAppsCatalog(),
+    asegurarColumnaAppsOrden(),
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
     asegurarSchemaAreas(),

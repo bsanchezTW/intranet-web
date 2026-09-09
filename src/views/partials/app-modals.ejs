@@ -1,0 +1,311 @@
+<%
+  /**
+   * Modales de aplicaciones (QR, instructivo PDF y, para admin, alta/edición/
+   * notificación). Los comparten la vista Apps y la autoayuda de Soporte; lo
+   * único que cambia es el catálogo al que se dan de alta y los textos.
+   *
+   * Espera: appCatalog e isAdministrador. Opcionales: modalNewTitle,
+   * modalNewSubtitle, modalNamePlaceholder, modalDescPlaceholder, allowNotify.
+   */
+  const mCatalog = (typeof appCatalog !== 'undefined' && appCatalog) ? appCatalog : 'corporate';
+  const mIsAdmin = (typeof isAdministrador !== 'undefined' && isAdministrador);
+  const mAllowNotify = (typeof allowNotify === 'undefined') ? true : allowNotify;
+  const mNewTitle = (typeof modalNewTitle !== 'undefined' && modalNewTitle) ? modalNewTitle : 'Ingresar nueva app';
+  const mNewSubtitle = (typeof modalNewSubtitle !== 'undefined' && modalNewSubtitle)
+    ? modalNewSubtitle
+    : 'Completa los datos y enlaces de descarga para cada plataforma.';
+  const mNamePlaceholder = (typeof modalNamePlaceholder !== 'undefined' && modalNamePlaceholder)
+    ? modalNamePlaceholder
+    : 'Ej: Transworld Lead App';
+  const mDescPlaceholder = (typeof modalDescPlaceholder !== 'undefined' && modalDescPlaceholder)
+    ? modalDescPlaceholder
+    : 'Describe para qué sirve la aplicación...';
+%>
+
+<!-- Modal QR -->
+<div class="modal-overlay" id="modal-qr" role="dialog" aria-modal="true" aria-labelledby="qr-titulo" aria-hidden="true">
+  <div class="modal-content qr-modal__content">
+    <div class="qr-modal__grid">
+      <aside class="qr-modal__aside">
+        <h3 class="qr-modal__title modal-title" id="qr-titulo">Escanea el código</h3>
+        <p class="qr-modal__text modal-description">Apunta la cámara de tu teléfono a este código para instalar la aplicación.</p>
+        <div class="qr-modal__actions">
+          <button type="button" id="qr-btn-descarga" class="btn-primario" onclick="forzarDescargaQR()">Descargar imagen QR</button>
+          <a id="qr-btn-enlace" href="#" target="_blank" rel="noopener noreferrer" class="btn-secundario" style="display: none; text-align: center; text-decoration: none;">Ir al enlace directo</a>
+        </div>
+      </aside>
+      <div class="qr-modal__main">
+        <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+        <div class="qr-modal__card">
+          <img id="qr-imagen" src="" alt="Código QR de instalación">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal PDF instructivo iOS/iPad -->
+<div class="modal-overlay" id="modal-pdf" role="dialog" aria-modal="true" aria-labelledby="pdf-titulo" aria-hidden="true">
+  <div class="modal-content pdf-modal__content">
+    <div class="pdf-modal__header">
+      <div class="pdf-modal__heading">
+        <h3 class="pdf-modal__title modal-title" id="pdf-titulo">Instructivo iOS/iPad</h3>
+        <p class="pdf-modal__subtitle">Guía de instalación y uso</p>
+      </div>
+      <div class="pdf-modal__toolbar">
+        <a id="pdf-btn-abrir" href="#" target="_blank" rel="noopener noreferrer" class="btn-secundario pdf-modal__open-btn">Abrir en pestaña</a>
+        <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+      </div>
+    </div>
+    <div class="pdf-modal__body">
+      <iframe id="pdf-iframe" title="Visor de instructivo PDF" loading="lazy"></iframe>
+    </div>
+  </div>
+</div>
+
+<% if (mIsAdmin) { %>
+
+<!-- Modal Nueva App -->
+<div class="modal-overlay" id="modal-nueva" role="dialog" aria-modal="true" aria-labelledby="nueva-titulo" aria-hidden="true">
+  <div class="modal-content app-modal__content">
+    <form action="/apps/nueva" method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="catalog" value="<%= mCatalog %>">
+      <div class="app-modal__grid">
+        <aside class="app-modal__aside">
+          <h3 class="app-modal__title modal-title" id="nueva-titulo"><%= mNewTitle %></h3>
+          <p class="app-modal__subtitle modal-description"><%= mNewSubtitle %></p>
+
+          <div class="app-icon-upload">
+            <label>Icono de la aplicación</label>
+            <div class="app-icon-preview-wrap">
+              <div class="app-icon-preview" id="nueva-icon-preview">
+                <img id="nueva-icon-preview-img" alt="" hidden>
+                <div class="app-icon-placeholder" id="nueva-icon-placeholder">
+                  <span>AA</span>
+                </div>
+              </div>
+              <div class="app-icon-actions">
+                <button type="button" class="app-btn-icon-select" id="nueva-icon-select">Subir icono</button>
+                <span class="app-icon-hint">JPG, PNG o WebP · Máx. 5 MB</span>
+              </div>
+            </div>
+            <input type="file" id="nueva-icon" name="icon" accept="image/*" hidden>
+          </div>
+
+          <div class="app-field">
+            <label for="nueva-nombre">Nombre de la aplicación *</label>
+            <input type="text" id="nueva-nombre" name="name" required placeholder="<%= mNamePlaceholder %>">
+          </div>
+          <div class="app-field">
+            <label for="nueva-desc">Descripción *</label>
+            <textarea id="nueva-desc" name="description" required placeholder="<%= mDescPlaceholder %>"></textarea>
+          </div>
+        </aside>
+
+        <div class="app-modal__main">
+          <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+
+          <div class="app-platforms">
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'windows' }) %> Windows</h4>
+              <div class="app-field">
+                <label>Enlace de descarga (opcional)</label>
+                <input type="url" name="url_pc" placeholder="Link de descarga (ej. MediaFire)">
+              </div>
+            </div>
+
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'android' }) %> Android</h4>
+              <div class="app-field">
+                <label>Enlace versión APK (opcional)</label>
+                <input type="url" name="url_apk" placeholder="Link de descarga (ej. MediaFire)">
+                <span class="app-field-hint">El código QR se generará automáticamente al mostrar la app.</span>
+              </div>
+            </div>
+
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'apple' }) %> iOS/iPad</h4>
+              <div class="app-field">
+                <label>Instructivo PDF (opcional)</label>
+                <input type="file" name="instructivo_ios" accept="application/pdf,.pdf" class="app-file-input">
+                <span class="app-field-hint">Se mostrará en un visor al tocar el botón iOS/iPad. Máx. 20 MB.</span>
+              </div>
+            </div>
+
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'web' }) %> WEB</h4>
+              <div class="app-field">
+                <label>Enlace web (opcional)</label>
+                <input type="url" name="url_web" placeholder="URL de la versión web">
+              </div>
+            </div>
+          </div>
+
+          <div class="app-modal__footer modal-actions">
+            <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+            <button type="submit" class="btn-primario">Guardar app</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Editar App -->
+<div class="modal-overlay" id="modal-editar" role="dialog" aria-modal="true" aria-labelledby="editar-titulo" aria-hidden="true">
+  <div class="modal-content app-modal__content">
+    <form id="form-editar" method="POST" enctype="multipart/form-data">
+      <div class="app-modal__grid">
+        <aside class="app-modal__aside">
+          <h3 class="app-modal__title modal-title" id="editar-titulo">Editar aplicación</h3>
+          <p class="app-modal__subtitle modal-description">Actualiza la información y los enlaces de descarga de la aplicación.</p>
+
+          <div class="app-icon-upload">
+            <label>Icono de la aplicación</label>
+            <div class="app-icon-preview-wrap">
+              <div class="app-icon-preview" id="edit-icon-preview">
+                <img id="edit-icon-preview-img" alt="" hidden>
+                <div class="app-icon-placeholder" id="edit-icon-placeholder">
+                  <span id="edit-icon-initials">AA</span>
+                </div>
+              </div>
+              <div class="app-icon-actions">
+                <button type="button" class="app-btn-icon-select" id="edit-icon-select">Subir icono</button>
+                <span class="app-icon-hint">JPG, PNG o WebP · Máx. 5 MB</span>
+              </div>
+            </div>
+            <input type="file" id="edit-icon" name="icon" accept="image/*" hidden>
+          </div>
+
+          <div class="app-field">
+            <label for="edit-nombre">Nombre</label>
+            <input type="text" id="edit-nombre" name="name" required>
+          </div>
+          <div class="app-field">
+            <label for="edit-desc">Descripción</label>
+            <textarea id="edit-desc" name="description" required></textarea>
+          </div>
+        </aside>
+
+        <div class="app-modal__main">
+          <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+
+          <div class="app-platforms">
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'windows' }) %> Windows</h4>
+              <div class="app-field">
+                <label>Enlace de descarga (opcional)</label>
+                <input type="url" name="url_pc" id="edit-pc">
+              </div>
+            </div>
+
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'android' }) %> Android</h4>
+              <div class="app-field">
+                <label>Enlace versión APK (opcional)</label>
+                <input type="url" name="url_apk" id="edit-apk">
+                <span class="app-field-hint">El código QR se generará automáticamente al mostrar la app.</span>
+              </div>
+            </div>
+
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'apple' }) %> iOS/iPad</h4>
+              <div class="app-field">
+                <label>Instructivo PDF (opcional)</label>
+                <p id="edit-ios-actual" class="app-field-hint app-ios-current" hidden>
+                  Instructivo actual:
+                  <button type="button" id="edit-ios-ver" class="app-ios-current__link">Ver PDF</button>
+                </p>
+                <input type="file" name="instructivo_ios" id="edit-ios-pdf" accept="application/pdf,.pdf" class="app-file-input">
+                <span class="app-field-hint">Sube un PDF nuevo solo si quieres reemplazar el actual. Máx. 20 MB.</span>
+              </div>
+            </div>
+
+            <div class="app-platform">
+              <h4 class="app-platform__head"><%- include('platform-logo', { name: 'web' }) %> WEB</h4>
+              <div class="app-field">
+                <label>Enlace web (opcional)</label>
+                <input type="url" name="url_web" id="edit-web">
+              </div>
+            </div>
+          </div>
+
+          <div class="app-modal__footer modal-actions">
+            <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+            <button type="submit" class="btn-primario">Actualizar cambios</button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<% if (mAllowNotify) { %>
+<!-- Modal Notificar -->
+<div class="modal-overlay" id="modal-notificar" role="dialog" aria-modal="true" aria-labelledby="notificar-titulo" aria-hidden="true">
+  <div class="modal-content app-notify__content">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <h3 class="app-notify__title modal-title" id="notificar-titulo">Enviar actualización</h3>
+    <p class="app-notify__hint modal-description">
+      <strong>Asunto del correo:</strong> <span id="preview-asunto" class="app-notify__subject"></span>
+    </p>
+    <p class="app-notify__hint">Describe los cambios realizados para notificar a los equipos.</p>
+
+    <form id="form-notificar" method="POST" class="modal-form">
+      <textarea name="cambios_texto" class="app-notify__textarea" required placeholder="Ej: Se corrigió el error de inicio de sesión y se añadió el manual de usuario v2..."></textarea>
+      <div class="app-notify__footer modal-actions">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario">Enviar correo masivo</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<!-- Crop icono nueva -->
+<div class="foto-crop-overlay" id="nuevaIconCropOverlay" role="dialog" aria-modal="true" aria-labelledby="nuevaIconCropTitle" hidden>
+  <div class="foto-crop-modal">
+    <div class="foto-crop-header">
+      <h3 id="nuevaIconCropTitle">Recortar icono</h3>
+      <button type="button" class="foto-crop-close" id="nuevaIconCropClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <p class="foto-crop-hint">Arrastra y ajusta el encuadre. El icono se mostrará cuadrado en la tarjeta.</p>
+    <div class="foto-crop-body">
+      <div class="foto-crop-stage">
+        <img id="nuevaIconCropImage" src="" alt="Vista previa para recortar">
+      </div>
+    </div>
+    <p id="nuevaIconCropError" class="foto-crop-error" role="alert"></p>
+    <div class="foto-crop-footer">
+      <button type="button" class="btn-crop-cancel" id="nuevaIconCropCancel">Cancelar</button>
+      <button type="button" class="btn-crop-save" id="nuevaIconCropSave">Aplicar recorte</button>
+    </div>
+  </div>
+</div>
+
+<!-- Crop icono editar -->
+<div class="foto-crop-overlay" id="editIconCropOverlay" role="dialog" aria-modal="true" aria-labelledby="editIconCropTitle" hidden>
+  <div class="foto-crop-modal">
+    <div class="foto-crop-header">
+      <h3 id="editIconCropTitle">Recortar icono</h3>
+      <button type="button" class="foto-crop-close" id="editIconCropClose" aria-label="Cerrar">&times;</button>
+    </div>
+    <p class="foto-crop-hint">Arrastra y ajusta el encuadre. El icono se mostrará cuadrado en la tarjeta.</p>
+    <div class="foto-crop-body">
+      <div class="foto-crop-stage">
+        <img id="editIconCropImage" src="" alt="Vista previa para recortar">
+      </div>
+    </div>
+    <p id="editIconCropError" class="foto-crop-error" role="alert"></p>
+    <div class="foto-crop-footer">
+      <button type="button" class="btn-crop-cancel" id="editIconCropCancel">Cancelar</button>
+      <button type="button" class="btn-crop-save" id="editIconCropSave">Aplicar recorte</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="/js/profile-photo-cropper.js"></script>
+<% } %>
+
+<script src="/js/apps-ui.js?v=20260909a" data-apps-admin="<%= mIsAdmin ? 'true' : 'false' %>"></script>

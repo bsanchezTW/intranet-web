@@ -210,8 +210,8 @@
     titleId: 'ticket-modal-title',
     title: 'Abrir Nuevo Ticket de Soporte',
     overlayClass: 'modal-ticket-navbar',
-    panelClass: 'modal-content2-large modal-ticket-navbar-content',
-    titleClass: 'ticket-modal-title',
+    panelClass: 'modal-ticket-navbar-content modal-ticket-create-content',
+    titleClass: 'ticket-modal-title ticket-modal-title--sr',
     closeLabel: 'Cerrar modal de ticket',
     body: include('partials/ticket-create-modal-content', { currentUser, displayName })
   }) %>

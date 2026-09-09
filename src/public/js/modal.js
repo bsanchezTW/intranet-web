@@ -3,6 +3,24 @@
   let scrollLockCount = 0;
   let savedScrollY = 0;
 
+  /**
+   * Cierres en vuelo, por overlay.
+   *
+   * El cierre es diferido (espera la animación), así que si se reabre antes de
+   * que termine hay que cancelar el temporizador y el listener pendientes: si
+   * no, el cierre viejo se ejecuta sobre el modal recién abierto y lo apaga en
+   * el acto. Ese era el bug de "abre y se cierra al tiro" al reabrir rápido.
+   */
+  const cierresPendientes = new WeakMap();
+
+  function cancelarCierrePendiente(overlay) {
+    const pendiente = cierresPendientes.get(overlay);
+    if (!pendiente) return;
+    clearTimeout(pendiente.timer);
+    pendiente.panel?.removeEventListener('transitionend', pendiente.onEnd);
+    cierresPendientes.delete(overlay);
+  }
+
   function resolve(el) {
     if (!el) return null;
     return typeof el === 'string' ? document.getElementById(el) : el;
@@ -59,14 +77,30 @@
     return overlay && overlay.classList.contains('is-open');
   }
 
+  /** El bloqueo de scroll se contabiliza una vez por overlay, no por llamada. */
+  function lockFor(overlay) {
+    if (overlay.dataset.modalLocked === 'true') return;
+    overlay.dataset.modalLocked = 'true';
+    lockScroll();
+  }
+
+  function unlockFor(overlay) {
+    if (overlay.dataset.modalLocked !== 'true') return;
+    delete overlay.dataset.modalLocked;
+    unlockScroll();
+  }
+
   function open(target) {
     const overlay = resolve(target);
     if (!overlay) return;
 
+    // Un cierre a medio camino se aborta antes de volver a mostrar.
+    cancelarCierrePendiente(overlay);
+
     overlay.classList.remove('is-closing');
     overlay.style.display = 'flex';
     overlay.setAttribute('aria-hidden', 'false');
-    lockScroll();
+    lockFor(overlay);
 
     // Force visible immediately; rAF only for enter transform.
     overlay.classList.add('is-open');
@@ -74,37 +108,47 @@
 
   function close(target) {
     const overlay = resolve(target);
-    if (!overlay || !overlay.classList.contains('is-open')) {
-      if (overlay) {
-        overlay.style.display = 'none';
-        overlay.classList.remove('is-open', 'is-closing');
-        overlay.setAttribute('aria-hidden', 'true');
-      }
+    if (!overlay) return;
+
+    if (!overlay.classList.contains('is-open')) {
+      cancelarCierrePendiente(overlay);
+      overlay.style.display = 'none';
+      overlay.classList.remove('is-open', 'is-closing');
+      overlay.setAttribute('aria-hidden', 'true');
+      unlockFor(overlay);
       syncScrollLock();
       return;
     }
 
+    cancelarCierrePendiente(overlay);
     overlay.classList.remove('is-open');
     overlay.classList.add('is-closing');
 
     const finish = () => {
+      cierresPendientes.delete(overlay);
       overlay.style.display = 'none';
       overlay.classList.remove('is-closing');
       overlay.setAttribute('aria-hidden', 'true');
+      unlockFor(overlay);
       syncScrollLock();
     };
 
     const panel = getPanel(overlay);
     const onEnd = (e) => {
       if (panel && e.target !== panel) return;
-      panel?.removeEventListener('transitionend', onEnd);
+      panel.removeEventListener('transitionend', onEnd);
       finish();
     };
 
     if (panel) {
       panel.addEventListener('transitionend', onEnd);
     }
-    setTimeout(finish, ANIM_MS + 40);
+
+    cierresPendientes.set(overlay, {
+      timer: setTimeout(finish, ANIM_MS + 40),
+      panel,
+      onEnd,
+    });
   }
 
   function bindOverlayDismiss() {

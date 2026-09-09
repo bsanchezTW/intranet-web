@@ -29,8 +29,8 @@ function getBaseUrl(req) {
 }
 
 function pbkdf2Hash(password, saltHex) {
-  const salt = Buffer.from(saltHex, "hex");
-  const derived = crypto.pbkdf2Sync(password, salt, 120000, 32, "sha256");
+  const salt = Buffer.from(String(saltHex || ""), "hex");
+  const derived = crypto.pbkdf2Sync(String(password), salt, 120000, 32, "sha256");
   return derived.toString("hex");
 }
 
@@ -46,6 +46,18 @@ function safeEqualString(a, b) {
   const bufB = Buffer.from(String(b));
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// urlencoded extended:true convierte campos duplicados en array. Gestores de
+// contraseñas a veces inyectan un segundo input `password` y pbkdf2Sync explota.
+function bodyString(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item === "string" && item.length > 0) return item;
+    }
+    return typeof value[0] === "string" ? value[0] : "";
+  }
+  return typeof value === "string" ? value : "";
 }
 
 const OTP_EXPIRES_MS = 15 * 60 * 1000;
@@ -122,10 +134,10 @@ function renderAuthPage(res, view, options = {}) {
 }
 
 function wantsJsonResponse(req) {
-  return (
-    req.get("Accept")?.includes("application/json") ||
-    req.get("X-Requested-With") === "fetch"
-  );
+  if (req.xhr || req.get("X-Requested-With") === "fetch") return true;
+  const accept = String(req.get("Accept") || "");
+  if (accept.includes("text/html")) return false;
+  return accept.includes("application/json");
 }
 
 function isTransworldEmail(email) {
@@ -292,7 +304,9 @@ router.get("/login", (req, res) => {
 
 router.post("/login", async (req, res) => {
   const json = wantsJsonResponse(req);
-  const { username, password, domain } = req.body || {};
+  const username = bodyString(req.body && req.body.username);
+  const password = bodyString(req.body && req.body.password);
+  const domain = bodyString(req.body && req.body.domain);
   const validUser =
     typeof process.env.AUTH_USER === "string"
       ? process.env.AUTH_USER.trim()
@@ -316,8 +330,8 @@ router.post("/login", async (req, res) => {
   // Solo permitir bypass estático si AUTH_USER y AUTH_PASS están configurados (no vacíos).
   if (
     envBypassEnabled &&
-    typeof username === "string" &&
-    typeof password === "string" &&
+    username.length > 0 &&
+    password.length > 0 &&
     safeEqualString(username, validUser) &&
     safeEqualString(password, validPass)
   ) {
@@ -332,6 +346,12 @@ router.post("/login", async (req, res) => {
   }
 
   try {
+    if (!username.trim() || !password) {
+      return fail(400, "Debes ingresar usuario y contraseña.");
+    }
+
+    logger.info("auth", `login ${username}@${domain || "(sin dominio)"}`);
+
     const tldError = foreignDomainError(selectedEmailDomain(username, domain));
     if (tldError) return fail(400, tldError);
 
@@ -384,8 +404,12 @@ router.post("/login", async (req, res) => {
         !u.confirm_expires || new Date(u.confirm_expires) < new Date();
       let codeJustSent = false;
       if (!u.confirm_token || codeExpired) {
-        await issueVerificationCode(u.id, u.first_name, email);
-        codeJustSent = true;
+        try {
+          await issueVerificationCode(u.id, u.first_name, email);
+          codeJustSent = true;
+        } catch (mailErr) {
+          logger.error("auth", mailErr);
+        }
       }
       req.session.pendingEmailVerification = email;
       return succeed(
@@ -432,7 +456,12 @@ router.post("/login", async (req, res) => {
     return succeed(redirectUrl);
   } catch (err) {
     logger.error("auth", err);
-    return fail(500, "Error interno del servidor");
+    if (err && err.stack) console.error(err.stack);
+    const isLocal =
+      process.env.NODE_ENV !== "production" ||
+      /localhost|127\.0\.0\.1/i.test(String(process.env.APP_BASE_URL || ""));
+    const detail = isLocal && err && err.message ? `: ${err.message}` : "";
+    return fail(500, `Error interno del servidor${detail}`);
   }
 });
 

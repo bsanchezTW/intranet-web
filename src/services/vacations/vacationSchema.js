@@ -197,6 +197,9 @@ async function ensureVacationSchema() {
     // Un solo round-trip: cada ALTER/CREATE por separado suma ~175ms a us-west-2.
     await client.query(DDL_STATEMENTS.join(";\n"));
     await seedHolidays(client);
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
   } finally {
     client.release();
   }
