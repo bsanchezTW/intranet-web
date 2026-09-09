@@ -1,0 +1,162 @@
+<%
+  const lista = (typeof solicitudes !== 'undefined' && Array.isArray(solicitudes)) ? solicitudes : [];
+  const ctx = (typeof areaContext !== 'undefined' && areaContext) ? areaContext : { area: null, manager: null };
+  const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
+  const puedeSolicitar = !!(ctx.area && ctx.manager);
+
+  const abiertas = lista.filter((s) => s.status === 'pending' || s.status === 'approved_manager').length;
+  const fechaOpts = { year: 'numeric', month: '2-digit', day: '2-digit' };
+%>
+
+<div class="contenedor">
+
+  <div class="page-header page-header--toolbar">
+    <div class="page-header__text">
+      <h2 class="page-title">Mis solicitudes</h2>
+      <p class="page-description">
+        <%= lista.length %> <%= lista.length === 1 ? 'solicitud' : 'solicitudes' %> ·
+        <%= abiertas %> en curso
+        <% if (ctx.area) { %> · Área <%= ctx.area.area_name %><% } %>
+      </p>
+    </div>
+
+    <div class="page-header-actions">
+      <a href="/procesos" class="link-volver">← Volver a Procesos</a>
+      <% if (revisor) { %>
+        <a href="/gastos/gestion" class="page-header-btn">Gestión de solicitudes</a>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div class="flash-msg flash-msg--ok" role="status">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
+      <span><%= success %></span>
+    </div>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= error %></span>
+    </div>
+  <% } %>
+
+  <section class="seccion" aria-labelledby="gastos-nueva">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="gastos-nueva">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'wallet' }) %></span>
+          Nueva solicitud
+        </h3>
+        <p class="seccion__desc">
+          <% if (puedeSolicitar) { %>
+            Aprueba primero <strong><%= ctx.manager.name %></strong>, y después Finanzas.
+          <% } else { %>
+            No disponible: tu área necesita un jefe asignado.
+          <% } %>
+        </p>
+      </div>
+    </div>
+
+    <% if (puedeSolicitar) { %>
+      <div class="procesos-grid">
+        <a href="/gastos/nueva/rendicion" class="procesos-card">
+          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'receipt' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Rendir gastos</h4>
+            <p class="procesos-card__desc">Gastos que ya pagaste, con sus comprobantes.</p>
+          </div>
+        </a>
+        <a href="/gastos/nueva/fondos" class="procesos-card">
+          <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Solicitar fondos</h4>
+            <p class="procesos-card__desc">Dinero por adelantado para una compra o gestión.</p>
+          </div>
+        </a>
+      </div>
+    <% } else { %>
+      <div class="procesos-aviso">
+        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
+        <span>
+          <% if (!ctx.area) { %>
+            Todavía no tienes un área asignada. Pídele a RRHH que te asigne una.
+          <% } else { %>
+            El área <strong><%= ctx.area.area_name %></strong> aún no tiene un jefe asignado, y su aprobación es un requisito. Pídele a RRHH que designe uno.
+          <% } %>
+        </span>
+      </div>
+    <% } %>
+  </section>
+
+  <section class="seccion" aria-labelledby="gastos-historial">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="gastos-historial">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'clipboard' }) %></span>
+          Historial
+        </h3>
+        <p class="seccion__desc">Todo lo que has enviado, con su estado actual.</p>
+      </div>
+    </div>
+
+    <div class="gastos-panel">
+      <% if (lista.length) { %>
+      <div class="gastos-toolbar">
+        <div class="gastos-buscar">
+          <span class="gastos-buscar__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
+          <label class="sr-only" for="gastosBuscar">Buscar solicitudes</label>
+          <input type="search" id="gastosBuscar" class="gastos-buscar__input" data-gastos-buscar
+                 placeholder="Buscar por asunto o número…" autocomplete="off">
+        </div>
+        <div class="gastos-chips" role="group" aria-label="Filtrar por estado">
+          <button type="button" class="gastos-chip is-active" data-filtro-estado="activos">En curso</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="approved_finance">Aprobadas</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="rejected">Rechazadas</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="todos">Todas</button>
+        </div>
+      </div>
+      <% } %>
+
+      <ul class="gastos-lista" data-gastos-lista>
+        <% lista.forEach((s) => {
+             const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaOpts) : '—';
+             const buscable = [s.title, String(s.id), expenseKindLabel(s.kind)].filter(Boolean).join(' ').toLowerCase();
+        %>
+          <li class="gasto-item" data-estado="<%= s.status %>" data-buscar="<%= buscable %>">
+            <a class="gasto-item__link" href="/gastos/<%= s.id %>">
+              <span class="gasto-item__main">
+                <span class="gasto-item__top">
+                  <span class="gasto-item__id">#<%= s.id %></span>
+                  <span class="gasto-item__titulo"><%= s.title %></span>
+                </span>
+                <span class="gasto-item__meta">
+                  <span><%= expenseKindLabel(s.kind) %></span>
+                  <span>Enviada el <%= creado %></span>
+                  <span><%= s.item_count %> <%= s.item_count === 1 ? 'ítem' : 'ítems' %></span>
+                  <% if (s.attachment_count > 0) { %>
+                    <span><%= s.attachment_count %> <%= s.attachment_count === 1 ? 'adjunto' : 'adjuntos' %></span>
+                  <% } %>
+                </span>
+              </span>
+
+              <span class="gasto-item__lado">
+                <span class="gasto-item__monto"><%= formatMoney(s.total_amount) %></span>
+                <span class="<%= expenseStatusBadge(s.status) %>"><%= expenseStatusLabel(s.status) %></span>
+              </span>
+
+              <span class="gasto-item__chevron" aria-hidden="true"><%- include('../partials/icon', { name: 'chevron-right' }) %></span>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+
+      <p class="gastos-vacio" data-gastos-vacio hidden>No hay solicitudes que coincidan con el filtro.</p>
+
+      <% if (!lista.length) { %>
+        <p class="gastos-vacio">Todavía no has enviado ninguna solicitud.</p>
+      <% } %>
+    </div>
+  </section>
+
+</div>

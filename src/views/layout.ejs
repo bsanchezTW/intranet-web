@@ -59,10 +59,15 @@
   
   <a href="#" class="submenu-toggle">PROCESOS Y DOCUMENTOS <span class="arrow">▾</span></a>
   <div class="sub-menu">
-    <a href="/procesos/procedimientos">Procedimientos</a>
-    <a href="/procesos/protocolos">Protocolos</a>
+    <% if (features.expenseCenter) { %>
+    <a href="/gastos/nueva/rendicion">Rendir gastos</a>
+    <a href="/gastos/nueva/fondos">Solicitar fondos</a>
+    <a href="/gastos">Mis solicitudes</a>
+    <% } %>
     <a href="/procesos/reglamento">Reglamento interno</a>
     <a href="/procesos/otros">Otros documentos</a>
+    <a href="/procesos/procedimientos">Procedimientos</a>
+    <a href="/procesos/protocolos">Protocolos</a>
   </div>
 
   <a href="#" class="submenu-toggle">RRHH <span class="arrow">▾</span></a>
@@ -122,10 +127,15 @@
       <div class="nav-item">
         <a href="/procesos">PROCESOS Y DOCUMENTOS</a>
         <div class="dropdown-menu">
-          <a href="/procesos/procedimientos">Procedimientos</a>
-          <a href="/procesos/protocolos">Protocolos</a>
+          <% if (features.expenseCenter) { %>
+          <a href="/gastos/nueva/rendicion">Rendir gastos</a>
+          <a href="/gastos/nueva/fondos">Solicitar fondos</a>
+          <a href="/gastos">Mis solicitudes</a>
+          <% } %>
           <a href="/procesos/reglamento">Reglamento interno</a>
           <a href="/procesos/otros">Otros documentos</a>
+          <a href="/procesos/procedimientos">Procedimientos</a>
+          <a href="/procesos/protocolos">Protocolos</a>
         </div>
       </div>
       <div class="nav-item">
@@ -222,10 +232,13 @@
 
     <div class="footer-col">
       <strong>Procesos</strong>
-      <a href="/procesos/protocolos">Protocolos</a>
+      <% if (features.expenseCenter) { %>
+      <a href="/gastos">Centro de gastos</a>
+      <% } %>
       <a href="/procesos/reglamento">Reglamento interno</a>
-      <a href="/procesos/procedimientos">Procedimientos</a>
       <a href="/procesos/otros">Otros documentos</a>
+      <a href="/procesos/procedimientos">Procedimientos</a>
+      <a href="/procesos/protocolos">Protocolos</a>
     </div>
 
     <div class="footer-col">

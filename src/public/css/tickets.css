@@ -1,57 +1,5 @@
-/* ── Zona de Soporte: secciones (Autoayuda + Ticketera) ── */
-
-.soporte-seccion {
-  margin-bottom: 38px;
-}
-
-.soporte-seccion__head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-bottom: 16px;
-}
-
-.soporte-seccion__heading {
-  min-width: 0;
-}
-
-.soporte-seccion__title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-  font-size: 1.15rem;
-  font-weight: 800;
-  color: var(--color-heading);
-  letter-spacing: -0.01em;
-}
-
-.soporte-seccion__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: 11px;
-  background: var(--brand-soft);
-  color: var(--brand);
-}
-
-.soporte-seccion__desc {
-  margin: 6px 0 0 44px;
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-}
-
-.soporte-seccion__acciones {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+/* Las clases de sección (.seccion*) viven en intranet.css: las usan también
+   Procesos y el centro de gastos. Aquí queda sólo lo propio de la ticketera. */
 
 /* La autoayuda usa la misma tarjeta que Apps, con una grilla más suelta. */
 .apps-grid--soporte {
@@ -375,10 +323,6 @@ html[data-theme="dark"] .ticket-item__prioridad-txt--high {
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
-  }
-
-  .soporte-seccion__desc {
-    margin-left: 0;
   }
 
   .apps-grid--soporte {

@@ -1,91 +1,65 @@
-<style>
-  .grid-carpetas {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 25px;
-    margin-top: 30px;
-  }
-
-  .folder-card-exec {
-    background: var(--color-surface, #ffffff);
-    border: 1px solid var(--color-border, #e2e8f0);
-    border-radius: 8px;
-    padding: 25px 20px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    text-decoration: none;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-  }
-
-  .folder-card-exec:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 15px rgba(0,0,0,0.06);
-    border-color: var(--color-border-strong, #cbd5e0);
-    background: var(--color-surface-muted, #f8fafc);
-  }
-
-  .folder-icon-exec {
-    font-size: 2.5rem;
-    line-height: 1;
-  }
-
-  .folder-info {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .folder-title-exec {
-    margin: 0;
-    font-size: 1.15rem;
-    color: #2d3748;
-    font-weight: 700;
-  }
-  
-  .folder-count {
-    font-size: 0.85rem;
-    color: #718096;
-    background: #edf2f7;
-    padding: 2px 8px;
-    border-radius: 12px;
-    display: inline-block;
-    width: fit-content;
-    font-weight: 600;
-  }
-
-  .boton-volver {
-    display: inline-block; background: #f8fafc; border: 1px solid #cbd5e0;
-    color: #4a5568; padding: 10px 20px; border-radius: 6px; text-decoration: none;
-    font-weight: 600; font-size: 0.95rem; transition: all 0.2s;
-  }
-  .boton-volver:hover { background: #edf2f7; color: #1a202c; }
-</style>
+<%
+  const listado = (typeof areas !== 'undefined' && Array.isArray(areas)) ? areas : [];
+  const sinArea = (typeof huerfanos !== 'undefined' && huerfanos) ? huerfanos : 0;
+  const conDocumentos = listado.reduce((n, a) => n + (a.cantidad || 0), 0);
+%>
 
 <div class="contenedor">
+
+  <nav class="procesos-migas" aria-label="Ruta de navegación">
+    <a href="/procesos">Procesos y Documentos</a>
+    <span aria-hidden="true">/</span>
+    <span><%= titulo %></span>
+  </nav>
+
   <div class="page-header">
     <h2 class="page-title"><%= titulo %></h2>
     <p class="page-description">
-      Selecciona el área para ver los documentos correspondientes.
+      <%= listado.length %> <%= listado.length === 1 ? 'área' : 'áreas' %> ·
+      <%= conDocumentos %> <%= conDocumentos === 1 ? 'documento' : 'documentos' %>.
+      Cada área tiene su propia carpeta; se crea y se elimina junto con el área.
     </p>
   </div>
 
-  <div class="grid-carpetas">
-    <% areas.forEach(area => { %>
-      <a href="/procesos/<%= seccionBase %>/<%= area.slug %>" class="folder-card-exec">
-        <div class="folder-icon-exec"><%- include('../partials/icon', { name: 'folder' }) %></div>
-        <div class="folder-info">
-          <h3 class="folder-title-exec"><%= area.name %></h3>
-          <span class="folder-count"><%= area.cantidad %> archivo(s)</span>
-        </div>
-      </a>
-    <% }) %>
-  </div>
+  <% if (!listado.length) { %>
+    <div class="archivos-panel">
+      <div class="archivos-vacio">
+        <span class="archivos-vacio__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'folder' }) %></span>
+        <h3>No hay áreas registradas</h3>
+        <p>Crea un área en <a href="/RRHH/areas">RRHH &rsaquo; Áreas</a> y su carpeta aparecerá aquí.</p>
+      </div>
+    </div>
+  <% } else { %>
+    <div class="carpetas-grid">
+      <% listado.forEach(area => { %>
+        <a href="/procesos/<%= seccionBase %>/<%= area.id %>" class="carpeta-card" style="--carpeta-color: <%= area.color %>">
+          <span class="carpeta-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'folder' }) %></span>
+          <div class="carpeta-card__info">
+            <h3 class="carpeta-card__nombre"><%= area.area_name %></h3>
+            <span class="carpeta-card__conteo">
+              <%= area.cantidad %> <%= area.cantidad === 1 ? 'archivo' : 'archivos' %>
+            </span>
+          </div>
+        </a>
+      <% }) %>
 
-  <div class="grid-opciones" style="margin-top: 40px;">
-    <a class="boton-volver" href="/procesos">
-      ← Volver al menú principal
-    </a>
-  </div>
+      <%
+        /* Documentos heredados de los slugs antiguos (contabilidad, comercial…)
+           que no correspondían a ningún área real. Se listan para que nadie los
+           dé por perdidos; no se puede subir nada nuevo ahí. */
+      %>
+      <% if (sinArea > 0) { %>
+        <a href="/procesos/<%= seccionBase %>/<%= slugSinArea %>" class="carpeta-card" style="--carpeta-color: var(--color-text-muted)">
+          <span class="carpeta-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'archive' }) %></span>
+          <div class="carpeta-card__info">
+            <h3 class="carpeta-card__nombre">Sin área</h3>
+            <span class="carpeta-card__conteo">
+              <%= sinArea %> <%= sinArea === 1 ? 'archivo heredado' : 'archivos heredados' %>
+            </span>
+          </div>
+        </a>
+      <% } %>
+    </div>
+  <% } %>
+
 </div>

@@ -1,0 +1,114 @@
+<%
+  const esRendicion = kind === 'rendicion';
+  const ctx = areaContext;
+  const hoy = new Date().toISOString().slice(0, 10);
+%>
+
+<div class="contenedor">
+
+  <nav class="procesos-migas" aria-label="Ruta de navegación">
+    <a href="/procesos">Procesos y Documentos</a>
+    <span aria-hidden="true">/</span>
+    <a href="/gastos">Mis solicitudes</a>
+    <span aria-hidden="true">/</span>
+    <span><%= titulo %></span>
+  </nav>
+
+  <div class="page-header">
+    <h2 class="page-title"><%= titulo %></h2>
+    <p class="page-description">
+      <% if (esRendicion) { %>
+        Declara gastos que ya pagaste. Detalla cada uno y adjunta sus comprobantes.
+      <% } else { %>
+        Pide dinero por adelantado. Detalla en qué se va a usar.
+      <% } %>
+      Aprueba <strong><%= ctx.manager.name %></strong> y después Finanzas.
+    </p>
+  </div>
+
+  <form class="gasto-form" id="formGasto"
+        data-kind="<%= kind %>"
+        data-requiere-adjunto="<%= esRendicion ? 'true' : 'false' %>"
+        data-max-mb="<%= maxAdjuntoMb %>">
+
+    <div class="campo-form">
+      <label for="titulo">Asunto <span class="required-mark">*</span></label>
+      <input type="text" id="titulo" name="title" required maxlength="200"
+             placeholder="<%= esRendicion ? 'Ej: Viaje a planta Antofagasta' : 'Ej: Compra de insumos de bodega' %>">
+    </div>
+
+    <div class="campo-form">
+      <label for="descripcion">Descripción</label>
+      <textarea id="descripcion" name="description" maxlength="4000"
+                placeholder="Contexto que ayude a quien aprueba: motivo, autorización previa, proyecto asociado…"></textarea>
+    </div>
+
+    <% if (!esRendicion) { %>
+    <div class="campo-form">
+      <label for="neededBy">Requerido para</label>
+      <input type="date" id="neededBy" name="needed_by" min="<%= hoy %>">
+      <span class="campo-form__ayuda">Fecha en que necesitas disponer del dinero.</span>
+    </div>
+    <% } %>
+
+    <div class="campo-form">
+      <label id="labelDesglose">Desglose <span class="required-mark">*</span></label>
+      <span class="campo-form__ayuda">
+        El total se calcula a partir de estas líneas; no se puede escribir a mano.
+      </span>
+    </div>
+
+    <div class="gasto-items" id="gastoItems" role="group" aria-labelledby="labelDesglose">
+      <div class="gasto-items__head" aria-hidden="true">
+        <span><%= esRendicion ? 'Fecha del gasto' : 'Fecha estimada' %></span>
+        <span>Detalle</span>
+        <span>Monto</span>
+        <span></span>
+      </div>
+      <!-- Las filas las genera gastos-form.js a partir de esta plantilla. -->
+    </div>
+
+    <template id="plantillaFila">
+      <div class="gasto-item-fila">
+        <div data-col="date">
+          <label class="sr-only">Fecha</label>
+          <input type="date" data-campo="item_date" max="<%= esRendicion ? hoy : '' %>">
+        </div>
+        <div data-col="detail">
+          <label class="sr-only">Detalle</label>
+          <input type="text" data-campo="detail" maxlength="300" placeholder="Ej: Peaje ida y vuelta">
+        </div>
+        <div data-col="amount">
+          <label class="sr-only">Monto</label>
+          <input type="text" data-campo="amount" inputmode="decimal" placeholder="0">
+        </div>
+        <button type="button" class="gasto-item-fila__quitar" data-quitar-fila
+                aria-label="Quitar esta línea">&times;</button>
+      </div>
+    </template>
+
+    <div class="gasto-items__pie">
+      <button type="button" class="gasto-btn-secundario" id="btnAgregarFila">+ Agregar línea</button>
+      <div class="gasto-total">Total: <strong id="totalCalculado"><%= formatMoney(0) %></strong></div>
+    </div>
+
+    <div class="campo-form">
+      <label for="adjuntoInput">
+        Comprobantes <% if (esRendicion) { %><span class="required-mark">*</span><% } %>
+      </label>
+      <input type="file" id="adjuntoInput" multiple>
+      <span class="campo-form__ayuda">
+        <% if (esRendicion) { %>Boletas o facturas. <% } %>Hasta <%= maxAdjuntoMb %> MB por archivo.
+      </span>
+      <ul class="gasto-adjuntos" id="listaAdjuntos"></ul>
+    </div>
+
+    <div class="gasto-form-error" id="formError" role="alert"></div>
+
+    <div class="gasto-form-acciones">
+      <a href="/gastos" class="gasto-btn-secundario" style="text-decoration: none; display: inline-flex; align-items: center;">Cancelar</a>
+      <button type="submit" class="gasto-btn-primario" id="btnEnviar">Enviar solicitud</button>
+    </div>
+  </form>
+
+</div>

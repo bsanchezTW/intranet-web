@@ -1,224 +1,139 @@
-<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-<style>
-  /* ESTILO EJECUTIVO */
-  .header-navegacion { margin-bottom: 20px; }
-  
-  .boton-volver {
-    display: inline-block; background: #f8fafc; border: 1px solid #cbd5e0;
-    color: #4a5568; padding: 8px 15px; border-radius: 6px; text-decoration: none;
-    font-weight: 600; font-size: 0.9rem; transition: all 0.2s;
-  }
-  .boton-volver:hover { background: #edf2f7; color: #1a202c; }
+<%
+  const puedeEscribir = !!(can && can[seccionBase + '_write']);
+  const lista = (typeof archivos !== 'undefined' && Array.isArray(archivos)) ? archivos : [];
+  const esSeccionDeArea = seccionBase === 'procedimientos' || seccionBase === 'protocolos';
+  const heredados = (typeof avisoHuerfanos !== 'undefined' && avisoHuerfanos);
+  const color = (typeof areaColor !== 'undefined' && areaColor) ? areaColor : null;
+  const retorno = `/procesos/${seccionBase}` + (esSeccionDeArea ? `/${slugArea}` : '');
 
-  .page-title {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
+  /* Icono y color por formato: en una lista larga el icono solo no basta para
+     encontrar "el Excel". */
+  function formatoDe(archivo) {
+    const fmt = (archivo.format || '').toLowerCase().replace('.', '');
+    if (fmt === 'pdf') return { icono: 'file-text', clase: 'pdf' };
+    if (fmt.includes('doc')) return { icono: 'file-text', clase: 'doc' };
+    if (fmt.includes('xls') || fmt === 'csv') return { icono: 'file-spreadsheet', clase: 'xls' };
+    return { icono: 'file', clase: '' };
   }
-
-  .file-count-badge {
-    background: #003a70; color: #ffffff; font-size: 0.9rem; padding: 4px 12px;
-    border-radius: 20px; font-weight: bold;
-  }
-
-  .btn-upload {
-    background-color: #003a70; color: white; border: none; padding: 10px 20px;
-    border-radius: 6px; font-weight: bold; cursor: pointer; display: flex;
-    align-items: center; gap: 8px; transition: background 0.2s;
-  }
-  .btn-upload:hover { background-color: #002a52; }
-
-  /* TABLA DE ARCHIVOS */
-  .tabla-archivos-contenedor {
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.02); overflow: hidden;
-  }
-  
-  .tabla-archivos {
-    width: 100%; border-collapse: collapse; text-align: left;
-  }
-  .tabla-archivos th {
-    background: #f8fafc; color: #475569; font-weight: 700; padding: 15px 20px;
-    border-bottom: 2px solid #e2e8f0; font-size: 0.95rem; text-transform: uppercase;
-  }
-  .tabla-archivos td {
-    padding: 15px 20px; border-bottom: 1px solid #e2e8f0; color: #334155; vertical-align: middle;
-  }
-  .tabla-archivos tr:last-child td { border-bottom: none; }
-  .tabla-archivos tr:hover { background: #f8fbff; }
-
-  .archivo-icono {
-    font-size: 1.5rem; margin-right: 12px; vertical-align: middle;
-  }
-  .archivo-link {
-    color: #003a70; text-decoration: none; font-weight: 600; font-size: 1.05rem;
-    transition: color 0.2s;
-  }
-  .archivo-link:hover { color: #175cd3; text-decoration: underline; }
-
-  .archivo-tipo {
-    display: inline-block; background: #e2e8f0; color: #475569; font-size: 0.8rem;
-    font-weight: 700; padding: 4px 10px; border-radius: 4px; text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
-  /* BOTONES DE ACCIÓN EN TABLA */
-  .acciones-cell { text-align: right; white-space: nowrap; }
-  .btn-accion {
-    background: transparent; border: none; cursor: pointer; padding: 6px 10px;
-    border-radius: 4px; transition: background 0.2s; font-size: 1rem;
-  }
-  .btn-accion:hover { background: #e2e8f0; }
-  .btn-edit { color: #d97706; }
-  .btn-delete { color: #dc2626; }
-
-  /* MODALES — shell from modal.css */
-  .form-group { margin-bottom: 10px; display: grid; gap: 6px; }
-  .form-label { display: block; font-weight: 700; font-size: 0.92rem; color: var(--color-text-muted, #4a5568); }
-  .form-control {
-    width: 100%; padding: 11px 12px; border: 1px solid var(--color-border-strong, #cbd5e0); border-radius: 8px;
-    box-sizing: border-box; font-family: inherit; font-size: 0.94rem;
-    background: var(--color-surface-muted, #f8fafc); color: var(--color-text, #1a202c);
-  }
-  .form-control:focus {
-    border-color: var(--color-heading, #0f4c81); outline: none;
-    box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.12); background: #fff;
-  }
-
-  .upload-status {
-    margin-top: 8px; font-size: 0.95rem; font-weight: 600; color: #0f4c81; text-align: center; display: none;
-  }
-  .upload-spinner {
-    display: inline-block; width: 16px; height: 16px; border: 2px solid #0f4c81;
-    border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;
-    vertical-align: middle; margin-right: 8px;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .empty-state { text-align: center; padding: 50px 20px; color: #718096; }
-  .empty-state-icon { font-size: 3rem; margin-bottom: 15px; opacity: 0.5; }
-</style>
+%>
 
 <div class="contenedor">
-  
-  <div class="header-navegacion">
-    <a href="/procesos" class="boton-volver">← Volver al Menú Principal</a>
-    <% if (seccionBase !== 'otros' && seccionBase !== 'reglamento') { %>
-      <a href="/procesos/<%= seccionBase %>" class="boton-volver" style="margin-left: 10px;">← Volver a <%= tituloSeccion %></a>
+
+  <nav class="procesos-migas" aria-label="Ruta de navegación">
+    <a href="/procesos">Procesos y Documentos</a>
+    <% if (esSeccionDeArea) { %>
+      <span aria-hidden="true">/</span>
+      <a href="/procesos/<%= seccionBase %>"><%= tituloSeccion %></a>
     <% } %>
-  </div>
+    <span aria-hidden="true">/</span>
+    <span><%= tituloArea || tituloSeccion %></span>
+  </nav>
 
   <div class="page-header page-header--toolbar">
     <div class="page-header__text">
-      <h2 class="page-title">
-        <%= titulo %>
-        <span class="file-count-badge"><%= archivos.length %> Documento(s)</span>
-      </h2>
+      <h2 class="page-title"><%= titulo %></h2>
+      <p class="page-description">
+        <%= lista.length %> <%= lista.length === 1 ? 'documento' : 'documentos' %>
+        <% if (color) { %>
+          · <span class="carpeta-card__conteo" style="background: color-mix(in srgb, <%= color %> 16%, transparent); color: <%= color %>;"><%= tituloArea %></span>
+        <% } %>
+      </p>
     </div>
 
-    <% if (can[seccionBase + '_write']) { %>
+    <% if (puedeEscribir) { %>
     <div class="page-header-actions">
-      <button class="btn-upload" onclick="abrirModal('modalSubir')">
-        <span style="font-size: 1.2rem;">+</span> Subir Documento
+      <button type="button" class="page-header-btn" onclick="IntranetModal.open('modalSubir')">
+        <span aria-hidden="true">+</span> Subir documento
       </button>
     </div>
     <% } %>
   </div>
 
-  <% if (archivos.length === 0) { %>
-    <div class="tabla-archivos-contenedor">
-      <div class="empty-state">
-        <div class="empty-state-icon"><%- include('../partials/icon', { name: 'folder' }) %></div>
-        <h3>No hay documentos</h3>
-        <p>Aún no se han subido archivos a esta sección.</p>
-      </div>
-    </div>
-  <% } else { %>
-    <div class="tabla-archivos-contenedor">
-      <table class="tabla-archivos">
-        <thead>
-          <tr>
-            <th>Nombre del Documento</th>
-            <th style="width: 100px;">Tipo</th>
-            <% if (can[seccionBase + '_write']) { %>
-              <th style="width: 120px; text-align: right;">Acciones</th>
-            <% } %>
-          </tr>
-        </thead>
-        <tbody>
-          <% archivos.forEach(a => { %>
-            <tr>
-              <td style="vertical-align: middle;">
-                <% 
-                  // Normalizamos el formato limpiando puntos y pasando a minúsculas
-                  const fmt = (a.format || '').toLowerCase().replace('.', ''); 
-                  
-                  let iconName = 'insert_drive_file'; // Icono genérico gris por defecto
-                  let iconColor = '#757575'; 
-                  
-                  if (fmt === 'pdf') {
-                    iconName = 'picture_as_pdf';
-                    iconColor = '#F44336'; // Rojo Adobe
-                  } else if (fmt.includes('doc') || fmt.includes('word')) {
-                    iconName = 'description'; 
-                    iconColor = '#2196F3'; // Azul Word
-                  } else if (fmt.includes('xls') || fmt.includes('excel') || fmt === 'csv') {
-                    iconName = 'table_chart'; 
-                    iconColor = '#4CAF50'; // Verde Excel
-                  }
-                %>
-                <span class="archivo-icono" style="display: inline-flex; align-items: center; margin-right: 8px; vertical-align: middle;">
-                  <!-- Icono nativo de Google Fonts -->
-                  <i class="material-icons" style="font-size: 22px; color: <%= iconColor %>;"><%= iconName %></i>
-                </span>
-                <a href="<%= a.url %>" target="_blank" class="archivo-link" style="vertical-align: middle; text-decoration: none; font-weight: 500;"><%= a.name %></a>
-              </td>
-              <td>
-                <% const tipoArchivo = (a.format || '').toUpperCase(); %>
-                <span class="archivo-tipo"><%= tipoArchivo || '—' %></span>
-              </td>
-              
-              <% if (can[seccionBase + '_write']) { %>
-                <td class="acciones-cell">
-                  <button class="btn-accion btn-edit" title="Editar nombre" onclick="abrirModalEditar('<%= a.id %>', '<%= a.name.replace(/'/g, "\\'") %>')"><i class="material-icons" style="font-size: 18px; vertical-align: middle;">edit</i></button>
-                  <button class="btn-accion btn-delete" title="Eliminar" onclick="confirmarEliminar('<%= a.id %>', '<%= a.public_id %>', '<%= a.name.replace(/'/g, "\\'") %>')"><i class="material-icons" style="font-size: 18px; vertical-align: middle;">delete</i></button>
-                </td>
-              <% } %>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
+  <% if (typeof ok !== 'undefined' && ok) { %>
+    <div class="flash-msg flash-msg--ok" role="status">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
+      <span><%= ok %></span>
     </div>
   <% } %>
 
+  <% if (heredados) { %>
+    <div class="procesos-aviso" style="margin-bottom: 20px;">
+      <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
+      <span>
+        Estos documentos venían de carpetas antiguas cuyo nombre no corresponde a ningún área actual.
+        Para reubicarlos, crea el área en <a href="/RRHH/areas">RRHH &rsaquo; Áreas</a> y vuelve a subirlos en su carpeta.
+      </span>
+    </div>
+  <% } %>
+
+  <div class="archivos-panel">
+    <% if (!lista.length) { %>
+      <div class="archivos-vacio">
+        <span class="archivos-vacio__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'folder' }) %></span>
+        <h3>No hay documentos</h3>
+        <p>Aún no se han subido archivos a esta carpeta.</p>
+      </div>
+    <% } else { %>
+      <ul class="archivos-lista">
+        <% lista.forEach(a => { const f = formatoDe(a); %>
+          <li class="archivo-item">
+            <span class="archivo-item__icono archivo-item__icono--<%= f.clase %>" aria-hidden="true">
+              <%- include('../partials/icon', { name: f.icono }) %>
+            </span>
+
+            <div class="archivo-item__main">
+              <a href="<%= a.url %>" target="_blank" rel="noopener" class="archivo-item__nombre"><%= a.name %></a>
+              <span class="archivo-item__tipo"><%= (a.format || '').toUpperCase() || 'Archivo' %></span>
+            </div>
+
+            <% if (puedeEscribir) { %>
+              <div class="archivo-item__acciones">
+                <button type="button" class="archivo-item__btn archivo-item__btn--editar"
+                        title="Editar nombre" aria-label="Editar el nombre de <%= a.name %>"
+                        data-editar-doc data-id="<%= a.id %>" data-nombre="<%= a.name %>">
+                  <%- include('../partials/icon', { name: 'edit' }) %>
+                </button>
+                <button type="button" class="archivo-item__btn archivo-item__btn--eliminar"
+                        title="Eliminar" aria-label="Eliminar <%= a.name %>"
+                        data-eliminar-doc data-id="<%= a.id %>" data-public-id="<%= a.public_id %>" data-nombre="<%= a.name %>">
+                  <%- include('../partials/icon', { name: 'trash' }) %>
+                </button>
+              </div>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </div>
+
 </div>
 
+<% if (puedeEscribir) { %>
 <div id="modalSubir" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalSubirTitle" aria-hidden="true">
   <div class="modal-content">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalSubirTitle" class="modal-title">Subir Nuevo Documento</h3>
-    
+    <h3 id="modalSubirTitle" class="modal-title">Subir nuevo documento</h3>
+
     <form id="formSubir" action="/procesos/<%= seccionBase %>/<%= slugArea %>/subir" method="POST" class="modal-form">
-      <div class="form-group">
-        <label class="form-label" for="nombreInput">Nombre del Documento</label>
-        <input type="text" id="nombreInput" class="form-control" placeholder="Ej: Procedimiento de Ventas V2" required>
-      </div>
-      
-      <div class="form-group">
-        <label class="form-label" for="fileInput">Archivo</label>
-        <input type="file" id="fileInput" class="form-control" required>
+      <div class="campo-form">
+        <label for="nombreInput">Nombre del documento <span class="required-mark">*</span></label>
+        <input type="text" id="nombreInput" placeholder="Ej: Procedimiento de despacho V2" required maxlength="200">
       </div>
 
-      <div id="uploadStatus" class="upload-status">
-        <span class="upload-spinner" id="uploadSpinner"></span>
-        <span id="uploadText">Preparando...</span>
+      <div class="campo-form">
+        <label for="fileInput">Archivo <span class="required-mark">*</span></label>
+        <input type="file" id="fileInput" required>
+        <span class="campo-form__ayuda">Hasta 20 MB.</span>
+      </div>
+
+      <div id="uploadStatus" class="procesos-subida-estado">
+        <span class="procesos-subida-spinner" id="uploadSpinner"></span>
+        <span id="uploadText">Preparando…</span>
       </div>
 
       <div class="modal-actions" id="modalActions">
         <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-        <button type="submit" class="btn-primario" id="btnSubmit">Subir Archivo</button>
+        <button type="submit" class="btn-primario" id="btnSubmit">Subir archivo</button>
       </div>
     </form>
   </div>
@@ -227,137 +142,116 @@
 <div id="modalEditar" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalEditarTitle" aria-hidden="true">
   <div class="modal-content">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalEditarTitle" class="modal-title">Editar Nombre del Documento</h3>
-    
-    <% const editAction = (seccionBase === 'otros') ? '/procesos/otros/editar' : '/procesos/documento/editar'; %>
-    
-    <form action="<%= editAction %>" method="POST" class="modal-form">
+    <h3 id="modalEditarTitle" class="modal-title">Editar nombre del documento</h3>
+
+    <form action="/procesos/documento/editar" method="POST" class="modal-form">
       <input type="hidden" name="id" id="editId">
-      <input type="hidden" name="return_to" value="/procesos/<%= seccionBase %>/<%= slugArea %>">
+      <input type="hidden" name="return_to" value="<%= retorno %>">
       <input type="hidden" name="seccion_base" value="<%= seccionBase %>">
-      
-      <div class="form-group">
-        <label class="form-label" for="editNombre">Nuevo Nombre</label>
-        <input type="text" name="nuevo_nombre" id="editNombre" class="form-control" required>
+
+      <div class="campo-form">
+        <label for="editNombre">Nuevo nombre <span class="required-mark">*</span></label>
+        <input type="text" name="nuevo_nombre" id="editNombre" required maxlength="200">
       </div>
 
       <div class="modal-actions">
         <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-        <button type="submit" class="btn-primario">Guardar Cambios</button>
+        <button type="submit" class="btn-primario">Guardar cambios</button>
       </div>
     </form>
   </div>
 </div>
 
-<% const deleteAction = (seccionBase === 'otros') ? '/procesos/otros/eliminar' : '/procesos/eliminar'; %>
-<form id="formEliminar" action="<%= deleteAction %>" method="POST" style="display: none;">
+<form id="formEliminar" action="/procesos/eliminar" method="POST" hidden>
   <input type="hidden" name="db_id" id="deleteDbId">
-  <input type="hidden" name="id" id="deleteIdOtros">
   <input type="hidden" name="public_id" id="deletePublicId">
-  <input type="hidden" name="return_to" value="/procesos/<%= seccionBase %>/<%= slugArea %>">
+  <input type="hidden" name="return_to" value="<%= retorno %>">
   <input type="hidden" name="seccion_base" value="<%= seccionBase %>">
 </form>
 
 <script>
-  function abrirModal(id) { IntranetModal.open(id); }
-  function cerrarModal(id) { IntranetModal.close(id); }
+  (function () {
+    "use strict";
 
-  function abrirModalEditar(id, nombreActual) {
-    document.getElementById('editId').value = id;
-    document.getElementById('editNombre').value = nombreActual;
-    abrirModal('modalEditar');
-  }
+    document.querySelectorAll("[data-editar-doc]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        document.getElementById("editId").value = btn.dataset.id;
+        document.getElementById("editNombre").value = btn.dataset.nombre || "";
+        IntranetModal.open("modalEditar");
+      });
+    });
 
-  function confirmarEliminar(id, publicId, nombre) {
-    if (confirm(`¿Estás seguro de que deseas eliminar permanentemente el documento:\n"${nombre}"?`)) {
-      document.getElementById('deleteDbId').value = id;
-      document.getElementById('deleteIdOtros').value = id; 
-      document.getElementById('deletePublicId').value = publicId;
-      document.getElementById('formEliminar').submit();
-    }
-  }
+    document.querySelectorAll("[data-eliminar-doc]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var nombre = btn.dataset.nombre || "este documento";
+        if (!confirm('¿Eliminar permanentemente "' + nombre + '"?')) return;
+        document.getElementById("deleteDbId").value = btn.dataset.id;
+        document.getElementById("deletePublicId").value = btn.dataset.publicId || "";
+        document.getElementById("formEliminar").submit();
+      });
+    });
 
-  window.addEventListener('click', e => {
-    if (e.target.classList.contains('modal-overlay')) {
-      cerrarModal('modalSubir');
-      cerrarModal('modalEditar');
-    }
-  });
+    var form = document.getElementById("formSubir");
+    if (!form) return;
 
-  // LÓGICA DE SUBIDA A ALMACENAMIENTO LOCAL
-  const formSubir = document.getElementById('formSubir');
-  if (formSubir) {
-    formSubir.addEventListener('submit', async (e) => {
+    var MAX_BYTES = 20 * 1024 * 1024;
+
+    form.addEventListener("submit", async function (e) {
       e.preventDefault();
-      
-      const fileInput = document.getElementById('fileInput');
-      const nameInput = document.getElementById('nombreInput');
-      const btnSubmit = document.getElementById('btnSubmit');
-      const statusDiv = document.getElementById('uploadStatus');
-      const statusText = document.getElementById('uploadText');
-      const spinner = document.getElementById('uploadSpinner');
-      const actions = document.getElementById('modalActions');
 
-      if (!fileInput.files.length) return alert('Selecciona un archivo.');
-      const file = fileInput.files[0];
+      var fileInput = document.getElementById("fileInput");
+      var nameInput = document.getElementById("nombreInput");
+      var statusDiv = document.getElementById("uploadStatus");
+      var statusText = document.getElementById("uploadText");
+      var spinner = document.getElementById("uploadSpinner");
+      var actions = document.getElementById("modalActions");
 
-      if (file.size > 20 * 1024 * 1024) {
-          return alert('El archivo excede el límite de 20MB.');
-      }
+      if (!fileInput.files.length) return alert("Selecciona un archivo.");
+      var file = fileInput.files[0];
+      if (file.size > MAX_BYTES) return alert("El archivo excede el límite de 20 MB.");
 
-      function setStatus(msg, isUploading = false) {
-          statusText.textContent = msg;
-          statusDiv.style.display = 'block';
-          if (isUploading) {
-              spinner.style.display = 'inline-block';
-              actions.style.display = 'none';
-          } else {
-              spinner.style.display = 'none';
-              actions.style.display = 'flex';
-          }
+      function setStatus(msg, subiendo) {
+        statusText.textContent = msg;
+        statusDiv.style.display = "block";
+        spinner.style.display = subiendo ? "inline-block" : "none";
+        actions.style.display = subiendo ? "none" : "flex";
       }
 
       try {
-        setStatus('Subiendo documento...', true);
-        
-        const form = e.target;
-        const formData = new FormData();
-        formData.append('archivo', file);
-        
-        const uploadPath = form.action.replace('/subir', '/upload');
-        const upRes = await fetch(uploadPath, { 
-          method: 'POST',
-          body: formData,
-          credentials: 'same-origin'
+        setStatus("Subiendo documento…", true);
+
+        var datos = new FormData();
+        datos.append("archivo", file);
+
+        var upRes = await fetch(form.action.replace("/subir", "/upload"), {
+          method: "POST",
+          body: datos,
+          credentials: "same-origin",
         });
-        
-        const upData = await upRes.json().catch(() => ({}));
-        if (!upRes.ok) {
-          throw new Error(upData.error || 'Error al subir el archivo.');
-        }
-        
-        setStatus('Registrando en el sistema...', true);
-        const saveRes = await fetch(form.action, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            credentials: 'same-origin',
-            body: JSON.stringify({
-                nombre_archivo: nameInput.value || file.name,
-                secure_url: upData.secure_url,
-                public_id: upData.public_id
-            })
+        var upData = await upRes.json().catch(function () { return {}; });
+        if (!upRes.ok) throw new Error(upData.error || "Error al subir el archivo.");
+
+        setStatus("Registrando en el sistema…", true);
+        var saveRes = await fetch(form.action, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            nombre_archivo: nameInput.value || file.name,
+            secure_url: upData.secure_url,
+            public_id: upData.public_id,
+          }),
         });
-        const saveData = await saveRes.json().catch(() => ({}));
-        if (!saveRes.ok) {
-          throw new Error(saveData.error || 'Error al guardar el registro en la base de datos.');
-        }
-        
+        var saveData = await saveRes.json().catch(function () { return {}; });
+        if (!saveRes.ok) throw new Error(saveData.error || "Error al guardar el registro.");
+
         location.reload();
-      } catch(err) {
+      } catch (err) {
         console.error(err);
         alert(err.message);
-        setStatus('Error en la subida', false);
+        setStatus("Error en la subida", false);
       }
     });
-  }
+  })();
 </script>
+<% } %>

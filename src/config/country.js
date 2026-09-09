@@ -36,6 +36,9 @@ const COUNTRY_CONFIGS = {
     timezone: "America/Santiago",
     locale: "es-CL",
     corporateEmailDomain: "transworld.cl",
+    // Moneda de los montos del centro de gastos. El peso chileno no usa
+    // decimales: mostrarlos convierte "45.000" en un monto que nadie escribe.
+    currency: { code: "CLP", symbol: "$", decimals: 0 },
     pageTitleSuffix: "Intranet Transworld Chile",
     sessionCookieName: "tw_sid_cl",
     devPort: 3000,
@@ -68,6 +71,7 @@ const COUNTRY_CONFIGS = {
     timezone: "America/Lima",
     locale: "es-PE",
     corporateEmailDomain: "transworld.pe",
+    currency: { code: "PEN", symbol: "S/", decimals: 2 },
     pageTitleSuffix: "Intranet Transworld Perú",
     sessionCookieName: "tw_sid_pe",
     devPort: 3001,
@@ -167,6 +171,27 @@ function getLocale() {
   return getCountryConfig().locale;
 }
 
+/** Moneda de la instancia: { code, symbol, decimals }. */
+function getCurrency() {
+  return getCountryConfig().currency;
+}
+
+/** Monto formateado con la moneda del país (Intl, sin dependencias). */
+function formatMoney(amount, countryCode = getCurrentCountry()) {
+  const { code, decimals } = getCountryConfig(countryCode).currency;
+  // Number(null) y Number("") son 0: sin este guardia un monto ausente se
+  // mostraría como un cero legítimo en vez de como "sin dato".
+  if (amount === null || amount === undefined || amount === "") return "—";
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat(getCountryConfig(countryCode).locale, {
+    style: "currency",
+    currency: code,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
 module.exports = {
   COUNTRY_CODES,
   PUBLIC_EMAIL_DOMAINS,
@@ -177,4 +202,6 @@ module.exports = {
   getCountryConfig,
   getTimezone,
   getLocale,
+  getCurrency,
+  formatMoney,
 };

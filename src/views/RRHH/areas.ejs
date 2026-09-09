@@ -75,6 +75,19 @@
             <% } %>
           </div>
 
+          <%# La jefatura es requisito para aprobar rendiciones: si falta, se
+              avisa aquí y no en una pantalla aparte. %>
+          <div class="area-card__jefe<%= area.managerName ? '' : ' area-card__jefe--vacio' %>">
+            <span class="area-card__jefe-icono" aria-hidden="true">
+              <%- include('../partials/icon', { name: area.managerName ? 'user-check' : 'alert-triangle' }) %>
+            </span>
+            <% if (area.managerName) { %>
+              <span>Jefe de área: <strong><%= area.managerName %></strong></span>
+            <% } else { %>
+              <span>Sin jefe asignado — su gente no puede rendir gastos.</span>
+            <% } %>
+          </div>
+
           <ul class="area-members">
             <% if (!area.members.length) { %>
               <li class="area-members__empty">Sin colaboradores en esta área.</li>
@@ -201,6 +214,17 @@
         <label for="area_name">Nombre <span class="required-mark">*</span></label>
         <input type="text" id="area_name" name="area_name" required maxlength="150" placeholder="Ej: Operaciones">
       </div>
+      <div class="campo" id="campoJefe">
+        <label for="area_manager">Jefe de área</label>
+        <select id="area_manager" name="manager_user_id">
+          <option value="">Sin jefe asignado</option>
+        </select>
+        <p class="area-jefe-ayuda" id="jefeAyuda">
+          Debe ser alguien del área. Su aprobación es el primer paso de toda
+          rendición de gastos o solicitud de fondos.
+        </p>
+      </div>
+
       <div class="campo">
         <label for="area_color">Color</label>
         <div class="area-palette" role="listbox" aria-label="Paleta de colores">
@@ -227,6 +251,13 @@
 <script type="application/json" id="areas-config"><%- JSON.stringify({
   puedeEditar,
   defaultColor: defaultColor || '#5a6879',
-  areas: listado.map((a) => ({ id: a.id, area_name: a.area_name })),
+  areas: listado.map((a) => ({
+    id: a.id,
+    area_name: a.area_name,
+    manager_user_id: a.manager_user_id || null,
+    // Sólo los miembros del área pueden dirigirla, así que el selector se arma
+    // con esta lista y no con la plantilla completa de colaboradores.
+    members: a.members.map((m) => ({ id: m.id, nombre: m.nombreLista })),
+  })),
 }).replace(/</g, '\\u003c') %></script>
-<script src="/js/areas.js?v=20260907b" defer></script>
+<script src="/js/areas.js?v=20260909a" defer></script>

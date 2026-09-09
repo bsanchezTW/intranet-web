@@ -52,6 +52,45 @@
     marcarSwatch(valor);
   }
 
+  /**
+   * El jefe de un área tiene que pertenecer a ella (el servidor lo revalida),
+   * así que el selector se arma sólo con sus miembros. Al crear un área todavía
+   * no hay ninguno: el campo se deshabilita y se explica por qué.
+   */
+  function llenarJefes(area) {
+    var select = document.getElementById('area_manager');
+    var ayuda = document.getElementById('jefeAyuda');
+    if (!select) return;
+
+    var miembros = (area && Array.isArray(area.members)) ? area.members : [];
+    select.innerHTML = '';
+
+    var vacio = document.createElement('option');
+    vacio.value = '';
+    vacio.textContent = 'Sin jefe asignado';
+    select.appendChild(vacio);
+
+    miembros.forEach(function (m) {
+      var option = document.createElement('option');
+      option.value = m.id;
+      option.textContent = m.nombre || ('Usuario ' + m.id);
+      select.appendChild(option);
+    });
+
+    var actual = area && area.manager_user_id ? String(area.manager_user_id) : '';
+    select.value = actual;
+    select.disabled = !miembros.length;
+
+    if (!ayuda) return;
+    if (!area) {
+      ayuda.textContent = 'Primero crea el área y asígnale colaboradores; después podrás designar a su jefe.';
+    } else if (!miembros.length) {
+      ayuda.textContent = 'Esta área todavía no tiene colaboradores entre los cuales elegir un jefe.';
+    } else {
+      ayuda.textContent = 'Debe ser alguien del área. Su aprobación es el primer paso de toda rendición de gastos o solicitud de fondos.';
+    }
+  }
+
   function initModal(config) {
     var overlay = document.getElementById('modalArea');
     var form = document.getElementById('formArea');
@@ -60,13 +99,27 @@
     var titulo = document.getElementById('modalAreaTitle');
     var submit = document.getElementById('modalAreaSubmit');
     var nombre = document.getElementById('area_name');
+    var campoJefe = document.getElementById('campoJefe');
     var defaultColor = config.defaultColor || '#5a6879';
+    var areas = Array.isArray(config.areas) ? config.areas : [];
+
+    function buscarArea(id) {
+      var buscado = String(id);
+      for (var i = 0; i < areas.length; i += 1) {
+        if (String(areas[i].id) === buscado) return areas[i];
+      }
+      return null;
+    }
 
     function abrirCrear() {
       form.action = '/RRHH/areas';
       if (titulo) titulo.textContent = 'Agregar área';
       if (submit) submit.textContent = 'Crear área';
       if (nombre) nombre.value = '';
+      // El área nace vacía: no hay a quién nombrar jefe, así que el campo se
+      // oculta en vez de ofrecer un selector con una sola opción inútil.
+      if (campoJefe) campoJefe.hidden = true;
+      llenarJefes(null);
       setColorInputs(defaultColor);
       if (window.IntranetModal) window.IntranetModal.open(overlay);
       if (nombre) nombre.focus();
@@ -77,6 +130,8 @@
       if (titulo) titulo.textContent = 'Editar área';
       if (submit) submit.textContent = 'Guardar cambios';
       if (nombre) nombre.value = datos.name || '';
+      if (campoJefe) campoJefe.hidden = false;
+      llenarJefes(buscarArea(datos.id));
       setColorInputs(datos.color || defaultColor);
       if (window.IntranetModal) window.IntranetModal.open(overlay);
       if (nombre) nombre.focus();

@@ -1,0 +1,520 @@
+/* Procesos y Documentos — usa tokens de theme.css.
+   Antes esta zona llevaba <style> embebido con hex fijos (#003a70, #f8fafc),
+   por eso la tabla de archivos no tenía modo oscuro. */
+
+/* ── Buscador global ─────────────────────────────────────────────────────── */
+
+.buscador-global {
+  position: relative;
+  max-width: 700px;
+  margin-bottom: 34px;
+  /* Por encima de las tarjetas para que el desplegable no quede detrás. */
+  z-index: 20;
+}
+
+.buscador-global__icono {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-subtle);
+  display: inline-flex;
+  font-size: 1.15rem;
+  pointer-events: none;
+}
+
+.buscador-global__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 15px 50px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.buscador-global__input::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.buscador-global__input:focus {
+  border-color: var(--brand);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.buscador-global__spinner {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: procesosSpin 0.9s linear infinite;
+  display: none;
+}
+
+@keyframes procesosSpin {
+  to {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+
+.buscador-global__resultados {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.buscador-global__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--color-border);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.buscador-global__item:last-child {
+  border-bottom: none;
+}
+
+.buscador-global__item:hover,
+.buscador-global__item:focus-visible {
+  background: var(--color-surface-muted);
+}
+
+.buscador-global__item-icono {
+  display: inline-flex;
+  font-size: 1.25rem;
+  color: var(--brand);
+  flex-shrink: 0;
+}
+
+.buscador-global__item-titulo {
+  font-weight: 700;
+  color: var(--color-heading);
+  font-size: 0.98rem;
+}
+
+.buscador-global__item-tipo {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 2px;
+}
+
+.buscador-global__vacio {
+  padding: 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+/* ── Tarjetas de sección ─────────────────────────────────────────────────── */
+
+.procesos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.procesos-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+a.procesos-card:hover,
+a.procesos-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border-strong);
+}
+
+/* Estado deshabilitado: el área todavía no tiene jefe, así que la acción
+   existe pero no se puede ejercer. Se muestra apagada y no como enlace. */
+.procesos-card--bloqueada {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.procesos-card__tile {
+  width: 50px;
+  height: 50px;
+  flex-shrink: 0;
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.procesos-card__tile--green {
+  background: var(--green-soft);
+  color: var(--green-deep);
+}
+
+.procesos-card__cuerpo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.procesos-card__titulo {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: var(--color-heading);
+  letter-spacing: -0.01em;
+}
+
+.procesos-card__desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.procesos-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.procesos-card__badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.procesos-card__badge--alerta {
+  background: var(--brand-soft);
+  border-color: transparent;
+  color: var(--brand-deep, var(--brand));
+}
+
+/* ── Aviso (sin área, sin jefe) ──────────────────────────────────────────── */
+
+.procesos-aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.procesos-aviso__icono {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--brand);
+  font-size: 1.1rem;
+  margin-top: 1px;
+}
+
+/* ── Carpetas por área ───────────────────────────────────────────────────── */
+
+.carpetas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 18px;
+}
+
+.carpeta-card {
+  --carpeta-color: var(--brand);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.carpeta-card:hover,
+.carpeta-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border-strong);
+}
+
+/* El color del área (work_areas.color) es lo que hace reconocible la carpeta
+   de un vistazo, igual que el chip en la ficha de personal. */
+.carpeta-card__tile {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  background: color-mix(in srgb, var(--carpeta-color) 16%, transparent);
+  color: var(--carpeta-color);
+}
+
+.carpeta-card__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.carpeta-card__nombre {
+  margin: 0;
+  font-size: 1.03rem;
+  font-weight: 700;
+  color: var(--color-heading);
+  overflow-wrap: anywhere;
+}
+
+.carpeta-card__conteo {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+  border-radius: 999px;
+  padding: 2px 10px;
+  width: fit-content;
+}
+
+/* ── Lista de archivos ───────────────────────────────────────────────────── */
+
+.archivos-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.archivos-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.archivo-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.archivo-item:last-child {
+  border-bottom: none;
+}
+
+.archivo-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.archivo-item__icono {
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 1.4rem;
+  color: var(--color-text-muted);
+}
+
+/* Los formatos se distinguen por color porque en una lista larga el icono
+   solo no basta para encontrar "el Excel". */
+.archivo-item__icono--pdf {
+  color: #d93025;
+}
+.archivo-item__icono--doc {
+  color: #2b6cb0;
+}
+.archivo-item__icono--xls {
+  color: #2f855a;
+}
+
+.archivo-item__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.archivo-item__nombre {
+  color: var(--color-link);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.98rem;
+  overflow-wrap: anywhere;
+}
+
+.archivo-item__nombre:hover {
+  text-decoration: underline;
+}
+
+.archivo-item__tipo {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.archivo-item__acciones {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.archivo-item__btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 7px;
+  border-radius: 8px;
+  display: inline-flex;
+  color: var(--color-text-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.archivo-item__btn:hover {
+  background: var(--color-surface-muted);
+}
+
+.archivo-item__btn--editar:hover {
+  color: var(--brand);
+}
+
+.archivo-item__btn--eliminar:hover {
+  color: #d93025;
+}
+
+.archivos-vacio {
+  text-align: center;
+  padding: 46px 20px;
+  color: var(--color-text-muted);
+}
+
+.archivos-vacio__icono {
+  font-size: 2.4rem;
+  color: var(--color-text-subtle);
+  display: block;
+  margin-bottom: 10px;
+}
+
+.archivos-vacio h3 {
+  margin: 0 0 6px;
+  color: var(--color-heading);
+  font-size: 1.05rem;
+}
+
+.archivos-vacio p {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+/* ── Migas y subida ──────────────────────────────────────────────────────── */
+
+.procesos-migas {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+
+.procesos-migas a {
+  color: var(--color-link);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.procesos-migas a:hover {
+  text-decoration: underline;
+}
+
+.procesos-subida-estado {
+  margin-top: 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--brand);
+  text-align: center;
+  display: none;
+}
+
+.procesos-subida-spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--brand);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: procesosSpinPlain 0.9s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+@keyframes procesosSpinPlain {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .procesos-grid,
+  .carpetas-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .archivo-item {
+    flex-wrap: wrap;
+  }
+
+  .archivo-item__acciones {
+    margin-left: auto;
+  }
+}

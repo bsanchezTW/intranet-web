@@ -326,3 +326,49 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ── Jefatura del área ────────────────────────────────────────────────────────
+   Requisito para aprobar rendiciones: cuando falta, la tarjeta lo dice en vez
+   de dejar que el colaborador lo descubra al intentar rendir. */
+
+.area-card__jefe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.area-card__jefe--vacio {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.area-card__jefe strong {
+  color: var(--color-heading);
+}
+
+.area-card__jefe--vacio strong {
+  color: inherit;
+}
+
+.area-card__jefe-icono {
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+.area-jefe-ayuda {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-subtle);
+  line-height: 1.45;
+}

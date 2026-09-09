@@ -1,320 +1,247 @@
-<style>
-      .global-search-wrapper {
-        position: relative;
-        max-width: 700px;
-        margin-bottom: 40px;
-        z-index: 100;
-      }
+<%
+  const admin = (typeof esAdmin !== 'undefined' && esAdmin);
+  const ctx = (typeof areaContext !== 'undefined' && areaContext) ? areaContext : { area: null, manager: null, isManager: false };
+  const conteos = (typeof conteosArea !== 'undefined' && conteosArea) ? conteosArea : { procedimiento: 0, protocolo: 0 };
+  const hayGastos = (typeof gastosActivos !== 'undefined') ? gastosActivos : false;
+  const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
+  const porAprobar = (typeof pendientes !== 'undefined' && pendientes) ? pendientes : 0;
 
-      .search-icon-global {
-        position: absolute;
-        left: 18px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #a0aec0;
-        font-size: 1.3rem;
-      }
+  // Sin área no hay jefe, y sin jefe no hay a quién enviarle la solicitud.
+  const puedeSolicitar = !!(ctx.area && ctx.manager);
+  const flashError = (typeof error !== 'undefined' && error) ? error : null;
 
-      .search-input-global {
-        width: 100%;
-        padding: 16px 50px 16px 50px;
-        border: 2px solid #e2e8f0;
-        border-radius: 10px;
-        font-size: 1.1rem;
-        background: #ffffff;
-        transition: all 0.2s;
-        box-sizing: border-box;
-        color: #2d3748;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
-      }
-
-      .search-input-global:focus {
-        border-color: #003a70;
-        outline: none;
-        box-shadow: 0 0 0 4px rgba(0, 58, 112, 0.1);
-      }
-
-      .search-spinner {
-        position: absolute;
-        right: 18px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 22px;
-        height: 22px;
-        border: 3px solid #e2e8f0;
-        border-top-color: #003a70;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        display: none;
-      }
-
-      @keyframes spin {
-        to {
-          transform: translateY(-50%) rotate(360deg);
-        }
-      }
-
-      .search-results-dropdown {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        max-height: 350px;
-        overflow-y: auto;
-        margin-top: 8px;
-      }
-
-      .search-item {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        padding: 15px 20px;
-        border-bottom: 1px solid #edf2f7;
-        text-decoration: none;
-        transition: background 0.2s;
-      }
-
-      .search-item:last-child {
-        border-bottom: none;
-      }
-      .search-item:hover {
-        background: #f8fafc;
-      }
-      .search-item-icon {
-        font-size: 1.5rem;
-      }
-      .search-item-title {
-        color: #003a70;
-        font-weight: 700;
-        font-size: 1rem;
-        margin-bottom: 2px;
-      }
-      .search-item-type {
-        color: #718096;
-        font-size: 0.8rem;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-
-      .grid-opciones-exec {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 25px;
-      }
-
-      .card-opcion-exec {
-        background: var(--color-surface, #ffffff);
-        border: 1px solid var(--color-border, #e2e8f0);
-        border-radius: 12px;
-        padding: 30px 25px;
-        text-decoration: none;
-        display: flex;
-        align-items: flex-start;
-        gap: 20px;
-        transition: all 0.3s ease;
-        box-shadow: var(--shadow-card, 0 2px 5px rgba(0, 0, 0, 0.02));
-        color: var(--color-text, #333333);
-      }
-
-      .card-opcion-exec:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.08);
-        border-color: var(--color-border-strong, #cbd5e0);
-        background: var(--color-surface-muted, #f8fafc);
-      }
-
-      .card-icon-wrapper {
-        background: #eef4ff;
-        color: #175cd3;
-        width: 55px;
-        height: 55px;
-        border-radius: 14px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.8rem;
-        flex-shrink: 0;
-        border: 1px solid #d1e0ff;
-      }
-
-      .card-content {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .card-title {
-        color: var(--color-heading, #003a70);
-        font-size: 1.25rem;
-        font-weight: 800;
-        margin: 0;
-      }
-
-      .card-desc {
-        color: var(--color-text-muted, #718096);
-        font-size: 0.95rem;
-        line-height: 1.5;
-        margin: 0;
-      }
-</style>
+  function plural(n, singular, pluralWord) { return n === 1 ? singular : pluralWord; }
+%>
 
 <div class="contenedor">
-      <div class="page-header">
-        <h2 class="page-title">Procesos y Documentos</h2>
-        <p class="page-description">
-          Selecciona la sección que deseas consultar en el repositorio documental:
+
+  <div class="page-header">
+    <h2 class="page-title">Procesos y Documentos</h2>
+    <p class="page-description">
+      Rinde tus gastos, consulta la normativa de la empresa y revisa los documentos de tu área.
+    </p>
+  </div>
+
+  <% if (flashError) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= flashError %></span>
+    </div>
+  <% } %>
+
+  <div class="buscador-global">
+    <span class="buscador-global__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
+    <label class="sr-only" for="buscadorGlobal">Buscar documentos</label>
+    <input
+      type="search"
+      id="buscadorGlobal"
+      class="buscador-global__input"
+      placeholder="Buscar en procedimientos, protocolos y documentos…"
+      autocomplete="off"
+    >
+    <div id="buscadorSpinner" class="buscador-global__spinner"></div>
+    <div id="buscadorResultados" class="buscador-global__resultados" hidden></div>
+  </div>
+
+  <% if (hayGastos) { %>
+  <!-- ═══════════ Finanzas ═══════════ -->
+  <section class="seccion" aria-labelledby="seccion-finanzas">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="seccion-finanzas">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'wallet' }) %></span>
+          Finanzas
+        </h3>
+        <p class="seccion__desc">
+          <% if (puedeSolicitar) { %>
+            Tus solicitudes pasan primero por <strong><%= ctx.manager.name %></strong> y luego por Finanzas.
+          <% } else { %>
+            Rinde gastos ya realizados o pide fondos por adelantado.
+          <% } %>
         </p>
-      </div>
-
-      <div class="global-search-wrapper">
-        <span class="search-icon-global"><%- include('../partials/icon', { name: 'search' }) %></span>
-        <input
-          type="text"
-          id="buscadorGlobal"
-          class="search-input-global"
-          placeholder="Buscar en todos los procesos, protocolos y documentos..."
-          autocomplete="off"
-        />
-        <div id="searchSpinner" class="search-spinner"></div>
-        <div
-          id="searchResults"
-          class="search-results-dropdown"
-          style="display: none"
-        ></div>
-      </div>
-
-      <div class="grid-opciones-exec">
-        <a href="/procesos/procedimientos" class="card-opcion-exec">
-          <div class="card-icon-wrapper"><%- include('../partials/icon', { name: 'clipboard' }) %></div>
-          <div class="card-content">
-            <h3 class="card-title">Procedimientos</h3>
-            <p class="card-desc">
-              Instructivos paso a paso para tareas operativas y recurrentes.
-            </p>
-          </div>
-        </a>
-
-        <a href="/procesos/protocolos" class="card-opcion-exec">
-          <div class="card-icon-wrapper"><%- include('../partials/icon', { name: 'shield' }) %></div>
-          <div class="card-content">
-            <h3 class="card-title">Protocolos</h3>
-            <p class="card-desc">
-              Lineamientos formales para situaciones específicas y de seguridad.
-            </p>
-          </div>
-        </a>
-
-        <a href="/procesos/reglamento" class="card-opcion-exec">
-          <div class="card-icon-wrapper"><%- include('../partials/icon', { name: 'scale' }) %></div>
-          <div class="card-content">
-            <h3 class="card-title">Reglamento Interno</h3>
-            <p class="card-desc">
-              Normativa, políticas internas y reglas generales de la empresa.
-            </p>
-          </div>
-        </a>
-
-        <a href="/procesos/otros" class="card-opcion-exec">
-          <div class="card-icon-wrapper"><%- include('../partials/icon', { name: 'folder' }) %></div>
-          <div class="card-content">
-            <h3 class="card-title">Otros Documentos</h3>
-            <p class="card-desc">
-              Documentación adicional, plantillas e información importante.
-            </p>
-          </div>
-        </a>
       </div>
     </div>
 
-    <script>
-      let searchTimeout;
-      const searchInput = document.getElementById("buscadorGlobal");
-      const resultsContainer = document.getElementById("searchResults");
-      const spinner = document.getElementById("searchSpinner");
+    <% if (!ctx.area) { %>
+      <div class="procesos-aviso" style="margin-bottom: 18px;">
+        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
+        <span>Todavía no tienes un área asignada, así que no es posible determinar quién aprueba tus solicitudes. Pídele a RRHH que te asigne una.</span>
+      </div>
+    <% } else if (!ctx.manager) { %>
+      <div class="procesos-aviso" style="margin-bottom: 18px;">
+        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
+        <span>El área <strong><%= ctx.area.area_name %></strong> aún no tiene un jefe asignado, y la aprobación de la jefatura es un requisito. Pídele a RRHH que designe uno.</span>
+      </div>
+    <% } %>
 
-      searchInput.addEventListener("input", (e) => {
-        clearTimeout(searchTimeout);
-        const query = e.target.value.trim();
+    <div class="procesos-grid">
+      <% if (puedeSolicitar) { %>
+        <a href="/gastos/nueva/rendicion" class="procesos-card">
+          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'receipt' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Rendir gastos</h4>
+            <p class="procesos-card__desc">Declara gastos que ya pagaste de tu bolsillo y adjunta los comprobantes.</p>
+          </div>
+        </a>
 
-        if (query.length < 2) {
-          resultsContainer.style.display = "none";
-          spinner.style.display = "none";
-          return;
-        }
+        <a href="/gastos/nueva/fondos" class="procesos-card">
+          <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Solicitar fondos</h4>
+            <p class="procesos-card__desc">Pide dinero por adelantado para una compra o gestión que todavía no realizas.</p>
+          </div>
+        </a>
+      <% } else { %>
+        <div class="procesos-card procesos-card--bloqueada" aria-disabled="true">
+          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'receipt' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Rendir gastos</h4>
+            <p class="procesos-card__desc">No disponible hasta que tu área tenga un jefe asignado.</p>
+          </div>
+        </div>
 
-        spinner.style.display = "block";
+        <div class="procesos-card procesos-card--bloqueada" aria-disabled="true">
+          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Solicitar fondos</h4>
+            <p class="procesos-card__desc">No disponible hasta que tu área tenga un jefe asignado.</p>
+          </div>
+        </div>
+      <% } %>
 
-        searchTimeout = setTimeout(async () => {
-          try {
-            const response = await fetch(
-              `/procesos/api/buscar?q=${encodeURIComponent(query)}`,
-            );
-            const data = await response.json();
+      <a href="/gastos" class="procesos-card">
+        <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'clipboard' }) %></span>
+        <div class="procesos-card__cuerpo">
+          <h4 class="procesos-card__titulo">Mis solicitudes</h4>
+          <p class="procesos-card__desc">Revisa el estado y el historial de todo lo que has enviado.</p>
+        </div>
+      </a>
 
-            resultsContainer.innerHTML = "";
+      <% if (revisor) { %>
+        <a href="/gastos/gestion" class="procesos-card">
+          <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'inbox' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Gestión de solicitudes</h4>
+            <p class="procesos-card__desc">Aprueba, rechaza y consulta el historial de las solicitudes que te corresponden.</p>
+            <div class="procesos-card__meta">
+              <% if (porAprobar > 0) { %>
+                <span class="procesos-card__badge procesos-card__badge--alerta">
+                  <%= porAprobar %> <%= plural(porAprobar, 'por aprobar', 'por aprobar') %>
+                </span>
+              <% } else { %>
+                <span class="procesos-card__badge">Sin pendientes</span>
+              <% } %>
+            </div>
+          </div>
+        </a>
+      <% } %>
+    </div>
+  </section>
+  <% } %>
 
-            if (data.length === 0) {
-              resultsContainer.innerHTML =
-                '<div style="color:#718096; text-align:center; padding: 20px;">No se encontraron documentos.</div>';
-            } else {
-              data.forEach((doc) => {
-                let tipoLabel = "Documento";
-                if (doc.tipo === "reglamento") tipoLabel = "Reglamento Interno";
-                else if (doc.tipo === "otros") tipoLabel = "Otros Documentos";
-                else if (doc.type === "reglamento") tipoLabel = "Reglamento Interno";
-                else if (doc.type === "otros") tipoLabel = "Otros Documentos";
-                else if (doc.tipo || doc.type) {
-                  const tipo = doc.tipo || doc.type;
-                  const partes = tipo.split("_");
-                  if (partes.length === 2) {
-                    tipoLabel = partes[0] + " (" + partes[1] + ")";
-                  }
-                }
+  <!-- ═══════════ Documentos generales ═══════════ -->
+  <section class="seccion" aria-labelledby="seccion-generales">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="seccion-generales">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'scale' }) %></span>
+          Documentos generales
+        </h3>
+        <p class="seccion__desc">Normativa y documentación que aplica a toda la empresa.</p>
+      </div>
+    </div>
 
-                const icon = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+    <div class="procesos-grid">
+      <a href="/procesos/reglamento" class="procesos-card">
+        <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'scale' }) %></span>
+        <div class="procesos-card__cuerpo">
+          <h4 class="procesos-card__titulo">Reglamento interno</h4>
+          <p class="procesos-card__desc">Normativa, políticas internas y reglas generales de la empresa.</p>
+        </div>
+      </a>
 
-                const item = document.createElement("a");
-                item.href = doc.url;
-                item.target = "_blank";
-                item.className = "search-item";
-                item.innerHTML = `
-                            <div class="search-item-icon">${icon}</div>
-                            <div>
-                                <div class="search-item-title">${doc.name || doc.nombre}</div>
-                                <div class="search-item-type">${tipoLabel}</div>
-                            </div>
-                        `;
-                resultsContainer.appendChild(item);
-              });
-            }
-            resultsContainer.style.display = "block";
-          } catch (err) {
-            console.error("Error buscando:", err);
-          } finally {
-            spinner.style.display = "none";
-          }
-        }, 300);
-      });
+      <a href="/procesos/otros" class="procesos-card">
+        <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'folder' }) %></span>
+        <div class="procesos-card__cuerpo">
+          <h4 class="procesos-card__titulo">Otros documentos</h4>
+          <p class="procesos-card__desc">Documentación adicional, plantillas e información importante.</p>
+        </div>
+      </a>
+    </div>
+  </section>
 
-      document.addEventListener("click", (e) => {
-        if (
-          !searchInput.contains(e.target) &&
-          !resultsContainer.contains(e.target)
-        ) {
-          resultsContainer.style.display = "none";
-        }
-      });
+  <!-- ═══════════ Mi área / Áreas ═══════════ -->
+  <section class="seccion" aria-labelledby="seccion-area">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="seccion-area">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: admin ? 'users' : 'briefcase' }) %></span>
+          <%= admin ? 'Áreas' : 'Mi área' %>
+        </h3>
+        <p class="seccion__desc">
+          <% if (admin) { %>
+            Procedimientos y protocolos de cada área de la empresa.
+          <% } else if (ctx.area) { %>
+            Procedimientos y protocolos de <strong><%= ctx.area.area_name %></strong>.
+          <% } else { %>
+            Procedimientos y protocolos del área a la que perteneces.
+          <% } %>
+        </p>
+      </div>
+    </div>
 
-      searchInput.addEventListener("focus", () => {
-        if (
-          searchInput.value.trim().length >= 2 &&
-          resultsContainer.innerHTML !== ""
-        ) {
-          resultsContainer.style.display = "block";
-        }
-      });
-</script>
+    <% if (admin) { %>
+      <div class="procesos-grid">
+        <a href="/procesos/procedimientos" class="procesos-card">
+          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'clipboard' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Procedimientos</h4>
+            <p class="procesos-card__desc">Instructivos paso a paso para tareas operativas y recurrentes, por área.</p>
+          </div>
+        </a>
+
+        <a href="/procesos/protocolos" class="procesos-card">
+          <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'shield' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Protocolos</h4>
+            <p class="procesos-card__desc">Lineamientos formales para situaciones específicas y de seguridad, por área.</p>
+          </div>
+        </a>
+      </div>
+    <% } else if (ctx.area) { %>
+      <div class="procesos-grid">
+        <a href="/procesos/procedimientos/<%= ctx.area.id %>" class="procesos-card">
+          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'clipboard' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Procedimientos</h4>
+            <p class="procesos-card__desc">Instructivos paso a paso para las tareas de tu área.</p>
+            <div class="procesos-card__meta">
+              <span class="procesos-card__badge">
+                <%= conteos.procedimiento || 0 %> <%= plural(conteos.procedimiento || 0, 'documento', 'documentos') %>
+              </span>
+            </div>
+          </div>
+        </a>
+
+        <a href="/procesos/protocolos/<%= ctx.area.id %>" class="procesos-card">
+          <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'shield' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Protocolos</h4>
+            <p class="procesos-card__desc">Lineamientos formales y de seguridad de tu área.</p>
+            <div class="procesos-card__meta">
+              <span class="procesos-card__badge">
+                <%= conteos.protocolo || 0 %> <%= plural(conteos.protocolo || 0, 'documento', 'documentos') %>
+              </span>
+            </div>
+          </div>
+        </a>
+      </div>
+    <% } else { %>
+      <div class="procesos-aviso">
+        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
+        <span>Todavía no perteneces a ningún área, así que no hay procedimientos ni protocolos que mostrarte. Pídele a RRHH que te asigne una.</span>
+      </div>
+    <% } %>
+  </section>
+
+</div>

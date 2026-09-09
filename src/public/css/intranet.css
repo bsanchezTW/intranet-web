@@ -1080,3 +1080,171 @@ body:not(.login-split-page) {
   vertical-align: -0.125em;
   flex-shrink: 0;
 }
+
+
+/* ── Secciones de página ──────────────────────────────────────────────────────
+   Encabezado de sección: tile con icono + título + descripción, y acciones a la
+   derecha. Estrenado en Soporte y reutilizado por Procesos y el centro de
+   gastos; .soporte-seccion se mantiene como alias para no tocar esa vista. */
+
+.seccion,
+.soporte-seccion {
+  margin-bottom: 38px;
+}
+
+.seccion__head,
+.soporte-seccion__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.seccion__heading,
+.soporte-seccion__heading {
+  min-width: 0;
+}
+
+.seccion__title,
+.soporte-seccion__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-heading);
+  letter-spacing: -0.01em;
+}
+
+.seccion__icon,
+.soporte-seccion__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* Alineada bajo el título y no bajo el icono: 34px del tile + 10px del gap. */
+.seccion__desc,
+.soporte-seccion__desc {
+  margin: 6px 0 0 44px;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.seccion__acciones,
+.soporte-seccion__acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .seccion__desc,
+  .soporte-seccion__desc {
+    margin-left: 0;
+  }
+}
+
+
+/* ── Aviso de resultado (flash) ───────────────────────────────────────────────
+   Los módulos que redirigen con ?ok=/?error= muestran el resultado aquí. Vive
+   en el CSS global porque la alternativa (.popup-notification) está en
+   personal.css y sólo se carga en RRHH. */
+
+.flash-msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 22px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.45;
+  border: 1px solid transparent;
+}
+
+.flash-msg--ok {
+  background: #d1fae5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.flash-msg--error {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.flash-msg__icono {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+
+/* ── Campo de formulario ──────────────────────────────────────────────────────
+   Etiqueta + control + ayuda. Vive en el CSS global porque lo usan Procesos, el
+   centro de gastos y los modales; antes cada módulo redefinía lo mismo con su
+   propio prefijo. */
+
+.campo-form {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.campo-form > label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.campo-form input[type="text"],
+.campo-form input[type="date"],
+.campo-form input[type="file"],
+.campo-form input[type="number"],
+.campo-form textarea,
+.campo-form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.94rem;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+}
+
+.campo-form textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.campo-form input:focus,
+.campo-form textarea:focus,
+.campo-form select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.campo-form__ayuda {
+  font-size: 0.82rem;
+  color: var(--color-text-subtle);
+}
+
+.required-mark {
+  color: #d93025;
+}

@@ -1,0 +1,179 @@
+<%
+  const listaPendientes = (typeof pendientes !== 'undefined' && Array.isArray(pendientes)) ? pendientes : [];
+  const listaHistorial  = (typeof historial  !== 'undefined' && Array.isArray(historial))  ? historial  : [];
+  const areas = (typeof areasACargo !== 'undefined' && Array.isArray(areasACargo)) ? areasACargo : [];
+  const finanzas = (typeof esFinanzas !== 'undefined' && esFinanzas);
+  const admin = (typeof esAdmin !== 'undefined' && esAdmin);
+
+  const fechaOpts = { year: 'numeric', month: '2-digit', day: '2-digit' };
+
+  function nombreDe(s) {
+    return [s.requester_first_name, s.requester_last_name].filter(Boolean).join(' ')
+      || s.requester_email || 'Colaborador';
+  }
+  function buscableDe(s) {
+    return [s.title, String(s.id), nombreDe(s), s.area_name, expenseKindLabel(s.kind)]
+      .filter(Boolean).join(' ').toLowerCase();
+  }
+
+  // Quién es este revisor decide qué explicar en las descripciones.
+  const roles = [];
+  if (areas.length) roles.push('jefatura de ' + areas.map(a => a.area_name).join(', '));
+  if (finanzas) roles.push('Finanzas');
+  if (admin && !roles.length) roles.push('administración');
+%>
+
+<div class="contenedor">
+
+  <div class="page-header page-header--toolbar">
+    <div class="page-header__text">
+      <h2 class="page-title">Gestión de solicitudes</h2>
+      <p class="page-description">
+        <%= listaPendientes.length %> <%= listaPendientes.length === 1 ? 'solicitud por resolver' : 'solicitudes por resolver' %>
+        <% if (roles.length) { %> · Revisas como <%= roles.join(' y ') %><% } %>
+      </p>
+    </div>
+    <div class="page-header-actions">
+      <a href="/gastos" class="link-volver">← Mis solicitudes</a>
+    </div>
+  </div>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div class="flash-msg flash-msg--ok" role="status">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
+      <span><%= success %></span>
+    </div>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= error %></span>
+    </div>
+  <% } %>
+
+  <!-- ═══════════ Por aprobar ═══════════ -->
+  <section class="seccion" aria-labelledby="gestion-pendientes">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="gestion-pendientes">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'inbox' }) %></span>
+          Por aprobar
+        </h3>
+        <p class="seccion__desc">
+          Sólo lo que te toca resolver a ti, en la etapa en la que está cada solicitud.
+          Las más antiguas van primero.
+        </p>
+      </div>
+    </div>
+
+    <div class="gastos-panel">
+      <ul class="gastos-lista" data-gastos-lista>
+        <% listaPendientes.forEach((s) => {
+             const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaOpts) : '—';
+             const esDeJefe = s.status === 'pending' && !s.manager_user_id;
+        %>
+          <li class="gasto-item" data-estado="<%= s.status %>" data-buscar="<%= buscableDe(s) %>">
+            <a class="gasto-item__link" href="/gastos/<%= s.id %>?volver=gestion">
+              <span class="gasto-item__main">
+                <span class="gasto-item__top">
+                  <span class="gasto-item__id">#<%= s.id %></span>
+                  <span class="gasto-item__titulo"><%= s.title %></span>
+                </span>
+                <span class="gasto-item__meta">
+                  <span><%= nombreDe(s) %></span>
+                  <% if (s.area_name) { %><span><%= s.area_name %></span><% } %>
+                  <span><%= expenseKindLabel(s.kind) %></span>
+                  <span>Enviada el <%= creado %></span>
+                  <% if (esDeJefe) { %><span>Requiere administrador</span><% } %>
+                </span>
+              </span>
+
+              <span class="gasto-item__lado">
+                <span class="gasto-item__monto"><%= formatMoney(s.total_amount) %></span>
+                <span class="<%= expenseStatusBadge(s.status) %>"><%= expenseStatusLabel(s.status) %></span>
+              </span>
+
+              <span class="gasto-item__chevron" aria-hidden="true"><%- include('../partials/icon', { name: 'chevron-right' }) %></span>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+
+      <% if (!listaPendientes.length) { %>
+        <p class="gastos-vacio">No tienes solicitudes esperando tu aprobación.</p>
+      <% } %>
+    </div>
+  </section>
+
+  <!-- ═══════════ Historial ═══════════ -->
+  <section class="seccion" aria-labelledby="gestion-historial">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="gestion-historial">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'clipboard' }) %></span>
+          Historial
+        </h3>
+        <p class="seccion__desc">
+          Todo lo que ha pasado por ti o por las áreas que gestionas, en cualquier estado.
+        </p>
+      </div>
+    </div>
+
+    <div class="gastos-panel">
+      <% if (listaHistorial.length) { %>
+      <div class="gastos-toolbar">
+        <div class="gastos-buscar">
+          <span class="gastos-buscar__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
+          <label class="sr-only" for="gestionBuscar">Buscar en el historial</label>
+          <input type="search" id="gestionBuscar" class="gastos-buscar__input" data-gastos-buscar
+                 placeholder="Buscar por asunto, solicitante, área o número…" autocomplete="off">
+        </div>
+        <div class="gastos-chips" role="group" aria-label="Filtrar por estado">
+          <button type="button" class="gastos-chip is-active" data-filtro-estado="todos">Todas</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="activos">En curso</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="approved_finance">Aprobadas</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="rejected">Rechazadas</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="cancelled">Anuladas</button>
+        </div>
+      </div>
+      <% } %>
+
+      <ul class="gastos-lista" data-gastos-lista>
+        <% listaHistorial.forEach((s) => {
+             const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaOpts) : '—';
+        %>
+          <li class="gasto-item" data-estado="<%= s.status %>" data-buscar="<%= buscableDe(s) %>">
+            <a class="gasto-item__link" href="/gastos/<%= s.id %>?volver=gestion">
+              <span class="gasto-item__main">
+                <span class="gasto-item__top">
+                  <span class="gasto-item__id">#<%= s.id %></span>
+                  <span class="gasto-item__titulo"><%= s.title %></span>
+                </span>
+                <span class="gasto-item__meta">
+                  <span><%= nombreDe(s) %></span>
+                  <% if (s.area_name) { %><span><%= s.area_name %></span><% } %>
+                  <span><%= expenseKindLabel(s.kind) %></span>
+                  <span><%= creado %></span>
+                </span>
+              </span>
+
+              <span class="gasto-item__lado">
+                <span class="gasto-item__monto"><%= formatMoney(s.total_amount) %></span>
+                <span class="<%= expenseStatusBadge(s.status) %>"><%= expenseStatusLabel(s.status) %></span>
+              </span>
+
+              <span class="gasto-item__chevron" aria-hidden="true"><%- include('../partials/icon', { name: 'chevron-right' }) %></span>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+
+      <p class="gastos-vacio" data-gastos-vacio hidden>No hay solicitudes que coincidan con el filtro.</p>
+
+      <% if (!listaHistorial.length) { %>
+        <p class="gastos-vacio">Todavía no hay solicitudes en el historial.</p>
+      <% } %>
+    </div>
+  </section>
+
+</div>

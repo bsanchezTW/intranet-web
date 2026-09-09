@@ -25,6 +25,7 @@ const FEATURE_KEYS = [
   "supportTickets",
   "homeQuickAccess",
   "chileHrPortals",
+  "expenseCenter",
 ];
 
 const FEATURE_MATRIX = {
@@ -43,6 +44,8 @@ const FEATURE_MATRIX = {
     homeQuickAccess: true,
     // Portales RRHH chilenos: Rex+, ACHS y Caja Los Andes (home, menú, footer).
     chileHrPortals: true,
+    // Centro de gastos: rendiciones y solicitudes de fondos (/gastos).
+    expenseCenter: true,
   },
   PE: {
     // Sin tabla linkedin_posts ni tokens; no se sincroniza el feed.
@@ -59,6 +62,8 @@ const FEATURE_MATRIX = {
     homeQuickAccess: false,
     // Rex+, ACHS y Caja Los Andes son portales chilenos; no se ofrecen en Perú.
     chileHrPortals: false,
+    // El proceso de rendiciones es corporativo, no chileno.
+    expenseCenter: true,
   },
 };
 

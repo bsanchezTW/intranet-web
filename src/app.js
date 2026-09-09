@@ -42,6 +42,9 @@ const ticketsRoutes = isFeatureEnabled("supportTickets")
 const claudeRoutes = isFeatureEnabled("claudeAssistant")
   ? require("./routes/claude")
   : null;
+const gastosRoutes = isFeatureEnabled("expenseCenter")
+  ? require("./routes/gastos")
+  : null;
 const { syncUnverifiedUsersToDisabled } = require("./utils/syncDisabledUsers");
 const storageService = require("./services/storage/storageService");
 const {
@@ -51,6 +54,7 @@ const {
 const signedMedia = require("./services/media/signedMedia");
 const { ensureVacationSchema } = require("./services/vacations/vacationSchema");
 const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
+const { ensureExpenseSchema } = require("./services/expenses/expenseSchema");
 const {
   APP_CATALOG_VALUES,
   DEFAULT_APP_CATALOG,
@@ -363,6 +367,9 @@ app.use("/", adminDbTestRoutes); // Diagnóstico BD (sin sesión: el login puede
 app.use("/", requireAuth, indexRoutes);
 app.use("/procesos", requireAuth, procesosRoutes);
 app.use("/RRHH", requireAuth, personasRoutes);
+if (gastosRoutes) {
+  app.use("/gastos", requireAuth, requireFeature("expenseCenter"), gastosRoutes);
+}
 if (ticketsRoutes) {
   app.use("/sistemas", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
 }
@@ -646,6 +653,14 @@ async function asegurarSchemaVacaciones() {
   }
 }
 
+async function asegurarSchemaGastos() {
+  try {
+    await ensureExpenseSchema();
+  } catch (err) {
+    logger.error("gastos", err);
+  }
+}
+
 async function asegurarSchemaAreas() {
   try {
     await ensureWorkAreaSchema();
@@ -672,6 +687,7 @@ function startBackgroundJobs() {
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
     asegurarSchemaAreas(),
+    asegurarSchemaGastos(),
   ]).finally(() => {
     iniciarTransicionesVacaciones();
   });

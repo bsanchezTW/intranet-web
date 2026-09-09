@@ -31,6 +31,8 @@ const {
 const { validateEmail } = require("../utils/email");
 const { mapPersonaForView } = require("../utils/schemaMappers");
 const balanceService = require("../services/vacations/vacationBalanceService");
+const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
+const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
 
 function parsePriorYearsCredited(value) {
   const n = Number(value);
@@ -187,6 +189,61 @@ function redirectAreasError(res, message) {
 
 function isUniqueViolation(err) {
   return err && err.code === "23505";
+}
+
+/**
+ * Quién forma la mesa de ayuda y quién aprueba en Finanzas se deduce del área,
+ * y ambos servicios lo cachean 60 s. Cualquier cambio de área o de membresía
+ * tiene que invalidarlos o el permiso queda desfasado hasta un minuto.
+ */
+/**
+ * Deja sin jefe a cualquier área cuyo jefe ya no pertenezca a ella. Se llama
+ * después de reasignar a alguien: una jefatura que apunta fuera del área es
+ * exactamente el estado que impide aprobar con criterio.
+ */
+async function limpiarJefaturaHuerfana(userId) {
+  await db.query(
+    `UPDATE work_areas w
+        SET manager_user_id = NULL
+       FROM users u
+      WHERE w.manager_user_id = $1
+        AND u.id = $1
+        AND (u.work_area_id IS NULL OR u.work_area_id <> w.id)`,
+    [userId],
+  );
+}
+
+function invalidarCachesDeArea() {
+  invalidateFinanceTeam();
+  invalidateSupportTeam();
+}
+
+/**
+ * Valida al jefe propuesto para un área. Devuelve { ok, managerId } o
+ * { ok: false, error }. Un jefe que no pertenece al área que dirige no puede
+ * aprobar sus gastos con criterio, así que se exige la pertenencia.
+ */
+async function parseAreaManager(rawValue, areaId) {
+  const raw = String(rawValue ?? "").trim();
+  if (!raw) return { ok: true, managerId: null };
+
+  const managerId = parsePositiveInt(raw);
+  if (!managerId) return { ok: false, error: "Jefe de área inválido." };
+
+  const { rows } = await db.query(
+    "SELECT id, work_area_id FROM users WHERE id = $1",
+    [managerId],
+  );
+  if (!rows.length) {
+    return { ok: false, error: "El colaborador elegido como jefe no existe." };
+  }
+  if (Number(rows[0].work_area_id) !== Number(areaId)) {
+    return {
+      ok: false,
+      error: "El jefe de área debe pertenecer al área que dirige.",
+    };
+  }
+  return { ok: true, managerId };
 }
 
 function formatAreaMember(row, idx) {
@@ -821,7 +878,12 @@ router.get("/areas", async (req, res) => {
   try {
     const [areasResult, peopleResult] = await Promise.all([
       db.query(
-        "SELECT id, area_name, color FROM work_areas ORDER BY area_name ASC",
+        `SELECT w.id, w.area_name, w.color, w.manager_user_id,
+                m.first_name AS manager_first_name,
+                m.last_name  AS manager_last_name
+         FROM work_areas w
+         LEFT JOIN users m ON m.id = w.manager_user_id
+         ORDER BY w.area_name ASC`,
       ),
       db.query(
         `SELECT u.id, u.first_name, u.last_name, u.photo, u.work_area_id,
@@ -850,10 +912,15 @@ router.get("/areas", async (req, res) => {
 
     const areas = areasResult.rows.map((area) => {
       const members = peopleByArea.get(Number(area.id)) || [];
+      const managerName = [area.manager_first_name, area.manager_last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
       return {
         ...enrichAreaWithPill(area),
         members,
         memberCount: members.length,
+        managerName: managerName || null,
       };
     });
 
@@ -890,11 +957,17 @@ router.post("/areas", requireRole.administrador(), async (req, res) => {
   }
 
   try {
-    await db.query(
+    // queryRetryIdCollision y no query: work_areas usa un id aleatorio de 4
+    // dígitos y dos altas simultáneas pueden recibir el mismo candidato.
+    await db.queryRetryIdCollision(
       "INSERT INTO work_areas (area_name, color) VALUES ($1, $2)",
       [areaName, color],
     );
-    return redirectAreasOk(res, "Área creada.");
+    // El área nace sin jefe: todavía no tiene miembros entre los cuales elegirlo.
+    return redirectAreasOk(
+      res,
+      "Área creada. Asígnale colaboradores y luego designa a su jefe.",
+    );
   } catch (err) {
     if (isUniqueViolation(err)) {
       return redirectAreasError(res, "Ya existe un área con ese nombre.");
@@ -916,13 +989,19 @@ router.post("/areas/:id", requireRole.administrador(), async (req, res) => {
   }
 
   try {
+    const manager = await parseAreaManager(req.body.manager_user_id, areaId);
+    if (!manager.ok) return redirectAreasError(res, manager.error);
+
     const { rowCount } = await db.query(
-      "UPDATE work_areas SET area_name = $1, color = $2 WHERE id = $3",
-      [areaName, color, areaId],
+      `UPDATE work_areas
+          SET area_name = $1, color = $2, manager_user_id = $3
+        WHERE id = $4`,
+      [areaName, color, manager.managerId, areaId],
     );
     if (!rowCount) {
       return redirectAreasError(res, "El área no existe.");
     }
+    invalidarCachesDeArea();
     return redirectAreasOk(res, "Área actualizada.");
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -954,6 +1033,16 @@ router.post(
         );
       }
 
+      // La carpeta de procedimientos y protocolos muere con el área. Las filas
+      // de documents las limpia el ON DELETE CASCADE, pero los objetos del
+      // bucket no tienen FK: hay que borrarlos a mano y antes del DELETE, que
+      // es cuando todavía se pueden consultar.
+      const { rows: docs } = await db.query(
+        `SELECT public_id FROM documents
+          WHERE work_area_id = $1 AND public_id IS NOT NULL`,
+        [areaId],
+      );
+
       const { rowCount } = await db.query(
         "DELETE FROM work_areas WHERE id = $1",
         [areaId],
@@ -961,7 +1050,28 @@ router.post(
       if (!rowCount) {
         return redirectAreasError(res, "El área no existe.");
       }
-      return redirectAreasOk(res, "Área eliminada.");
+
+      // Un fallo de storage no debe deshacer el borrado ya confirmado en BD:
+      // deja archivos huérfanos en el bucket, que es recuperable; abortar aquí
+      // dejaría el área a medio eliminar, que no lo es.
+      if (docs.length) {
+        const { failed } = await fileStorage.deleteFiles(
+          docs.map((d) => d.public_id),
+        );
+        if (failed) {
+          console.error(
+            `[Áreas] ${failed} archivo(s) del área ${areaId} no se pudieron borrar del storage.`,
+          );
+        }
+      }
+
+      invalidarCachesDeArea();
+      return redirectAreasOk(
+        res,
+        docs.length
+          ? `Área eliminada junto con ${docs.length} documento(s) de su carpeta.`
+          : "Área eliminada.",
+      );
     } catch (err) {
       console.error("Error eliminando área:", err);
       return redirectAreasError(res, "No se pudo eliminar el área.");
@@ -999,6 +1109,9 @@ router.post(
         "UPDATE users SET work_area_id = $1 WHERE id = $2",
         [areaId, userId],
       );
+      // Si venía de otra área y allí era jefe, esa jefatura queda vacante.
+      await limpiarJefaturaHuerfana(userId);
+      invalidarCachesDeArea();
       return redirectAreasOk(res, "Colaborador asignado al área.");
     } catch (err) {
       console.error("Error asignando colaborador:", err);
@@ -1018,16 +1131,42 @@ router.post(
     }
 
     try {
-      const { rowCount } = await db.query(
-        `UPDATE users
-         SET work_area_id = NULL
-         WHERE id = $1 AND work_area_id = $2`,
-        [userId, areaId],
-      );
-      if (!rowCount) {
-        return redirectAreasError(res, "Colaborador no encontrado en esta área.");
+      const client = await db.getClient();
+      let eraJefe = false;
+      try {
+        await client.query("BEGIN");
+        const { rowCount } = await client.query(
+          `UPDATE users
+           SET work_area_id = NULL
+           WHERE id = $1 AND work_area_id = $2`,
+          [userId, areaId],
+        );
+        if (!rowCount) {
+          await client.query("ROLLBACK");
+          return redirectAreasError(res, "Colaborador no encontrado en esta área.");
+        }
+        // En la misma transacción: quien sale del área no puede seguir siendo
+        // su jefe, y dejar la FK apuntando fuera bloquearía las aprobaciones.
+        const { rowCount: jefaturas } = await client.query(
+          "UPDATE work_areas SET manager_user_id = NULL WHERE id = $1 AND manager_user_id = $2",
+          [areaId, userId],
+        );
+        eraJefe = jefaturas > 0;
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
       }
-      return redirectAreasOk(res, "Colaborador quitado del área.");
+
+      invalidarCachesDeArea();
+      return redirectAreasOk(
+        res,
+        eraJefe
+          ? "Colaborador quitado del área. El área quedó sin jefe: designa uno para que su gente pueda rendir gastos."
+          : "Colaborador quitado del área.",
+      );
     } catch (err) {
       console.error("Error quitando colaborador:", err);
       return redirectAreasError(res, "No se pudo quitar el colaborador.");
@@ -1070,11 +1209,35 @@ router.post(
         return redirectAreasError(res, "Colaborador no encontrado en esta área.");
       }
 
-      await db.query("UPDATE users SET work_area_id = $1 WHERE id = $2", [
-        targetAreaId,
-        userId,
-      ]);
+      const client = await db.getClient();
+      let eraJefe = false;
+      try {
+        await client.query("BEGIN");
+        await client.query("UPDATE users SET work_area_id = $1 WHERE id = $2", [
+          targetAreaId,
+          userId,
+        ]);
+        const { rowCount: jefaturas } = await client.query(
+          "UPDATE work_areas SET manager_user_id = NULL WHERE id = $1 AND manager_user_id = $2",
+          [areaId, userId],
+        );
+        eraJefe = jefaturas > 0;
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      invalidarCachesDeArea();
       const destName = targetResult.rows[0].area_name;
+      if (eraJefe) {
+        return redirectAreasOk(
+          res,
+          `Colaborador movido a «${destName}». Su área anterior quedó sin jefe: designa uno.`,
+        );
+      }
       return redirectAreasOk(
         res,
         destName

@@ -16,6 +16,33 @@ function isWorkAreaPublicId(id) {
   return Number.isInteger(n) && n >= WORK_AREA_ID_MIN && n <= WORK_AREA_ID_MAX;
 }
 
+/** Rango de marcas diacríticas combinantes que deja `normalize("NFD")`. */
+const COMBINING_MARKS = /[̀-ͯ]/g;
+
+/**
+ * Minúsculas y sin diacríticos, para comparar nombres escritos a mano.
+ * `area_name` se teclea en el modal de áreas, así que conviven "Informática",
+ * "Informatica" y "TI"; compararlos en crudo perdería coincidencias.
+ */
+function normalizeAreaName(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(COMBINING_MARKS, "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Slug estable de un área. Resuelve los enlaces históricos de /procesos
+ * (`/procesos/procedimientos/logistica`) contra el área real, y el backfill
+ * de documents.work_area_id contra los `type` legacy.
+ */
+function areaSlug(areaName) {
+  return normalizeAreaName(areaName)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 const WORK_AREA_HSL = {
   Informática: { h: 142, s: 55 },
   Logística: { h: 258, s: 58 },
@@ -164,6 +191,8 @@ module.exports = {
   WORK_AREA_ID_MIN,
   WORK_AREA_ID_MAX,
   isWorkAreaPublicId,
+  normalizeAreaName,
+  areaSlug,
   WORK_AREA_HSL,
   WORK_AREA_COLORS,
   COLOR_PALETTE,

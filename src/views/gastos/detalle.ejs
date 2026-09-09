@@ -1,0 +1,247 @@
+<%
+  const s = solicitud;
+  const puedeResolver = !!etapaRevisor;
+  const puedeAnular = esDueno && s.status === 'pending';
+  const fechaLarga = { year: 'numeric', month: 'long', day: 'numeric' };
+  const fechaCorta = { year: 'numeric', month: '2-digit', day: '2-digit' };
+  const conHora = { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+
+  const solicitante = [s.requester_first_name, s.requester_last_name].filter(Boolean).join(' ') || s.requester_email || 'Colaborador';
+  const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaLarga) : '—';
+
+  function fecha(valor, opts) {
+    return valor ? new Date(valor).toLocaleDateString(countryConfig.locale, opts) : '—';
+  }
+%>
+
+<div class="contenedor">
+
+  <nav class="procesos-migas" aria-label="Ruta de navegación">
+    <a href="<%= volverA %>"><%= volverA === '/gastos/gestion' ? 'Gestión de solicitudes' : 'Mis solicitudes' %></a>
+    <span aria-hidden="true">/</span>
+    <span>Solicitud #<%= s.id %></span>
+  </nav>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div class="flash-msg flash-msg--ok" role="status">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
+      <span><%= success %></span>
+    </div>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= error %></span>
+    </div>
+  <% } %>
+
+  <article class="gasto-detalle">
+
+    <header class="gasto-detalle__head">
+      <div class="gasto-detalle__tags">
+        <span class="gasto-item__id">#<%= s.id %></span>
+        <span class="<%= expenseStatusBadge(s.status) %>"><%= expenseStatusLabel(s.status) %></span>
+        <span class="gasto-tipo"><%= expenseKindLabel(s.kind) %></span>
+      </div>
+      <h2 class="gasto-detalle__titulo"><%= s.title %></h2>
+      <p class="gasto-detalle__sub">
+        <%= solicitante %><% if (s.area_name) { %> · <%= s.area_name %><% } %> · Enviada el <%= creado %>
+      </p>
+    </header>
+
+    <div class="gasto-detalle__body">
+
+      <% if (s.description) { %>
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Descripción</h3>
+        <p><%= s.description %></p>
+      </section>
+      <% } %>
+
+      <% if (s.needed_by) { %>
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Requerido para</h3>
+        <p><%= fecha(s.needed_by, fechaLarga) %></p>
+      </section>
+      <% } %>
+
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Desglose</h3>
+        <div class="gasto-tabla-wrap">
+          <table class="gasto-tabla">
+            <thead>
+              <tr>
+                <th style="width: 120px;">Fecha</th>
+                <th>Detalle</th>
+                <th class="gasto-tabla__monto" style="width: 140px;">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% s.items.forEach((item) => { %>
+                <tr>
+                  <td><%= fecha(item.item_date, fechaCorta) %></td>
+                  <td><%= item.detail %></td>
+                  <td class="gasto-tabla__monto"><%= formatMoney(item.amount) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">Total</td>
+                <td class="gasto-tabla__monto"><%= formatMoney(s.total_amount) %></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Comprobantes</h3>
+        <% if (s.attachments.length) { %>
+          <ul class="gasto-adjuntos">
+            <% s.attachments.forEach((a) => { %>
+              <li class="gasto-adjunto">
+                <span aria-hidden="true"><%- include('../partials/icon', { name: 'paperclip' }) %></span>
+                <a class="gasto-adjunto__nombre" href="<%= a.url %>" target="_blank" rel="noopener"><%= a.name %></a>
+              </li>
+            <% }) %>
+          </ul>
+        <% } else { %>
+          <p style="color: var(--color-text-muted); font-size: 0.92rem;">Sin comprobantes adjuntos.</p>
+        <% } %>
+      </section>
+
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Seguimiento</h3>
+        <ul class="gasto-traza">
+          <li class="gasto-traza__item">
+            <span class="gasto-traza__punto" aria-hidden="true"></span>
+            <div>
+              <div><span class="gasto-traza__quien"><%= solicitante %></span> envió la solicitud</div>
+              <div class="gasto-traza__cuando"><%= fecha(s.created_at, conHora) %></div>
+            </div>
+          </li>
+
+          <% if (s.manager_reviewed_at) { %>
+            <li class="gasto-traza__item">
+              <span class="gasto-traza__punto<%= s.rejected_stage === 'manager' ? ' gasto-traza__punto--rechazo' : '' %>" aria-hidden="true"></span>
+              <div>
+                <div>
+                  <span class="gasto-traza__quien">Jefatura de área</span>
+                  <%= s.rejected_stage === 'manager' ? 'rechazó la solicitud' : 'aprobó la solicitud' %>
+                </div>
+                <div class="gasto-traza__cuando"><%= fecha(s.manager_reviewed_at, conHora) %></div>
+                <% if (s.manager_notes) { %>
+                  <div class="gasto-traza__nota">«<%= s.manager_notes %>»</div>
+                <% } %>
+              </div>
+            </li>
+          <% } else if (s.status === 'pending') { %>
+            <li class="gasto-traza__item">
+              <span class="gasto-traza__punto" style="background: var(--color-border-strong);" aria-hidden="true"></span>
+              <div>
+                <div class="gasto-traza__cuando">
+                  <% if (s.manager_user_id) { %>
+                    Esperando la aprobación de la jefatura de área.
+                  <% } else { %>
+                    Esperando la aprobación de un administrador: el solicitante es el jefe de su área
+                    y no puede aprobarse a sí mismo.
+                  <% } %>
+                </div>
+              </div>
+            </li>
+          <% } %>
+
+          <% if (s.finance_reviewed_at) { %>
+            <li class="gasto-traza__item">
+              <span class="gasto-traza__punto<%= s.rejected_stage === 'finance' ? ' gasto-traza__punto--rechazo' : '' %>" aria-hidden="true"></span>
+              <div>
+                <div>
+                  <span class="gasto-traza__quien">Finanzas</span>
+                  <%= s.rejected_stage === 'finance' ? 'rechazó la solicitud' : 'aprobó la solicitud' %>
+                </div>
+                <div class="gasto-traza__cuando"><%= fecha(s.finance_reviewed_at, conHora) %></div>
+                <% if (s.finance_notes) { %>
+                  <div class="gasto-traza__nota">«<%= s.finance_notes %>»</div>
+                <% } %>
+              </div>
+            </li>
+          <% } else if (s.status === 'approved_manager') { %>
+            <li class="gasto-traza__item">
+              <span class="gasto-traza__punto" style="background: var(--color-border-strong);" aria-hidden="true"></span>
+              <div><div class="gasto-traza__cuando">Esperando la revisión de Finanzas.</div></div>
+            </li>
+          <% } %>
+
+          <% if (s.status === 'cancelled') { %>
+            <li class="gasto-traza__item">
+              <span class="gasto-traza__punto" style="background: var(--color-text-subtle);" aria-hidden="true"></span>
+              <div><div>El solicitante anuló la solicitud.</div></div>
+            </li>
+          <% } %>
+        </ul>
+      </section>
+
+    </div>
+
+    <% if (puedeResolver || puedeAnular) { %>
+    <footer class="gasto-detalle__foot">
+      <% if (puedeResolver) { %>
+        <form method="POST" id="formResolver" action="/gastos/<%= s.id %>/aprobar">
+          <input type="hidden" name="volver" value="<%= volverA === '/gastos/gestion' ? 'gestion' : 'detalle' %>">
+          <div class="campo-form" style="margin-bottom: 0;">
+            <label for="notas">
+              Comentario
+              <% if (etapaRevisor === 'finance') { %>de Finanzas<% } else { %>de la jefatura<% } %>
+              <span class="campo-form__ayuda">(obligatorio si rechazas)</span>
+            </label>
+            <textarea id="notas" name="notes" maxlength="2000"
+                      placeholder="Motivo del rechazo, o cualquier observación que quieras dejar registrada."></textarea>
+          </div>
+
+          <div class="gasto-acciones">
+            <button type="submit" class="gasto-btn-primario" data-accion="aprobar">
+              Aprobar<% if (etapaRevisor === 'manager') { %> y enviar a Finanzas<% } %>
+            </button>
+            <button type="submit" class="gasto-btn-peligro" data-accion="rechazar"
+                    formaction="/gastos/<%= s.id %>/rechazar">Rechazar</button>
+          </div>
+        </form>
+      <% } %>
+
+      <% if (puedeAnular) { %>
+        <form method="POST" action="/gastos/<%= s.id %>/cancelar" class="gasto-acciones"
+              onsubmit="return confirm('¿Anular esta solicitud? No se puede deshacer.');">
+          <button type="submit" class="gasto-btn-secundario">Anular solicitud</button>
+        </form>
+      <% } %>
+    </footer>
+    <% } %>
+
+  </article>
+</div>
+
+<% if (puedeResolver) { %>
+<script>
+  (function () {
+    "use strict";
+    var form = document.getElementById("formResolver");
+    if (!form) return;
+
+    /* El motivo es obligatorio al rechazar. El servidor lo vuelve a validar;
+       esto evita el viaje de ida y vuelta. */
+    form.addEventListener("submit", function (e) {
+      var boton = e.submitter;
+      if (!boton || boton.dataset.accion !== "rechazar") return;
+      var notas = document.getElementById("notas");
+      if (!notas.value.trim()) {
+        e.preventDefault();
+        notas.focus();
+        alert("Indica el motivo del rechazo.");
+        return;
+      }
+      if (!confirm("¿Rechazar esta solicitud?")) e.preventDefault();
+    });
+  })();
+</script>
+<% } %>
