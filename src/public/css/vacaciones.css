@@ -31,18 +31,16 @@
 
 .vac-subtitle { color: var(--muted); font-size: 0.9rem; margin: 0; }
 
-.vac-link-volver {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-text-muted);
+/* Nombre del colaborador en la tabla de gestión: es un enlace de dato, no un
+   botón. Antes reusaba .vac-link-volver con un color a mano en el marcado. */
+.vac-link-colaborador {
+  color: var(--color-heading);
+  font-weight: 600;
   text-decoration: none;
-  font-weight: 500;
-  font-size: 0.875rem;
   transition: color 0.15s ease;
 }
 
-.vac-link-volver:hover { color: var(--brand); }
+.vac-link-colaborador:hover { color: var(--brand); text-decoration: underline; }
 
 /* Rejilla genérica del módulo (el menú usa las tarjetas de rrhh.css). */
 .vac-grid {

@@ -190,24 +190,22 @@
     var formulario = document.getElementById('formCrearColaborador');
     if (!formulario) return;
 
-    var FECHA_REQUERIDA = 'La fecha de nacimiento es obligatoria para colaboradores sin correo.';
+    var FECHA_REQUERIDA = 'Fecha requerida sin correo';
 
     var email = document.getElementById('crear_email');
-    var emailError = document.getElementById('crear_email-error');
     var fecha = document.getElementById('crear_fecha_nacimiento');
     var fechaMarca = document.getElementById('crear_fecha_nacimiento_mark');
-    var fechaAyuda = document.getElementById('crear_fecha_nacimiento_hint');
     var telefonoCampo = document.getElementById('crear_phone_field');
     var telefonoLocal = document.getElementById('crear_telefono_local');
-    var telefonoError = document.getElementById('crear_telefono-error');
 
+    // Sin correo no hay cuenta de intranet, así que el cumpleaños pasa a ser el
+    // único dato con el que RRHH puede identificar la ficha.
     function sincronizarFecha() {
       if (!fecha) return;
       var obligatoria = window.EmailValidate.isEmpty(email);
       fecha.required = obligatoria;
       if (fechaMarca) fechaMarca.hidden = !obligatoria;
-      if (fechaAyuda) fechaAyuda.hidden = obligatoria;
-      if (!obligatoria) fecha.setCustomValidity('');
+      if (!obligatoria) window.CampoForm.limpiar(fecha);
     }
 
     function telefonoInvalido() {
@@ -222,8 +220,8 @@
 
     if (email) {
       email.addEventListener('input', function () {
-        mostrarMensaje(
-          emailError,
+        window.CampoForm.marcar(
+          email,
           window.EmailValidate.isValid(email) ? '' : window.EmailValidate.ERROR_MSG,
         );
         sincronizarFecha();
@@ -232,7 +230,10 @@
 
     if (telefonoLocal) {
       telefonoLocal.addEventListener('input', function () {
-        mostrarMensaje(telefonoError, telefonoInvalido() ? window.PhoneField.ERROR_MSG : '');
+        window.CampoForm.marcar(
+          telefonoLocal,
+          telefonoInvalido() ? window.PhoneField.ERROR_MSG : '',
+        );
       });
     }
 
@@ -243,23 +244,22 @@
 
       if (!window.EmailValidate.isValid(email)) {
         hayError = true;
-        mostrarMensaje(emailError, window.EmailValidate.ERROR_MSG);
-        email.reportValidity();
+        window.CampoForm.marcar(email, window.EmailValidate.ERROR_MSG);
       }
 
       if (telefonoInvalido()) {
         hayError = true;
-        mostrarMensaje(telefonoError, window.PhoneField.ERROR_MSG);
-        telefonoLocal.reportValidity();
+        window.CampoForm.marcar(telefonoLocal, window.PhoneField.ERROR_MSG);
       }
 
       if (window.EmailValidate.isEmpty(email) && !String(fecha && fecha.value || '').trim()) {
         hayError = true;
-        fecha.setCustomValidity(FECHA_REQUERIDA);
-        fecha.reportValidity();
+        window.CampoForm.marcar(fecha, FECHA_REQUERIDA);
       }
 
-      if (hayError) evento.preventDefault();
+      if (!hayError) return;
+      evento.preventDefault();
+      window.CampoForm.enfocarPrimerError(formulario);
     });
   }
 
@@ -273,7 +273,13 @@
     var CARGANDO = '<p class="modal-loading">Cargando colaborador…</p>';
     var destruirFormulario = null;
 
+    // Abrir y cerrar deprisa deja peticiones en vuelo. Cada apertura se queda
+    // con un número, y sólo la última pinta: si no, la respuesta lenta de una
+    // ficha anterior sobreescribe la que el usuario está mirando.
+    var apertura = 0;
+
     async function abrir(id, mensaje) {
+      var mia = ++apertura;
       mostrarMensaje(error, mensaje);
       cuerpo.innerHTML = CARGANDO;
       window.IntranetModal.open(overlay);
@@ -284,17 +290,24 @@
         });
         if (!respuesta.ok) throw new Error('No se pudo cargar el colaborador');
 
-        cuerpo.innerHTML = await respuesta.text();
+        var html = await respuesta.text();
+        if (mia !== apertura) return;
+
+        cuerpo.innerHTML = html;
+        if (window.NationalIdField) window.NationalIdField.init(cuerpo);
         if (destruirFormulario) destruirFormulario();
         destruirFormulario =
           typeof window.initPersonaEditarForm === 'function' ? window.initPersonaEditarForm() : null;
       } catch (fallo) {
+        if (mia !== apertura) return;
         cuerpo.innerHTML = '<p class="modal-loading">No se pudo cargar el formulario de edición.</p>';
         mostrarMensaje(error, 'Error al cargar los datos del colaborador.');
       }
     }
 
     alCerrarModal(overlay, function () {
+      // Invalida lo que siga en vuelo: al reabrir se pide de nuevo.
+      apertura += 1;
       if (destruirFormulario) {
         destruirFormulario();
         destruirFormulario = null;

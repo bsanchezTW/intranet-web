@@ -205,6 +205,9 @@
   height: min(92vh, 880px);
   max-height: 92vh;
   padding: 0;
+  /* Panel "flush": renuncia al hueco de barra que reserva .modal-content, que
+     aquí sólo dejaría una franja muerta contra el borde. */
+  scrollbar-gutter: auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;

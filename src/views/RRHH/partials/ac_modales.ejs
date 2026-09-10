@@ -1,0 +1,67 @@
+<%
+/*
+  Modales compartidos por Áreas de trabajo y Centros de costo.
+
+  Los dos listados tienen el mismo problema —grupos con muchas personas— y la
+  misma solución: la tarjeta sólo resume, y tanto ver la lista como agregar
+  gente ocurre aquí. El contenido lo arma ac-cards.js desde el JSON #ac-config,
+  así que el marcado no depende de cuál de las dos vistas lo incluya.
+*/
+%>
+
+<div id="modalMiembros" class="modal-overlay" role="dialog" aria-modal="true"
+     aria-labelledby="modalMiembrosTitle" aria-hidden="true">
+  <div class="modal-content ac-modal">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <h2 id="modalMiembrosTitle" class="modal-title">Colaboradores</h2>
+    <p class="ac-modal__sub" id="modalMiembrosSub"></p>
+
+    <div class="ac-modal__buscador">
+      <span class="ac-modal__buscador-icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'search' }) %></span>
+      <label class="sr-only" for="modalMiembrosBuscar">Buscar en la lista</label>
+      <input type="search" id="modalMiembrosBuscar" placeholder="Buscar por nombre…" autocomplete="off">
+    </div>
+
+    <ul class="ac-lista" id="modalMiembrosLista"></ul>
+    <p class="ac-lista__vacia" id="modalMiembrosVacio" hidden></p>
+
+    <div class="modal-form-actions">
+      <button type="button" class="btn-secundario" data-modal-close>Cerrar</button>
+      <button type="button" class="btn-primario" id="modalMiembrosAgregar" hidden>
+        Agregar colaboradores
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="modalAgregar" class="modal-overlay" role="dialog" aria-modal="true"
+     aria-labelledby="modalAgregarTitle" aria-hidden="true">
+  <div class="modal-content ac-modal">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <h2 id="modalAgregarTitle" class="modal-title">Agregar colaboradores</h2>
+    <p class="ac-modal__sub" id="modalAgregarSub"></p>
+
+    <%# El formulario tiene que ser el que se estira dentro del panel: si queda
+        como bloque suelto, la lista de dentro nunca recibe una altura tope y
+        deja de scrollear. %>
+    <form id="formAgregar" class="ac-modal__form" method="POST" action="#">
+      <div class="ac-modal__buscador">
+        <span class="ac-modal__buscador-icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'search' }) %></span>
+        <label class="sr-only" for="modalAgregarBuscar">Buscar colaboradores</label>
+        <input type="search" id="modalAgregarBuscar" placeholder="Buscar por nombre…" autocomplete="off">
+      </div>
+
+      <%# Marca cuántos van seleccionados: en una lista larga la cuenta se
+          pierde de vista al hacer scroll. %>
+      <p class="ac-modal__seleccion" id="modalAgregarSeleccion" hidden></p>
+
+      <ul class="ac-lista ac-lista--seleccion" id="modalAgregarLista"></ul>
+      <p class="ac-lista__vacia" id="modalAgregarVacio" hidden></p>
+
+      <div class="modal-form-actions">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario" id="modalAgregarSubmit" disabled>Agregar</button>
+      </div>
+    </form>
+  </div>
+</div>

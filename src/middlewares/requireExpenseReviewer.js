@@ -1,3 +1,4 @@
+const { rememberReturnTo } = require("../utils/returnTo");
 const { isAdministrador, normalizeRole } = require("../constants/roles");
 const { isAreaManager } = require("../services/expenses/areaManager");
 const { isFinanceApprover } = require("../services/expenses/financeTeam");
@@ -28,7 +29,7 @@ function requireExpenseReviewer() {
   return async (req, res, next) => {
     const user = req.session && req.session.user;
     if (!user) {
-      req.session.returnTo = req.originalUrl;
+      rememberReturnTo(req);
       if (wantsJsonResponse(req)) {
         return res
           .status(401)

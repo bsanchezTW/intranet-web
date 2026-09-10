@@ -35,9 +35,14 @@ function localMaxLength(cfg = phoneConfig()) {
   return cfg.nationalDigits + cfg.groups.length - 1;
 }
 
-/** Mensaje de error con el ejemplo del país. */
-function mobileErrorMessage(cfg = phoneConfig()) {
-  return `Ingresa un celular válido con formato ${cfg.example}.`;
+// Mensajes de campo: cortos y del mismo tono que los del resto del
+// formulario. El formato esperado ya está en el placeholder del campo.
+function mobileErrorMessage() {
+  return "Teléfono incorrecto";
+}
+
+function mobileRequiredMessage() {
+  return "Teléfono requerido";
 }
 
 /**
@@ -94,7 +99,7 @@ function validateMobilePhone(phone, { required = false } = {}, cfg = phoneConfig
         valid: false,
         value: null,
         storageValue: null,
-        error: mobileErrorMessage(cfg),
+        error: mobileRequiredMessage(),
       };
     }
     return { valid: true, value: null, storageValue: null, error: null };
@@ -143,6 +148,7 @@ module.exports = {
   groupDigits,
   localMaxLength,
   mobileErrorMessage,
+  mobileRequiredMessage,
   toNationalDigits,
   toStoragePhone,
   formatPhoneForDisplay,

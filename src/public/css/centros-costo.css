@@ -1,0 +1,172 @@
+/* RR.HH. · Centros de costo. Reusa de areas.css la barra .ac-*, la fila de
+   resumen (.area-resumen) y las listas de los modales (.ac-lista); aquí sólo
+   lo propio de la tarjeta de centro. */
+
+.centros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 18px;
+  /* Las tarjetas miden por su contenido, sin estirarse a la fila. */
+  align-items: start;
+}
+
+.centro-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 18px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.centro-card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border-strong);
+}
+
+.centro-card.is-oculta {
+  display: none;
+}
+
+/* Un centro inactivo sigue visible —tiene historial— pero se lee como apagado. */
+.centro-card--inactivo {
+  background: var(--color-surface-muted);
+}
+
+.centro-card--inactivo .centro-card__tile {
+  background: var(--color-surface);
+  color: var(--color-text-subtle);
+}
+
+.centro-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.centro-card__tile {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.centro-card__title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* El código es la clave que cita contabilidad: va primero y en cifras
+   tabulares, para que dos códigos se comparen de un vistazo. */
+.centro-card__codigo {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Código y nombre a una línea cada uno: es lo que mantiene todas las tarjetas
+   de una fila a la misma altura. El nombre completo queda en el title. */
+.centro-card__nombre {
+  margin: 0;
+  font-size: 0.87rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.centro-card__actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  flex: none;
+}
+
+.centro-card__estado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.centro-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.centro-badge--on {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+.centro-badge--off {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-subtle);
+}
+
+.centro-card--inactivo .area-card__count {
+  background: var(--color-surface);
+}
+
+/* Resumen: los primeros nombres en una sola línea. Sin esto la tarjeta volvía
+   a crecer con cada colaborador asignado. */
+.centro-resumen__nombres {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.centro-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.centro-check input {
+  width: auto;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .centros-grid {
+    grid-template-columns: 1fr;
+  }
+}

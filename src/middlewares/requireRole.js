@@ -1,4 +1,5 @@
 // src/middlewares/requireRole.js
+const { rememberReturnTo } = require("../utils/returnTo");
 const {
   roleMatchesRoute,
   ROLES,
@@ -17,7 +18,7 @@ function wantsJsonResponse(req) {
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.session || !req.session.user) {
-      req.session.returnTo = req.originalUrl;
+      rememberReturnTo(req);
       if (wantsJsonResponse(req)) {
         return res.status(401).json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
       }

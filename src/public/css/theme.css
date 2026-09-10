@@ -32,7 +32,7 @@
   --nav-bg: rgba(11, 58, 99, 0.88);
 
   /* Superficies base — tarjetas planas, no glassmorphism */
-  --color-bg: #f5f7fa;
+  --color-bg: #f2f5fa;
   --color-bg-image-opacity: 0;
   --color-surface: #ffffff;
   --color-surface-muted: #eef2f6;
@@ -66,8 +66,13 @@
   --glass-shadow-lg: 0 4px 8px rgba(13, 31, 51, 0.06), 0 16px 40px rgba(13, 31, 51, 0.12);
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 
-  /* Fondo global — plano, sin mesh */
-  --app-background: none;
+  /* Fondo global — dos halos corporativos muy tenues sobre un degradado frío.
+     Va fijo al viewport (ver la regla de body), así que da profundidad de app
+     sin moverse con el scroll ni competir con las tarjetas, que son blancas. */
+  --app-background:
+    radial-gradient(880px 520px at 6% -10%, rgba(15, 76, 129, 0.10), transparent 62%),
+    radial-gradient(760px 460px at 98% 0%, rgba(166, 216, 74, 0.13), transparent 58%),
+    linear-gradient(180deg, #f8fafd 0%, #eef2f8 48%, #e8edf5 100%);
   --bg-gradient: none;
   --bg-gradient-glow: none;
 
@@ -138,7 +143,12 @@ html[data-theme="dark"] {
   --glass-shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.35), 0 16px 48px rgba(0, 0, 0, 0.5);
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
-  --app-background: none;
+  /* Mismos halos que en claro, pero por encima del fondo oscuro: la superficie
+     de las tarjetas (#111c2e) sigue destacando sobre el degradado. */
+  --app-background:
+    radial-gradient(880px 520px at 6% -10%, rgba(121, 180, 232, 0.16), transparent 62%),
+    radial-gradient(760px 460px at 98% 0%, rgba(166, 216, 74, 0.07), transparent 58%),
+    linear-gradient(180deg, #0c1626 0%, #0a1220 52%, #070d18 100%);
   --bg-gradient: none;
   --bg-gradient-glow: none;
 
@@ -199,6 +209,65 @@ main {
   background: var(--glass-bg-dark);
   border-color: var(--glass-border-subtle);
   color: #ffffff;
+}
+
+/* ── Velo de carga ────────────────────────────────────────────────────────────
+   Las vistas traen sus propios <link> en el cuerpo (personal.css, gastos.css…),
+   y hasta que llegan el navegador ya pintó la cabecera con el CSS del layout:
+   ese es el destello de página "sin CSS". El velo la tapa hasta que el
+   documento está listo. */
+
+.cargando-pagina {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* El mismo fondo que el body: si el velo fuera plano se vería un salto de
+     color justo al desaparecer. */
+  background-color: var(--color-bg, #f2f5fa);
+  background-image: var(--app-background);
+  background-size: cover;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.cargando-pagina__spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid var(--color-border-strong, #d3dce6);
+  border-top-color: var(--brand, #0f4c81);
+  animation: cargando-giro 0.7s linear infinite;
+}
+
+@keyframes cargando-giro {
+  to { transform: rotate(360deg); }
+}
+
+body.login-split-page .cargando-pagina {
+  background: #ffffff;
+}
+
+/* La clase la pone el script del layout en cuanto el documento está listo. */
+html.pagina-lista .cargando-pagina {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* La regla global de movimiento reducido (más abajo) congela cualquier
+   animación; un indicador de carga congelado parece un error, así que aquí gira
+   igual, sólo que despacio. */
+@media (prefers-reduced-motion: reduce) {
+  .cargando-pagina__spinner {
+    animation-duration: 1.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .cargando-pagina {
+    transition: none;
+  }
 }
 
 /* ── Utilidad: texto solo para lectores de pantalla ── */

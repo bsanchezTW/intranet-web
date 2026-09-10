@@ -781,6 +781,10 @@ body.login-split-page {
 
 /* Botón principal — acento verde corporativo */
 .login-split__submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
   height: 52px;
   margin-top: 8px;
@@ -793,6 +797,38 @@ body.login-split-page {
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(170, 221, 85, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.35);
   transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+}
+
+/* Enviado: el formulario navega, y hasta que el servidor responda el botón
+   tiene que decir que está trabajando. Sin esto se puede pulsar dos veces. */
+.login-split__submit__spinner {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: currentColor;
+  animation: login-giro 0.7s linear infinite;
+}
+
+.login-split__submit:not(.is-enviando) .login-split__submit__spinner {
+  display: none;
+}
+
+.login-split__submit.is-enviando {
+  cursor: progress;
+  pointer-events: none;
+}
+
+@keyframes login-giro {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-split__submit__spinner {
+    animation-duration: 1.8s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 .login-split__submit:hover {
@@ -935,7 +971,7 @@ body.login-split-page {
   inset: 0;
   width: 100%;
   height: 100%;
-  background: #ffffff url("/img/background-login.jpg") center center / cover no-repeat;
+  background: #ffffff url("/img/background_login18.png") center center / cover no-repeat;
   overflow: hidden;
   z-index: 1;
 }
@@ -953,6 +989,18 @@ body.login-split-page {
       rgba(0, 22, 44, 0.48) 42%,
       transparent 72%
     );
+}
+
+.login-split__visual-panel .festive-garlands {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
 }
 
 /* Bloque carrusel + banner (centrado en la foto derecha, más abajo) */
@@ -1175,6 +1223,12 @@ body.login-split-page {
   }
 
   .login-split__visual-panel {
+    background-image: none;
+    background-color: transparent;
+  }
+
+  .login-split__visual-overlay,
+  .login-visual-content {
     display: none;
   }
 

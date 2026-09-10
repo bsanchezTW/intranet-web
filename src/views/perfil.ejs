@@ -2,120 +2,179 @@
   const tieneFoto = Boolean(usuario.photo);
   const sinDato = '—';
   const rolFmt = usuario.role || 'Usuario';
-  const correoVerificado = usuario.email_confirmed ? 'Verificado' : 'Pendiente de verificación';
+  const correoVerificado = Boolean(usuario.email_confirmed);
   const errorPerfil = typeof error !== 'undefined' ? error : null;
+  const okPerfil = (typeof success !== 'undefined' && success) ? success : null;
   const passwordErrorModal = typeof passwordError !== 'undefined' ? passwordError : null;
   const abrirModalPassword = typeof openPasswordModal !== 'undefined' ? openPasswordModal : false;
+  const nombreCompleto = [usuario.first_name, usuario.last_name].filter(Boolean).join(' ') || sinDato;
+  const inicial = (usuario.first_name || usuario.last_name || '?').charAt(0).toUpperCase();
 %>
-<link rel="stylesheet" href="/css/horizontal-forms.css">
 <link rel="stylesheet" href="/css/phone.css">
-<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260910a">
 <link rel="stylesheet" href="/css/change-password-modal.css">
+<link rel="stylesheet" href="/css/perfil.css?v=20260910v">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-<div class="contenedor-formulario perfil-container">
+<div class="contenedor perfil-page">
 
-  <div class="form-card layout-horizontal-form">
-    <aside class="form-aside">
-      <h2 class="perfil-title">Mi Perfil</h2>
-      <p class="form-aside-desc">Administra tu foto y revisa todos tus datos de cuenta.</p>
-      <div class="profile-photo-upload">
-        <label for="foto">Foto de perfil</label>
-        <div class="profile-photo-preview-wrap">
-          <div class="profile-photo-preview profile-photo-preview--light" id="photo-preview">
-            <img id="photo-preview-img" <% if (tieneFoto) { %>src="<%= usuario.photo %>"<% } else { %>hidden<% } %>>
-            <div class="profile-photo-placeholder" id="photo-placeholder" <%= tieneFoto ? 'hidden' : '' %>>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-            </div>
-          </div>
-          <div class="profile-photo-actions">
-            <button type="button" class="btn-photo-select btn-photo-select--light" id="btn-select-photo">
-              <%= tieneFoto ? 'Cambiar foto' : 'Seleccionar foto' %>
-            </button>
-            <button type="button" class="btn-photo-remove" id="btn-remove-photo" <%= tieneFoto ? '' : 'hidden' %>>Quitar foto</button>
-            <span class="profile-photo-hint profile-photo-hint--light">JPG, PNG o WebP · Máx. 5 MB</span>
-          </div>
-        </div>
-        <input type="file" id="foto" name="foto" accept="image/*" hidden>
-      </div>
+  <div class="page-header page-header--toolbar">
+    <div class="page-header__text">
+      <h2 class="page-title">Mi perfil</h2>
+      <p class="page-description">Tus datos de contacto y de cuenta en la intranet.</p>
+    </div>
+    <div class="page-header-actions">
+      <a href="/perfil/cursos" class="page-header-btn">
+        <%- include('partials/icon', { name: 'graduation-cap' }) %>
+        Mis cursos
+      </a>
+    </div>
+  </div>
 
-      <div class="perfil-aside-actions">
-        <a href="/perfil/cursos" class="btn-perfil">Mis cursos</a>
-      </div>
-    </aside>
+  <% if (okPerfil) { %>
+    <div class="flash-msg flash-msg--ok" role="status">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('partials/icon', { name: 'check-circle' }) %></span>
+      <span><%= okPerfil %></span>
+    </div>
+  <% } %>
 
-    <main class="form-main">
-      <h1 class="perfil-nombre">
-        <%= usuario.first_name %> <%= usuario.last_name %>
-      </h1>
+  <% if (errorPerfil) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= errorPerfil %></span>
+    </div>
+  <% } %>
 
-      <span class="perfil-rol"><%= rolFmt.toUpperCase() %></span>
+  <div class="perfil-layout">
 
-      <% if (errorPerfil) { %>
-        <div class="perfil-alert perfil-alert--error"><%= errorPerfil %></div>
-      <% } %>
+    <!-- ═══════════ Ficha de identidad ═══════════ -->
+    <aside class="panel perfil-ficha">
+      <div class="perfil-ficha__banda" aria-hidden="true"></div>
 
-      <form action="/perfil" method="POST" class="perfil-form">
-        <div class="perfil-datos">
-          <div class="form-grid-2">
-            <div class="perfil-field">
-              <label for="first_name">Nombre</label>
-              <input type="text" id="first_name" name="first_name" value="<%= usuario.first_name || '' %>" required autocomplete="given-name">
-            </div>
-            <div class="perfil-field">
-              <label for="last_name">Apellido</label>
-              <input type="text" id="last_name" name="last_name" value="<%= usuario.last_name || '' %>" required autocomplete="family-name">
-            </div>
-          </div>
-
-          <div class="form-grid-2">
-            <div class="perfil-field">
-              <label for="email">Correo electrónico</label>
-              <input type="text" id="email" value="<%= usuario.email || sinDato %>" readonly class="perfil-input-readonly" aria-readonly="true">
-            </div>
-            <div class="perfil-field">
-              <label for="telefono_local">Teléfono</label>
-              <div class="phone-field" data-phone-field>
-                <span class="phone-field__prefix" aria-hidden="true"><%= countryConfig.phone.callingCode ? "+" + countryConfig.phone.callingCode : "" %></span>
-                <input type="tel" id="telefono_local" class="phone-field__local" required placeholder="<%= countryConfig.phone.example %>" maxlength="<%= countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1 %>" inputmode="numeric" autocomplete="tel-national" aria-label="Número celular sin código de país">
-                <input type="hidden" name="phone" id="telefono" value="<%= usuario.phone || '' %>">
+      <div class="perfil-ficha__identidad">
+        <div class="profile-photo-upload perfil-ficha__foto">
+          <div class="profile-photo-preview-wrap">
+            <div class="profile-photo-preview profile-photo-preview--light" id="photo-preview">
+              <img id="photo-preview-img" <% if (tieneFoto) { %>src="<%= usuario.photo %>"<% } else { %>hidden<% } %>>
+              <div class="profile-photo-placeholder" id="photo-placeholder" <%= tieneFoto ? 'hidden' : '' %>>
+                <span class="perfil-inicial" aria-hidden="true"><%= inicial %></span>
               </div>
             </div>
           </div>
+          <input type="file" id="foto" name="foto" accept="image/*" hidden>
+        </div>
 
-          <div class="form-grid-2">
-            <div class="perfil-field">
-              <label for="area">Área de trabajo</label>
-              <input type="text" id="area" value="<%= usuario.area || sinDato %>" readonly class="perfil-input-readonly" aria-readonly="true">
-            </div>
-            <div class="perfil-field">
-              <label for="fecha_nacimiento">Fecha de nacimiento</label>
-              <input type="date" id="fecha_nacimiento" name="birth_date" value="<%= usuario.birth_date_input || '' %>" required autocomplete="bday">
-            </div>
-          </div>
+        <h2 class="perfil-nombre"><%= nombreCompleto %></h2>
+        <p class="perfil-correo"><%= usuario.email || sinDato %></p>
+        <span class="perfil-verificacion <%= correoVerificado ? 'perfil-verificacion--ok' : 'perfil-verificacion--pendiente' %>">
+          <%- include('partials/icon', { name: correoVerificado ? 'check-circle' : 'clock' }) %>
+          <%= correoVerificado ? 'Correo verificado' : 'Correo sin verificar' %>
+        </span>
 
-          <div class="form-grid-2">
-            <div class="perfil-field">
-              <label for="role">Rol en intranet</label>
-              <input type="text" id="role" value="<%= rolFmt %>" readonly class="perfil-input-readonly" aria-readonly="true">
-            </div>
-            <div class="perfil-field">
-              <label for="email_confirmed">Estado del correo</label>
-              <input type="text" id="email_confirmed" value="<%= correoVerificado %>" readonly class="perfil-input-readonly" aria-readonly="true">
-            </div>
+        <div class="profile-photo-actions perfil-ficha__foto-acciones">
+          <button type="button" class="btn-photo-select btn-photo-select--light" id="btn-select-photo">
+            <%= tieneFoto ? 'Cambiar foto' : 'Seleccionar foto' %>
+          </button>
+          <button type="button" class="btn-photo-remove" id="btn-remove-photo" <%= tieneFoto ? '' : 'hidden' %>>Quitar foto</button>
+        </div>
+      </div>
+
+      <div class="perfil-acciones">
+        <button type="button" class="btn-perfil" id="btnOpenChangePassword">Cambiar contraseña</button>
+        <a href="/logout" class="btn-perfil btn-perfil--danger">Cerrar sesión</a>
+      </div>
+    </aside>
+
+    <!-- ═══════════ Datos de la persona ═══════════ -->
+    <div class="panel perfil-datos">
+      <form action="/perfil" method="POST" id="formPerfil">
+        <div class="perfil-datos__head">
+          <span class="perfil-datos__icono" aria-hidden="true"><%- include('partials/icon', { name: 'user' }) %></span>
+          <div>
+            <h3 class="perfil-datos__title">Datos personales</h3>
+            <p class="perfil-datos__desc">Los actualizas tú y son los que usamos para contactarte.</p>
           </div>
         </div>
 
-        <div class="perfil-form-footer">
-          <button type="button" class="btn-perfil btn-perfil--spaced" id="btnOpenChangePassword">Cambiar contraseña</button>
+        <div class="campos-grid">
+          <div class="campo-form">
+            <label for="first_name">Nombre <span class="required-mark">*</span></label>
+            <input type="text" id="first_name" name="first_name" value="<%= usuario.first_name || '' %>" required autocomplete="given-name">
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+
+          <div class="campo-form">
+            <label for="last_name">Apellido <span class="required-mark">*</span></label>
+            <input type="text" id="last_name" name="last_name" value="<%= usuario.last_name || '' %>" required autocomplete="family-name">
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+
+          <div class="campo-form">
+            <label for="fecha_nacimiento">Fecha de nacimiento <span class="required-mark">*</span></label>
+            <input type="date" id="fecha_nacimiento" name="birth_date" value="<%= usuario.birth_date_input || '' %>" required autocomplete="bday">
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+
+          <div class="campo-form">
+            <label for="telefono_local">Teléfono <span class="required-mark">*</span></label>
+            <div class="phone-field" data-phone-field>
+              <span class="phone-field__prefix" aria-hidden="true"><%= countryConfig.phone.callingCode ? "+" + countryConfig.phone.callingCode : "" %></span>
+              <input type="tel" id="telefono_local" class="phone-field__local" required placeholder="<%= countryConfig.phone.example %>" maxlength="<%= countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1 %>" inputmode="numeric" autocomplete="tel-national" aria-label="Número celular sin código de país">
+              <input type="hidden" name="phone" id="telefono" value="<%= usuario.phone || '' %>">
+            </div>
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+
+          <% if (!documentoBloqueado) { %>
+            <%# Mientras no esté registrado se pide aquí: es el dato con el que
+                se emiten los reembolsos. Una vez guardado pasa al bloque de
+                RRHH, de sólo lectura. %>
+            <div class="campo-form campo-form--ancho">
+              <label for="national_id"><%= documentoConfig.label %></label>
+              <input type="text" id="national_id" name="national_id"
+                     data-national-id
+                     placeholder="<%= documentoConfig.example %>" autocomplete="off">
+              <span class="campo-form__error" role="alert"></span>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="perfil-guardar">
           <button type="submit" class="btn-perfil btn-perfil--primary">Guardar cambios</button>
-          <a href="/logout" class="btn-perfil btn-perfil--danger">Cerrar sesión</a>
         </div>
       </form>
-    </main>
+
+      <section class="perfil-rrhh" aria-labelledby="perfil-rrhh-title">
+        <h3 class="perfil-rrhh__title" id="perfil-rrhh-title">Administrado por RRHH</h3>
+        <dl class="perfil-rrhh__lista">
+          <div class="perfil-rrhh__dato">
+            <span class="perfil-rrhh__icono" aria-hidden="true"><%- include('partials/icon', { name: 'building' }) %></span>
+            <div>
+              <dt>Área de trabajo</dt>
+              <dd><%= usuario.area || sinDato %></dd>
+            </div>
+          </div>
+          <div class="perfil-rrhh__dato">
+            <span class="perfil-rrhh__icono" aria-hidden="true"><%- include('partials/icon', { name: 'user-check' }) %></span>
+            <div>
+              <dt>Rol en intranet</dt>
+              <dd><%= rolFmt %></dd>
+            </div>
+          </div>
+          <% if (documentoBloqueado) { %>
+            <div class="perfil-rrhh__dato">
+              <span class="perfil-rrhh__icono" aria-hidden="true"><%- include('partials/icon', { name: 'file-text' }) %></span>
+              <div>
+                <dt><%= documentoConfig.label %></dt>
+                <dd class="perfil-rrhh__numero"><%= usuario.documento %></dd>
+              </div>
+            </div>
+          <% } %>
+        </dl>
+        <p class="perfil-rrhh__nota">Si algo de aquí no cuadra, escríbele a RRHH: no se edita desde la intranet.</p>
+      </section>
+    </div>
+
   </div>
 </div>
 
@@ -127,7 +186,6 @@
       <h3 id="fotoCropTitle">Recortar foto de perfil</h3>
       <button type="button" class="foto-crop-close" id="fotoCropClose" aria-label="Cerrar">&times;</button>
     </div>
-    <p class="foto-crop-hint">Arrastra y ajusta el encuadre. La foto se verá circular en el perfil.</p>
     <div class="foto-crop-body">
       <div class="foto-crop-stage">
         <img id="fotoCropImage" src="" alt="Vista previa para recortar">
@@ -142,16 +200,45 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="/js/campo-form.js?v=20260910n"></script>
 <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
-<script src="/js/phone.js"></script>
+<script src="/js/phone.js?v=20260910n"></script>
+<script type="application/json" id="national-id-config"><%- JSON.stringify(documentoConfig).replace(/</g, '\\u003c') %></script>
+<script src="/js/national-id.js?v=20260910n"></script>
 <script src="/js/profile-photo-cropper.js"></script>
 <script src="/js/change-password-modal.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const btnRemove = document.getElementById('btn-remove-photo');
     const telefonoField = document.querySelector('[data-phone-field]');
+    const telefonoLocal = telefonoField.querySelector('.phone-field__local');
+    const formPerfil = document.getElementById('formPerfil');
 
     PhoneField.initField(telefonoField);
+
+    function revisarTelefono() {
+      const vacio = PhoneField.isFieldEmpty(telefonoField);
+      const invalido = !vacio && !PhoneField.isFieldValid(telefonoField);
+      CampoForm.marcar(telefonoLocal, invalido ? PhoneField.ERROR_MSG : '');
+      return !invalido;
+    }
+
+    telefonoLocal.addEventListener('input', revisarTelefono);
+
+    formPerfil.addEventListener('submit', (evento) => {
+      let hayError = false;
+
+      if (PhoneField.isFieldEmpty(telefonoField)) {
+        hayError = true;
+        CampoForm.marcar(telefonoLocal, 'Teléfono requerido');
+      } else if (!revisarTelefono()) {
+        hayError = true;
+      }
+
+      if (!hayError) return;
+      evento.preventDefault();
+      CampoForm.enfocarPrimerError(formPerfil);
+    });
 
     ChangePasswordModal.init({
       overlayId: 'changePasswordModal',

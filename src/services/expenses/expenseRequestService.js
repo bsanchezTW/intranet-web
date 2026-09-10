@@ -10,6 +10,9 @@ const { isIdPrimaryKeyCollision } = require("../../utils/idCollision");
 const { currentCurrencyCode } = require("./expenseSchema");
 const areaManager = require("./areaManager");
 const financeTeam = require("./financeTeam");
+const costCenters = require("../costCenters/costCenterService");
+const { formatNationalId } = require("../../utils/nationalId");
+const { getDocumentConfig } = require("../../config/country");
 
 /**
  * Reglas del centro de gastos.
@@ -103,6 +106,52 @@ function normalizeAttachments(rawAttachments) {
 // Creación
 // ---------------------------------------------------------------------------
 
+/**
+ * Ficha del solicitante tal como quedará congelada en la solicitud.
+ *
+ * Una rendición es un documento contable: el nombre, el documento de identidad,
+ * el correo y el área se copian al enviarla. Si mañana se corrige un RUT o
+ * alguien cambia de área, lo que Finanzas ya aprobó no cambia solo.
+ */
+async function fetchRequesterSnapshot(userId) {
+  const { rows } = await db.query(
+    `SELECT u.id, u.first_name, u.last_name, u.email, u.national_id,
+            w.area_name
+       FROM users u
+       LEFT JOIN work_areas w ON w.id = u.work_area_id
+      WHERE u.id = $1`,
+    [userId],
+  );
+  if (!rows.length) return null;
+
+  const row = rows[0];
+  const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
+  return {
+    name: name || row.email || `Usuario ${row.id}`,
+    nationalId: row.national_id || null,
+    email: row.email || null,
+    areaName: row.area_name || null,
+  };
+}
+
+/**
+ * Con un solo centro asignado no hay nada que elegir y se acepta sin más; con
+ * dos, el elegido tiene que ser uno de los suyos (el formulario ofrece sólo
+ * esos, pero un POST a mano podría mandar cualquier id).
+ */
+function elegirCentro(centros, costCenterId) {
+  // Number(null) y Number("") son 0: sin normalizar a texto primero, un campo
+  // vacío se leería como "eligió el centro 0" en vez de "no eligió".
+  const raw = String(costCenterId ?? "").trim();
+  if (!raw) {
+    return centros.length === 1 ? centros[0] : null;
+  }
+
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return centros.find((c) => Number(c.id) === id) || null;
+}
+
 async function createRequest({
   user,
   kind,
@@ -111,6 +160,7 @@ async function createRequest({
   items: rawItems,
   attachments: rawAttachments,
   neededBy,
+  costCenterId,
 }) {
   if (!isExpenseKind(kind)) {
     return { ok: false, error: "Tipo de solicitud inválido." };
@@ -131,6 +181,32 @@ async function createRequest({
 
   const approver = await areaManager.resolveApprover(user.id, context.area.id);
   if (!approver.ok) return approver;
+
+  // El documento identifica al beneficiario del reembolso: sin él la rendición
+  // no sirve para contabilidad, así que se exige aquí y no al crear la ficha.
+  const requester = await fetchRequesterSnapshot(user.id);
+  if (!requester) return { ok: false, error: "No se encontró tu ficha de colaborador." };
+  if (!requester.nationalId) {
+    const label = getDocumentConfig().label;
+    return {
+      ok: false,
+      error: `Necesitas registrar tu ${label} antes de rendir gastos. Complétalo en tu perfil.`,
+    };
+  }
+
+  // Todo gasto se imputa a un centro de costo; con dos asignados hay que elegir.
+  const centros = await costCenters.listUserCostCenters(user.id);
+  if (!centros.length) {
+    return {
+      ok: false,
+      error:
+        "No tienes centros de costo asignados. Pídele a RRHH que te asigne al menos uno.",
+    };
+  }
+  const centro = elegirCentro(centros, costCenterId);
+  if (!centro) {
+    return { ok: false, error: "Elige un centro de costo válido para imputar el gasto." };
+  }
 
   const normalized = normalizeItems(rawItems);
   if (!normalized.ok) return normalized;
@@ -159,6 +235,8 @@ async function createRequest({
       total: normalized.total,
       neededBy: kind === EXPENSE_KIND.FONDOS ? parseDate(neededBy) : null,
       managerId: approver.managerId,
+      requester,
+      costCenter: centro,
     });
 
     const requestId = inserted.id;
@@ -223,8 +301,11 @@ async function insertRequestWithRetry(client, data, maxAttempts = 8) {
       const { rows } = await client.query(
         `INSERT INTO expense_requests
            (kind, user_id, work_area_id, title, description,
-            currency_code, total_amount, needed_by, manager_user_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            currency_code, total_amount, needed_by, manager_user_id,
+            requester_name, requester_national_id, requester_email, requester_area_name,
+            cost_center_id, cost_center_code, cost_center_name)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+                 $10, $11, $12, $13, $14, $15, $16)
          RETURNING *`,
         [
           data.kind,
@@ -236,6 +317,13 @@ async function insertRequestWithRetry(client, data, maxAttempts = 8) {
           data.total,
           data.neededBy,
           data.managerId,
+          data.requester.name,
+          data.requester.nationalId,
+          data.requester.email,
+          data.requester.areaName,
+          data.costCenter.id,
+          data.costCenter.code,
+          data.costCenter.name,
         ],
       );
       await client.query("RELEASE SAVEPOINT insert_expense");
@@ -379,13 +467,23 @@ async function cancelRequest({ requestId, user }) {
 // Consultas
 // ---------------------------------------------------------------------------
 
+/**
+ * Los datos del solicitante salen de lo congelado en la solicitud; el JOIN a
+ * users queda sólo como respaldo para filas anteriores a la copia y para la
+ * foto, que sí conviene que sea la actual.
+ */
 const LIST_SELECT = `
   SELECT r.*,
-         w.area_name,
-         w.color            AS area_color,
-         u.first_name       AS requester_first_name,
-         u.last_name        AS requester_last_name,
-         u.email            AS requester_email,
+         COALESCE(r.requester_area_name, w.area_name) AS area_name,
+         w.color AS area_color,
+         COALESCE(
+           r.requester_name,
+           NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''),
+           u.email
+         ) AS requester_display_name,
+         COALESCE(r.requester_national_id, u.national_id) AS requester_document,
+         COALESCE(r.requester_email, u.email)             AS requester_contact_email,
+         u.photo AS requester_photo,
          (SELECT COUNT(*)::int FROM expense_request_items i WHERE i.request_id = r.id)       AS item_count,
          (SELECT COUNT(*)::int FROM expense_request_attachments a WHERE a.request_id = r.id) AS attachment_count
     FROM expense_requests r
@@ -483,6 +581,9 @@ async function getRequestDetail(requestId) {
 
   return {
     ...request,
+    // El documento se guarda normalizado ("12345678-5"); los puntos son
+    // decoración de pantalla y se agregan aquí.
+    requester_document_display: formatNationalId(request.requester_document),
     items: itemsResult.rows,
     attachments: attachmentsResult.rows,
   };
@@ -509,6 +610,7 @@ async function countPendingForReviewer(user) {
 
 module.exports = {
   createRequest,
+  elegirCentro,
   approveRequest,
   rejectRequest,
   cancelRequest,

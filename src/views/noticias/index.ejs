@@ -6,6 +6,14 @@ const restantes = noticias.filter(n => !destacada || n.id !== destacada.id);
 
 const ICONO_CHIP = { image: 'image', pdf: 'file-text', word: 'file-text', video: 'video', file: 'paperclip' };
 
+function formatNewsDate(fecha) {
+  const d = new Date(fecha);
+  if (Number.isNaN(d.getTime())) return '';
+  const dia = d.getDate();
+  const mes = d.toLocaleString(countryConfig.locale, { month: 'short' });
+  return `${dia} ${mes.replace('.', '')}`.toUpperCase();
+}
+
 // Filtros por tipo de contenido: solo se ofrecen los que existen de verdad.
 const FILTROS = [
   { tipo: 'image', label: 'Con adjuntos', icono: 'paperclip' },
@@ -73,48 +81,26 @@ const filtrosVisibles = FILTROS.filter(f => tiposPresentes.has(f.tipo));
       <% } %>
     </div>
 
-    <%# --- Noticia destacada --- %>
+    <%# --- Noticia destacada: misma card que el home (portada 16:9 + título/bajada) --- %>
     <% if (destacada) { %>
-      <%# Sin portada no se reserva el panel de imagen: quedaba un hueco enorme. %>
-      <a href="/noticias/<%= destacada.id %>"
-         class="noticia-hero <%= destacada.image ? '' : 'noticia-hero--sin-imagen' %>"
-         data-noticia
-         data-search="<%= destacada.textoBusqueda %>"
-         data-tipos="<%= destacada.tiposAdjunto.join(' ') %>">
-        <% if (destacada.image) { %>
-          <div class="noticia-hero__media">
-            <span class="media-placeholder" aria-hidden="true"><%- include('../partials/icon', { name: 'news' }) %></span>
-            <img src="<%= destacada.image %>"
-                 alt=""
-                 loading="eager"
-                 fetchpriority="high"
-                 decoding="async"
-                 onerror="this.remove()">
-          </div>
-        <% } %>
-        <div class="noticia-hero__body">
-          <span class="noticia-hero__badge">
-            <%- include('../partials/icon', { name: 'sparkles' }) %>
-            Destacada
-          </span>
-          <h2 class="noticia-hero__title"><%= destacada.title %></h2>
-          <% if (destacada.subtitle) { %>
-            <p class="noticia-hero__sub"><%= destacada.subtitle %></p>
-          <% } %>
-          <p class="noticia-card__date"><%= destacada.fechaLarga %></p>
-          <% if (destacada.resumen.chips.length) { %>
-            <div class="noticia-card__chips">
-              <% destacada.resumen.chips.forEach(chip => { %>
-                <span class="noticia-chip noticia-chip--<%= chip.kind %>">
-                  <%- include('../partials/icon', { name: ICONO_CHIP[chip.kind] || 'paperclip' }) %>
-                  <%= chip.text %>
-                </span>
-              <% }) %>
-            </div>
-          <% } %>
-          <span class="noticia-hero__cta">Leer noticia <span aria-hidden="true">→</span></span>
-        </div>
-      </a>
+      <%- include('../partials/noticia-featured-card', {
+        href: '/noticias/' + destacada.id,
+        image: destacada.image,
+        title: destacada.title,
+        subtitle: destacada.subtitle,
+        datetime: destacada.fechaISO,
+        dateLabel: formatNewsDate(destacada.created_at || destacada.fechaISO),
+        chipsText: destacada.resumen.chips.length
+          ? destacada.resumen.chips.map(c => c.text).join(' · ')
+          : '',
+        showBadge: true,
+        cta: 'Leer comunicado →',
+        extraClass: 'home-featured--noticias',
+        filterable: true,
+        dataSearch: destacada.textoBusqueda,
+        dataTipos: destacada.tiposAdjunto.join(' '),
+        imageLoading: 'eager'
+      }) %>
     <% } %>
 
     <%# --- Resto de noticias --- %>

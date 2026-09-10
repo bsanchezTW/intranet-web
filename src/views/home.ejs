@@ -162,24 +162,20 @@
 
       <!-- Noticia destacada -->
       <% if (tieneDestacada) { %>
-        <a href="<%= destacada.link %>" class="home-featured">
-          <span class="home-featured__glow home-featured__glow--1" aria-hidden="true"></span>
-          <span class="home-featured__glow home-featured__glow--2" aria-hidden="true"></span>
-          <div class="home-featured__content">
-            <div class="home-featured__head">
-              <span class="home-featured__badge">Destacada</span>
-              <time class="home-featured__date" datetime="<%= destacada.fecha.toISOString() %>"><%= formatNewsDate(destacada.fecha) %></time>
-            </div>
-            <h2 class="home-featured__title"><%= destacada.title %></h2>
-            <% if (destacada.subtitle) { %>
-              <p class="home-featured__sub"><%= destacada.subtitle %></p>
-            <% } %>
-            <% if (destacada.resumen && destacada.resumen.chips.length) { %>
-              <p class="home-featured__chips"><%= destacada.resumen.chips.map(c => c.text).join(' · ') %></p>
-            <% } %>
-            <span class="home-featured__cta">Leer comunicado →</span>
-          </div>
-        </a>
+        <%- include('partials/noticia-featured-card', {
+          href: destacada.link,
+          image: destacada.image,
+          title: destacada.title,
+          subtitle: destacada.subtitle,
+          datetime: destacada.fecha.toISOString(),
+          dateLabel: formatNewsDate(destacada.fecha),
+          chipsText: (destacada.resumen && destacada.resumen.chips.length)
+            ? destacada.resumen.chips.map(c => c.text).join(' · ')
+            : '',
+          showBadge: true,
+          cta: 'Leer comunicado →',
+          imageLoading: 'eager'
+        }) %>
       <% } %>
 
       <!-- Lista de noticias -->

@@ -56,9 +56,13 @@ const { ensureVacationSchema } = require("./services/vacations/vacationSchema");
 const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
 const { ensureExpenseSchema } = require("./services/expenses/expenseSchema");
 const {
+  ensureCostCenterSchema,
+} = require("./services/costCenters/costCenterSchema");
+const {
   APP_CATALOG_VALUES,
   DEFAULT_APP_CATALOG,
 } = require("./constants/appCatalogs");
+const { rememberReturnTo } = require("./utils/returnTo");
 const vacationRequestService = require("./services/vacations/vacationRequestService");
 
 // ================================
@@ -355,6 +359,7 @@ app.use((req, res, next) => {
 // ================================
 function requireAuth(req, res, next) {
   if (req.session && req.session.user) return next();
+  rememberReturnTo(req);
   return res.redirect("/login");
 }
 
@@ -653,6 +658,16 @@ async function asegurarSchemaVacaciones() {
   }
 }
 
+// Va después de asegurarSchemaGastos: añade columnas a expense_requests, que
+// esa función es la que crea.
+async function asegurarSchemaCentrosCosto() {
+  try {
+    await ensureCostCenterSchema();
+  } catch (err) {
+    logger.error("centros-costo", err);
+  }
+}
+
 async function asegurarSchemaGastos() {
   try {
     await ensureExpenseSchema();
@@ -687,7 +702,7 @@ function startBackgroundJobs() {
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
     asegurarSchemaAreas(),
-    asegurarSchemaGastos(),
+    asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),
   ]).finally(() => {
     iniciarTransicionesVacaciones();
   });

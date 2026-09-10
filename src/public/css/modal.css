@@ -84,6 +84,13 @@
   max-height: min(90vh, 820px);
   overflow-x: hidden;
   overflow-y: auto;
+  /* El panel scrollea, y la barra se comería el padding derecho: el contenido
+     quedaría descentrado y pegado a ella. Reservando el hueco a los dos lados
+     el margen es simétrico y no baila según si el contenido llega a scrollear.
+     En móvil la barra es superpuesta y no ocupa, así que ahí no cambia nada.
+     Un panel "flush" (sin padding, con su propio layout scrolleable dentro)
+     debe apagarlo con scrollbar-gutter: auto, como hacen los de más abajo. */
+  scrollbar-gutter: stable both-edges;
   -webkit-overflow-scrolling: touch;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -105,6 +112,10 @@
 .modal-content.modal-editar-panel,
 .modal-content.modal-panel--flush {
   padding: 0;
+  /* El hueco de barra del panel base no corresponde aquí: estos paneles no
+     scrollean ellos mismos —lo hace su layout interno— y reservarlo dejaría una
+     franja muerta contra el borde. */
+  scrollbar-gutter: auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -706,4 +717,74 @@ html[data-theme="dark"] .modal-list-item {
   .modal-button-secondary {
     width: 100%;
   }
+}
+
+
+/* ── .campo-form dentro de un modal ───────────────────────────────────────────
+   El campo compartido (intranet.css) usa la paleta de la página. Dentro de un
+   modal el panel tiene fondo propio, así que aquí sólo se reasignan los colores
+   a los tokens del modal; la geometría sigue siendo la del campo. */
+
+.modal-overlay .campo-form > label {
+  color: var(--modal-label);
+}
+
+.modal-overlay .campo-form input[type="text"],
+.modal-overlay .campo-form input[type="email"],
+.modal-overlay .campo-form input[type="tel"],
+.modal-overlay .campo-form input[type="date"],
+.modal-overlay .campo-form input[type="number"],
+.modal-overlay .campo-form input[type="password"],
+.modal-overlay .campo-form input[type="search"],
+.modal-overlay .campo-form input[type="file"],
+.modal-overlay .campo-form textarea,
+.modal-overlay .campo-form select,
+.modal-overlay .campo-form .phone-field__prefix {
+  border-color: var(--modal-border-strong);
+  background: var(--modal-input-bg);
+  color: var(--modal-text);
+}
+
+.modal-overlay .campo-form input:focus,
+.modal-overlay .campo-form select:focus,
+.modal-overlay .campo-form textarea:focus {
+  border-color: var(--modal-heading);
+  box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.12);
+  background: var(--modal-bg);
+}
+
+.modal-overlay .campo-form input[readonly] {
+  background: var(--modal-border);
+  color: var(--modal-muted);
+  cursor: default;
+}
+
+.modal-overlay .campo-form__ayuda {
+  color: var(--modal-muted);
+}
+
+.modal-overlay .campo-form.is-invalid input[type="text"],
+.modal-overlay .campo-form.is-invalid input[type="email"],
+.modal-overlay .campo-form.is-invalid input[type="tel"],
+.modal-overlay .campo-form.is-invalid input[type="date"],
+.modal-overlay .campo-form.is-invalid input[type="number"],
+.modal-overlay .campo-form.is-invalid input[type="password"],
+.modal-overlay .campo-form.is-invalid input[type="search"],
+.modal-overlay .campo-form.is-invalid input[type="file"],
+.modal-overlay .campo-form.is-invalid textarea,
+.modal-overlay .campo-form.is-invalid select,
+.modal-overlay .campo-form.is-invalid .phone-field__prefix {
+  border-color: var(--down);
+}
+
+.modal-overlay .campo-form.is-invalid input:focus,
+.modal-overlay .campo-form.is-invalid select:focus,
+.modal-overlay .campo-form.is-invalid textarea:focus {
+  border-color: var(--down);
+  box-shadow: 0 0 0 3px rgba(208, 92, 92, 0.18);
+}
+
+.modal-overlay .form-seccion__title {
+  color: var(--modal-heading);
+  border-bottom-color: var(--modal-border);
 }

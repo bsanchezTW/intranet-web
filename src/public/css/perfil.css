@@ -1,0 +1,354 @@
+/* ── Mi perfil ────────────────────────────────────────────────────────────────
+   En Soporte o Procesos cada sección es un tema distinto y las tarjetas
+   apiladas funcionan; aquí todo habla de una sola persona, así que apilar
+   trozos la parte en pedazos. La pantalla es un layout de dos columnas: la
+   identidad en una ficha fija a la izquierda y sus datos —los que edita y los
+   que administra RRHH— en un único panel a la derecha. Los campos son los
+   compartidos (.campo-form en intranet.css). */
+
+.perfil-page {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.perfil-layout {
+  display: grid;
+  grid-template-columns: 312px minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
+}
+
+/* El panel global reserva el hueco del siguiente de la pila; dentro de la
+   rejilla ese hueco lo pone el gap. */
+.perfil-layout .panel {
+  margin-bottom: 0;
+}
+
+/* ══ Columna izquierda: ficha de identidad ══ */
+
+/* Mismo alto de anclaje que la columna del artículo en Noticias: bajo la
+   navbar fija. Si la ventana es más baja que la ficha, scrollea sola en vez
+   de dejar "Cerrar sesión" fuera de alcance. */
+.perfil-ficha {
+  position: sticky;
+  top: 92px;
+  max-height: calc(100vh - 112px);
+  padding: 0 0 20px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Banda de marca detrás de la foto: da a la ficha aire de perfil y no de
+   formulario. La recorta el overflow del contenedor. */
+.perfil-ficha__banda {
+  height: 78px;
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(166, 216, 74, 0.28), transparent 62%),
+    linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%);
+}
+
+.perfil-ficha__identidad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 20px;
+  text-align: center;
+}
+
+/* La foto monta sobre la banda: 128px de avatar menos el solape. */
+.perfil-ficha__foto {
+  margin: -50px 0 14px;
+}
+
+/* El anillo toma el color de la ficha: la foto queda recortada contra la banda
+   como una pastilla y no como una imagen pegada encima. */
+.perfil-ficha__foto .profile-photo-preview {
+  --photo-ring: var(--color-surface);
+  --photo-ring-width: 4px;
+  box-shadow: var(--shadow-card);
+}
+
+.perfil-nombre {
+  margin: 0 0 6px;
+  font-size: 1.28rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--color-heading);
+}
+
+/* Inicial cuando no hay foto: el mismo recurso que la tabla de colaboradores. */
+.perfil-inicial {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--brand);
+}
+
+.perfil-correo {
+  margin: 0 0 10px;
+  font-size: 0.87rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.perfil-verificacion {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.perfil-verificacion--ok {
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+.perfil-verificacion--pendiente {
+  background: rgba(208, 92, 92, 0.12);
+  color: var(--down);
+}
+
+/* Van tras el nombre y no bajo el avatar: así la identidad se lee de corrido
+   —foto, nombre, correo, estado— y las acciones quedan como pie del bloque. */
+.perfil-ficha__foto-acciones {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.perfil-ficha__foto-acciones .btn-photo-select {
+  padding: 7px 15px;
+  font-size: 0.82rem;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.perfil-ficha__foto-acciones .btn-photo-select:hover {
+  background: var(--brand-soft);
+  color: var(--brand);
+  transform: none;
+}
+
+.perfil-ficha__foto-acciones .btn-photo-remove {
+  font-size: 0.82rem;
+}
+
+.perfil-acciones {
+  display: grid;
+  gap: 8px;
+  margin: 20px 20px 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ══ Columna derecha: los datos ══ */
+
+.perfil-datos__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.perfil-datos__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.perfil-datos__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--color-heading);
+}
+
+.perfil-datos__desc {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.perfil-guardar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+/* ── Lo que administra RRHH: mismo panel, otro bloque ──
+   No es una tarjeta aparte a propósito: son datos de la misma persona, sólo
+   que de sólo lectura. La regla la separa del formulario sin desgajarla. */
+
+.perfil-rrhh {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--color-border);
+}
+
+.perfil-rrhh__title {
+  margin: 0 0 16px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-subtle);
+}
+
+.perfil-rrhh__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+  gap: 16px 18px;
+  margin: 0;
+}
+
+.perfil-rrhh__dato {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 0;
+}
+
+.perfil-rrhh__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 16px;
+}
+
+.perfil-rrhh__dato dt {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-subtle);
+  margin-bottom: 2px;
+}
+
+.perfil-rrhh__dato dd {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* Un documento se lee dígito a dígito. */
+.perfil-rrhh__numero {
+  font-variant-numeric: tabular-nums;
+}
+
+.perfil-rrhh__nota {
+  margin: 16px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-text-subtle);
+}
+
+/* ══ Botones ══ */
+
+.btn-perfil {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 10px 18px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-perfil:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--brand);
+  color: var(--color-heading);
+}
+
+.btn-perfil--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #ffffff;
+}
+
+.btn-perfil--primary:hover {
+  background: var(--brand-deep);
+  border-color: var(--brand-deep);
+  color: #ffffff;
+}
+
+.btn-perfil--danger {
+  background: transparent;
+  border-color: rgba(208, 92, 92, 0.42);
+  color: var(--down);
+}
+
+.btn-perfil--danger:hover {
+  background: rgba(208, 92, 92, 0.12);
+  border-color: var(--down);
+  color: var(--down);
+}
+
+/* La ficha deja de ser columna y pasa a encabezado. */
+@media (max-width: 900px) {
+  .perfil-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Deja de ser columna fija: ni se ancla ni se limita en alto. */
+  .perfil-ficha {
+    position: static;
+    max-height: none;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 640px) {
+  .perfil-guardar .btn-perfil {
+    flex: 1 1 100%;
+  }
+}
+
+/* En modo oscuro el azul de marca es claro: el texto blanco encima no contrasta. */
+html[data-theme="dark"] .btn-perfil--primary,
+html[data-theme="dark"] .btn-perfil--primary:hover {
+  color: var(--color-bg);
+}
+
+/* La banda usa el azul claro del tema oscuro, sobre el que la foto cantaría;
+   se apaga a un degradado de superficie. */
+html[data-theme="dark"] .perfil-ficha__banda {
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(166, 216, 74, 0.16), transparent 62%),
+    linear-gradient(135deg, #1c3252 0%, #14243c 100%);
+}
+
+/* Sin foto, el círculo interior es un disco claro: en oscuro cantaría sobre la
+   ficha. La foto real lo tapa, así que sólo afecta a la inicial. */
+html[data-theme="dark"] .perfil-ficha__foto .profile-photo-preview--light {
+  --photo-fill: var(--color-surface-muted);
+}

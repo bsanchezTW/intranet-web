@@ -1,4 +1,12 @@
-/* RRHH · Áreas de trabajo */
+/* RRHH · Áreas de trabajo.
+   Las clases con prefijo .ac- (áreas + centros) son el lenguaje común de las
+   dos pantallas de agrupación y las carga también centros_costo.ejs vía
+   extraCss; lo propio de la tarjeta de centro vive en centros-costo.css.
+
+   El rediseño parte de un problema concreto: la tarjeta listaba a todos sus
+   miembros, así que un área con cuarenta personas medía diez veces más que una
+   de tres y rompía la grilla. Ahora la tarjeta muestra siempre un resumen de
+   alto fijo y la lista completa se abre en un modal. */
 
 .contenedor-areas {
   width: 100%;
@@ -7,97 +15,272 @@
 }
 
 .contenedor-areas .page-header {
-  margin-bottom: 25px;
+  margin-bottom: 22px;
 }
 
-.area-empty-panel {
-  background: var(--color-surface);
+
+/* ── Barra de herramientas ────────────────────────────────────────────────────
+   Misma pieza que la ticketera de Soporte: buscador a la izquierda, chips de
+   filtro a la derecha. */
+
+.ac-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  margin-bottom: 20px;
   border: 1px solid var(--color-border);
   border-radius: 16px;
+  background: var(--color-surface);
   box-shadow: var(--shadow);
 }
 
+.ac-search {
+  position: relative;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.ac-search__icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.ac-search__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px 9px 36px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+
+.ac-search__input::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.ac-search__input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.ac-filtros {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.ac-chip:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.ac-chip.is-active {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--color-bg);
+}
+
+.ac-chip__n {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+
+.ac-chip.is-active .ac-chip__n {
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
+}
+
+.ac-sin-resultados {
+  margin: 0 0 20px;
+  padding: 26px 20px;
+  text-align: center;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 16px;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+
+/* ── Estado vacío ─────────────────────────────────────────────────────────── */
+
+.ac-vacio {
+  text-align: center;
+  padding: 52px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.ac-vacio__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 1.5rem;
+}
+
+.ac-vacio h3 {
+  margin: 0 0 6px;
+  font-size: 1.08rem;
+  color: var(--color-heading);
+}
+
+.ac-vacio p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--color-text-muted);
+}
+
+
+/* ── Grilla de tarjetas ───────────────────────────────────────────────────── */
+
 .areas-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
   gap: 18px;
+  /* Sin esto una tarjeta abierta estira a toda su fila. */
+  align-items: start;
 }
 
 .area-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 16px 16px 14px;
+  padding: 18px 18px 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-top: 3px solid var(--area-color, var(--brand));
   min-width: 0;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.area-card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border-strong);
+}
+
+.area-card.is-oculta {
+  display: none;
 }
 
 .area-card--unassigned {
-  border-top-color: var(--border2);
+  --area-color: var(--color-text-subtle);
   border-style: dashed;
 }
 
 .area-card__head {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 12px;
   min-width: 0;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--color-border);
-  background: none;
-  position: static;
-  z-index: auto;
-  width: auto;
-  color: inherit;
-  box-shadow: none;
 }
 
+/* El color del área identifica la tarjeta igual que en las carpetas de
+   Procesos: tile teñido en vez de una franja superior. */
+.area-card__tile {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  background: color-mix(in srgb, var(--area-color, var(--brand)) 16%, transparent);
+  color: var(--area-color, var(--brand));
+}
+
+/* El alto de dos líneas de título se reserva aquí y no en el <h3>: así un
+   nombre corto deja el hueco al final del bloque y no entre el nombre y su
+   chip de id, y todas las tarjetas siguen midiendo lo mismo. */
 .area-card__title {
+  flex: 1;
+  min-width: 0;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Como mucho dos líneas; el nombre completo queda en el title del elemento. */
+.area-card__nombre {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--color-heading);
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.area-card__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.area-card__title .pill {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  gap: 7px;
+  flex-wrap: wrap;
 }
 
 .area-card__id {
-  flex: none;
   font-variant-numeric: tabular-nums;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--color-text-muted);
-  background: var(--surface2, rgba(0, 0, 0, 0.05));
+  letter-spacing: 0.03em;
+  color: var(--color-text-subtle);
+  background: var(--color-surface-muted);
   border-radius: 6px;
-  padding: 2px 6px;
-}
-
-.area-swatch-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex: none;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
-}
-
-.area-swatch-dot--muted {
-  background: var(--subtle);
+  padding: 2px 7px;
 }
 
 .area-card__count {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  font-size: 0.76rem;
   font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 2px 10px;
   white-space: nowrap;
   flex: none;
 }
@@ -119,20 +302,21 @@
   height: 32px;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
-  border-radius: 8px;
+  color: var(--color-text-subtle);
+  border-radius: 9px;
   cursor: pointer;
   font-size: 0.95rem;
+  transition: background 0.15s, color 0.15s;
 }
 
 .area-icon-btn:hover {
-  background: var(--surface2);
+  background: var(--color-surface-muted);
   color: var(--brand);
 }
 
 .area-icon-btn--danger:hover:not(:disabled) {
-  color: var(--down, #c0392e);
-  background: var(--surface2);
+  color: var(--down);
+  background: var(--color-surface-muted);
 }
 
 .area-icon-btn:disabled {
@@ -145,41 +329,339 @@
   margin: 0;
 }
 
-.area-members {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-}
 
-.area-members__empty {
-  color: var(--subtle);
-  font-size: 0.85rem;
-  padding: 8px 0;
-}
+/* ── Jefatura del área ────────────────────────────────────────────────────────
+   Requisito para aprobar rendiciones: cuando falta, la tarjeta lo dice en vez
+   de dejar que el colaborador lo descubra al intentar rendir. */
 
-.area-member {
+.area-card__jefe {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 9px 12px;
+  border-radius: 11px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  font-size: 0.84rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* Ámbar propio y no un token de superficie: es una advertencia, y en modo
+   oscuro el ámbar claro sobre fondo oscuro no se lee. */
+.area-card__jefe--vacio {
+  background: rgba(224, 163, 60, 0.14);
+  border-color: rgba(224, 163, 60, 0.3);
+  color: #8a5d09;
+}
+
+html[data-theme="dark"] .area-card__jefe--vacio {
+  color: #e8b860;
+}
+
+.area-card__jefe strong {
+  color: var(--color-heading);
+}
+
+.area-card__jefe--vacio strong {
+  color: inherit;
+}
+
+.area-card__jefe-icono {
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+/* También a una línea: dos tarjetas vecinas no deben desalinearse porque el
+   jefe de una tenga el nombre más largo. */
+.area-card__jefe-txt {
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.area-member__avatar.avatar,
-.area-member__avatar.avatar-fallback {
-  width: 28px;
-  height: 28px;
-  font-size: 0.72rem;
-  border-width: 1px;
+.area-jefe-ayuda {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-subtle);
+  line-height: 1.45;
 }
 
-.area-member__name {
+
+/* ── Resumen de miembros (lo que fija la altura de la tarjeta) ────────────── */
+
+.area-resumen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.area-resumen:hover {
+  background: var(--brand-soft);
+}
+
+.area-resumen:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.area-resumen__txt {
   flex: 1;
   min-width: 0;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.area-resumen__chev {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--color-text-subtle);
+  transition: transform 0.2s ease;
+}
+
+.area-resumen[aria-expanded="true"] .area-resumen__chev {
+  transform: rotate(90deg);
+}
+
+/* Pila de avatares: sustituye a la lista en el estado cerrado, con ancho
+   acotado para que veinte personas no ensanchen la tarjeta. */
+.area-stack {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.area-stack__item {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex: none;
+  box-sizing: border-box;
+  border: 2px solid var(--color-surface);
+  object-fit: cover;
+}
+
+.area-stack__item + .area-stack__item {
+  margin-left: -9px;
+}
+
+.avatar-fallback.area-stack__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.area-stack__mas {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.area-stack__vacio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+  font-size: 0.8rem;
+}
+
+
+/* ── Listas dentro de los modales ─────────────────────────────────────────────
+   Ver y agregar colaboradores ocurre en un modal (ac_modales.ejs) y no en un
+   panel dentro de la tarjeta: una lista desplegable estiraba la fila de la
+   grilla y dejaba aire bajo las tarjetas vecinas. Estas clases las usan las dos
+   pantallas, así que el marcado lo arma ac-cards.js y no cada vista. */
+
+.ac-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: min(84vh, 720px);
+  /* Sólo scrollea la lista de dentro: si el panel también pudiera scrollear,
+     acabarían compitiendo dos barras para el mismo gesto. */
+  overflow: hidden;
+}
+
+/* En el modal de agregar, la lista va dentro del <form>. Sin esto el form es
+   un bloque de altura libre, la lista se estira a su contenido completo y deja
+   de scrollear: la rueda del ratón encima de ella no hacía nada, porque un
+   contenedor de scroll que no desborda igual retiene el gesto
+   (overscroll-behavior: contain) en vez de pasárselo al panel. */
+.ac-modal__form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Los botones no se encogen: son lo último que debe ceder espacio. */
+.ac-modal .modal-form-actions {
+  flex: none;
+}
+
+.ac-modal__sub {
+  margin: -6px 0 14px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--modal-muted, var(--color-text-muted));
+}
+
+.ac-modal__buscador {
+  position: relative;
+  margin-bottom: 12px;
+  flex: none;
+}
+
+.ac-modal__buscador-icono {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.ac-modal__buscador input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px 9px 36px;
+  border: 1px solid var(--modal-border, var(--color-border-strong));
+  border-radius: 10px;
+  background: var(--modal-input-bg, var(--color-input-bg));
+  color: var(--color-input-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.ac-modal__buscador input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.ac-modal__seleccion {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+/* La lista es lo único que scrollea: el título, el buscador y los botones
+   quedan siempre a la vista aunque haya cien personas. */
+.ac-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--modal-border, var(--color-border));
+  border-radius: 12px;
+}
+
+.ac-lista__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+
+.ac-lista__item + .ac-lista__item {
+  border-top: 1px solid var(--modal-border, var(--color-border));
+}
+
+.ac-lista__item.is-oculta {
+  display: none;
+}
+
+.ac-lista__item:hover {
+  background: var(--color-surface-muted);
+}
+
+.ac-lista--seleccion .ac-lista__item {
+  padding: 0;
+}
+
+.ac-lista__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.ac-lista__item.is-bloqueada .ac-lista__label {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ac-lista__check {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: inherit;
+}
+
+.ac-lista__avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  font-size: 0.74rem;
+}
+
+.avatar-fallback.ac-lista__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #ffffff;
+  border: none;
+}
+
+.ac-lista__texto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ac-lista__nombre {
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--color-text);
   white-space: nowrap;
@@ -187,49 +669,77 @@
   text-overflow: ellipsis;
 }
 
-.area-member__actions {
+.ac-lista__detalle {
+  font-size: 0.76rem;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ac-lista__marca {
+  flex: none;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--green-ink);
+  background: var(--green-soft);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.ac-lista__acciones {
   display: flex;
   align-items: center;
   gap: 2px;
   flex: none;
 }
 
-.area-member__swap,
-.area-member__remove {
-  flex: none;
-  width: 24px;
-  height: 24px;
+.ac-lista__form {
+  display: inline;
+  margin: 0;
+}
+
+.ac-lista__btn {
+  width: 28px;
+  height: 28px;
   border: none;
   background: transparent;
-  color: var(--subtle);
-  border-radius: 6px;
+  color: var(--color-text-subtle);
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  transition: background 0.15s, color 0.15s;
 }
 
-.area-member__swap .icon-svg {
-  width: 14px;
-  height: 14px;
+.ac-lista__btn .icon-svg {
+  width: 15px;
+  height: 15px;
 }
 
-.area-member__swap:hover:not(:disabled) {
+.ac-lista__btn:hover {
+  background: var(--color-surface);
   color: var(--brand);
-  background: var(--surface2);
 }
 
-.area-member__swap:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+.ac-lista__btn--danger:hover {
+  color: var(--down);
 }
 
-.area-member__remove:hover {
-  color: var(--down, #c0392e);
-  background: var(--surface2);
+.ac-lista__vacia {
+  margin: 14px 0 0;
+  padding: 18px 12px;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--modal-border, var(--color-border-strong));
+  border-radius: 12px;
 }
 
 .area-mover-subtitle {
@@ -239,42 +749,8 @@
   line-height: 1.45;
 }
 
-.area-add-form {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
-  padding-top: 10px;
-  border-top: 1px solid var(--color-border);
-}
 
-.area-add-form select {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 0.82rem;
-  padding: 7px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.area-add-btn {
-  flex: none;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 7px 12px;
-  border: none;
-  border-radius: 8px;
-  background: var(--ink);
-  color: var(--color-bg);
-  cursor: pointer;
-}
-
-.area-add-btn:hover {
-  opacity: 0.9;
-}
+/* ── Paleta de color (modal) ──────────────────────────────────────────────── */
 
 .area-palette {
   display: flex;
@@ -321,54 +797,35 @@
   text-transform: lowercase;
 }
 
+
+@media (max-width: 768px) {
+  .ac-toolbar {
+    gap: 10px;
+  }
+
+  .ac-search {
+    flex: 1 1 100%;
+  }
+
+  .ac-filtros {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .ac-filtros::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ac-chip {
+    flex-shrink: 0;
+  }
+
+}
+
 @media (max-width: 640px) {
   .areas-grid {
     grid-template-columns: 1fr;
   }
-}
-
-
-/* ── Jefatura del área ────────────────────────────────────────────────────────
-   Requisito para aprobar rendiciones: cuando falta, la tarjeta lo dice en vez
-   de dejar que el colaborador lo descubra al intentar rendir. */
-
-.area-card__jefe {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0 4px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--color-surface-muted);
-  border: 1px solid var(--color-border);
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-.area-card__jefe--vacio {
-  background: #fef3c7;
-  border-color: #fde68a;
-  color: #92400e;
-}
-
-.area-card__jefe strong {
-  color: var(--color-heading);
-}
-
-.area-card__jefe--vacio strong {
-  color: inherit;
-}
-
-.area-card__jefe-icono {
-  display: inline-flex;
-  flex-shrink: 0;
-  font-size: 1rem;
-}
-
-.area-jefe-ayuda {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
-  color: var(--color-text-subtle);
-  line-height: 1.45;
 }

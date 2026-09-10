@@ -1,6 +1,10 @@
 <%
   const esRendicion = kind === 'rendicion';
-  const ctx = areaContext;
+  const req = requisitos;
+  const centros = req.centros || [];
+  // Con un solo centro no hay decisión que tomar: se muestra como dato, no
+  // como pregunta, y viaja igual en un campo oculto.
+  const centroUnico = centros.length === 1 ? centros[0] : null;
   const hoy = new Date().toISOString().slice(0, 10);
 %>
 
@@ -22,7 +26,7 @@
       <% } else { %>
         Pide dinero por adelantado. Detalla en qué se va a usar.
       <% } %>
-      Aprueba <strong><%= ctx.manager.name %></strong> y después Finanzas.
+      Aprueba <strong><%= req.manager.name %></strong> y después Finanzas.
     </p>
   </div>
 
@@ -30,6 +34,39 @@
         data-kind="<%= kind %>"
         data-requiere-adjunto="<%= esRendicion ? 'true' : 'false' %>"
         data-max-mb="<%= maxAdjuntoMb %>">
+
+    <div class="gasto-ficha">
+      <h3 class="gasto-ficha__titulo">Datos del solicitante</h3>
+      <p class="gasto-ficha__nota">
+        Se copian de tu ficha y quedan registrados en la solicitud.
+        Para corregirlos, edítalos en <a href="/perfil">tu perfil</a> antes de enviarla.
+      </p>
+      <dl class="gasto-ficha__lista">
+        <div><dt>Nombre</dt><dd><%= usuario.nombre || usuario.first_name || '—' %></dd></div>
+        <div><dt><%= req.documentoLabel %></dt><dd><%= formatNationalId(req.documento) || '—' %></dd></div>
+        <div><dt>Correo</dt><dd><%= usuario.email || '—' %></dd></div>
+        <div><dt>Área</dt><dd><%= req.area.area_name %></dd></div>
+      </dl>
+    </div>
+
+    <div class="campo-form">
+      <label for="centroCosto">
+        Centro de costo <span class="required-mark">*</span>
+      </label>
+      <% if (centroUnico) { %>
+        <input type="text" id="centroCosto" value="<%= centroUnico.code %> · <%= centroUnico.name %>" readonly>
+        <input type="hidden" id="centroCostoValor" value="<%= centroUnico.id %>">
+        <span class="campo-form__ayuda">Es el único centro de costo que tienes asignado.</span>
+      <% } else { %>
+        <select id="centroCosto" required>
+          <option value="">Elige a qué centro se imputa…</option>
+          <% centros.forEach(c => { %>
+            <option value="<%= c.id %>"><%= c.code %> · <%= c.name %></option>
+          <% }) %>
+        </select>
+        <span class="campo-form__ayuda">Tienes <%= centros.length %> centros asignados; elige a cuál se carga este gasto.</span>
+      <% } %>
+    </div>
 
     <div class="campo-form">
       <label for="titulo">Asunto <span class="required-mark">*</span></label>

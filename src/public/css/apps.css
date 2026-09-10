@@ -756,36 +756,12 @@
 /* ══════════ Reordenar tarjetas ══════════ */
 /* Lo comparten la vista Apps y la autoayuda de Soporte. */
 
-.apps-orden-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 10px;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: border-color 0.18s, color 0.18s, background 0.18s;
-}
-
-.apps-orden-btn:hover {
-  border-color: var(--brand);
-  color: var(--brand);
-}
-
+/* El aspecto base lo comparte con .link-volver en intranet.css; aquí sólo
+   vive el estado encendido, que es propio del modo reordenar. */
 .apps-orden-btn.is-active {
   background: var(--brand);
   border-color: var(--brand);
   color: #ffffff;
-}
-
-.apps-orden-btn:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
 }
 
 .apps-orden-barra {

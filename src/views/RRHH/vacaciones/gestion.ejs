@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260910n">
 
 <div class="vac-wrap">
   <div class="vac-header">
@@ -6,7 +6,7 @@
       <h2 class="vac-title">Gestión de vacaciones</h2>
       <p class="vac-subtitle">Aprueba o rechaza solicitudes y revisa los saldos del equipo.</p>
     </div>
-    <a href="/RRHH/vacaciones" class="vac-link-volver">← Volver</a>
+    <a href="/RRHH/vacaciones" class="link-volver">← Volver</a>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>
@@ -50,7 +50,7 @@
           <% requests.forEach(r => { %>
             <tr>
               <td>
-                <a class="vac-link-volver" style="color:#003a70;font-weight:600;" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
+                <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
               </td>
               <td><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
               <td><%= r.days %> <%= r.dayUnit %></td>

@@ -15,6 +15,13 @@ const {
   enrichAreaWithPill,
   normalizeHex,
 } = require("../constants/workAreas");
+const { isFeatureEnabled } = require("../config/features");
+const costCenterService = require("../services/costCenters/costCenterService");
+
+/** Etiqueta del documento según la instancia: "RUT" o "DNI". */
+function documentLabel() {
+  return require("../config/country").getDocumentConfig().label;
+}
 
 function parseRoleFromForm(role) {
   const value = String(role || "").trim();
@@ -29,6 +36,11 @@ const {
   toTelHref,
 } = require("../utils/phone");
 const { validateEmail } = require("../utils/email");
+const {
+  validateNationalId,
+  nationalIdClientConfig,
+  formatNationalId,
+} = require("../utils/nationalId");
 const { mapPersonaForView } = require("../utils/schemaMappers");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
@@ -155,6 +167,21 @@ async function getAreasTrabajo() {
     "SELECT id, area_name, color FROM work_areas ORDER BY area_name ASC",
   );
   return rows.map(enrichAreaWithPill);
+}
+
+/**
+ * Centros de costo que la ficha de un colaborador puede ofrecer.
+ *
+ * Sólo los activos: un centro apagado ya no se ofrece al rendir, así que
+ * tampoco tiene sentido asignarlo desde aquí. Si la instancia no tiene el
+ * centro de gastos encendido devuelve vacío y el campo no se dibuja.
+ */
+async function getCentrosCostoAsignables() {
+  if (!isFeatureEnabled("expenseCenter")) return [];
+  const { rows } = await db.query(
+    "SELECT id, code, name FROM cost_centers WHERE active = TRUE ORDER BY code ASC",
+  );
+  return rows;
 }
 
 function parsePositiveInt(value) {
@@ -299,6 +326,7 @@ router.get("/personal", async (req, res) => {
       u.phone,
       u.is_intranet_user,
       u.email_confirmed,
+      u.national_id,
       at.area_name AS area,
       at.color AS area_color
     FROM users u
@@ -327,6 +355,8 @@ router.get("/personal", async (req, res) => {
         ...p,
         phone: telefonoDisplay || phoneRaw,
         telefono: telefonoDisplay || phoneRaw,
+        // Guardado normalizado ("12345678-5"); los puntos se agregan al mostrar.
+        documento: formatNationalId(p.national_id),
         ordenCumple,
         fechaCumpleFmt,
         telefonoHref,
@@ -353,15 +383,21 @@ router.get("/personal", async (req, res) => {
       ? decodeURIComponent(req.query.editarError)
       : null;
 
-    const areas = await getAreasTrabajo();
+    const [areas, centrosCosto] = await Promise.all([
+      getAreasTrabajo(),
+      getCentrosCostoAsignables(),
+    ]);
 
     res.render("RRHH/personal", {
       titulo: "Personal",
       personas: personasFormateadas,
       areas,
+      centrosCosto,
+      maxCentrosCosto: costCenterService.MAX_COST_CENTERS_PER_USER,
       mostrarColumnaRol,
       getWorkAreaPillClass,
       getWorkAreaPill,
+      documentoConfig: nationalIdClientConfig(),
       user: req.session.user,
       success: successMsg,
       error: null,
@@ -396,6 +432,7 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
     prior_years_credited,
     progressive_days_override,
     work_days_per_week,
+    national_id,
   } = req.body;
 
   try {
@@ -412,6 +449,14 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
     const areaId = (work_area_id && String(work_area_id).trim()) ? Number(work_area_id) : null;
     const telefonoCheck = (phone && typeof phone === 'string' && phone.trim()) ? validateMobilePhone(phone) : { valid: true, value: null, storageValue: null };
     const telefonoVal = telefonoCheck.storageValue;
+
+    // Opcional al crear la ficha: RR.HH. no siempre tiene el documento a mano.
+    // La rendición de gastos sí lo exige, que es donde el dato importa.
+    const documentoCheck = validateNationalId(national_id);
+    if (!documentoCheck.valid) {
+      return redirectPersonalCrearError(res, documentoCheck.error);
+    }
+    const documentoVal = documentoCheck.storageValue;
 
     const firstName = (first_name && typeof first_name === 'string') ? toTitleCase(first_name.trim()) : '';
     const lastName = (last_name && typeof last_name === 'string') ? toTitleCase(last_name.trim()) : '';
@@ -432,6 +477,19 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
         res,
         "La fecha de nacimiento es obligatoria para colaboradores sin correo.",
       );
+    }
+
+    if (documentoVal) {
+      const { rows: repetido } = await db.query(
+        "SELECT id FROM users WHERE national_id = $1",
+        [documentoVal],
+      );
+      if (repetido.length) {
+        return redirectPersonalCrearError(
+          res,
+          `Ya hay un colaborador registrado con ese ${documentLabel()}.`,
+        );
+      }
     }
 
     if (!emailCheck.valid) {
@@ -465,8 +523,8 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
 
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
-          (first_name, last_name, email, password_hash, password_salt, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen, hire_date, prior_years_credited, progressive_days_override, work_days_per_week)
-        VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, $8, $9, TRUE, FALSE, $10, $11, $12, $13)
+          (first_name, last_name, email, password_hash, password_salt, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id)
+        VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, $8, $9, TRUE, FALSE, $10, $11, $12, $13, $14)
         RETURNING id`,
         [
           firstName,
@@ -482,6 +540,7 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
           priorYearsVal,
           progressiveOverrideVal,
           workDaysVal,
+          documentoVal,
         ],
       );
       userId = inserted[0].id;
@@ -492,8 +551,8 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
     } else {
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
-          (first_name, last_name, email, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, hire_date, prior_years_credited, progressive_days_override, work_days_per_week)
-        VALUES ($1, $2, $3, $4, FALSE, FALSE, $5, $6, $7, FALSE, $8, $9, $10, $11)
+          (first_name, last_name, email, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id)
+        VALUES ($1, $2, $3, $4, FALSE, FALSE, $5, $6, $7, FALSE, $8, $9, $10, $11, $12)
         RETURNING id`,
         [
           firstName,
@@ -507,6 +566,7 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
           priorYearsVal,
           progressiveOverrideVal,
           workDaysVal,
+          documentoVal,
         ],
       );
       userId = inserted[0].id;
@@ -517,6 +577,22 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
       balanceService
         .recalculatePeriods(userId)
         .catch((e) => console.error("[Vacaciones] recalc al crear:", e.message));
+    }
+
+    // Los centros de costo van después del INSERT porque necesitan el id. Si
+    // fallan, la ficha ya existe: se avisa en vez de deshacer al colaborador.
+    // Con el centro de gastos apagado la ficha no dibuja el campo, y un
+    // formulario sin casillas dejaría a la persona sin ningún centro.
+    const centrosCrear = isFeatureEnabled("expenseCenter")
+      ? await costCenterService.setUserCostCenters(
+          userId,
+          req.body.cost_center_ids,
+        )
+      : { ok: true };
+    if (!centrosCrear.ok) {
+      return res.redirect(
+        `/RRHH/personal?ok=1&msg=${successMsg}+pero+no+se+pudieron+asignar+los+centros+de+costo`,
+      );
     }
 
     res.redirect(`/RRHH/personal?ok=1&msg=${successMsg}`);
@@ -538,10 +614,13 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
 router.get("/editar/:id", requireRole.administrador(), async (req, res) => {
   const { id } = req.params;
   try {
-    const [userResult, areas] = await Promise.all([
-      db.query("SELECT * FROM users WHERE id = $1", [id]),
-      getAreasTrabajo(),
-    ]);
+    const [userResult, areas, centrosCosto, centrosDelUsuario] =
+      await Promise.all([
+        db.query("SELECT * FROM users WHERE id = $1", [id]),
+        getAreasTrabajo(),
+        getCentrosCostoAsignables(),
+        costCenterService.listUserCostCenters(id),
+      ]);
     const { rows } = userResult;
 
     if (rows.length === 0) return res.status(404).send("Usuario no encontrado");
@@ -553,13 +632,21 @@ router.get("/editar/:id", requireRole.administrador(), async (req, res) => {
       ...rows[0],
       phone: phoneDisplay,
       telefono: phoneDisplay,
+      // Guardado sin separadores; los puntos se agregan sólo al mostrarlo.
+      documento: formatNationalId(rows[0].national_id),
     });
 
     if (req.query.partial === "1") {
+      // El fragmento se renderiza fuera del layout: lo que la vista necesite
+      // hay que pasárselo aquí, porque no hereda los locals de /personal.
       return res.render("RRHH/partials/persona_editar_modal", {
         layout: false,
         persona,
         areas,
+        centrosCosto,
+        centrosSeleccionados: centrosDelUsuario.map((c) => c.id),
+        maxCentrosCosto: costCenterService.MAX_COST_CENTERS_PER_USER,
+        documentoConfig: nationalIdClientConfig(),
         getWorkAreaPillClass,
         getWorkAreaPill,
       });
@@ -591,6 +678,7 @@ router.post(
       prior_years_credited,
       progressive_days_override,
       work_days_per_week,
+      national_id,
     } = req.body;
 
     try {
@@ -601,6 +689,11 @@ router.post(
       const areaId = (work_area_id && String(work_area_id).trim()) ? Number(work_area_id) : null;
       const telefonoCheck = (phone && typeof phone === 'string' && phone.trim()) ? validateMobilePhone(phone) : { valid: true, value: null, storageValue: null };
       const telefonoVal = telefonoCheck.storageValue;
+      const documentoCheck = validateNationalId(national_id);
+      if (!documentoCheck.valid) {
+        return redirectPersonalEditarError(res, id, documentoCheck.error);
+      }
+      const documentoVal = documentoCheck.storageValue;
       const firstName = (first_name && typeof first_name === 'string') ? toTitleCase(first_name.trim()) : '';
       const lastName = (last_name && typeof last_name === 'string') ? toTitleCase(last_name.trim()) : '';
       const emailRaw =
@@ -620,6 +713,20 @@ router.post(
           id,
           "Completa los campos obligatorios: Nombre, Apellido y Área.",
         );
+      }
+
+      if (documentoVal) {
+        const { rows: repetido } = await db.query(
+          "SELECT id FROM users WHERE national_id = $1 AND id <> $2",
+          [documentoVal, id],
+        );
+        if (repetido.length) {
+          return redirectPersonalEditarError(
+            res,
+            id,
+            `Ya hay otro colaborador registrado con ese ${documentLabel()}.`,
+          );
+        }
       }
 
       if (!emailClean && !fechaVal) {
@@ -703,6 +810,7 @@ router.post(
         "prior_years_credited=$9",
         "progressive_days_override=$10",
         "work_days_per_week=$11",
+        "national_id=$12",
       ];
       const values = [
         firstName,
@@ -716,6 +824,7 @@ router.post(
         priorYearsVal,
         progressiveOverrideVal,
         workDaysVal,
+        documentoVal,
       ];
 
       if (fotoValue !== undefined) {
@@ -747,6 +856,19 @@ router.post(
         `UPDATE users SET ${setClauses.join(", ")} WHERE id=$${values.length}`,
         values,
       );
+
+      // La ficha muestra el conjunto completo de centros activos, así que lo
+      // que venga marcado es el estado final; sin casillas, ninguno.
+      // Con el centro de gastos apagado no hay campo que leer y no se toca nada.
+      const centrosEditar = isFeatureEnabled("expenseCenter")
+        ? await costCenterService.setUserCostCenters(
+            id,
+            req.body.cost_center_ids,
+          )
+        : { ok: true };
+      if (!centrosEditar.ok) {
+        return redirectPersonalEditarError(res, id, centrosEditar.error);
+      }
 
       if (
         req.session.user &&
@@ -1084,35 +1206,42 @@ router.post(
   requireRole.administrador(),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
-    const userId = parsePositiveInt(req.body.user_id);
-    if (!areaId || !userId) {
+    // El modal manda una casilla por persona, así que user_id llega como lista;
+    // el formato de un solo valor se sigue aceptando.
+    const userIds = [].concat(req.body.user_id || []).map(parsePositiveInt);
+    if (!areaId || !userIds.length || userIds.some((id) => !id)) {
       return redirectAreasError(res, "Datos inválidos.");
     }
 
     try {
-      const [areaResult, userResult] = await Promise.all([
+      const [areaResult, usersResult] = await Promise.all([
         db.query("SELECT id FROM work_areas WHERE id = $1", [areaId]),
-        db.query(
-          "SELECT id, work_area_id FROM users WHERE id = $1",
-          [userId],
-        ),
+        db.query("SELECT id FROM users WHERE id = ANY($1::int[])", [userIds]),
       ]);
       if (!areaResult.rows.length) {
         return redirectAreasError(res, "El área no existe.");
       }
-      const user = userResult.rows[0];
-      if (!user) {
-        return redirectAreasError(res, "Colaborador no encontrado.");
+      // Si alguno de los ids no existe se corta entero: asignar "los que sí"
+      // dejaría al administrador sin saber cuáles quedaron fuera.
+      if (usersResult.rows.length !== userIds.length) {
+        return redirectAreasError(res, "Alguno de los colaboradores ya no existe.");
       }
 
       await db.query(
-        "UPDATE users SET work_area_id = $1 WHERE id = $2",
-        [areaId, userId],
+        "UPDATE users SET work_area_id = $1 WHERE id = ANY($2::int[])",
+        [areaId, userIds],
       );
-      // Si venía de otra área y allí era jefe, esa jefatura queda vacante.
-      await limpiarJefaturaHuerfana(userId);
+      // Quien venía de otra área y allí era jefe deja esa jefatura vacante.
+      for (const userId of userIds) {
+        await limpiarJefaturaHuerfana(userId);
+      }
       invalidarCachesDeArea();
-      return redirectAreasOk(res, "Colaborador asignado al área.");
+      return redirectAreasOk(
+        res,
+        userIds.length === 1
+          ? "Colaborador asignado al área."
+          : `${userIds.length} colaboradores asignados al área.`,
+      );
     } catch (err) {
       console.error("Error asignando colaborador:", err);
       return redirectAreasError(res, "No se pudo asignar el colaborador.");
@@ -1251,8 +1380,11 @@ router.post(
   },
 );
 
-// Sub-módulo de vacaciones montado bajo /RRHH/vacaciones
+// Sub-módulos montados bajo /RRHH
 const vacationsRouter = require("./vacations");
 router.use("/vacaciones", vacationsRouter);
+
+const costCentersRouter = require("./costCenters");
+router.use("/centros-costo", costCentersRouter);
 
 module.exports = router;

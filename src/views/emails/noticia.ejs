@@ -20,7 +20,7 @@
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td align="left" style="vertical-align:middle;">
-              <img src="<%= logoUrl %>" alt="Transworld" width="160"
+              <img src="<%= logoUrl %>" alt="Transworld" width="160" height="46"
                    style="width:160px; max-width:160px; height:auto; display:block; border:0;">
             </td>
             <td align="right" style="vertical-align:middle;">
@@ -33,11 +33,11 @@
     <!-- Filete corporativo -->
     <tr><td style="background-color:#a6d84a; height:4px; line-height:4px; font-size:0;">&nbsp;</td></tr>
 
-    <!-- ============ Portada ============ -->
+    <!-- ============ Portada 600×180 (el recorte ya viene en el archivo) ============ -->
     <% if (coverUrl) { %>
       <tr>
-        <td style="padding:0;">
-          <a href="<%= noticiaUrl %>" target="_blank" style="display:block; text-decoration:none;">
+        <td style="padding:0; line-height:0; font-size:0;">
+          <a href="<%= noticiaUrl %>" target="_blank" style="display:block; text-decoration:none; line-height:0;">
             <img src="<%= coverUrl %>" alt="<%= noticia.title %>" width="600"
                  style="width:100%; max-width:600px; height:auto; display:block; border:0;">
           </a>

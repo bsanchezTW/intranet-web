@@ -95,8 +95,15 @@ describe("phone — aislamiento entre países", () => {
     assert.equal(validateMobilePhone("", { required: true }, PE).valid, false);
   });
 
-  it("PH-X-05: el mensaje de error usa el ejemplo del país", () => {
-    assert.match(validateMobilePhone("abc", {}, CL).error, /9 1234 5678/);
-    assert.match(validateMobilePhone("abc", {}, PE).error, /987 654 321/);
+  it("PH-X-05: el aviso es corto e igual en los dos países", () => {
+    // El formato esperado se enseña en el placeholder del campo; repetirlo en
+    // el error lo alarga y lo vuelve dependiente del país sin necesidad.
+    assert.equal(validateMobilePhone("abc", {}, CL).error, "Teléfono incorrecto");
+    assert.equal(validateMobilePhone("abc", {}, PE).error, "Teléfono incorrecto");
+  });
+
+  it("PH-X-06: faltar y estar mal escrito son avisos distintos", () => {
+    assert.equal(validateMobilePhone("", { required: true }, CL).error, "Teléfono requerido");
+    assert.equal(validateMobilePhone("123", { required: true }, CL).error, "Teléfono incorrecto");
   });
 });

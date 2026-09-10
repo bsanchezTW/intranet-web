@@ -1,0 +1,270 @@
+<%
+  const puedeEditar = typeof isAdministrador !== 'undefined' && isAdministrador;
+  const listado = centros || [];
+  const plantillaGente = people || [];
+  const activos = listado.filter(c => c.active);
+  const inactivos = listado.length - activos.length;
+  const totalAsignados = listado.reduce((n, c) => n + c.memberCount, 0);
+
+  // Cuántos nombres se asoman en el resumen antes de resumirse en «y N más».
+  const TOPE_RESUMEN = 3;
+
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+%>
+
+<link rel="stylesheet" href="/css/centros-costo.css?v=20260911a">
+
+<div class="contenedor">
+
+  <div class="page-header page-header--toolbar">
+    <div class="page-header__text">
+      <h2 class="page-title">Centros de costo</h2>
+      <p class="page-description">
+        <%= plural(listado.length, 'centro', 'centros') %>
+        (<%= plural(activos.length, 'activo', 'activos') %>) ·
+        <%= plural(totalAsignados, 'asignación', 'asignaciones') %>
+        <% if (sinCentro > 0) { %>
+          · <%= sinCentro %> sin centro
+        <% } %>
+      </p>
+    </div>
+    <div class="page-header-actions">
+      <a href="/RRHH" class="link-volver">← Volver al menú</a>
+      <% if (puedeEditar) { %>
+      <button type="button" class="page-header-btn" data-abrir-crear-centro>
+        <span aria-hidden="true"><%- include('../partials/icon', { name: 'plus' }) %></span> Agregar centro
+      </button>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (success) { %>
+    <div class="flash-msg flash-msg--ok" role="status">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
+      <span><%= success %></span>
+    </div>
+  <% } %>
+  <% if (error) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= error %></span>
+    </div>
+  <% } %>
+
+  <%# Confundir centro de costo con área de trabajo es el error más probable
+      aquí, así que se aclara arriba y en términos de lo que ve el usuario al
+      rendir un gasto, no de cómo están modelados. %>
+  <div class="procesos-aviso" style="margin-bottom: 22px;">
+    <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
+    <span>
+      Un centro de costo es la cuenta a la que se carga el dinero de un gasto. Al rendir, cada
+      colaborador elige entre los centros que tenga asignados aquí (puede tener hasta
+      <%= maxPorUsuario %>). No es lo mismo que el área de trabajo: el <strong>área</strong> define
+      quién aprueba la rendición; el <strong>centro de costo</strong>, de qué presupuesto sale la plata.
+    </span>
+  </div>
+
+  <% if (!listado.length) { %>
+    <div class="ac-vacio">
+      <span class="ac-vacio__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'wallet' }) %></span>
+      <h3>Todavía no hay centros de costo</h3>
+      <p><% if (puedeEditar) { %>Crea el primero con el botón de arriba.<% } else { %>Pídele a un administrador que cree el primero.<% } %></p>
+    </div>
+  <% } else { %>
+
+    <div class="ac-toolbar">
+      <div class="ac-search">
+        <span class="ac-search__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
+        <label class="sr-only" for="buscadorCentros">Buscar centro o colaborador</label>
+        <input type="search" id="buscadorCentros" class="ac-search__input"
+               placeholder="Buscar por código, nombre o colaborador…" autocomplete="off">
+      </div>
+
+      <div class="ac-filtros" role="group" aria-label="Filtrar centros de costo">
+        <button type="button" class="ac-chip is-active" data-filtro="todos">Todos</button>
+        <button type="button" class="ac-chip" data-filtro="activos">
+          Activos<% if (activos.length) { %> <span class="ac-chip__n"><%= activos.length %></span><% } %>
+        </button>
+        <button type="button" class="ac-chip" data-filtro="inactivos">
+          Inactivos<% if (inactivos) { %> <span class="ac-chip__n"><%= inactivos %></span><% } %>
+        </button>
+      </div>
+    </div>
+
+    <p class="ac-sin-resultados" id="centrosSinResultados" hidden>
+      Ningún centro de costo coincide con la búsqueda.
+    </p>
+
+    <div class="centros-grid">
+      <% listado.forEach(centro => { %>
+        <%
+          const visibles = centro.members.slice(0, TOPE_RESUMEN);
+          const restantes = centro.memberCount - visibles.length;
+          const buscable = [centro.code, centro.name]
+            .concat(centro.members.map(m => m.name))
+            .join(' ')
+            .toLowerCase();
+        %>
+        <article class="centro-card<%= centro.active ? '' : ' centro-card--inactivo' %>"
+                 data-buscar="<%= buscable %>"
+                 data-activo="<%= centro.active ? 'true' : 'false' %>">
+
+          <div class="centro-card__head">
+            <span class="centro-card__tile" aria-hidden="true">
+              <%- include('../partials/icon', { name: 'wallet' }) %>
+            </span>
+
+            <div class="centro-card__title">
+              <h3 class="centro-card__codigo"><%= centro.code %></h3>
+              <p class="centro-card__nombre" title="<%= centro.name %>"><%= centro.name %></p>
+            </div>
+
+            <% if (puedeEditar) { %>
+            <div class="centro-card__actions">
+              <% if (centro.active) { %>
+              <button type="button" class="area-icon-btn" data-agregar-miembros="<%= centro.id %>"
+                      title="Agregar colaboradores" aria-label="Agregar colaboradores a <%= centro.code %>">
+                <%- include('../partials/icon', { name: 'user-plus' }) %>
+              </button>
+              <% } %>
+
+              <button type="button" class="area-icon-btn" data-editar-centro
+                      data-id="<%= centro.id %>"
+                      data-code="<%= centro.code %>"
+                      data-name="<%= centro.name %>"
+                      data-active="<%= centro.active ? 'true' : 'false' %>"
+                      title="Editar centro" aria-label="Editar <%= centro.code %>">
+                <%- include('../partials/icon', { name: 'edit' }) %>
+              </button>
+
+              <form action="/RRHH/centros-costo/<%= centro.id %>/estado" method="POST" class="area-inline-form">
+                <input type="hidden" name="active" value="<%= centro.active ? 'false' : 'true' %>">
+                <button type="submit" class="area-icon-btn"
+                        data-confirmar="<%= centro.active
+                          ? '¿Desactivar «' + centro.code + '»? Dejará de ofrecerse al rendir, pero el historial se conserva.'
+                          : '¿Reactivar «' + centro.code + '»?' %>"
+                        title="<%= centro.active ? 'Desactivar' : 'Reactivar' %>"
+                        aria-label="<%= centro.active ? 'Desactivar' : 'Reactivar' %> <%= centro.code %>">
+                  <%- include('../partials/icon', { name: centro.active ? 'x-circle' : 'check-circle' }) %>
+                </button>
+              </form>
+
+              <%# Eliminar sólo tiene sentido si nunca se usó; el servicio
+                  rechaza el borrado si tiene solicitudes asociadas. %>
+              <form action="/RRHH/centros-costo/<%= centro.id %>/eliminar" method="POST" class="area-inline-form">
+                <button type="submit" class="area-icon-btn area-icon-btn--danger"
+                        <%= centro.memberCount > 0 ? 'disabled' : '' %>
+                        data-confirmar="¿Eliminar «<%= centro.code %>» definitivamente? Sólo se puede si nunca se usó."
+                        title="<%= centro.memberCount > 0 ? 'Quita a los colaboradores antes de eliminar' : 'Eliminar centro' %>"
+                        aria-label="Eliminar <%= centro.code %>">
+                  <%- include('../partials/icon', { name: 'trash' }) %>
+                </button>
+              </form>
+            </div>
+            <% } %>
+          </div>
+
+          <div class="centro-card__estado">
+            <% if (centro.active) { %>
+              <span class="centro-badge centro-badge--on">Activo</span>
+            <% } else { %>
+              <span class="centro-badge centro-badge--off">Inactivo</span>
+            <% } %>
+            <span class="area-card__count">
+              <%= plural(centro.memberCount, 'colaborador', 'colaboradores') %>
+            </span>
+          </div>
+
+          <%# Igual que en Áreas: la tarjeta muestra un resumen de altura fija y
+              la lista completa se abre en un modal. %>
+          <button type="button" class="area-resumen" data-ver-miembros="<%= centro.id %>">
+            <span class="centro-resumen__nombres">
+              <% if (!centro.memberCount) { %>
+                Sin colaboradores asignados
+              <% } else { %>
+                <%= visibles.map(m => m.name).join(', ') %><% if (restantes > 0) { %>, y <%= restantes %> más<% } %>
+              <% } %>
+            </span>
+            <span class="area-resumen__chev" aria-hidden="true">
+              <%- include('../partials/icon', { name: 'chevron-right' }) %>
+            </span>
+          </button>
+        </article>
+      <% }) %>
+    </div>
+  <% } %>
+</div>
+
+<%- include('partials/ac_modales') %>
+
+<% if (puedeEditar) { %>
+<div id="modalCentro" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalCentroTitle" aria-hidden="true">
+  <div class="modal-content">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <h2 id="modalCentroTitle" class="modal-title">Agregar centro de costo</h2>
+
+    <form id="formCentro" method="POST" action="/RRHH/centros-costo">
+      <div class="campo-form">
+        <label for="centro_code">Código <span class="required-mark">*</span></label>
+        <input type="text" id="centro_code" name="code" required maxlength="30" placeholder="Ej: CC-100">
+        <span class="campo-form__ayuda">Es lo que cita contabilidad. Se guarda en mayúsculas y no puede repetirse.</span>
+      </div>
+
+      <div class="campo-form">
+        <label for="centro_name">Nombre <span class="required-mark">*</span></label>
+        <input type="text" id="centro_name" name="name" required maxlength="150" placeholder="Ej: Operaciones Santiago">
+      </div>
+
+      <div class="campo-form" id="campoActivo" hidden>
+        <label class="centro-check">
+          <input type="checkbox" id="centro_active" name="active" checked>
+          <span>Activo — se ofrece al rendir gastos</span>
+        </label>
+      </div>
+
+      <div class="modal-form-actions">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario" id="modalCentroSubmit">Crear centro</button>
+      </div>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<script type="application/json" id="ac-config"><%- JSON.stringify({
+  puedeEditar,
+  base: '/RRHH/centros-costo',
+  permiteMover: false,
+  avatares: false,
+  detalleEnMiembros: true,
+  textos: {
+    miembrosVacio: 'Este centro de costo todavía no tiene colaboradores.',
+    candidatosVacio: 'Todos los colaboradores ya están en este centro de costo.',
+    agregarSub: 'Marca a quienes puedan cargar sus gastos a «{grupo}».',
+    agregarBoton: 'Agregar colaboradores',
+    quitarConfirmar: '¿Quitar a {nombre} de «{grupo}»? Dejará de poder cargarle gastos; lo ya rendido no cambia.',
+    quitar: 'Quitar del centro de costo',
+  },
+  personas: plantillaGente.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    detalle: p.areaName || 'Sin área',
+    bloqueado: !!p.alTope,
+    motivo: `Ya tiene ${maxPorUsuario} centros de costo`,
+  })),
+  grupos: listado.map((c) => ({
+    id: c.id,
+    titulo: `${c.code} · ${c.name}`,
+    subtitulo: c.active
+      ? 'Estos colaboradores pueden cargarle gastos.'
+      : 'Centro inactivo: ya no se ofrece al rendir, pero conserva su historial.',
+    miembros: c.members.map((m) => m.id),
+    destacado: null,
+    // A un centro apagado no se le suma gente: primero hay que reactivarlo.
+    puedeAgregar: c.active,
+  })),
+}).replace(/</g, '\\u003c') %></script>
+
+<script type="application/json" id="centros-config"><%- JSON.stringify({
+  puedeEditar,
+}).replace(/</g, '\\u003c') %></script>

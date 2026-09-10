@@ -10,6 +10,11 @@
    * que termine hay que cancelar el temporizador y el listener pendientes: si
    * no, el cierre viejo se ejecuta sobre el modal recién abierto y lo apaga en
    * el acto. Ese era el bug de "abre y se cierra al tiro" al reabrir rápido.
+   *
+   * Todo cierre tiene dos disparadores —el transitionend del panel y un
+   * temporizador de respaldo— y basta con que gane cualquiera de los dos. El
+   * que gane tiene que desarmar al otro: si no, el perdedor queda huérfano,
+   * fuera de este mapa, y nadie puede cancelarlo cuando el modal se reabre.
    */
   const cierresPendientes = new WeakMap();
 
@@ -125,7 +130,14 @@
     overlay.classList.add('is-closing');
 
     const finish = () => {
-      cierresPendientes.delete(overlay);
+      // Desarma al otro disparador antes de nada: el que llega segundo ya no
+      // tiene nada que cerrar, y un temporizador que sobreviva a este cierre
+      // apagaría el modal que el usuario abra después.
+      cancelarCierrePendiente(overlay);
+
+      // Y si ya volvió a abrirse, este cierre perdió vigencia.
+      if (overlay.classList.contains('is-open')) return;
+
       overlay.style.display = 'none';
       overlay.classList.remove('is-closing');
       overlay.setAttribute('aria-hidden', 'true');
@@ -134,21 +146,24 @@
     };
 
     const panel = getPanel(overlay);
+    // Sólo interesa el fin de la animación del panel: los controles de dentro
+    // también animan (bordes, sombras) y sus transitionend burbujean hasta aquí.
     const onEnd = (e) => {
       if (panel && e.target !== panel) return;
-      panel.removeEventListener('transitionend', onEnd);
       finish();
     };
 
-    if (panel) {
-      panel.addEventListener('transitionend', onEnd);
-    }
-
+    // La entrada se registra antes de escuchar, para que un transitionend
+    // inmediato encuentre qué cancelar.
     cierresPendientes.set(overlay, {
       timer: setTimeout(finish, ANIM_MS + 40),
       panel,
       onEnd,
     });
+
+    if (panel) {
+      panel.addEventListener('transitionend', onEnd);
+    }
   }
 
   function bindOverlayDismiss() {

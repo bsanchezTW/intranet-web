@@ -2,6 +2,11 @@ const express = require("express");
 const router = express.Router();
 const QRCode = require("qrcode");
 const db = require("../db");
+const {
+  validateNationalId,
+  formatNationalId,
+  nationalIdClientConfig,
+} = require("../utils/nationalId");
 const logger = require("../utils/logger");
 const multer = require("multer");
 const fileStorage = require("../services/fileStorage");
@@ -540,8 +545,15 @@ router.get("/perfil", async (req, res) => {
   );
   if (rows.length === 0) return res.redirect("/");
   const raw = rows[0];
+  // El documento se puede completar una vez; corregirlo después es cosa de
+  // RR.HH., porque es el dato con el que se emiten los reembolsos.
+  const documentoBloqueado = Boolean(raw.national_id);
+
   res.render("perfil", {
     titulo: "Mi Perfil",
+    documentoConfig: nationalIdClientConfig(),
+    documentoBloqueado,
+    success: req.query.ok || null,
     error: req.query.error || null,
     passwordError: req.query.password_error || null,
     openPasswordModal: req.query.openPasswordModal === "1",
@@ -554,6 +566,7 @@ router.get("/perfil", async (req, res) => {
         : "",
       phone: formatPhoneForDisplay(raw.phone) || raw.phone,
       telefonoHref: toTelHref(raw.phone),
+      documento: formatNationalId(raw.national_id),
     },
   });
 });
@@ -582,19 +595,28 @@ router.post("/perfil", async (req, res) => {
     );
   }
 
+  const documentoCheck = validateNationalId(req.body.national_id);
+  if (!documentoCheck.valid) {
+    return res.redirect(`/perfil?error=${encodeURIComponent(documentoCheck.error)}`);
+  }
+
   try {
+    // COALESCE y no una asignación directa: si el colaborador ya tiene
+    // documento, este formulario no lo puede cambiar. Un POST a mano tampoco.
     await db.query(
       `UPDATE users
        SET first_name = $1,
            last_name = $2,
            birth_date = $3,
-           phone = $4
-       WHERE id = $5`,
+           phone = $4,
+           national_id = COALESCE(national_id, $5)
+       WHERE id = $6`,
       [
         firstName,
         lastName,
         fechaNacimiento,
         telefonoCheck.storageValue,
+        documentoCheck.storageValue,
         userId,
       ],
     );
@@ -606,6 +628,11 @@ router.post("/perfil", async (req, res) => {
 
     res.redirect("/perfil?ok=Perfil+actualizado");
   } catch (err) {
+    if (err && err.code === "23505" && String(err.constraint || "").includes("national_id")) {
+      return res.redirect(
+        `/perfil?error=${encodeURIComponent("Ese documento ya está registrado en otra ficha. Avísale a RRHH.")}`,
+      );
+    }
     console.error("Error actualizando perfil:", err);
     res.redirect(
       `/perfil?error=${encodeURIComponent("No se pudo actualizar el perfil. Intenta nuevamente.")}`,

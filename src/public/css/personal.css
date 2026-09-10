@@ -10,24 +10,6 @@
   margin-bottom: 25px;
 }
 
-.link-volver {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: none;
-  color: var(--color-text-muted);
-  padding: 6px 0;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.875rem;
-  transition: color 0.15s;
-}
-
-.link-volver:hover {
-  color: var(--brand);
-}
-
 .btn-agregar-persona {
   border: none;
   cursor: pointer;
@@ -395,10 +377,6 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   max-width: 620px;
 }
 
-.modal-crear-desc {
-  margin: 0 0 18px;
-}
-
 .modal-crear-error {
   display: none;
   margin-bottom: 16px;
@@ -413,34 +391,12 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
 
 .modal-crear-error.show { display: block; }
 
-/* Campo bloqueado (rol antes de verificar el correo) */
-.input-solo-lectura {
-  background: var(--surface2) !important;
-  color: var(--subtle) !important;
-  cursor: not-allowed;
-}
+.modal-crear-colaborador .required-mark { margin-left: 2px; }
 
-.modal-crear-colaborador .campo { margin-bottom: 16px; }
-.modal-crear-colaborador .campo .phone-field__local { width: auto; }
-.modal-crear-colaborador .campo .hint {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 4px;
-  display: block;
-}
-.modal-crear-colaborador .campo .field-error {
-  font-size: 0.8rem;
-  color: var(--down);
-  margin-top: 4px;
-  display: none;
-}
-.modal-crear-colaborador .campo .field-error.show { display: block; }
-.modal-crear-colaborador .required-mark { color: var(--down); margin-left: 2px; }
-
-.modal-form-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 16px;
+/* Debajo del título va directo la primera sección, sin descripción de por
+   medio: los 6px que trae .modal-title lo dejan pegado. */
+.modal-crear-colaborador .modal-title {
+  margin-bottom: 28px;
 }
 
 /* ── Modal Editar colaborador ── */
@@ -463,27 +419,62 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
 }
 
 .modal-editar-aside {
+  box-sizing: border-box;
   flex: 0 0 240px;
-  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 28px 20px;
   border-right: 1px solid var(--color-border);
   background: linear-gradient(160deg, var(--brand-soft), transparent);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
+/* Quién se está editando, para no perderlo de vista al bajar por el formulario. */
+.modal-editar-identidad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  min-width: 0;
+  width: 100%;
+}
+
+.modal-editar-nombre {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-heading);
+  line-height: 1.3;
+}
+
+.modal-editar-correo {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
 .modal-editar-main {
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
+  scrollbar-gutter: stable both-edges;
   padding: 24px 28px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   max-height: none;
 }
 
-.modal-editar-title {
-  color: var(--brand-deep);
+.modal-editar-colaborador .modal-editar-title {
+  color: var(--color-heading);
   font-size: 1.25rem;
-  margin: 0 0 6px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 28px;
 }
 
 .modal-loading {
@@ -493,84 +484,12 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   font-size: 0.95rem;
 }
 
-.modal-editar-colaborador .form-grid-2 {
-  align-items: start;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+/* El teléfono es prefijo + input: se estiran juntos dentro del campo. */
+.modal-editar-colaborador .campo-form .phone-field__prefix,
+.modal-crear-colaborador .campo-form .phone-field__prefix {
+  border-right: none;
 }
 
-.modal-editar-colaborador .campo { margin-bottom: 16px; }
-.modal-editar-colaborador .campo label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--color-text);
-}
-.modal-editar-colaborador .campo input,
-.modal-editar-colaborador .campo select {
-  width: 100%;
-  height: 42px;
-  padding: 0 12px;
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  font-size: 0.95rem;
-  line-height: normal;
-  color: var(--color-input-text);
-  background: var(--color-input-bg);
-  box-sizing: border-box;
-}
-.modal-editar-colaborador .campo input[type="hidden"] {
-  display: none;
-  width: auto;
-  height: auto;
-  padding: 0;
-  border: 0;
-}
-.modal-editar-colaborador .campo .phone-field {
-  width: 100%;
-  min-width: 0;
-  height: 42px;
-}
-.modal-editar-colaborador .campo .phone-field__local {
-  width: auto;
-  height: 100%;
-}
-.modal-editar-colaborador .campo .phone-field__prefix {
-  height: 100%;
-  border-color: var(--border2);
-  background: var(--surface2);
-  color: var(--color-text);
-  border-radius: 8px 0 0 8px;
-}
-.modal-editar-colaborador .campo input:focus,
-.modal-editar-colaborador .campo select:focus {
-  outline: none;
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brand-soft);
-}
-.modal-editar-colaborador .campo .phone-field__local:focus {
-  box-shadow: none;
-}
-.modal-editar-colaborador .campo .phone-field:focus-within {
-  border-radius: 8px;
-  box-shadow: 0 0 0 3px var(--brand-soft);
-}
-.modal-editar-colaborador .campo .phone-field:focus-within .phone-field__prefix {
-  border-color: var(--brand);
-}
-.modal-editar-colaborador .campo .hint {
-  font-size: 0.8rem;
-  color: var(--muted);
-  margin-top: 4px;
-  display: block;
-}
-.modal-editar-colaborador .campo .field-error {
-  font-size: 0.8rem;
-  color: var(--down);
-  margin-top: 4px;
-  display: none;
-}
-.modal-editar-colaborador .campo .field-error.show { display: block; }
 .modal-editar-colaborador .btn-photo-remove {
   border: none;
   background: transparent;
@@ -581,13 +500,17 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   padding: 4px 8px;
 }
 .modal-editar-colaborador .zona-peligro {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 28px;
+  padding-top: 22px;
   border-top: 1px solid rgba(208, 92, 92, 0.3);
 }
-.modal-editar-colaborador .zona-peligro h3 {
-  margin: 0 0 6px;
+.modal-editar-colaborador .zona-peligro__title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 8px;
   font-size: 0.95rem;
+  font-weight: 800;
   color: var(--down);
 }
 .modal-editar-colaborador .zona-peligro p {
@@ -658,7 +581,6 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
 
   .btn-agregar-persona { flex: 1; justify-content: center; }
 
-  .modal-form-grid-2 { grid-template-columns: 1fr; }
   .modal-editar-layout {
     flex-direction: column;
     max-height: none;
@@ -679,4 +601,103 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   .modal-editar-panel {
     max-height: none;
   }
+}
+
+
+/* ── Selector de centros de costo (ficha de un colaborador) ───────────────────
+   Casillas y no un <select multiple>: los códigos hay que compararlos de un
+   vistazo, y el tope por persona se ve mejor con las opciones a la vista. */
+
+/* Un grupo de casillas no tiene un control único al que apuntar con <label>,
+   así que su título es un <span> que copia el aspecto de .campo-form > label,
+   incluida la variante de dentro de un modal. */
+.campo-form__label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.modal-overlay .campo-form__label {
+  color: var(--modal-label, var(--color-text-muted));
+}
+
+.centros-picker {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.centros-picker__item {
+  min-width: 0;
+}
+
+.centros-picker__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--modal-border, var(--color-border-strong));
+  border-radius: 10px;
+  background: var(--modal-input-bg, var(--color-input-bg));
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.centros-picker__label:hover {
+  border-color: var(--brand);
+}
+
+/* El marcado se nota en el borde y no sólo en la casilla: con seis centros en
+   grilla, buscar la marquita uno por uno es lento. */
+.centros-picker__label:has(.centros-picker__check:checked) {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.centros-picker__item.is-bloqueada .centros-picker__label {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.centros-picker__check {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: inherit;
+}
+
+.centros-picker__texto {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.centros-picker__codigo {
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.centros-picker__nombre {
+  font-size: 0.76rem;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.centros-picker__tope {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
 }

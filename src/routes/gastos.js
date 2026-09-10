@@ -16,7 +16,9 @@ const {
   expenseStageLabel,
   isExpenseKind,
 } = require("../constants/expenseStatuses");
-const { formatMoney } = require("../config/country");
+const { formatMoney, getDocumentConfig } = require("../config/country");
+const { formatNationalId } = require("../utils/nationalId");
+const costCenters = require("../services/costCenters/costCenterService");
 const expenses = require("../services/expenses/expenseRequestService");
 const areaManager = require("../services/expenses/areaManager");
 const financeTeam = require("../services/expenses/financeTeam");
@@ -41,6 +43,7 @@ const upload = multer({
  */
 const VIEW_HELPERS = {
   formatMoney,
+  formatNationalId,
   expenseStatusLabel,
   expenseStatusBadge,
   expenseKindLabel,
@@ -80,7 +83,7 @@ async function logChange(userId, action, requestId) {
 /** Datos del solicitante para los correos (la sesión no trae first/last name). */
 async function fetchRequester(userId) {
   const { rows } = await db.query(
-    "SELECT id, first_name, last_name, email FROM users WHERE id = $1",
+    "SELECT id, first_name, last_name, email, national_id FROM users WHERE id = $1",
     [userId],
   );
   return rows[0] || null;
@@ -93,16 +96,16 @@ async function fetchRequester(userId) {
 router.get("/", async (req, res) => {
   try {
     const user = req.session.user;
-    const [solicitudes, context, esRevisor] = await Promise.all([
+    const [solicitudes, requisitos, esRevisor] = await Promise.all([
       expenses.listForUser(user.id),
-      areaManager.getUserAreaContext(user.id),
+      requisitosParaRendir(user),
       puedeRevisar(user),
     ]);
 
     res.render("gastos/index", {
       titulo: "Mis solicitudes de gastos",
       solicitudes,
-      areaContext: context,
+      requisitos,
       esRevisor,
       ...flashFrom(req),
       user,
@@ -115,6 +118,65 @@ router.get("/", async (req, res) => {
     res.status(500).send("Error cargando tus solicitudes");
   }
 });
+
+/**
+ * Qué le falta a este colaborador para poder rendir.
+ *
+ * Los cuatro requisitos se resuelven juntos porque la portada, el índice y el
+ * formulario necesitan exactamente la misma respuesta, y responderla en tres
+ * sitios distintos es como se desincronizan los avisos.
+ *
+ * @returns {{ ok: boolean, motivo: string|null, area, manager, centros }}
+ */
+async function requisitosParaRendir(user) {
+  const [context, centros, ficha] = await Promise.all([
+    areaManager.getUserAreaContext(user.id),
+    costCenters.listUserCostCenters(user.id),
+    fetchRequester(user.id),
+  ]);
+
+  const documento = ficha && ficha.national_id ? ficha.national_id : null;
+  const base = {
+    area: context.area,
+    manager: context.manager,
+    centros,
+    documento,
+    documentoLabel: getDocumentConfig().label,
+  };
+
+  if (!context.area) {
+    return {
+      ...base,
+      ok: false,
+      motivo: "No tienes un área asignada. Pídele a RRHH que te asigne una.",
+    };
+  }
+  if (!context.manager) {
+    return {
+      ...base,
+      ok: false,
+      motivo: `El área ${context.area.area_name} aún no tiene un jefe asignado, y su aprobación es un requisito. Pídele a RRHH que designe uno.`,
+    };
+  }
+  if (!documento) {
+    return {
+      ...base,
+      ok: false,
+      motivo: `Necesitas registrar tu ${base.documentoLabel} antes de rendir gastos. Complétalo en tu perfil.`,
+      arreglarEn: "/perfil",
+    };
+  }
+  if (!centros.length) {
+    return {
+      ...base,
+      ok: false,
+      motivo:
+        "No tienes centros de costo asignados, y todo gasto debe imputarse a uno. Pídele a RRHH que te asigne al menos uno.",
+    };
+  }
+
+  return { ...base, ok: true, motivo: null };
+}
 
 async function puedeRevisar(user) {
   if (isAdministrador(normalizeRole(user.role))) return true;
@@ -131,27 +193,15 @@ router.get("/nueva/:kind", async (req, res) => {
   if (!isExpenseKind(kind)) return res.redirect("/gastos");
 
   try {
-    const context = await areaManager.getUserAreaContext(req.session.user.id);
-
-    if (!context.area) {
-      return redirectError(
-        res,
-        "/gastos",
-        "No tienes un área asignada. Pídele a RRHH que te asigne una.",
-      );
-    }
-    if (!context.manager) {
-      return redirectError(
-        res,
-        "/gastos",
-        "Tu área aún no tiene un jefe asignado. Pídele a RRHH que designe uno.",
-      );
+    const requisitos = await requisitosParaRendir(req.session.user);
+    if (!requisitos.ok) {
+      return redirectError(res, "/gastos", requisitos.motivo);
     }
 
     res.render("gastos/formulario", {
       titulo: EXPENSE_KIND_LABELS[kind],
       kind,
-      areaContext: context,
+      requisitos,
       maxAdjuntoMb: UPLOAD_LIMITS_MB.PROCESS_DOCUMENT,
       ...flashFrom(req),
       user: req.session.user,
@@ -202,7 +252,13 @@ router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { kind, title, description, needed_by: neededBy } = req.body;
+  const {
+    kind,
+    title,
+    description,
+    needed_by: neededBy,
+    cost_center_id: costCenterId,
+  } = req.body;
 
   try {
     const result = await expenses.createRequest({
@@ -211,6 +267,7 @@ router.post("/", async (req, res) => {
       title,
       description,
       neededBy,
+      costCenterId,
       items: req.body.items,
       attachments: req.body.attachments,
     });

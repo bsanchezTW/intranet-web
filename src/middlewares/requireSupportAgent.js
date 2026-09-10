@@ -1,3 +1,4 @@
+const { rememberReturnTo } = require("../utils/returnTo");
 const { isSupportAgent } = require("../services/tickets/supportTeam");
 
 /**
@@ -16,7 +17,7 @@ function wantsJsonResponse(req) {
 function requireSupportAgent() {
   return async (req, res, next) => {
     if (!req.session || !req.session.user) {
-      req.session.returnTo = req.originalUrl;
+      rememberReturnTo(req);
       if (wantsJsonResponse(req)) {
         return res
           .status(401)

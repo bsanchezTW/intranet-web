@@ -190,40 +190,25 @@
     });
   }
 
+  /**
+   * Eliminar el área es lo único que se confirma desde la tarjeta: quitar o
+   * agregar colaboradores ocurre dentro de los modales de ac-cards.js, que
+   * trae sus propias confirmaciones.
+   */
   function initConfirmaciones() {
     document.addEventListener('submit', function (evento) {
       var form = evento.target;
       if (!form || form.tagName !== 'FORM') return;
+      if (!form.hasAttribute('data-eliminar-area')) return;
 
-      if (form.hasAttribute('data-eliminar-area')) {
-        var miembros = Number(form.dataset.miembros || 0);
-        if (miembros > 0) {
-          evento.preventDefault();
-          return;
-        }
-        if (!window.confirm('¿Eliminar el área «' + (form.dataset.eliminarArea || '') + '»?')) {
-          evento.preventDefault();
-        }
+      // Un área con gente dentro no se borra: el botón ya viene deshabilitado,
+      // esto sólo cubre el envío por teclado.
+      if (Number(form.dataset.miembros || 0) > 0) {
+        evento.preventDefault();
         return;
       }
-
-      if (form.hasAttribute('data-quitar-miembro')) {
-        if (!window.confirm('¿Quitar a ' + (form.dataset.quitarMiembro || 'este colaborador') + ' de esta área?')) {
-          evento.preventDefault();
-        }
-        return;
-      }
-
-      if (form.hasAttribute('data-agregar-miembro')) {
-        var select = form.querySelector('select[name="user_id"]');
-        var option = select && select.selectedOptions && select.selectedOptions[0];
-        if (!option || !option.value) return;
-        var areaActual = option.getAttribute('data-area-actual') || '';
-        if (!areaActual) return;
-        var nombre = option.getAttribute('data-nombre') || 'Este colaborador';
-        if (!window.confirm(nombre + ' está en «' + areaActual + '». ¿Moverlo a esta área?')) {
-          evento.preventDefault();
-        }
+      if (!window.confirm('¿Eliminar el área «' + (form.dataset.eliminarArea || '') + '»?')) {
+        evento.preventDefault();
       }
     });
   }

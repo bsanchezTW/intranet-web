@@ -1,8 +1,8 @@
 <%
   const lista = (typeof solicitudes !== 'undefined' && Array.isArray(solicitudes)) ? solicitudes : [];
-  const ctx = (typeof areaContext !== 'undefined' && areaContext) ? areaContext : { area: null, manager: null };
+  const req = (typeof requisitos !== 'undefined' && requisitos) ? requisitos : { ok: false, motivo: null, area: null, manager: null, centros: [] };
   const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
-  const puedeSolicitar = !!(ctx.area && ctx.manager);
+  const puedeSolicitar = req.ok;
 
   const abiertas = lista.filter((s) => s.status === 'pending' || s.status === 'approved_manager').length;
   const fechaOpts = { year: 'numeric', month: '2-digit', day: '2-digit' };
@@ -16,7 +16,10 @@
       <p class="page-description">
         <%= lista.length %> <%= lista.length === 1 ? 'solicitud' : 'solicitudes' %> ·
         <%= abiertas %> en curso
-        <% if (ctx.area) { %> · Área <%= ctx.area.area_name %><% } %>
+        <% if (req.area) { %> · Área <%= req.area.area_name %><% } %>
+        <% if (req.centros && req.centros.length) { %>
+          · <%= req.centros.map(c => c.code).join(' / ') %>
+        <% } %>
       </p>
     </div>
 
@@ -50,9 +53,9 @@
         </h3>
         <p class="seccion__desc">
           <% if (puedeSolicitar) { %>
-            Aprueba primero <strong><%= ctx.manager.name %></strong>, y después Finanzas.
+            Aprueba primero <strong><%= req.manager.name %></strong>, y después Finanzas.
           <% } else { %>
-            No disponible: tu área necesita un jefe asignado.
+            Todavía falta un requisito para poder rendir.
           <% } %>
         </p>
       </div>
@@ -79,10 +82,9 @@
       <div class="procesos-aviso">
         <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
         <span>
-          <% if (!ctx.area) { %>
-            Todavía no tienes un área asignada. Pídele a RRHH que te asigne una.
-          <% } else { %>
-            El área <strong><%= ctx.area.area_name %></strong> aún no tiene un jefe asignado, y su aprobación es un requisito. Pídele a RRHH que designe uno.
+          <%= req.motivo %>
+          <% if (req.arreglarEn) { %>
+            <a href="<%= req.arreglarEn %>">Ir a mi perfil →</a>
           <% } %>
         </span>
       </div>

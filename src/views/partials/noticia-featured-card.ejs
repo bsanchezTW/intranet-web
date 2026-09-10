@@ -1,0 +1,58 @@
+<%
+  const cardImage = typeof image !== 'undefined' && image ? image : null;
+  const cardSubtitle = typeof subtitle !== 'undefined' ? subtitle : '';
+  const cardDatetime = typeof datetime !== 'undefined' ? datetime : '';
+  const cardDateLabel = typeof dateLabel !== 'undefined' ? dateLabel : '';
+  const cardChipsText = typeof chipsText !== 'undefined' ? chipsText : '';
+  const cardShowBadge = typeof showBadge === 'undefined' || Boolean(showBadge);
+  const cardInteractive = typeof interactive === 'undefined' || interactive !== false;
+  const cardShowCta = cardInteractive && (typeof showCta === 'undefined' || showCta);
+  const cardCta = typeof cta !== 'undefined' && cta ? cta : 'Leer comunicado →';
+  const cardExtraClass = typeof extraClass !== 'undefined' && extraClass ? extraClass : '';
+  const cardFilterable = Boolean(typeof filterable !== 'undefined' && filterable);
+  const cardDataSearch = typeof dataSearch !== 'undefined' ? dataSearch : '';
+  const cardDataTipos = typeof dataTipos !== 'undefined' ? dataTipos : '';
+  const cardTag = cardInteractive ? 'a' : 'header';
+  const headingTag = Number(typeof headingLevel !== 'undefined' ? headingLevel : 2) === 1 ? 'h1' : 'h2';
+%>
+<<%= cardTag %>
+   <% if (cardInteractive) { %>href="<%= href %>"<% } %>
+   class="home-featured<%= cardExtraClass ? ' ' + cardExtraClass : '' %>"
+   <% if (cardFilterable) { %>
+   data-noticia
+   data-search="<%= cardDataSearch %>"
+   data-tipos="<%= cardDataTipos %>"
+   <% } %>>
+  <% if (cardImage) { %>
+    <span class="home-featured__photo" aria-hidden="true">
+      <img src="<%= cardImage %>"
+           alt=""
+           loading="<%= typeof imageLoading !== 'undefined' ? imageLoading : 'eager' %>"
+           decoding="async"
+           onerror="this.closest('.home-featured__photo').remove()">
+    </span>
+  <% } else { %>
+    <span class="home-featured__glow home-featured__glow--1" aria-hidden="true"></span>
+    <span class="home-featured__glow home-featured__glow--2" aria-hidden="true"></span>
+  <% } %>
+  <div class="home-featured__content">
+    <div class="home-featured__head">
+      <% if (cardShowBadge) { %>
+        <span class="home-featured__badge">Destacada</span>
+      <% } %>
+      <% if (cardDateLabel) { %>
+        <time class="home-featured__date"<% if (cardDatetime) { %> datetime="<%= cardDatetime %>"<% } %>><%= cardDateLabel %></time>
+      <% } %>
+    </div>
+    <<%= headingTag %> class="home-featured__title"><%= title %></<%= headingTag %>>
+    <% if (cardSubtitle) { %>
+      <p class="home-featured__sub"><%= cardSubtitle %></p>
+    <% } %>
+    <% if (cardChipsText) { %>
+      <p class="home-featured__chips"><%= cardChipsText %></p>
+    <% } %>
+    <% if (cardShowCta) { %>
+      <span class="home-featured__cta"><%= cardCta %></span>
+    <% } %>
+  </div>
+</<%= cardTag %>>

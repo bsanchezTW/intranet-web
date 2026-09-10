@@ -39,6 +39,15 @@ const COUNTRY_CONFIGS = {
     // Moneda de los montos del centro de gastos. El peso chileno no usa
     // decimales: mostrarlos convierte "45.000" en un monto que nadie escribe.
     currency: { code: "CLP", symbol: "$", decimals: 0 },
+    // Documento de identidad del colaborador. `kind` elige el validador en
+    // utils/nationalId.js; el resto es lo que ve el usuario en el formulario.
+    document: {
+      kind: "rut",
+      label: "RUT",
+      example: "12.345.678-5",
+      maxLength: 12,
+      help: "Con dígito verificador. Los puntos y el guion se agregan solos.",
+    },
     pageTitleSuffix: "Intranet Transworld Chile",
     sessionCookieName: "tw_sid_cl",
     devPort: 3000,
@@ -72,6 +81,13 @@ const COUNTRY_CONFIGS = {
     locale: "es-PE",
     corporateEmailDomain: "transworld.pe",
     currency: { code: "PEN", symbol: "S/", decimals: 2 },
+    document: {
+      kind: "dni",
+      label: "DNI",
+      example: "87654321",
+      maxLength: 8,
+      help: "Ocho dígitos, sin puntos ni guiones.",
+    },
     pageTitleSuffix: "Intranet Transworld Perú",
     sessionCookieName: "tw_sid_pe",
     devPort: 3001,
@@ -176,6 +192,11 @@ function getCurrency() {
   return getCountryConfig().currency;
 }
 
+/** Documento de identidad de la instancia: { kind, label, example, ... }. */
+function getDocumentConfig(countryCode = getCurrentCountry()) {
+  return getCountryConfig(countryCode).document;
+}
+
 /** Monto formateado con la moneda del país (Intl, sin dependencias). */
 function formatMoney(amount, countryCode = getCurrentCountry()) {
   const { code, decimals } = getCountryConfig(countryCode).currency;
@@ -203,5 +224,6 @@ module.exports = {
   getTimezone,
   getLocale,
   getCurrency,
+  getDocumentConfig,
   formatMoney,
 };

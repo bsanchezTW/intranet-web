@@ -22,6 +22,7 @@ const {
   getCountryConfig,
   isForeignCountryEmailDomain,
 } = require("../config/country");
+const { consumeReturnTo } = require("../utils/returnTo");
 const requireFeature = require("../middlewares/requireFeature");
 
 function getBaseUrl(req) {
@@ -284,7 +285,9 @@ const uploadProfilePhoto = multer({
 // LOGIN
 // ==========================================
 router.get("/login", (req, res) => {
-  if (req.session && req.session.user) return res.redirect("/");
+  if (req.session && req.session.user) {
+    return res.redirect(consumeReturnTo(req.session));
+  }
 
   const info =
     req.query.confirmed === "1"
@@ -342,7 +345,7 @@ router.post("/login", async (req, res) => {
       email: null,
       foto: null,
     };
-    return succeed("/");
+    return succeed(consumeReturnTo(req.session));
   }
 
   try {
@@ -451,8 +454,7 @@ router.post("/login", async (req, res) => {
       return succeed("/reset-password");
     }
 
-    const redirectUrl = req.session.returnTo || "/";
-    delete req.session.returnTo;
+    const redirectUrl = consumeReturnTo(req.session);
     return succeed(redirectUrl);
   } catch (err) {
     logger.error("auth", err);
@@ -948,7 +950,9 @@ router.get("/reset-password", (req, res) => {
   }
 
   if (!req.session.user) return res.redirect("/login");
-  if (!req.session.user.must_change_password) return res.redirect("/");
+  if (!req.session.user.must_change_password) {
+    return res.redirect(consumeReturnTo(req.session));
+  }
 
   renderAuthPage(res, "reset");
 });
@@ -993,7 +997,7 @@ router.post("/reset-password", async (req, res) => {
 
     req.session.user.must_change_password = false;
 
-    res.redirect("/?changed=1");
+    res.redirect(consumeReturnTo(req.session, "/?changed=1"));
   } catch (err) {
     console.error(err);
     return renderAuthPage(res, "reset", {

@@ -8,21 +8,21 @@
   const phoneLocal = phoneFull.startsWith(phonePrefix)
     ? phoneFull.slice(phonePrefix.length).trim()
     : '';
+  const rolActual = persona.role || 'Usuario';
+  const areaActual = (areas || []).find((a) => Number(a.id) === Number(persona.work_area_id));
+  const pillArea = areaActual
+    ? getWorkAreaPill(areaActual.area_name, areaActual.color)
+    : null;
 %>
 
-<div class="modal-editar-layout layout-horizontal-form">
-  <aside class="form-aside modal-editar-aside">
-    <h2 class="modal-editar-title">Editar Colaborador</h2>
-    <p class="form-aside-desc">Modifica los datos del colaborador.</p>
+<div class="modal-editar-layout">
+  <aside class="modal-editar-aside">
     <div class="profile-photo-upload">
       <div class="profile-photo-preview-wrap">
         <div class="profile-photo-preview profile-photo-preview--light" id="photo-preview">
           <img id="photo-preview-img" <% if (tieneFoto) { %>src="<%= persona.photo %>"<% } else { %>hidden<% } %>>
           <div class="profile-photo-placeholder" id="photo-placeholder" <%= tieneFoto ? 'hidden' : '' %>>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
+            <%- include('../../partials/icon', { name: 'user' }) %>
           </div>
         </div>
         <div class="profile-photo-actions">
@@ -30,172 +30,187 @@
             <%= tieneFoto ? 'Cambiar foto' : 'Seleccionar foto' %>
           </button>
           <button type="button" class="btn-photo-remove" id="btn-remove-photo" <%= tieneFoto ? '' : 'hidden' %>>Quitar foto</button>
-          <span class="profile-photo-hint profile-photo-hint--light">Recorta la imagen en formato circular · JPG, PNG o WebP · Máx. 5 MB</span>
         </div>
       </div>
       <input type="file" id="foto" name="foto" accept="image/*" hidden form="formEditarPersona">
       <input type="hidden" name="eliminar_foto" id="eliminar_foto" value="0" form="formEditarPersona">
     </div>
+
+    <div class="modal-editar-identidad">
+      <p class="modal-editar-nombre"><%= nombreColaborador %></p>
+      <% if (pillArea) { %>
+        <span class="<%= pillArea.pillClass %>"<% if (pillArea.pillStyle) { %> style="<%= pillArea.pillStyle %>"<% } %>><%= areaActual.area_name %></span>
+      <% } %>
+      <% if (tieneCorreoRegistrado) { %>
+        <p class="modal-editar-correo"><%= persona.email %></p>
+      <% } %>
+    </div>
   </aside>
 
-  <main class="form-main modal-editar-main">
+  <main class="modal-editar-main">
+    <h2 class="modal-editar-title" id="editarColaboradorTitle">Editar colaborador</h2>
+
     <form action="/RRHH/editar/<%= persona.id %>" method="POST" enctype="multipart/form-data" id="formEditarPersona">
-      <div class="form-grid-2">
-        <div class="campo">
-          <label for="first_name">Nombre *</label>
-          <input type="text" id="first_name" name="first_name" required value="<%= persona.first_name || '' %>">
-        </div>
-        <div class="campo">
-          <label for="last_name">Apellido *</label>
-          <input type="text" id="last_name" name="last_name" required value="<%= persona.last_name || '' %>">
-        </div>
-      </div>
 
-      <div class="form-grid-2">
-        <div class="campo">
-          <label for="email">Correo Electrónico<%= tieneCorreoRegistrado ? ' *' : '' %></label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value="<%= persona.email || '' %>"
-            placeholder="nombre@empresa.com"
-            autocomplete="email"
-            <%= tieneCorreoRegistrado ? 'required data-email-locked="1"' : '' %>
-          >
-          <span class="hint">
-            <% if (tieneCorreoRegistrado) { %>
-              El correo no puede eliminarse una vez registrado. Puedes actualizarlo por otro válido.
-            <% } else { %>
-              Al agregar un correo, se creará la cuenta de intranet y se enviará la contraseña temporal al usuario.
-            <% } %>
-          </span>
-          <span class="field-error" id="email-error" role="alert"></span>
-        </div>
-        <div class="campo">
-          <label for="telefono_local">Teléfono</label>
-          <div class="phone-field" data-phone-field id="editar_phone_field">
-            <span class="phone-field__prefix" aria-hidden="true"><%= countryConfig.phone.callingCode ? "+" + countryConfig.phone.callingCode : "" %></span>
-            <input type="tel" id="telefono_local" class="phone-field__local" placeholder="<%= countryConfig.phone.example %>" maxlength="<%= countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1 %>" inputmode="numeric" autocomplete="tel-national" aria-label="Número celular sin código de país" value="<%= phoneLocal %>">
-            <input type="hidden" name="phone" id="telefono" value="<%= phoneFull %>">
+      <section class="form-seccion">
+        <h3 class="form-seccion__title">
+          <span class="form-seccion__icon" aria-hidden="true"><%- include('../../partials/icon', { name: 'user' }) %></span>
+          Datos personales
+        </h3>
+
+        <div class="campos-grid">
+          <div class="campo-form">
+            <label for="first_name">Nombre <span class="required-mark">*</span></label>
+            <input type="text" id="first_name" name="first_name" required value="<%= persona.first_name || '' %>">
+            <span class="campo-form__error" role="alert"></span>
           </div>
-          <span class="field-error" id="telefono-error" role="alert"></span>
+          <div class="campo-form">
+            <label for="last_name">Apellido <span class="required-mark">*</span></label>
+            <input type="text" id="last_name" name="last_name" required value="<%= persona.last_name || '' %>">
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+          <div class="campo-form">
+            <label for="national_id"><%= documentoConfig.label %></label>
+            <input type="text" id="national_id" name="national_id"
+                   value="<%= persona.documento || '' %>"
+                   data-national-id
+                   placeholder="<%= documentoConfig.example %>" autocomplete="off">
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+          <div class="campo-form">
+            <label for="fecha_nacimiento" id="fecha_nacimiento_label">
+              Fecha de nacimiento<% if (!tieneCorreoRegistrado) { %> <span class="required-mark">*</span><% } %>
+            </label>
+            <input type="date" id="fecha_nacimiento" name="birth_date"
+                   <%= tieneCorreoRegistrado ? '' : 'required' %>
+                   value="<%= persona.birth_date ? new Date(persona.birth_date).toISOString().split('T')[0] : '' %>">
+            <span class="campo-form__error" role="alert"></span>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div class="campo">
-        <label for="area_trabajo_id">Área de Trabajo *</label>
-        <select id="area_trabajo_id" name="work_area_id" required>
-          <option value="">-- Selecciona un área --</option>
-          <% (areas || []).forEach(area => { %>
-            <option value="<%= area.id %>" <%= Number(persona.work_area_id) === Number(area.id) ? 'selected' : '' %>><%= area.area_name %></option>
-          <% }) %>
-        </select>
-      </div>
+      <section class="form-seccion">
+        <h3 class="form-seccion__title">
+          <span class="form-seccion__icon" aria-hidden="true"><%- include('../../partials/icon', { name: 'mail' }) %></span>
+          Contacto
+        </h3>
 
-      <div class="campo">
-        <label for="hire_date">Fecha de ingreso</label>
-        <input
-          type="date"
-          id="hire_date"
-          name="hire_date"
-          value="<%= persona.hire_date ? new Date(persona.hire_date).toISOString().split('T')[0] : '' %>"
-        >
-        <span class="hint">Necesaria para calcular vacaciones.</span>
-      </div>
-
-      <% if (country === 'CL') { %>
-      <div class="form-grid-2">
-        <div class="campo">
-          <label for="prior_years_credited">Años previos acreditados</label>
-          <input
-            type="number"
-            id="prior_years_credited"
-            name="prior_years_credited"
-            min="0"
-            max="10"
-            step="0.5"
-            value="<%= persona.prior_years_credited != null ? persona.prior_years_credited : 0 %>"
-          >
-          <span class="hint">Antigüedad en otros empleadores (máx. 10).</span>
+        <div class="campos-grid">
+          <div class="campo-form">
+            <label for="email">Correo electrónico<% if (tieneCorreoRegistrado) { %> <span class="required-mark">*</span><% } %></label>
+            <input type="email" id="email" name="email"
+                   value="<%= persona.email || '' %>"
+                   placeholder="nombre@empresa.com" autocomplete="email"
+                   <%= tieneCorreoRegistrado ? 'required data-email-locked="1"' : '' %>>
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+          <div class="campo-form">
+            <label for="telefono_local">Teléfono</label>
+            <div class="phone-field" data-phone-field id="editar_phone_field">
+              <span class="phone-field__prefix" aria-hidden="true"><%= countryConfig.phone.callingCode ? "+" + countryConfig.phone.callingCode : "" %></span>
+              <input type="tel" id="telefono_local" class="phone-field__local" placeholder="<%= countryConfig.phone.example %>" maxlength="<%= countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1 %>" inputmode="numeric" autocomplete="tel-national" aria-label="Número celular sin código de país" value="<%= phoneLocal %>">
+              <input type="hidden" name="phone" id="telefono" value="<%= phoneFull %>">
+            </div>
+            <span class="campo-form__error" role="alert"></span>
+          </div>
         </div>
-        <div class="campo">
-          <label for="progressive_days_override">Progresivo negociado</label>
-          <input
-            type="number"
-            id="progressive_days_override"
-            name="progressive_days_override"
-            min="0"
-            step="1"
-            value="<%= persona.progressive_days_override != null ? persona.progressive_days_override : '' %>"
-            placeholder="Opcional"
-          >
-        </div>
-      </div>
-      <% } %>
+      </section>
 
-      <% if (country === 'PE') { %>
-      <div class="form-grid-2">
-        <div class="campo">
-          <label for="work_days_per_week">Jornada (días/semana)</label>
-          <% const jornada = persona.work_days_per_week || 5; %>
-          <select id="work_days_per_week" name="work_days_per_week">
-            <option value="5" <%= jornada === 5 ? 'selected' : '' %>>5 días</option>
-            <option value="6" <%= jornada === 6 ? 'selected' : '' %>>6 días</option>
-            <option value="4" <%= jornada === 4 ? 'selected' : '' %>>4 días</option>
-            <option value="3" <%= jornada === 3 ? 'selected' : '' %>>3 días</option>
-          </select>
-          <span class="hint">Récord vacacional (art. 10 D.L. 713).</span>
-        </div>
-      </div>
-      <% } %>
+      <section class="form-seccion">
+        <h3 class="form-seccion__title">
+          <span class="form-seccion__icon" aria-hidden="true"><%- include('../../partials/icon', { name: 'briefcase' }) %></span>
+          Puesto
+        </h3>
 
-      <div class="form-grid-2">
-        <div class="campo">
-          <label for="fecha_nacimiento" id="fecha_nacimiento_label">Fecha de Nacimiento<%= tieneCorreoRegistrado ? '' : ' *' %></label>
-          <input
-            type="date"
-            id="fecha_nacimiento"
-            name="birth_date"
-            <%= tieneCorreoRegistrado ? '' : 'required' %>
-            value="<%= persona.birth_date ? new Date(persona.birth_date).toISOString().split('T')[0] : '' %>"
-          >
-          <% if (tieneCorreoRegistrado) { %>
-            <span class="hint">Opcional para colaboradores con correo registrado.</span>
-          <% } %>
-        </div>
-        <div class="campo">
-          <label for="role">Rol de Intranet *</label>
-          <% if (persona.email_confirmed) { %>
-            <select id="role" name="role" required>
-              <option value="Usuario"        <%= (persona.role === 'Usuario' || persona.role === 'usuario') ? 'selected' : '' %>>Usuario</option>
-              <option value="Administrador"  <%= (persona.role === 'Administrador' || persona.role === 'admin') ? 'selected' : '' %>>Administrador</option>
-              <option value="Deshabilitado"  <%= (persona.role === 'Deshabilitado') ? 'selected' : '' %>>Deshabilitado</option>
+        <div class="campos-grid">
+          <div class="campo-form">
+            <label for="area_trabajo_id">Área de trabajo <span class="required-mark">*</span></label>
+            <select id="area_trabajo_id" name="work_area_id" required>
+              <option value="">Selecciona un área…</option>
+              <% (areas || []).forEach(area => { %>
+                <option value="<%= area.id %>" <%= Number(persona.work_area_id) === Number(area.id) ? 'selected' : '' %>><%= area.area_name %></option>
+              <% }) %>
             </select>
-          <% } else { %>
-            <input type="text" id="role" value="Deshabilitado" readonly class="input-solo-lectura">
-            <span class="hint">El rol solo puede modificarse después de que el colaborador verifique su correo.</span>
+            <span class="campo-form__error" role="alert"></span>
+          </div>
+
+          <%- include('campo_centros_costo', {
+            centros: typeof centrosCosto !== 'undefined' ? centrosCosto : [],
+            seleccionados: typeof centrosSeleccionados !== 'undefined' ? centrosSeleccionados : [],
+            max: typeof maxCentrosCosto !== 'undefined' ? maxCentrosCosto : 2,
+            idPrefijo: 'editar',
+          }) %>
+
+          <div class="campo-form">
+            <label for="hire_date">Fecha de ingreso</label>
+            <input type="date" id="hire_date" name="hire_date"
+                   value="<%= persona.hire_date ? new Date(persona.hire_date).toISOString().split('T')[0] : '' %>">
+          </div>
+
+          <div class="campo-form">
+            <label for="role">Rol de intranet <span class="required-mark">*</span></label>
+            <% if (persona.email_confirmed) { %>
+              <select id="role" name="role" required>
+                <option value="Usuario"        <%= (rolActual === 'Usuario' || rolActual === 'usuario') ? 'selected' : '' %>>Usuario</option>
+                <option value="Administrador"  <%= (rolActual === 'Administrador' || rolActual === 'admin') ? 'selected' : '' %>>Administrador</option>
+                <option value="Deshabilitado"  <%= (rolActual === 'Deshabilitado') ? 'selected' : '' %>>Deshabilitado</option>
+              </select>
+            <% } else { %>
+              <input type="text" id="role" value="Deshabilitado" readonly aria-readonly="true">
+              <span class="campo-form__ayuda">Se habilita al verificar el correo.</span>
+            <% } %>
+          </div>
+
+          <% if (country === 'CL') { %>
+            <div class="campo-form">
+              <label for="prior_years_credited">Años previos acreditados</label>
+              <input type="number" id="prior_years_credited" name="prior_years_credited"
+                     min="0" max="10" step="0.5"
+                     value="<%= persona.prior_years_credited != null ? persona.prior_years_credited : 0 %>">
+            </div>
+            <div class="campo-form">
+              <label for="progressive_days_override">Progresivo negociado</label>
+              <input type="number" id="progressive_days_override" name="progressive_days_override"
+                     min="0" step="1" placeholder="Opcional"
+                     value="<%= persona.progressive_days_override != null ? persona.progressive_days_override : '' %>">
+            </div>
+          <% } %>
+
+          <% if (country === 'PE') { %>
+            <div class="campo-form">
+              <label for="work_days_per_week">Jornada (días/semana)</label>
+              <% const jornada = persona.work_days_per_week || 5; %>
+              <select id="work_days_per_week" name="work_days_per_week">
+                <option value="5" <%= jornada === 5 ? 'selected' : '' %>>5 días</option>
+                <option value="6" <%= jornada === 6 ? 'selected' : '' %>>6 días</option>
+                <option value="4" <%= jornada === 4 ? 'selected' : '' %>>4 días</option>
+                <option value="3" <%= jornada === 3 ? 'selected' : '' %>>3 días</option>
+              </select>
+            </div>
           <% } %>
         </div>
-      </div>
+      </section>
 
       <div class="modal-form-actions">
         <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-        <button type="submit" class="btn-primario">Guardar Cambios</button>
+        <button type="submit" class="btn-primario">Guardar cambios</button>
       </div>
     </form>
 
-    <div class="zona-peligro">
-      <h3>Zona de peligro</h3>
-      <p>Esta acción elimina al colaborador del registro de forma permanente.</p>
+    <section class="zona-peligro">
+      <h3 class="zona-peligro__title">
+        <span class="form-seccion__icon form-seccion__icon--peligro" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+        Zona de peligro
+      </h3>
+      <p>Eliminar a <%= nombreColaborador %> borra su ficha de forma permanente.</p>
       <form
         action="/RRHH/eliminar/<%= persona.id %>"
         method="POST"
         onsubmit="return confirm('¿Eliminar a <%= nombreColaborador %>? Esta acción no se puede deshacer.');"
       >
-        <button type="submit" class="btn-eliminar">Eliminar Colaborador</button>
+        <button type="submit" class="btn-eliminar">Eliminar colaborador</button>
       </form>
-    </div>
+    </section>
   </main>
 </div>
 
@@ -205,7 +220,6 @@
       <h3 id="fotoCropTitle">Recortar foto de perfil</h3>
       <button type="button" class="foto-crop-close" id="fotoCropClose" aria-label="Cerrar">&times;</button>
     </div>
-    <p class="foto-crop-hint">Arrastra y ajusta el encuadre. La foto se verá circular en el perfil.</p>
     <div class="foto-crop-body">
       <div class="foto-crop-stage">
         <img id="fotoCropImage" src="" alt="Vista previa para recortar">

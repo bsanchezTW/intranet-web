@@ -12,7 +12,7 @@
     groups: [1, 4, 4],
     example: "9 1234 5678",
     maxLength: 11,
-    errorMessage: "Ingresa un celular válido con formato 9 1234 5678.",
+    errorMessage: "Teléfono incorrecto",
   };
 
   const ERROR_MSG = cfg.errorMessage;

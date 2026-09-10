@@ -5,7 +5,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= formatPageTitle(titulo || "Iniciar sesión") %></title>
-  <link rel="stylesheet" href="/css/login.css?v=20260907b">
+  <link rel="stylesheet" href="/css/login.css?v=20260910o">
+  <script>
+    (function () {
+      var raiz = document.documentElement;
+      function listo() { raiz.classList.add('pagina-lista'); }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', listo);
+      } else {
+        listo();
+      }
+      window.addEventListener('load', listo);
+      window.setTimeout(listo, 8000);
+      window.addEventListener('pageshow', listo);
+    })();
+  </script>
+  <noscript><style>.cargando-pagina { display: none; }</style></noscript>
   <script>
     document.documentElement.setAttribute('data-theme','light');
     try {
@@ -19,6 +34,11 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
 <body class="login-split-page">
+
+  <div class="cargando-pagina" role="status">
+    <span class="cargando-pagina__spinner" aria-hidden="true"></span>
+    <span class="sr-only">Cargando…</span>
+  </div>
 
   <% const activeView = locals.view || 'login'; %>
 
@@ -35,7 +55,7 @@
         <div class="login-auth-main" id="loginAuthMain">
 
         <div class="login-split__brand" id="loginAuthBrand"<% if (activeView === 'register') { %> hidden<% } %>>
-          <img src="/img/favicon.png" alt="Transworld" class="login-split__logo">
+          <img src="/img/favicon18.png" alt="Transworld" class="login-split__logo">
         </div>
 
         <%
@@ -429,6 +449,7 @@
     <!-- Panel derecho: área visual -->
     <section class="login-split__visual-panel" aria-label="Información corporativa">
       <div class="login-split__visual-overlay" aria-hidden="true"></div>
+      <img src="/img/guirnaldas18.png" alt="" class="festive-garlands" aria-hidden="true" draggable="false">
 
       <div class="login-visual-content">
       <div class="login-carousel" id="loginCarousel" aria-live="polite">
@@ -1177,7 +1198,7 @@
   <script src="/js/profile-photo-cropper.js"></script>
   <script src="/js/password-strength.js"></script>
   <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
-  <script src="/js/phone.js"></script>
+  <script src="/js/phone.js?v=20260910n"></script>
   <script>
     (function initRegisterForm() {
       const passwordInput = document.getElementById('reg-password');
@@ -1390,6 +1411,57 @@
       });
 
       updateSubmitState();
+    })();
+  </script>
+
+  <script>
+    /**
+     * Estado "enviando" de los botones de los formularios de acceso.
+     *
+     * Va al final del documento a propósito: los listeners corren en orden de
+     * registro, así que este es el último y ya sabe si alguna validación anterior
+     * canceló el envío (evento.defaultPrevented).
+     */
+    (function initBotonesEnviando() {
+      var ETIQUETA = 'Enviando…';
+
+      function marcar(boton) {
+        if (boton.classList.contains('is-enviando')) return;
+        var texto = boton.textContent.trim();
+        boton.classList.add('is-enviando');
+        boton.setAttribute('aria-busy', 'true');
+        boton.dataset.textoOriginal = texto;
+        boton.innerHTML =
+          '<span class="login-split__submit__spinner" aria-hidden="true"></span>' +
+          '<span>' + ETIQUETA + '</span>';
+        // Deshabilitar dentro del propio submit puede abortar el envío en
+        // algunos navegadores; en el siguiente tick ya salió la petición.
+        window.setTimeout(function () { boton.disabled = true; }, 0);
+      }
+
+      function restaurar(boton) {
+        if (!boton.classList.contains('is-enviando')) return;
+        boton.classList.remove('is-enviando');
+        boton.removeAttribute('aria-busy');
+        boton.disabled = false;
+        boton.textContent = boton.dataset.textoOriginal || boton.textContent;
+      }
+
+      document.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('submit', function (evento) {
+          if (evento.defaultPrevented) return;
+          var boton = form.querySelector('button.login-split__submit[type="submit"]');
+          if (!boton || boton.disabled) return;
+          marcar(boton);
+        });
+      });
+
+      // Al volver con el botón atrás la página se restaura tal como quedó, con
+      // el botón girando sobre un formulario que ya no se está enviando.
+      window.addEventListener('pageshow', function (evento) {
+        if (!evento.persisted) return;
+        document.querySelectorAll('.login-split__submit.is-enviando').forEach(restaurar);
+      });
     })();
   </script>
 

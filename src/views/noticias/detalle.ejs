@@ -26,6 +26,14 @@ const AVISOS_ERROR = {
 
 const mensajeOk = ok ? (AVISOS_OK[ok] || ok) : null;
 const mensajeError = error ? (AVISOS_ERROR[error] || 'Ocurrió un error inesperado.') : null;
+
+function formatNewsDate(fecha) {
+  const d = new Date(fecha);
+  if (Number.isNaN(d.getTime())) return '';
+  const dia = d.getDate();
+  const mes = d.toLocaleString(countryConfig.locale, { month: 'short' });
+  return `${dia} ${mes.replace('.', '')}`.toUpperCase();
+}
 %>
 
 <div class="contenedor articulo">
@@ -55,35 +63,28 @@ const mensajeError = error ? (AVISOS_ERROR[error] || 'Ocurrió un error inespera
 
     <article class="articulo__principal">
 
-      <%# ---------- Encabezado ---------- %>
-      <div class="articulo__header">
-        <div class="articulo__meta-top">
-          <span>Noticias</span>
-          <% if (noticia.featured) { %>
-            <span class="articulo__destacada">
-              <%- include('../partials/icon', { name: 'sparkles' }) %>
-              Destacada
-            </span>
-          <% } %>
-          <time class="articulo__fecha" datetime="<%= noticia.fechaISO %>"><%= noticia.fechaLarga %></time>
-        </div>
-
-        <h1 class="articulo__titulo"><%= noticia.title %></h1>
-
-        <% if (noticia.subtitle) { %>
-          <p class="articulo__bajada"><%= noticia.subtitle %></p>
-        <% } %>
-      </div>
-
-      <%# ---------- Portada ---------- %>
-      <% if (noticia.image) { %>
-        <figure class="articulo__portada">
-          <img src="<%= noticia.image %>" alt="" fetchpriority="high" decoding="async">
-        </figure>
-      <% } %>
+      <%# Misma card que home y listado: degradado o portada, título y bajada dentro. %>
+      <%- include('../partials/noticia-featured-card', {
+        interactive: false,
+        headingLevel: 1,
+        href: '',
+        image: noticia.image,
+        title: noticia.title,
+        subtitle: noticia.subtitle,
+        datetime: noticia.fechaISO,
+        dateLabel: formatNewsDate(noticia.created_at || noticia.fechaISO),
+        chipsText: (noticia.resumen && noticia.resumen.chips && noticia.resumen.chips.length)
+          ? noticia.resumen.chips.map(c => c.text).join(' · ')
+          : '',
+        showBadge: Boolean(noticia.featured),
+        extraClass: 'home-featured--articulo',
+        imageLoading: 'eager'
+      }) %>
 
       <%# ---------- Cuerpo ---------- %>
-      <div class="articulo__cuerpo"><%- noticia.content %></div>
+      <% if (noticia.content) { %>
+        <div class="articulo__cuerpo"><%- noticia.content %></div>
+      <% } %>
 
       <%# ---------- Archivos renderizados como contenido ---------- %>
       <% if (adjuntos.length) { %>

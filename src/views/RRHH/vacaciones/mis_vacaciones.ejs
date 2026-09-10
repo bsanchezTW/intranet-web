@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260910n">
 <%
   const isPeru = country === 'PE';
   const peBlockPeriod = isPeru && Array.isArray(periods)
@@ -15,7 +15,7 @@
       <h2 class="vac-title">Mis vacaciones</h2>
       <p class="vac-subtitle">Saldo expresado en <%= dayUnitLabel %>.</p>
     </div>
-    <a href="/RRHH/vacaciones" class="vac-link-volver">← Volver</a>
+    <a href="/RRHH/vacaciones" class="link-volver">← Volver</a>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>

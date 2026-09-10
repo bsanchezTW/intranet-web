@@ -106,117 +106,22 @@ html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
 /* El filtrado usa [hidden]; sin esto, display:grid/flex le gana al atributo. */
 [data-noticia][hidden] { display: none !important; }
 
-/* ==========================================================================
-   2. Noticia destacada (hero)
-   ========================================================================== */
-
-.noticia-hero {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  gap: 0;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--nt-radius);
-  overflow: hidden;
-  box-shadow: var(--shadow);
-  text-decoration: none;
-  color: inherit;
+/* Destacada: misma card que el home (.home-featured en home.css). */
+.noticias .home-featured {
   margin-bottom: 28px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-.noticia-hero:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-lg);
-  border-color: var(--border2);
-}
-
-.noticia-hero--sin-imagen {
-  grid-template-columns: 1fr;
-}
-
-.noticia-hero__media {
-  position: relative;
-  aspect-ratio: 16 / 10;
-  background: var(--color-surface-muted);
-  overflow: hidden;
-}
-
-.noticia-hero__media img {
-  position: absolute;
-  inset: 0;
+.home-featured--articulo {
+  cursor: default;
+  max-width: var(--nt-measure);
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-  /* Ligero zoom para llenar el marco sin bandas ni huecos laterales */
-  transform: scale(1.08);
-  z-index: 1;
-  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  margin: 0 auto 28px;
+  box-sizing: border-box;
 }
 
-.noticia-hero:hover .noticia-hero__media img {
-  transform: scale(1.12);
+.home-featured--articulo:hover {
+  transform: none;
 }
-
-.noticia-hero__body {
-  padding: 28px 30px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.noticia-hero__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: var(--green-soft);
-  color: var(--green-ink);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.noticia-hero__title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: normal;
-  color: var(--brand);
-}
-
-.noticia-hero__sub {
-  margin: 0;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--muted);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.noticia-hero__cta {
-  margin-top: 4px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--brand);
-}
-
-.noticia-hero__cta span {
-  display: inline-block;
-  transition: transform 0.2s ease;
-}
-
-.noticia-hero:hover .noticia-hero__cta span { transform: translateX(4px); }
 
 /* ==========================================================================
    3. Grilla de tarjetas
@@ -249,7 +154,7 @@ html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
 
 /* Entrada escalonada. `backwards` (y no `both`) es intencional: con `both` el
    último fotograma queda fijado y anularía el translateY del :hover. */
-.noticia-hero { animation: cardPop 0.6s cubic-bezier(0.16, 0.84, 0.3, 1.08) backwards; }
+.noticias .home-featured { animation: cardPop 0.6s cubic-bezier(0.16, 0.84, 0.3, 1.08) backwards; }
 .noticia-card { animation: cardPop 0.55s cubic-bezier(0.16, 0.84, 0.3, 1.08) backwards; }
 .noticia-card:nth-child(1) { animation-delay: 0.04s; }
 .noticia-card:nth-child(2) { animation-delay: 0.08s; }
@@ -258,8 +163,7 @@ html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
 .noticia-card:nth-child(5) { animation-delay: 0.2s; }
 .noticia-card:nth-child(n + 6) { animation-delay: 0.24s; }
 
-.noticia-card:focus-visible,
-.noticia-hero:focus-visible {
+.noticia-card:focus-visible {
   outline: 2px solid var(--corp-blue);
   outline-offset: 3px;
 }
@@ -285,8 +189,7 @@ html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
 }
 
 /* Con portada cargada, el icono no debe asomar detrás ni a los lados. */
-.noticia-card__media:has(> img) .media-placeholder,
-.noticia-hero__media:has(> img) .media-placeholder {
+.noticia-card__media:has(> img) .media-placeholder {
   visibility: hidden;
 }
 
@@ -477,6 +380,7 @@ html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
 
 .articulo__principal {
   min-width: 0;
+  font-size: 1rem;
   animation: fadeUp 0.5s 0.05s ease backwards;
 }
 
@@ -558,18 +462,26 @@ html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
 
 .articulo__portada img { width: 100%; height: auto; display: block; }
 
-/* --- Cuerpo del texto: la parte que realmente se lee --- */
+/* --- Cuerpo del texto: card blanca de lectura --- */
 .articulo__cuerpo {
   max-width: var(--nt-measure);
-  margin: 0 auto;
+  width: 100%;
+  margin: 0 auto 28px;
+  padding: 28px 32px;
+  box-sizing: border-box;
   font-size: 1rem;
   line-height: 1.7;
   color: var(--color-text);
   overflow-wrap: break-word;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--nt-radius);
+  box-shadow: var(--shadow-card);
 }
 
 .articulo__cuerpo > *:first-child { margin-top: 0; }
 .articulo__cuerpo p { margin: 0 0 1.25em; }
+.articulo__cuerpo > *:last-child { margin-bottom: 0; }
 
 .articulo__cuerpo h1,
 .articulo__cuerpo h2,
@@ -1264,7 +1176,9 @@ html[data-theme="dark"] .doc { --doc-stage: #060f1b; }
 /* --- Administración: tarjeta al pie del artículo --- */
 .articulo__admin {
   max-width: var(--nt-measure);
-  margin: 56px auto 0;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 28px auto 0;
   padding: 20px 22px;
   display: flex;
   align-items: center;
@@ -1521,9 +1435,6 @@ html[data-theme="dark"] .doc-mini__ext--video { color: #b79bf5; }
 }
 
 @media (max-width: 900px) {
-  .noticia-hero { grid-template-columns: 1fr; }
-  .noticia-hero__media { aspect-ratio: 16 / 9; }
-  .noticia-hero__body { padding: 26px 24px 30px; }
   .doc-word { padding: 24px 22px; }
 
   .aside-acciones .btn-nt { flex: 1 1 100%; }
@@ -1551,7 +1462,10 @@ html[data-theme="dark"] .doc-mini__ext--video { color: #b79bf5; }
   .nt-chips::-webkit-scrollbar { display: none; }
 
   .articulo__meta-top { font-size: 10.5px; }
-  .articulo__cuerpo { font-size: 0.98rem; }
+  .articulo__cuerpo {
+    font-size: 0.98rem;
+    padding: 22px 20px;
+  }
 
   .media-bloque { margin: 30px auto; }
 
@@ -1636,12 +1550,31 @@ html[data-theme="dark"] .doc-word [style*="background"] { background: transparen
   .articulo__layout,
   .articulo__principal { display: block; padding: 0; }
 
-  .articulo__header,
   .articulo__cuerpo,
   .media-bloque { max-width: none; margin-left: 0; margin-right: 0; }
 
-  .articulo__titulo { font-size: 22pt; }
-  .articulo__cuerpo { font-size: 11pt; line-height: 1.55; }
+  .home-featured--articulo {
+    background: none !important;
+    color: #000;
+    padding: 0;
+    box-shadow: none;
+    margin-bottom: 16px;
+  }
+  .home-featured--articulo .home-featured__photo,
+  .home-featured--articulo .home-featured__glow { display: none !important; }
+  .home-featured--articulo .home-featured__title { font-size: 22pt; color: #000; max-width: none; }
+  .home-featured--articulo .home-featured__sub,
+  .home-featured--articulo .home-featured__date,
+  .home-featured--articulo .home-featured__chips { color: #333; }
+  .articulo__cuerpo {
+    font-size: 11pt;
+    line-height: 1.55;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 16px;
+  }
 
   /* El Word colapsado debe imprimirse entero. */
   .doc-word--colapsado { max-height: none !important; }
@@ -2152,21 +2085,18 @@ html[data-theme="dark"] .editor__estado.is-error { color: #e88b80; }
 
 @media (prefers-reduced-motion: reduce) {
   .noticia-card,
-  .noticia-hero,
+  .noticias .home-featured,
   .galeria__item img,
   .noticia-card__media img,
-  .noticia-hero__media img,
   .noticias-add-btn,
   .btn-nt {
     transition: none;
   }
   .noticia-card:hover,
-  .noticia-hero:hover,
+  .noticias .home-featured:hover,
   .noticias-add-btn:hover,
   .btn-nt:hover { transform: none; }
-  /* Mantener el zoom base de portada (relleno del marco); solo se apaga el hover. */
-  .noticia-card:hover .noticia-card__media img,
-  .noticia-hero:hover .noticia-hero__media img {
+  .noticia-card:hover .noticia-card__media img {
     transform: scale(1.08);
   }
   .lightbox.is-open { animation: none; }

@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260910n">
 
 <%
   const nombre = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || ('#' + profile.id);
@@ -15,7 +15,7 @@
         · Disponible: <strong><%= summary.available %></strong>
       </p>
     </div>
-    <a href="/RRHH/vacaciones/gestion" class="vac-link-volver">← Volver a gestión</a>
+    <a href="/RRHH/vacaciones/gestion" class="link-volver">← Volver a gestión</a>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>

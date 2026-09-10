@@ -688,3 +688,66 @@
     flex: 1;
   }
 }
+
+/* ── Ficha del solicitante ────────────────────────────────────────────────────
+   Datos heredados de la ficha del colaborador. Se muestran de sólo lectura
+   porque son los que quedarán congelados en la solicitud: corregirlos aquí
+   daría a entender que el cambio afecta sólo a este documento. */
+
+.gasto-ficha {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 22px;
+}
+
+.gasto-ficha__titulo {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.gasto-ficha__nota {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: var(--color-text-subtle);
+  line-height: 1.45;
+}
+
+.gasto-ficha__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.gasto-ficha__lista > div {
+  min-width: 0;
+}
+
+.gasto-ficha__lista dt {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
+  margin-bottom: 2px;
+}
+
+.gasto-ficha__lista dd {
+  margin: 0;
+  font-size: 0.94rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* El documento y el código de centro se leen dígito a dígito. */
+.gasto-ficha__lista dd strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-heading);
+}
+

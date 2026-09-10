@@ -1,7 +1,6 @@
 (function (global) {
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
-  const ERROR_MSG =
-    "Ingresa un correo electrónico válido (ej: nombre@empresa.com).";
+  const ERROR_MSG = "Correo incorrecto";
 
   function isValidEmail(email) {
     return EMAIL_PATTERN.test(String(email || "").trim());

@@ -6,7 +6,7 @@
   const fechaCorta = { year: 'numeric', month: '2-digit', day: '2-digit' };
   const conHora = { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
 
-  const solicitante = [s.requester_first_name, s.requester_last_name].filter(Boolean).join(' ') || s.requester_email || 'Colaborador';
+  const solicitante = s.requester_display_name || 'Colaborador';
   const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaLarga) : '—';
 
   function fecha(valor, opts) {
@@ -50,6 +50,28 @@
     </header>
 
     <div class="gasto-detalle__body">
+
+      <%# Datos congelados al enviar: es lo que va al comprobante contable. %>
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Solicitante e imputación</h3>
+        <dl class="gasto-ficha__lista">
+          <div><dt>Nombre</dt><dd><%= solicitante %></dd></div>
+          <div>
+            <dt>Documento</dt>
+            <dd><%= s.requester_document_display || '—' %></dd>
+          </div>
+          <div><dt>Correo</dt><dd><%= s.requester_contact_email || '—' %></dd></div>
+          <div><dt>Área</dt><dd><%= s.area_name || '—' %></dd></div>
+          <div>
+            <dt>Centro de costo</dt>
+            <dd>
+              <% if (s.cost_center_code) { %>
+                <strong><%= s.cost_center_code %></strong> · <%= s.cost_center_name %>
+              <% } else { %>—<% } %>
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       <% if (s.description) { %>
       <section class="gasto-bloque">

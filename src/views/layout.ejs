@@ -5,22 +5,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= formatPageTitle(titulo) %></title>
-    <link rel="stylesheet" href="/css/intranet.css?v=20260903a">
-    <link rel="stylesheet" href="/css/modal.css?v=20260902">
+    <link rel="stylesheet" href="/css/intranet.css?v=20260911a">
+    <link rel="stylesheet" href="/css/modal.css?v=20260910n">
     <% if (features.supportTickets) { %>
-    <link rel="stylesheet" href="/css/ticket-modal.css?v=20260909a">
+    <link rel="stylesheet" href="/css/ticket-modal.css?v=20260910n">
     <% } %>
     <% if (typeof extraCss !== 'undefined' && Array.isArray(extraCss)) { %>
       <% extraCss.forEach((href) => { %>
         <link rel="stylesheet" href="<%= href %>">
       <% }) %>
     <% } %>
-    <link rel="stylesheet" href="/css/home.css">
+    <link rel="stylesheet" href="/css/home.css?v=20260910x">
     <% if (typeof usuario !== 'undefined' && usuario && features.claudeAssistant) { %>
-    <link rel="stylesheet" href="/css/claude-fab.css">
+    <link rel="stylesheet" href="/css/claude-fab.css?v=20260910n">
     <link rel="stylesheet" href="/css/claude-chat.css">
     <% } %>
-    <script src="/js/modal.js?v=20260728c" defer></script>
+    <script>
+      // Sin defer y en el head: la clase se pone en cuanto el documento está
+      // listo, sin esperar a las imágenes. Los dos respaldos —load y el
+      // temporizador— existen para que un recurso atascado no deje la página
+      // tapada para siempre.
+      (function () {
+        var raiz = document.documentElement;
+        function listo() { raiz.classList.add('pagina-lista'); }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', listo);
+        } else {
+          listo();
+        }
+        window.addEventListener('load', listo);
+        window.setTimeout(listo, 8000);
+        // Al volver con el botón atrás la página llega desde la caché ya
+        // pintada: el velo no debe reaparecer.
+        window.addEventListener('pageshow', listo);
+      })();
+    </script>
+    <noscript><style>.cargando-pagina { display: none; }</style></noscript>
+    <script src="/js/modal.js?v=20260910n" defer></script>
     <% if (features.supportTickets) { %>
     <script src="/js/ticket-create-form.js" defer></script>
     <script src="/js/ticket-detail.js" defer></script>
@@ -28,6 +49,15 @@
 </head>
 
 <body>
+
+  <div class="app-backdrop" aria-hidden="true">
+    <img src="/img/guirnaldas_laterales.png" alt="" class="festive-garlands festive-garlands--laterales" draggable="false">
+  </div>
+
+  <div class="cargando-pagina" role="status">
+    <span class="cargando-pagina__spinner" aria-hidden="true"></span>
+    <span class="sr-only">Cargando…</span>
+  </div>
 
   <div id="toast-container">
     <div class="toast-success">
@@ -75,6 +105,7 @@
     <a href="/RRHH/organigrama">Organigrama</a>
     <a href="/RRHH/personal">Personal</a>
     <a href="/RRHH/areas">Áreas</a>
+    <a href="/RRHH/centros-costo">Centros de costo</a>
     <a href="/RRHH/vacaciones">Vacaciones</a>
     <% if (features.chileHrPortals) { %>
     <a href="https://transworld.mirexmas.com/" target="_blank">Rex+</a>
@@ -116,8 +147,8 @@
       
       <div class="logo-container">
         <a href="/" title="Ir al Inicio">
-          <img src="/img/trw_logohor.png" alt="Transworld" class="logo-tw logo-tw--light">
-          <img src="/img/PNG-LOGO-TW-2.png" alt="Transworld" class="logo-tw logo-tw--dark">
+          <img src="/img/logotw_blue.png" alt="Transworld" class="logo-tw logo-tw--light">
+          <img src="/img/logotw_white18.png" alt="Transworld" class="logo-tw logo-tw--dark">
         </a>
       </div>
     </div>
@@ -144,6 +175,7 @@
           <a href="/RRHH/organigrama">Organigrama</a>
           <a href="/RRHH/personal">Personal</a>
           <a href="/RRHH/areas">Áreas</a>
+          <a href="/RRHH/centros-costo">Centros de costo</a>
           <a href="/RRHH/vacaciones">Vacaciones</a>
           <% if (features.chileHrPortals) { %>
           <a href="https://transworld.mirexmas.com/" target="_blank" rel="noopener noreferrer">Rex+</a>
@@ -372,8 +404,10 @@
     const urlParams = new URLSearchParams(window.location.search);
     const okMsg = urlParams.get('ok');
     const flashMsg = urlParams.get('msg');
-    // ok=1&msg=... lo maneja la vista (p. ej. listado de personal); evita toast duplicado
-    if (okMsg && !(okMsg === '1' && flashMsg)) {
+    // ok=1&msg=... lo maneja la vista (p. ej. listado de personal); evita toast duplicado.
+    // Claves tipo correo_enviado las traduce la propia página (nt-aviso), no el toast.
+    const okEsClave = okMsg && /_/.test(okMsg);
+    if (okMsg && !okEsClave && !(okMsg === '1' && flashMsg)) {
       const toastContainer = document.getElementById('toast-container');
       const toastMessage = document.getElementById('toast-message');
       toastMessage.textContent = decodeURIComponent(okMsg.replace(/\+/g, ' '));

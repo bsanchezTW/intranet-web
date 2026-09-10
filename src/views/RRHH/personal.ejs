@@ -21,10 +21,9 @@
   const errorMsg   = (typeof error   !== 'undefined' && error)   ? error   : null;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260902">
+<link rel="stylesheet" href="/css/personal.css?v=20260911a">
 <link rel="stylesheet" href="/css/phone.css?v=20260902">
 <% if (puedeEditar) { %>
-<link rel="stylesheet" href="/css/horizontal-forms.css?v=20260902">
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <% } %>
@@ -211,14 +210,13 @@
   <div id="modalCrearColaborador" class="modal-overlay modal-crear-colaborador" role="dialog" aria-modal="true" aria-labelledby="crearColaboradorTitle" aria-hidden="true">
     <div class="modal-content modal-content--large">
       <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-      <h2 id="crearColaboradorTitle" class="modal-title">Agregar Colaborador</h2>
-      <p class="modal-description modal-crear-desc">Puede agregar a un colaborador con su correo electrónico, o también puede agregar el cumpleaños de un colaborador.</p>
+      <h2 id="crearColaboradorTitle" class="modal-title">Agregar colaborador</h2>
       <div id="crearColaboradorError" class="modal-crear-error" role="alert"></div>
       <%- include('partials/persona_crear_form') %>
     </div>
   </div>
 
-  <div id="modalEditarColaborador" class="modal-overlay modal-editar-colaborador" role="dialog" aria-modal="true" aria-labelledby="editarColaboradorTitle" aria-hidden="true">
+  <div id="modalEditarColaborador" class="modal-overlay modal-editar-colaborador" role="dialog" aria-modal="true" aria-label="Editar colaborador" aria-hidden="true">
     <div class="modal-content modal-editar-panel">
       <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
       <div id="editarColaboradorError" class="modal-crear-error" role="alert" style="margin: 16px 20px 0;"></div>
@@ -238,12 +236,16 @@
   editarError: (typeof editarError !== 'undefined' && editarError) ? editarError : '',
 }).replace(/</g, '\\u003c') %></script>
 
-<script src="/js/email-validate.js"></script>
+<script src="/js/campo-form.js?v=20260910n"></script>
+<script src="/js/email-validate.js?v=20260910n"></script>
 <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
-<script src="/js/phone.js"></script>
+<script src="/js/phone.js?v=20260910n"></script>
+<script type="application/json" id="national-id-config"><%- JSON.stringify(documentoConfig).replace(/</g, '\\u003c') %></script>
+<script src="/js/national-id.js?v=20260910n"></script>
 <% if (puedeEditar) { %>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="/js/profile-photo-cropper.js"></script>
-<script src="/js/persona-editar-form.js"></script>
+<script src="/js/persona-editar-form.js?v=20260910n"></script>
+<script src="/js/centros-picker.js?v=20260911a"></script>
 <% } %>
-<script src="/js/personal-tabla.js?v=20260803b" defer></script>
+<script src="/js/personal-tabla.js?v=20260910n" defer></script>

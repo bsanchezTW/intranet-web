@@ -23,8 +23,12 @@ const { getLocale, getCountryConfig } = require("../../config/country");
 const { sanitizeArticleHtml, htmlToText, excerptFrom } = require("../../utils/sanitizeContent");
 
 const TEMPLATE_PATH = path.join(__dirname, "..", "..", "views", "emails", "noticia.ejs");
-// Logo blanco del navbar (fondo azul del correo).
-const LOGO_WHITE_PATH = path.join(__dirname, "..", "..", "public", "img", "PNG-LOGO-TW-2.png");
+// Wordmark blanco sobre el header azul. PNG-LOGO-TW-2.png ya no existe.
+const LOGO_WHITE_FILE = "logotw_white.png";
+const LOGO_WHITE_PATH = path.join(__dirname, "..", "..", "public", "img", LOGO_WHITE_FILE);
+// Banner bajo para el correo (10:3). 16:9 a 600px serían 338px de alto; esto baja a 180.
+const COVER_EMAIL_WIDTH = 600;
+const COVER_EMAIL_HEIGHT = 180;
 
 const MAX_WORD_HTML_CHARS = 12000;
 const MAX_EMAIL_PDF_PAGES = 20;
@@ -86,10 +90,67 @@ async function loadAsDataUri(relativePath) {
 
 function logoDataUri() {
   try {
-    if (!fs.existsSync(LOGO_WHITE_PATH)) return `${baseUrl()}/img/PNG-LOGO-TW-2.png`;
-    return toDataUri(fs.readFileSync(LOGO_WHITE_PATH), "image/png");
+    if (fs.existsSync(LOGO_WHITE_PATH)) {
+      const embedded = toDataUri(fs.readFileSync(LOGO_WHITE_PATH), "image/png");
+      if (embedded) return embedded;
+    }
   } catch {
-    return `${baseUrl()}/img/PNG-LOGO-TW-2.png`;
+    // Si falla el embed, el HTML usa el archivo estático de la intranet.
+  }
+  return `${baseUrl()}/img/${LOGO_WHITE_FILE}`;
+}
+
+/**
+ * Recorta al centro y reescala a 600×180. El archivo ya sale en la proporción
+ * del correo: no hay que estirar con height en el HTML (Outlook lo distorsiona).
+ */
+async function cropCoverForEmail(buffer) {
+  const { loadImage, createCanvas } = require("@napi-rs/canvas");
+  const image = await loadImage(buffer);
+  const srcW = image.width;
+  const srcH = image.height;
+  if (!srcW || !srcH) {
+    throw new Error("portada sin dimensiones");
+  }
+
+  const targetW = COVER_EMAIL_WIDTH;
+  const targetH = COVER_EMAIL_HEIGHT;
+  const targetAspect = targetW / targetH;
+  let sx = 0;
+  let sy = 0;
+  let sw = srcW;
+  let sh = srcH;
+  const srcAspect = srcW / srcH;
+  if (srcAspect > targetAspect) {
+    sw = Math.round(srcH * targetAspect);
+    sx = Math.round((srcW - sw) / 2);
+  } else if (srcAspect < targetAspect) {
+    sh = Math.round(srcW / targetAspect);
+    sy = Math.round((srcH - sh) / 2);
+  }
+
+  const canvas = createCanvas(targetW, targetH);
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, targetW, targetH);
+  // Calidad 0–100. 0.85 se interpretaba como ~1 y dejaba el JPEG cuadriculado.
+  return canvas.toBuffer("image/jpeg", 85);
+}
+
+async function loadCoverAsDataUri(relativePath) {
+  if (!relativePath) return null;
+  try {
+    const { buffer } = await storage.downloadFile(relativePath);
+    if (!buffer || !buffer.length) return null;
+    const cropped = await cropCoverForEmail(buffer);
+    return toDataUri(cropped, "image/jpeg");
+  } catch (err) {
+    console.warn(
+      `[Noticias] No se pudo embebir la portada "${relativePath}" en el correo:`,
+      err.message || err,
+    );
+    return null;
   }
 }
 
@@ -295,11 +356,11 @@ async function buildEmailHtml(noticia) {
 
   const contenidoLimpio = sanitizeArticleHtml(noticia.content);
 
-  // Portada también embebida para no depender de la carga remota del cliente.
+  // Portada embebida y recortada a 600×180 para no depender de la carga remota.
   let coverUrl = null;
   if (noticia.image) {
     const coverPath = signedMedia.toRelativePath(noticia.image) || noticia.image;
-    coverUrl = await loadAsDataUri(coverPath);
+    coverUrl = await loadCoverAsDataUri(coverPath);
   }
 
   return ejs.renderFile(TEMPLATE_PATH, {

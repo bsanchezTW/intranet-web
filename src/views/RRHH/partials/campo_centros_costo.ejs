@@ -1,0 +1,50 @@
+<%
+/*
+  Selector de centros de costo para la ficha de un colaborador.
+
+  Recibe:
+    centros        — centros activos que se pueden elegir
+    seleccionados  — ids ya asignados (vacío al crear)
+    max            — tope de centros por persona
+    idPrefijo      — para no repetir ids de DOM entre crear y editar
+
+  El campo no se dibuja si la instancia no tiene el centro de gastos encendido
+  o si todavía no hay ningún centro creado: un campo vacío sólo genera dudas.
+*/
+const lista = centros || [];
+const marcados = (seleccionados || []).map(Number);
+const prefijo = idPrefijo || 'cc';
+%>
+<% if (lista.length) { %>
+<div class="campo-form campo-form--ancho">
+  <span class="campo-form__label" id="<%= prefijo %>_centros_label">Centros de costo</span>
+  <p class="campo-form__ayuda">
+    A cuáles podrá cargar sus gastos cuando rinda. Puede tener hasta <%= max %>;
+    si no eliges ninguno, tendrá que pedírselo a RR.HH. antes de rendir.
+  </p>
+
+  <ul class="centros-picker" role="group" aria-labelledby="<%= prefijo %>_centros_label"
+      data-centros-picker data-max="<%= max %>">
+    <% lista.forEach(centro => { %>
+      <li class="centros-picker__item">
+        <label class="centros-picker__label" for="<%= prefijo %>_centro_<%= centro.id %>">
+          <input type="checkbox"
+                 id="<%= prefijo %>_centro_<%= centro.id %>"
+                 name="cost_center_ids"
+                 value="<%= centro.id %>"
+                 class="centros-picker__check"
+                 <%= marcados.includes(Number(centro.id)) ? 'checked' : '' %>>
+          <span class="centros-picker__texto">
+            <span class="centros-picker__codigo"><%= centro.code %></span>
+            <span class="centros-picker__nombre"><%= centro.name %></span>
+          </span>
+        </label>
+      </li>
+    <% }) %>
+  </ul>
+
+  <p class="centros-picker__tope" data-centros-tope hidden>
+    Llegaste al máximo de <%= max %> centros. Desmarca uno para elegir otro.
+  </p>
+</div>
+<% } %>

@@ -186,9 +186,11 @@
   color: var(--brand-deep);
 }
 
-/* ── Noticia destacada ── */
+/* ── Noticia destacada (home y /noticias): mismas proporciones ── */
 .home-featured {
   position: relative;
+  z-index: 0;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -200,7 +202,29 @@
   background: linear-gradient(120deg, var(--corp-blue-dark) 0%, var(--corp-blue) 85%);
   box-shadow: var(--shadow-card-lg);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
-  animation: cardPop 0.7s 0.08s cubic-bezier(0.16, 0.84, 0.3, 1.08) both;
+  animation: cardPop 0.7s 0.08s cubic-bezier(0.16, 0.84, 0.3, 1.08) backwards;
+}
+
+/* La portada sustituye el degradado; el alto lo sigue marcando el texto. */
+.home-featured__photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.home-featured__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.home-featured__photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(11, 31, 51, 0.72) 0%, rgba(15, 76, 129, 0.62) 85%);
 }
 
 .home-featured:hover {
@@ -238,6 +262,11 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.home-featured:focus-visible {
+  outline: 2px solid var(--corp-green, #a6d84a);
+  outline-offset: 3px;
 }
 
 .home-featured__head {

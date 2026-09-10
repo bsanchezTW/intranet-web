@@ -15,6 +15,10 @@
   var listaAdjuntos = document.getElementById("listaAdjuntos");
   var errorEl = document.getElementById("formError");
   var btnEnviar = document.getElementById("btnEnviar");
+  // Con un solo centro asignado el campo visible es de sólo lectura y el id
+  // viaja en un hidden; con dos, el propio select lleva el valor.
+  var centroSelect = document.getElementById("centroCosto");
+  var centroHidden = document.getElementById("centroCostoValor");
 
   var KIND = form.dataset.kind;
   var REQUIERE_ADJUNTO = form.dataset.requiereAdjunto === "true";
@@ -229,12 +233,19 @@
       return mostrarError("Una rendición necesita al menos un comprobante adjunto.");
     }
 
+    var centro = centroHidden ? centroHidden.value : (centroSelect ? centroSelect.value : "");
+    if (!centro) {
+      if (centroSelect && centroSelect.focus) centroSelect.focus();
+      return mostrarError("Elige el centro de costo al que se imputa este gasto.");
+    }
+
     var cuerpo = {
       kind: KIND,
       title: document.getElementById("titulo").value,
       description: document.getElementById("descripcion").value,
       items: items,
       attachments: adjuntos,
+      cost_center_id: centro,
     };
     var neededBy = document.getElementById("neededBy");
     if (neededBy) cuerpo.needed_by = neededBy.value;

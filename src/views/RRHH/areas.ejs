@@ -5,55 +5,110 @@
   const successMsg = (typeof success !== 'undefined' && success) ? success : null;
   const errorMsg   = (typeof error   !== 'undefined' && error)   ? error   : null;
   const totalMiembros = listado.reduce((n, a) => n + (a.memberCount || 0), 0);
+  const sinJefe = listado.filter(a => !a.managerName).length;
+  const listaSinArea = (unassigned && unassigned.length) ? unassigned : [];
+  const sinArea = listaSinArea.length;
+
+  // Cuántos avatares caben en la fila de resumen antes de resumirse en «+N».
+  const TOPE_STACK = 5;
+
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260902">
-<link rel="stylesheet" href="/css/areas.css?v=20260907">
+<link rel="stylesheet" href="/css/personal.css?v=20260911a">
+<link rel="stylesheet" href="/css/areas.css?v=20260911a">
 
 <div id="popup" class="popup-notification <%= successMsg ? 'success show' : errorMsg ? 'error show' : '' %>" role="status">
   <span><%= successMsg || errorMsg || '' %></span>
   <button type="button" class="popup-close" data-popup-close aria-label="Cerrar aviso">&times;</button>
 </div>
 
-<div class="contenedor-areas">
+<div class="contenedor contenedor-areas">
   <div class="page-header page-header--toolbar">
     <div class="page-header__text">
       <h2 class="page-title">Áreas de trabajo</h2>
       <p class="page-description">
         <span id="contadorAreas"><%= listado.length %></span> áreas ·
         <%= totalMiembros %> colaboradores asignados
-        <% if (unassigned && unassigned.length) { %>
-          · <%= unassigned.length %> sin área
+        <% if (sinArea) { %>
+          · <%= sinArea %> sin área
         <% } %>
       </p>
     </div>
     <div class="page-header-actions">
       <a href="/RRHH" class="link-volver">← Volver al menú</a>
       <% if (puedeEditar) { %>
-      <button type="button" class="btn-agregar-persona" data-abrir-crear>
-        <span aria-hidden="true">+</span> Agregar área
+      <button type="button" class="page-header-btn" data-abrir-crear>
+        <span aria-hidden="true"><%- include('../partials/icon', { name: 'plus' }) %></span> Agregar área
       </button>
       <% } %>
     </div>
   </div>
 
-  <% if (!listado.length && !(unassigned && unassigned.length)) { %>
-    <div class="panel area-empty-panel">
-      <p class="personal-empty">No hay áreas de trabajo registradas.</p>
+  <% if (!listado.length && !sinArea) { %>
+    <div class="ac-vacio">
+      <span class="ac-vacio__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'layers' }) %></span>
+      <h3>No hay áreas de trabajo</h3>
+      <p>Crea la primera área para empezar a organizar a los colaboradores.</p>
     </div>
   <% } else { %>
+
+    <%# Buscador y filtros: con muchas áreas, encontrar a una persona a ojo deja
+        de ser viable. El filtro entra tanto por nombre de área como de persona. %>
+    <div class="ac-toolbar">
+      <div class="ac-search">
+        <span class="ac-search__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
+        <label class="sr-only" for="buscadorAreas">Buscar área o colaborador</label>
+        <input type="search" id="buscadorAreas" class="ac-search__input"
+               placeholder="Buscar un área o un colaborador…" autocomplete="off">
+      </div>
+
+      <div class="ac-filtros" role="group" aria-label="Filtrar áreas">
+        <button type="button" class="ac-chip is-active" data-filtro="todas">Todas</button>
+        <button type="button" class="ac-chip" data-filtro="sin-jefe">
+          Sin jefe<% if (sinJefe) { %> <span class="ac-chip__n"><%= sinJefe %></span><% } %>
+        </button>
+        <button type="button" class="ac-chip" data-filtro="vacias">Sin colaboradores</button>
+      </div>
+    </div>
+
+    <p class="ac-sin-resultados" id="areasSinResultados" hidden>
+      Ningún área ni colaborador coincide con la búsqueda.
+    </p>
+
     <div class="areas-grid">
       <% listado.forEach(area => { %>
-        <article class="area-card" style="--area-color: <%= area.color %>">
+        <%
+          const visibles = area.members.slice(0, TOPE_STACK);
+          const restantes = area.memberCount - visibles.length;
+          const buscable = [area.area_name, area.managerName || '']
+            .concat(area.members.map(m => m.nombreCompleto))
+            .join(' ')
+            .toLowerCase();
+        %>
+        <article class="area-card" style="--area-color: <%= area.color %>"
+                 data-buscar="<%= buscable %>"
+                 data-miembros="<%= area.memberCount %>"
+                 data-sin-jefe="<%= area.managerName ? 'false' : 'true' %>">
+
           <div class="area-card__head">
+            <span class="area-card__tile" aria-hidden="true">
+              <%- include('../partials/icon', { name: 'users' }) %>
+            </span>
+
             <div class="area-card__title">
-              <span class="area-swatch-dot" style="background: <%= area.color %>" aria-hidden="true"></span>
-              <span class="<%= area.pillClass %>" style="<%= area.pillStyle %>"><%= area.area_name %></span>
-              <span class="area-card__id" title="ID del área"><%= area.id %></span>
+              <h3 class="area-card__nombre" title="<%= area.area_name %>"><%= area.area_name %></h3>
+              <div class="area-card__meta">
+                <span class="area-card__id" title="ID del área">#<%= area.id %></span>
+              </div>
             </div>
-            <span class="area-card__count"><%= area.memberCount %> <%= area.memberCount === 1 ? 'colaborador' : 'colaboradores' %></span>
+
             <% if (puedeEditar) { %>
             <div class="area-card__actions">
+              <button type="button" class="area-icon-btn" data-agregar-miembros="<%= area.id %>"
+                      title="Agregar colaboradores" aria-label="Agregar colaboradores a <%= area.area_name %>">
+                <%- include('../partials/icon', { name: 'user-plus' }) %>
+              </button>
               <button type="button" class="area-icon-btn" data-editar-area
                       data-id="<%= area.id %>"
                       data-name="<%= area.area_name %>"
@@ -82,106 +137,98 @@
               <%- include('../partials/icon', { name: area.managerName ? 'user-check' : 'alert-triangle' }) %>
             </span>
             <% if (area.managerName) { %>
-              <span>Jefe de área: <strong><%= area.managerName %></strong></span>
+              <span class="area-card__jefe-txt" title="Jefe de área: <%= area.managerName %>">Jefe de área: <strong><%= area.managerName %></strong></span>
             <% } else { %>
-              <span>Sin jefe asignado — su gente no puede rendir gastos.</span>
+              <span class="area-card__jefe-txt" title="Sin jefe asignado: su gente no puede rendir gastos.">Sin jefe: no pueden rendir gastos</span>
             <% } %>
           </div>
 
-          <ul class="area-members">
-            <% if (!area.members.length) { %>
-              <li class="area-members__empty">Sin colaboradores en esta área.</li>
-            <% } %>
-            <% area.members.forEach(m => { %>
-              <li class="area-member">
+          <%# El resumen sustituye a la lista completa: la tarjeta mide lo mismo
+              con tres colaboradores que con cuarenta, y el detalle se abre en un
+              modal en vez de estirar la fila entera de la grilla. %>
+          <button type="button" class="area-resumen" data-ver-miembros="<%= area.id %>">
+            <span class="area-stack" aria-hidden="true">
+              <% if (!area.memberCount) { %>
+                <span class="area-stack__item area-stack__vacio"><%- include('../partials/icon', { name: 'user' }) %></span>
+              <% } %>
+              <% visibles.forEach(m => { %>
                 <% if (m.photo) { %>
-                  <img src="<%= m.photo %>" alt="" class="avatar area-member__avatar" loading="lazy" decoding="async">
+                  <img src="<%= m.photo %>" alt="" class="avatar area-stack__item" loading="lazy" decoding="async">
                 <% } else { %>
-                  <span class="avatar-fallback <%= m.paletaAvatar %> area-member__avatar" aria-hidden="true"><%= m.inicial %></span>
+                  <span class="avatar-fallback <%= m.paletaAvatar %> area-stack__item"><%= m.inicial %></span>
                 <% } %>
-                <span class="area-member__name" title="<%= m.nombreCompleto %>"><%= m.nombreLista %></span>
-                <% if (puedeEditar) { %>
-                <div class="area-member__actions">
-                  <button type="button" class="area-member__swap" data-mover-miembro
-                          data-user-id="<%= m.id %>"
-                          data-nombre="<%= m.nombreLista %>"
-                          data-area-id="<%= area.id %>"
-                          data-area-name="<%= area.area_name %>"
-                          <%= listado.length < 2 ? 'disabled' : '' %>
-                          title="<%= listado.length < 2 ? 'No hay otras áreas para mover' : 'Cambiar de área' %>"
-                          aria-label="Cambiar de área a <%= m.nombreLista %>">
-                    <%- include('../partials/icon', { name: 'repeat' }) %>
-                  </button>
-                  <form action="/RRHH/areas/<%= area.id %>/miembros/<%= m.id %>/quitar" method="POST" class="area-inline-form"
-                        data-quitar-miembro="<%= m.nombreLista %>">
-                    <button type="submit" class="area-member__remove" title="Quitar del área" aria-label="Quitar a <%= m.nombreLista %>">×</button>
-                  </form>
-                </div>
-                <% } %>
-              </li>
-            <% }) %>
-          </ul>
-
-          <% if (puedeEditar) { %>
-          <form action="/RRHH/areas/<%= area.id %>/miembros" method="POST" class="area-add-form" data-agregar-miembro>
-            <label class="sr-only" for="user_id_<%= area.id %>">Agregar colaborador a <%= area.area_name %></label>
-            <select id="user_id_<%= area.id %>" name="user_id" required>
-              <option value="">Agregar colaborador…</option>
-              <% (people || []).forEach(p => { %>
-                <% if (Number(p.work_area_id) === Number(area.id)) return; %>
-                <option value="<%= p.id %>"
-                        data-area-actual="<%= p.area_name || '' %>"
-                        data-nombre="<%= p.nombreLista %>">
-                  <%= p.nombreLista %><% if (p.area_name) { %> (<%= p.area_name %>)<% } %>
-                </option>
               <% }) %>
-            </select>
-            <button type="submit" class="area-add-btn">Agregar</button>
-          </form>
-          <% } %>
+              <% if (restantes > 0) { %>
+                <span class="area-stack__item area-stack__mas">+<%= restantes %></span>
+              <% } %>
+            </span>
+            <span class="area-resumen__txt">
+              <% if (area.memberCount) { %><%= plural(area.memberCount, 'colaborador', 'colaboradores') %><% } else { %>Sin colaboradores<% } %>
+            </span>
+            <span class="area-resumen__chev" aria-hidden="true">
+              <%- include('../partials/icon', { name: 'chevron-right' }) %>
+            </span>
+          </button>
         </article>
       <% }) %>
 
-      <% if (unassigned && unassigned.length) { %>
-        <article class="area-card area-card--unassigned">
+      <% if (sinArea) { %>
+        <%
+          const visiblesSA = listaSinArea.slice(0, TOPE_STACK);
+          const restantesSA = listaSinArea.length - visiblesSA.length;
+          const buscableSA = ['sin área sin area']
+            .concat(listaSinArea.map(m => m.nombreCompleto))
+            .join(' ')
+            .toLowerCase();
+        %>
+        <article class="area-card area-card--unassigned"
+                 data-buscar="<%= buscableSA %>"
+                 data-miembros="<%= listaSinArea.length %>"
+                 data-sin-jefe="true">
           <div class="area-card__head">
+            <span class="area-card__tile" aria-hidden="true">
+              <%- include('../partials/icon', { name: 'alert-triangle' }) %>
+            </span>
             <div class="area-card__title">
-              <span class="area-swatch-dot area-swatch-dot--muted" aria-hidden="true"></span>
-              <span class="pill pill-area pill-area-default">Sin área</span>
+              <h3 class="area-card__nombre">Sin área</h3>
+              <div class="area-card__meta">
+                <span class="area-card__id">sin asignar</span>
+              </div>
             </div>
-            <span class="area-card__count"><%= unassigned.length %></span>
           </div>
-          <ul class="area-members">
-            <% unassigned.forEach(m => { %>
-              <li class="area-member">
+
+          <div class="area-card__jefe area-card__jefe--vacio">
+            <span class="area-card__jefe-icono" aria-hidden="true">
+              <%- include('../partials/icon', { name: 'info' }) %>
+            </span>
+            <span class="area-card__jefe-txt">Sin área no hay quién apruebe sus gastos</span>
+          </div>
+
+          <button type="button" class="area-resumen" data-ver-miembros="sin-area">
+            <span class="area-stack" aria-hidden="true">
+              <% visiblesSA.forEach(m => { %>
                 <% if (m.photo) { %>
-                  <img src="<%= m.photo %>" alt="" class="avatar area-member__avatar" loading="lazy" decoding="async">
+                  <img src="<%= m.photo %>" alt="" class="avatar area-stack__item" loading="lazy" decoding="async">
                 <% } else { %>
-                  <span class="avatar-fallback <%= m.paletaAvatar %> area-member__avatar" aria-hidden="true"><%= m.inicial %></span>
+                  <span class="avatar-fallback <%= m.paletaAvatar %> area-stack__item"><%= m.inicial %></span>
                 <% } %>
-                <span class="area-member__name" title="<%= m.nombreCompleto %>"><%= m.nombreLista %></span>
-                <% if (puedeEditar) { %>
-                <div class="area-member__actions">
-                  <button type="button" class="area-member__swap" data-mover-miembro
-                          data-user-id="<%= m.id %>"
-                          data-nombre="<%= m.nombreLista %>"
-                          data-area-id=""
-                          data-area-name=""
-                          <%= listado.length < 1 ? 'disabled' : '' %>
-                          title="<%= listado.length < 1 ? 'Crea un área para asignar colaboradores' : 'Asignar área' %>"
-                          aria-label="Asignar área a <%= m.nombreLista %>">
-                    <%- include('../partials/icon', { name: 'repeat' }) %>
-                  </button>
-                </div>
-                <% } %>
-              </li>
-            <% }) %>
-          </ul>
+              <% }) %>
+              <% if (restantesSA > 0) { %>
+                <span class="area-stack__item area-stack__mas">+<%= restantesSA %></span>
+              <% } %>
+            </span>
+            <span class="area-resumen__txt"><%= plural(listaSinArea.length, 'colaborador', 'colaboradores') %></span>
+            <span class="area-resumen__chev" aria-hidden="true">
+              <%- include('../partials/icon', { name: 'chevron-right' }) %>
+            </span>
+          </button>
         </article>
       <% } %>
     </div>
   <% } %>
 </div>
+
+<%- include('partials/ac_modales') %>
 
 <% if (puedeEditar) { %>
 <div id="modalMoverMiembro" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalMoverTitle" aria-hidden="true">
@@ -248,6 +295,56 @@
 </div>
 <% } %>
 
+<%# Configuración de los modales de lista: las personas van una sola vez y los
+    grupos las referencian por id, para no repetir la plantilla en cada área. %>
+<script type="application/json" id="ac-config"><%- JSON.stringify({
+  puedeEditar,
+  base: '/RRHH/areas',
+  permiteMover: true,
+  avatares: true,
+  detalleEnMiembros: false,
+  textos: {
+    miembrosVacio: 'Esta área todavía no tiene colaboradores.',
+    candidatosVacio: 'Todos los colaboradores ya están en esta área.',
+    agregarSub: 'Marca a quienes deban quedar en «{grupo}».',
+    agregarBoton: 'Agregar colaboradores',
+    quitarConfirmar: '¿Quitar a {nombre} de «{grupo}»? Quedará sin área hasta que le asignes otra.',
+    quitar: 'Quitar del área',
+    mover: 'Cambiar de área',
+    destacado: 'Jefe de área',
+    destacadoCorto: 'Jefe',
+    confirmarMoverUno: 'El colaborador que marcaste está en otra área y pasará a «{grupo}»: sus gastos los aprobará el jefe de esta área. ¿Continuar?',
+    confirmarMover: '{n} de los colaboradores que marcaste están en otras áreas y pasarán a «{grupo}»: sus gastos los aprobará el jefe de esta área. ¿Continuar?',
+  },
+  personas: (people || []).map((p) => ({
+    id: p.id,
+    nombre: p.nombreLista,
+    detalle: p.area_name || 'Sin área',
+    photo: p.photo || null,
+    inicial: p.inicial,
+    paleta: p.paletaAvatar,
+    // Quien ya tiene área cambia de jefe al pasar a otra: se avisa al agregar.
+    mueve: !!p.area_name,
+  })),
+  grupos: listado.map((a) => ({
+    id: a.id,
+    titulo: a.area_name,
+    subtitulo: a.managerName ? `Jefe de área: ${a.managerName}` : 'Sin jefe asignado',
+    miembros: a.members.map((m) => m.id),
+    destacado: a.manager_user_id || null,
+    puedeAgregar: true,
+  })).concat(sinArea ? [{
+    id: 'sin-area',
+    // No es un área: con el destino vacío el modal ofrece "asignar" y no "mover".
+    moverId: '',
+    titulo: 'Sin área',
+    subtitulo: 'Estos colaboradores no tienen quién les apruebe los gastos.',
+    miembros: listaSinArea.map((m) => m.id),
+    destacado: null,
+    puedeAgregar: false,
+  }] : []),
+}).replace(/</g, '\\u003c') %></script>
+
 <script type="application/json" id="areas-config"><%- JSON.stringify({
   puedeEditar,
   defaultColor: defaultColor || '#5a6879',
@@ -260,4 +357,5 @@
     members: a.members.map((m) => ({ id: m.id, nombre: m.nombreLista })),
   })),
 }).replace(/</g, '\\u003c') %></script>
-<script src="/js/areas.js?v=20260909a" defer></script>
+<script src="/js/ac-cards.js?v=20260911a" defer></script>
+<script src="/js/areas.js?v=20260911a" defer></script>

@@ -19,6 +19,7 @@
 /* ── Contenedor único consolidado ── */
 .profile-photo-preview {
   --photo-ring: #e2e8f0;
+  --photo-ring-width: 3px;
   --photo-fill: #f8fafc;
   position: relative;
   flex-shrink: 0;
@@ -31,7 +32,7 @@
   box-shadow: none;
   filter: none;
   border-radius: 50%;
-  padding: 3px;
+  padding: var(--photo-ring-width);
   background: var(--photo-ring);
 }
 
@@ -45,13 +46,17 @@
   --photo-fill: #f8fafc;
 }
 
-/* ── Placeholder e imagen ocupan el círculo interior (el padding es el anillo) ── */
+/* ── Placeholder e imagen ocupan el círculo interior (el padding es el anillo) ──
+   Las medidas van explícitas y no con `width: auto`: en un elemento reemplazado
+   posicionado, `auto` resuelve al tamaño intrínseco —los 400px que deja el
+   recorte— y la foto se sale del anillo. El porcentaje se mide contra la caja
+   de relleno del contenedor, así que hay que descontar el anillo dos veces. */
 .profile-photo-placeholder,
 .profile-photo-preview img {
   position: absolute;
-  inset: 3px;
-  width: auto;
-  height: auto;
+  inset: var(--photo-ring-width);
+  width: calc(100% - var(--photo-ring-width) * 2);
+  height: calc(100% - var(--photo-ring-width) * 2);
   border-radius: 50%;
   background: var(--photo-fill);
 }

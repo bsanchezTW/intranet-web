@@ -50,52 +50,45 @@
     }
 
     const emailInput = document.getElementById('email');
-    const emailError = document.getElementById('email-error');
     const fechaInput = document.getElementById('fecha_nacimiento');
     const fechaLabel = document.getElementById('fecha_nacimiento_label');
     const telefonoField = form.querySelector('[data-phone-field]');
     const telefonoLocal = telefonoField?.querySelector('.phone-field__local');
-    const telefonoError = document.getElementById('telefono-error');
-    const FECHA_REQUERIDA_MSG =
-      'La fecha de nacimiento es obligatoria para colaboradores sin correo.';
-    const EMAIL_LOCKED_MSG =
-      'No puedes quitar el correo de un usuario ya registrado en la intranet.';
+    const FECHA_REQUERIDA_MSG = 'Fecha requerida sin correo';
+    const EMAIL_LOCKED_MSG = 'El correo no se puede quitar';
 
-    function toggleFieldError(el, message) {
-      if (!el) return;
-      if (message) {
-        el.textContent = message;
-        el.classList.add('show');
-      } else {
-        el.textContent = '';
-        el.classList.remove('show');
-      }
-    }
-
+    /** Sin correo no hay cuenta de intranet: el cumpleaños pasa a ser obligatorio. */
     function syncFechaRequired() {
       if (!fechaInput || !emailInput) return;
       const obligatoria = global.EmailValidate.isEmpty(emailInput);
       fechaInput.required = obligatoria;
       if (fechaLabel) {
-        fechaLabel.textContent = obligatoria
-          ? 'Fecha de Nacimiento *'
-          : 'Fecha de Nacimiento';
+        const marca = fechaLabel.querySelector('.required-mark');
+        if (obligatoria && !marca) {
+          fechaLabel.insertAdjacentHTML(
+            'beforeend',
+            ' <span class="required-mark">*</span>',
+          );
+        } else if (!obligatoria && marca) {
+          marca.remove();
+        }
       }
-      if (!obligatoria) fechaInput.setCustomValidity('');
+      if (!obligatoria) global.CampoForm.limpiar(fechaInput);
     }
 
     global.EmailValidate.initField(emailInput);
     global.PhoneField.initField(telefonoField);
 
-    function onEmailInput() {
-      let msg = '';
-      if (emailInput.dataset.emailLocked === '1' && global.EmailValidate.isEmpty(emailInput)) {
-        msg = EMAIL_LOCKED_MSG;
-      } else if (!global.EmailValidate.isValid(emailInput)) {
-        msg = global.EmailValidate.ERROR_MSG;
+    function mensajeCorreo() {
+      if (emailInput?.dataset.emailLocked === '1' && global.EmailValidate.isEmpty(emailInput)) {
+        return EMAIL_LOCKED_MSG;
       }
-      emailInput.setCustomValidity(msg);
-      toggleFieldError(emailError, msg);
+      if (!global.EmailValidate.isValid(emailInput)) return global.EmailValidate.ERROR_MSG;
+      return '';
+    }
+
+    function onEmailInput() {
+      global.CampoForm.marcar(emailInput, mensajeCorreo());
       syncFechaRequired();
     }
 
@@ -103,21 +96,16 @@
       const invalid =
         !global.PhoneField.isFieldEmpty(telefonoField) &&
         !global.PhoneField.isFieldValid(telefonoField);
-      toggleFieldError(telefonoError, invalid ? global.PhoneField.ERROR_MSG : '');
+      global.CampoForm.marcar(telefonoLocal, invalid ? global.PhoneField.ERROR_MSG : '');
     }
 
     function onSubmit(event) {
       let hasError = false;
 
-      if (emailInput?.dataset.emailLocked === '1' && global.EmailValidate.isEmpty(emailInput)) {
+      const errorCorreo = mensajeCorreo();
+      if (errorCorreo) {
         hasError = true;
-        toggleFieldError(emailError, EMAIL_LOCKED_MSG);
-        emailInput.setCustomValidity(EMAIL_LOCKED_MSG);
-        emailInput.reportValidity();
-      } else if (!global.EmailValidate.isValid(emailInput)) {
-        hasError = true;
-        toggleFieldError(emailError, global.EmailValidate.ERROR_MSG);
-        emailInput.reportValidity();
+        global.CampoForm.marcar(emailInput, errorCorreo);
       }
 
       if (
@@ -125,8 +113,7 @@
         !global.PhoneField.isFieldValid(telefonoField)
       ) {
         hasError = true;
-        toggleFieldError(telefonoError, global.PhoneField.ERROR_MSG);
-        telefonoLocal.reportValidity();
+        global.CampoForm.marcar(telefonoLocal, global.PhoneField.ERROR_MSG);
       }
 
       if (
@@ -134,11 +121,12 @@
         !String(fechaInput?.value || '').trim()
       ) {
         hasError = true;
-        fechaInput.setCustomValidity(FECHA_REQUERIDA_MSG);
-        fechaInput.reportValidity();
+        global.CampoForm.marcar(fechaInput, FECHA_REQUERIDA_MSG);
       }
 
-      if (hasError) event.preventDefault();
+      if (!hasError) return;
+      event.preventDefault();
+      global.CampoForm.enfocarPrimerError(form);
     }
 
     emailInput?.addEventListener('input', onEmailInput);
