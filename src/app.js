@@ -34,6 +34,7 @@ const noticiasRoutes = require("./routes/noticias");
 const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
 const { phoneClientConfig } = require("./utils/phone");
+const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const ticketsRoutes = isFeatureEnabled("supportTickets")
@@ -97,6 +98,7 @@ app.set("layout", "layout");
 app.locals.formatPageTitle = formatPageTitle;
 // Formato de celular del país, para inyectarlo al script de cliente.
 app.locals.phoneClientConfig = phoneClientConfig;
+app.locals.getMonogram = getMonogram;
 
 // ================================
 // Middlewares Básicos
@@ -314,7 +316,7 @@ app.use("/content", async (req, res, next) => {
 // ================================
 // Variables Globales y Permisos
 // ================================
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   const user = req.session.user;
 
   // Identidad de la instancia disponible en todas las vistas.
@@ -326,6 +328,26 @@ app.use((req, res, next) => {
   res.locals.usuario = req.session.user || null;
 
   if (user) {
+    // Sesiones anteriores al monograma no traen área: una consulta y queda
+    // en la cookie. `area_color: null` (sin área) también cuenta como listo.
+    if (user.id && user.area_color === undefined) {
+      try {
+        const { rows } = await db.query(
+          `SELECT u.first_name, u.last_name, u.photo, u.work_area_id,
+                  at.area_name, at.color AS area_color
+             FROM users u
+             LEFT JOIN work_areas at ON at.id = u.work_area_id
+            WHERE u.id = $1`,
+          [user.id],
+        );
+        if (rows[0]) applyIdentityToSession(user, rows[0]);
+        else user.area_color = null;
+      } catch (err) {
+        logger.warn("session-identity", err);
+        user.area_color = null;
+      }
+    }
+
     const role = normalizeRole(user.role);
     res.locals.userRole = role;
     res.locals.isAdministrador = isAdministrador(role);

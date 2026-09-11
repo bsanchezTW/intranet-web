@@ -71,8 +71,12 @@
     closeBtn?.addEventListener('click', closeModal);
     cancelBtn?.addEventListener('click', closeModal);
 
+    // El fondo cierra sólo si el gesto entero ocurrió sobre el fondo: soltar
+    // fuera un arrastre iniciado dentro reporta el `click` sobre el overlay.
     overlay.addEventListener('click', function (e) {
-      if (e.target === overlay) closeModal();
+      if (e.target !== overlay) return;
+      if (!global.IntranetModal.gestoCompletoSobre(overlay)) return;
+      closeModal();
     });
 
     overlay.querySelectorAll('[data-toggle-password]').forEach(function (btn) {

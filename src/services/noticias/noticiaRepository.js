@@ -174,7 +174,8 @@ async function findAuthorNames(claves) {
 
 async function listUsersWithEmail() {
   const { rows } = await db.query(`
-    SELECT u.id, u.first_name, u.last_name, u.email, at.area_name AS area
+    SELECT u.id, u.first_name, u.last_name, u.email, at.area_name AS area,
+           at.color AS area_color
     FROM users u
     LEFT JOIN work_areas at ON at.id = u.work_area_id
     WHERE u.email IS NOT NULL AND TRIM(u.email) <> ''

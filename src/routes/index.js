@@ -30,6 +30,7 @@ const { isFeatureEnabled } = require("../config/features");
 const requireRole = require("../middlewares/requireRole");
 const requireFeature = require("../middlewares/requireFeature");
 const { toTitleCase } = require("../utils/formatName");
+const { applyIdentityToSession, getMonogram } = require("../utils/monogram");
 const {
   toTelHref,
   formatPhoneForDisplay,
@@ -354,8 +355,11 @@ router.get("/", async (req, res) => {
     // FIX: LEFT JOIN en vez de INNER JOIN para no romper si area_trabajo_id es NULL
     const sqlMes = `
       SELECT
+        u.first_name,
+        u.last_name,
         TRIM(CONCAT(u.first_name, ' ', COALESCE(u.last_name, ''))) AS nombre,
         COALESCE(at.area_name, 'Sin área') AS area,
+        at.color AS area_color,
         u.photo,
         EXTRACT(DAY FROM u.birth_date) AS dia
       FROM users u
@@ -431,7 +435,10 @@ router.get("/", async (req, res) => {
       nombrePila,
       mesNombre,
       diaHoy,
-      cumpleaniosMes: resultsMes,
+      cumpleaniosMes: resultsMes.map((p) => ({
+        ...p,
+        monogram: getMonogram(p),
+      })),
       eventosCarousel: eventosRows,
       eventosPortadas,
       mixedCarousel: mixedFeed,
@@ -537,7 +544,7 @@ router.get("/perfil", async (req, res) => {
   if (!req.session.user) return res.redirect("/login");
   const id = req.session.user.id;
   const { rows } = await db.query(
-    `SELECT u.*, at.area_name AS area
+    `SELECT u.*, at.area_name AS area, at.color AS area_color
      FROM users u
      LEFT JOIN work_areas at ON at.id = u.work_area_id
      WHERE u.id = $1`,
@@ -621,8 +628,10 @@ router.post("/perfil", async (req, res) => {
       ],
     );
 
-    req.session.user.first_name = firstName;
-    req.session.user.last_name = lastName;
+    applyIdentityToSession(req.session.user, {
+      first_name: firstName,
+      last_name: lastName,
+    });
     req.session.user.telefono = telefonoCheck.storageValue;
     req.session.user.fecha_nacimiento = fechaNacimiento;
 

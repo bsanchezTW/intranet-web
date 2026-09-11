@@ -366,10 +366,13 @@ router.post("/login", async (req, res) => {
     let rows;
     try {
       ({ rows } = await pool.query(
-        `SELECT id, first_name, last_name, email, role, email_confirmed,
-                password_hash, password_salt, photo, must_change_password,
-                confirm_token, confirm_expires, home_tutorial_seen, last_login_at
-         FROM users WHERE email = $1 LIMIT 1`,
+        `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.email_confirmed,
+                u.password_hash, u.password_salt, u.photo, u.must_change_password,
+                u.confirm_token, u.confirm_expires, u.home_tutorial_seen, u.last_login_at,
+                u.work_area_id, at.area_name, at.color AS area_color
+         FROM users u
+         LEFT JOIN work_areas at ON at.id = u.work_area_id
+         WHERE u.email = $1 LIMIT 1`,
         [email],
       ));
     } catch (queryErr) {
@@ -443,12 +446,21 @@ router.post("/login", async (req, res) => {
       email: u.email,
       role: normalizeRole(u.role),
       nombre: u.first_name + (u.last_name ? " " + u.last_name : ""),
+      first_name: u.first_name,
+      last_name: u.last_name,
       foto: u.photo || null,
       photo: u.photo || null,
+      work_area_id: u.work_area_id || null,
+      area: u.area_name || null,
       must_change_password: u.must_change_password,
       home_tutorial_seen: u.home_tutorial_seen !== false,
       show_home_tutorial: showHomeTutorial,
     };
+    // El SELECT de respaldo (esquema viejo) no trae color: dejar `undefined`
+    // para que el middleware hidrate el área en el siguiente request.
+    if ("area_color" in u) {
+      req.session.user.area_color = u.area_color ?? null;
+    }
 
     if (u.must_change_password) {
       return succeed("/reset-password");

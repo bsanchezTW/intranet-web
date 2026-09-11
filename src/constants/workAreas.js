@@ -134,13 +134,74 @@ const WORK_AREA_COLOR_LOOKUP = Object.fromEntries(
 WORK_AREA_COLOR_LOOKUP.ti = WORK_AREA_COLORS.Informática;
 WORK_AREA_COLOR_LOOKUP.informatica = WORK_AREA_COLORS.Informática;
 
-const COLOR_PALETTE = [
-  ...Object.entries(WORK_AREA_HSL).map(([label, { h, s }]) => ({
-    hex: hslToHex(h, s),
-    label,
-  })),
-  { hex: DEFAULT_COLOR, label: "Gris" },
+/**
+ * Matices del selector. Incluye los HSL históricos de WORK_AREA_HSL para que
+ * las áreas ya pintadas sigan coincidiendo con un swatch, y completa el resto
+ * del círculo (rojo, lima) que antes no se podía elegir de un clic.
+ */
+const PALETTE_HUES = [
+  { label: "Rojo", h: 4, s: 70 },
+  { label: "Naranja", h: 25, s: 75 },
+  { label: "Ámbar", h: 38, s: 72 },
+  { label: "Mostaza", h: 48, s: 68 },
+  { label: "Lima", h: 92, s: 52 },
+  { label: "Verde", h: 142, s: 55 },
+  { label: "Teal", h: 172, s: 62 },
+  { label: "Cian", h: 190, s: 68 },
+  { label: "Celeste", h: 200, s: 72 },
+  { label: "Azul", h: 232, s: 58 },
+  { label: "Violeta", h: 258, s: 58 },
+  { label: "Púrpura", h: 292, s: 58 },
+  { label: "Rosa", h: 330, s: 62 },
 ];
+
+const PALETTE_TONES = [
+  { name: "oscuro", l: 32 },
+  { name: "medio", l: 45 },
+  { name: "claro", l: 58 },
+];
+
+const PALETTE_NEUTRALS = [
+  { label: "Carbón", h: 215, s: 10, l: 26 },
+  { label: "Grafito", h: 215, s: 12, l: 38 },
+  { label: "Gris", hex: DEFAULT_COLOR },
+  { label: "Pizarra", h: 215, s: 16, l: 52 },
+  { label: "Piedra", h: 32, s: 8, l: 48 },
+  { label: "Crema", h: 36, s: 18, l: 58 },
+];
+
+function buildColorPalette() {
+  const namedByHex = new Map(
+    Object.entries(WORK_AREA_COLORS).map(([name, hex]) => [hex, name]),
+  );
+  const seen = new Set();
+  const entries = [];
+
+  function add(hex, label) {
+    const normalized = normalizeHex(hex);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    entries.push({ hex: normalized, label });
+  }
+
+  PALETTE_TONES.forEach(({ name, l }) => {
+    PALETTE_HUES.forEach(({ label, h, s }) => {
+      const hex = hslToHex(h, s, l);
+      const named = l === 45 ? namedByHex.get(hex) : null;
+      add(hex, named || (name === "medio" ? label : `${label} ${name}`));
+    });
+  });
+
+  PALETTE_NEUTRALS.forEach((neutral) => {
+    const hex =
+      neutral.hex || hslToHex(neutral.h, neutral.s, neutral.l);
+    add(hex, neutral.label);
+  });
+
+  return entries;
+}
+
+const COLOR_PALETTE = buildColorPalette();
 
 function getColorForAreaName(areaName) {
   if (!areaName) return DEFAULT_COLOR;

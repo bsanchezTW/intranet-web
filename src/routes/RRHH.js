@@ -30,6 +30,7 @@ function parseRoleFromForm(role) {
 const requireRole = require("../middlewares/requireRole");
 const { sendMail } = require("../services/mailer");
 const { toTitleCase } = require("../utils/formatName");
+const { getMonogram, applyIdentityToSession } = require("../utils/monogram");
 const {
   validateMobilePhone,
   formatPhoneForDisplay,
@@ -273,7 +274,7 @@ async function parseAreaManager(rawValue, areaId) {
   return { ok: true, managerId };
 }
 
-function formatAreaMember(row, idx) {
+function formatAreaMember(row) {
   const firstName = row.first_name || "";
   const lastName = row.last_name || "";
   const primerNombre = String(firstName).trim().split(/\s+/)[0] || "";
@@ -282,7 +283,12 @@ function formatAreaMember(row, idx) {
     [primerNombre, primerApellido].filter(Boolean).join(" ") || "-";
   const nombreCompleto =
     [firstName, lastName].filter(Boolean).join(" ") || "-";
-  const inicial = (primerNombre || primerApellido || "?").charAt(0).toUpperCase();
+  const monogram = getMonogram({
+    first_name: firstName,
+    last_name: lastName,
+    area: row.area_name,
+    area_color: row.area_color || row.color,
+  });
   return {
     id: row.id,
     first_name: firstName,
@@ -292,9 +298,23 @@ function formatAreaMember(row, idx) {
     area_name: row.area_name || null,
     nombreLista,
     nombreCompleto,
-    inicial,
-    paletaAvatar: `avatar-fallback--c${(idx % 6) + 1}`,
+    inicial: monogram.initials,
+    monogramStyle: monogram.style,
   };
+}
+
+async function refreshSessionIdentity(req, userId) {
+  if (!req.session?.user || !userId) return;
+  if (String(req.session.user.id) !== String(userId)) return;
+  const { rows } = await db.query(
+    `SELECT u.first_name, u.last_name, u.photo, u.work_area_id,
+            at.area_name, at.color AS area_color
+       FROM users u
+       LEFT JOIN work_areas at ON at.id = u.work_area_id
+      WHERE u.id = $1`,
+    [userId],
+  );
+  if (rows[0]) applyIdentityToSession(req.session.user, rows[0]);
 }
 
 // ==========================================
@@ -362,6 +382,7 @@ router.get("/personal", async (req, res) => {
         telefonoHref,
         pillClass: pill.pillClass,
         pillStyle: pill.pillStyle,
+        monogram: getMonogram(p),
       };
 
       if (!mostrarColumnaRol) {
@@ -872,11 +893,9 @@ router.post(
 
       if (
         req.session.user &&
-        String(req.session.user.id) === String(id) &&
-        fotoValue !== undefined
+        String(req.session.user.id) === String(id)
       ) {
-        req.session.user.foto = fotoValue;
-        req.session.user.photo = fotoValue;
+        await refreshSessionIdentity(req, id);
       }
 
       if (passwordTemporalNueva) {
@@ -1009,16 +1028,14 @@ router.get("/areas", async (req, res) => {
       ),
       db.query(
         `SELECT u.id, u.first_name, u.last_name, u.photo, u.work_area_id,
-                at.area_name
+                at.area_name, at.color AS area_color
          FROM users u
          LEFT JOIN work_areas at ON at.id = u.work_area_id
          ORDER BY u.last_name ASC NULLS LAST, u.first_name ASC`,
       ),
     ]);
 
-    const people = peopleResult.rows.map((row, idx) =>
-      formatAreaMember(row, idx),
-    );
+    const people = peopleResult.rows.map((row) => formatAreaMember(row));
     const peopleByArea = new Map();
     const unassigned = [];
     for (const person of people) {
@@ -1124,6 +1141,9 @@ router.post("/areas/:id", requireRole.administrador(), async (req, res) => {
       return redirectAreasError(res, "El área no existe.");
     }
     invalidarCachesDeArea();
+    if (Number(req.session.user?.work_area_id) === areaId) {
+      await refreshSessionIdentity(req, req.session.user.id);
+    }
     return redirectAreasOk(res, "Área actualizada.");
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -1236,6 +1256,7 @@ router.post(
         await limpiarJefaturaHuerfana(userId);
       }
       invalidarCachesDeArea();
+      await refreshSessionIdentity(req, req.session.user?.id);
       return redirectAreasOk(
         res,
         userIds.length === 1
@@ -1290,6 +1311,7 @@ router.post(
       }
 
       invalidarCachesDeArea();
+      await refreshSessionIdentity(req, userId);
       return redirectAreasOk(
         res,
         eraJefe
@@ -1360,6 +1382,7 @@ router.post(
       }
 
       invalidarCachesDeArea();
+      await refreshSessionIdentity(req, userId);
       const destName = targetResult.rows[0].area_name;
       if (eraJefe) {
         return redirectAreasOk(

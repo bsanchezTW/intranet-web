@@ -749,7 +749,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--brand-soft);
+  font-size: 0.68rem;
 }
 
 .home-bday--today .home-bday__avatar {
@@ -760,12 +760,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.home-bday__initials {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--brand);
 }
 
 .home-bday__info {

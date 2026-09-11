@@ -21,7 +21,7 @@
   const errorMsg   = (typeof error   !== 'undefined' && error)   ? error   : null;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260911a">
+<link rel="stylesheet" href="/css/personal.css?v=20260911c">
 <link rel="stylesheet" href="/css/phone.css?v=20260902">
 <% if (puedeEditar) { %>
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
@@ -105,7 +105,7 @@
           </tr>
         </thead>
         <tbody>
-          <% listado.forEach((p, idx) => { %>
+          <% listado.forEach((p) => { %>
             <%
               const firstName  = p.first_name  || '';
               const lastName   = p.last_name   || '';
@@ -115,8 +115,6 @@
               const nombreLista = [primerNombre, primerApellido].filter(Boolean).join(' ') || '-';
               const nombreCompleto = [firstName, lastName].filter(Boolean).join(' ') || '-';
               const sortApellido = (primerApellido || primerNombre || '').toLowerCase();
-              const inicial    = (primerNombre || primerApellido || '?').charAt(0).toUpperCase();
-              const paletaAvatar = 'avatar-fallback--c' + ((idx % 6) + 1);
               const areaNombre = p.area || '-';
               const correo   = p.email    || '-';
               const telefono = p.phone || '-';
@@ -136,7 +134,7 @@
                   <% if (p.photo) { %>
                     <img src="<%= p.photo %>" alt="" class="avatar" loading="lazy" decoding="async">
                   <% } else { %>
-                    <span class="avatar-fallback <%= paletaAvatar %>" aria-hidden="true"><%= inicial %></span>
+                    <%- include('../partials/monogram', { initials: p.monogram.initials, style: p.monogram.style, className: 'avatar-fallback' }) %>
                   <% } %>
                   <% if (puedeEditar) { %>
                     <a href="/RRHH/personal?editar=<%= p.id %>" class="link-nombre-colaborador"

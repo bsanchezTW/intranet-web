@@ -23,13 +23,6 @@
     return formatDateShort(dateString).replace('-', ' ').toUpperCase();
   }
 
-  function getInitials(name) {
-    if (!name) return '?';
-    const parts = String(name).trim().split(/\s+/).filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return parts[0][0].toUpperCase();
-  }
-
   function financeTrendClass(tendencia) {
     if (tendencia === 'alcista') return 'home-indicator--up';
     if (tendencia === 'bajista') return 'home-indicator--down';
@@ -42,6 +35,19 @@
     return '−';
   }
 
+  function inicialesCumple(person) {
+    const first = String(person.first_name || '').trim().split(/\s+/).filter(Boolean)[0] || '';
+    const last = String(person.last_name || '').trim().split(/\s+/).filter(Boolean)[0] || '';
+    if (first && last) return (first.charAt(0) + last.charAt(0)).toUpperCase();
+    const parts = String(person.nombre || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+    if (parts[0]) return parts[0].charAt(0).toUpperCase();
+    if (first) return first.charAt(0).toUpperCase();
+    return '?';
+  }
+
   const mesCorto = new Date(2000, new Date().getMonth(), 1)
     .toLocaleString(countryConfig.locale, { month: 'short' })
     .replace('.', '');
@@ -49,7 +55,13 @@
   const mesNum = new Date().getMonth() + 1;
   let cumpleaniosOrdenados = [];
   if (typeof cumpleaniosMes !== 'undefined' && cumpleaniosMes) {
-    cumpleaniosOrdenados = [...cumpleaniosMes].sort((a, b) => {
+    cumpleaniosOrdenados = [...cumpleaniosMes].map((p) => {
+      if (p.monogram && p.monogram.initials) return p;
+      const extra = (typeof getMonogram === 'function')
+        ? getMonogram(p)
+        : { initials: inicialesCumple(p), style: '' };
+      return Object.assign({}, p, { monogram: extra });
+    }).sort((a, b) => {
       const dHoy = (typeof diaHoy !== 'undefined') ? diaHoy : new Date().getDate();
       const aPasado = a.dia < dHoy;
       const bPasado = b.dia < dHoy;
@@ -379,26 +391,27 @@
           <% } else { %>
             <% const hoyDia = new Date().getDate(); %>
             <div id="lista-cumpleanos" class="home-bdays__list">
-              <% cumpleaniosOrdenados.forEach((p, index) => {
+              <% for (let index = 0; index < cumpleaniosOrdenados.length; index++) {
+                const p = cumpleaniosOrdenados[index];
                 const ocultoClass = (index >= 3) ? 'is-hidden' : '';
                 const esHoy = (Number(p.dia) === hoyDia);
-                const iniciales = getInitials(p.nombre);
+                const monogram = p.monogram || { initials: inicialesCumple(p), style: '' };
               %>
                 <article class="home-bday item-cumple<%= esHoy ? ' home-bday--today' : '' %> <%= ocultoClass %>" aria-label="Cumpleaños de <%= titleCase(p.nombre) %>">
-                  <span class="home-bday__avatar">
-                    <% if (p.photo || p.foto) { %>
+                  <% if (p.photo || p.foto) { %>
+                    <span class="home-bday__avatar">
                       <img src="<%= p.photo || p.foto %>" alt="" class="home-bday__img" loading="lazy">
-                    <% } else { %>
-                      <span class="home-bday__initials" aria-hidden="true"><%= iniciales %></span>
-                    <% } %>
-                  </span>
+                    </span>
+                  <% } else { %>
+                    <span class="home-bday__avatar monogram" style="<%= monogram.style || '' %>" aria-hidden="true"><%= monogram.initials || '?' %></span>
+                  <% } %>
                   <span class="home-bday__info">
                     <span class="home-bday__name"><%= titleCase(p.nombre) %></span>
                     <span class="home-bday__area"><%= titleCase(p.area) %></span>
                   </span>
                   <span class="home-bday__date<%= esHoy ? ' home-bday__date--today' : '' %>" aria-label="<%= p.dia %> de <%= mesCorto %>"><%= p.dia %> <%= mesCorto.toUpperCase() %></span>
                 </article>
-              <% }); %>
+              <% } %>
             </div>
             <% if (cumpleaniosOrdenados.length > 3) { %>
               <button type="button" id="btn-ver-mas-cumple" class="home-bdays__more" onclick="toggleCumpleanios()">Ver más...</button>

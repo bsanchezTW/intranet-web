@@ -259,7 +259,7 @@ html[data-theme="dark"] .personal-chip.is-activo { color: var(--color-bg); }
   color: var(--color-text-muted);
 }
 
-/* ── Avatares con iniciales (paletas rotativas) ── */
+/* ── Avatares: tamaño; el color lo pinta .monogram (área de trabajo) ── */
 .avatar {
   width: 38px;
   height: 38px;
@@ -272,22 +272,8 @@ html[data-theme="dark"] .personal-chip.is-activo { color: var(--color-bg); }
   flex: none;
   width: 38px;
   height: 38px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.9rem;
-  color: #fff;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--brand), var(--corp-blue-light));
+  font-size: 0.72rem;
 }
-
-.avatar-fallback--c1 { background: linear-gradient(135deg, #0f4c81, #2a6ba8); }
-.avatar-fallback--c2 { background: linear-gradient(135deg, #5c8f1d, #8bc34a); }
-.avatar-fallback--c3 { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
-.avatar-fallback--c4 { background: linear-gradient(135deg, #c2410c, #fb923c); }
-.avatar-fallback--c5 { background: linear-gradient(135deg, #0e7490, #22d3ee); }
-.avatar-fallback--c6 { background: linear-gradient(135deg, #9d174d, #ec4899); }
 
 /* ── Chips de área / rol ── */
 .pill {
@@ -563,7 +549,7 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   .tabla-personal .avatar-fallback {
     width: 32px;
     height: 32px;
-    font-size: 0.8rem;
+    font-size: 0.62rem;
   }
 }
 

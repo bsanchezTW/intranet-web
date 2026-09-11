@@ -193,12 +193,47 @@
 
     btnClose.addEventListener("click", onCancel);
     btnCancel.addEventListener("click", onCancel);
+    // Cerrar al pulsar el fondo exige que el gesto entero ocurra sobre el
+    // fondo. Recortar es arrastrar: al soltar el ratón fuera del modal el
+    // `click` se reporta sobre el overlay —es el ancestro común del punto
+    // donde se apretó y donde se soltó— y el recorte se cancelaba solo.
+    // Los oyentes de pointer van en captura para ver el gesto aunque
+    // Cropper.js detenga la propagación del suyo.
+    let apretadoEn = null;
+    let soltadoEn = null;
+    overlay.addEventListener(
+      "pointerdown",
+      function (e) {
+        apretadoEn = e.target;
+      },
+      true,
+    );
+    overlay.addEventListener(
+      "pointerup",
+      function (e) {
+        soltadoEn = e.target;
+      },
+      true,
+    );
     overlay.addEventListener("click", function (e) {
-      if (e.target === overlay) onCancel();
+      const gestoEnElFondo = apretadoEn === overlay && soltadoEn === overlay;
+      apretadoEn = null;
+      soltadoEn = null;
+      if (e.target === overlay && gestoEnElFondo) onCancel();
     });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && overlay.classList.contains("is-open")) onCancel();
-    });
+    // El recorte se abre por encima de otros modales (editar persona, por
+    // ejemplo). En captura y cortando la propagación, Escape cierra sólo el
+    // recorte: antes el mismo Escape llegaba a modal.js y cerraba también el
+    // formulario de abajo, perdiendo lo escrito.
+    document.addEventListener(
+      "keydown",
+      function (e) {
+        if (e.key !== "Escape" || !overlay.classList.contains("is-open")) return;
+        e.stopPropagation();
+        onCancel();
+      },
+      true,
+    );
 
     btnSave.addEventListener("click", function () {
       if (!cropper) return;

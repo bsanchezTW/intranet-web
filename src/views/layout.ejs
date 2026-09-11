@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= formatPageTitle(titulo) %></title>
-    <link rel="stylesheet" href="/css/intranet.css?v=20260911a">
-    <link rel="stylesheet" href="/css/modal.css?v=20260910n">
+    <link rel="stylesheet" href="/css/intranet.css?v=20260911c">
+    <link rel="stylesheet" href="/css/modal.css?v=20260911b">
     <% if (features.supportTickets) { %>
     <link rel="stylesheet" href="/css/ticket-modal.css?v=20260910n">
     <% } %>
@@ -15,7 +15,7 @@
         <link rel="stylesheet" href="<%= href %>">
       <% }) %>
     <% } %>
-    <link rel="stylesheet" href="/css/home.css?v=20260910x">
+    <link rel="stylesheet" href="/css/home.css?v=20260911a">
     <% if (typeof usuario !== 'undefined' && usuario && features.claudeAssistant) { %>
     <link rel="stylesheet" href="/css/claude-fab.css?v=20260910n">
     <link rel="stylesheet" href="/css/claude-chat.css">
@@ -41,7 +41,7 @@
       })();
     </script>
     <noscript><style>.cargando-pagina { display: none; }</style></noscript>
-    <script src="/js/modal.js?v=20260910n" defer></script>
+    <script src="/js/modal.js?v=20260911b" defer></script>
     <% if (features.supportTickets) { %>
     <script src="/js/ticket-create-form.js" defer></script>
     <script src="/js/ticket-detail.js" defer></script>
@@ -76,6 +76,7 @@
       else if (currentUser.name) displayName = currentUser.name;
       else if (currentUser.username) displayName = currentUser.username;
     }
+    const monogram = currentUser ? getMonogram(currentUser) : null;
   %>
 
 <div class="mobile-overlay" id="mobile-overlay"></div>
@@ -128,9 +129,7 @@
         <% if (currentUser.photo || currentUser.foto) { %>
           <img src="<%= currentUser.photo || currentUser.foto %>" alt="Foto de perfil" class="nav-user-photo">
         <% } else { %>
-          <div class="nav-user-avatar">
-            <%= displayName.charAt(0).toUpperCase() %>
-          </div>
+          <div class="nav-user-avatar monogram" style="<%= monogram.style %>"><%= monogram.initials %></div>
         <% } %>
         <span>Mi perfil</span>
       </a>
@@ -225,9 +224,7 @@
             <% if (currentUser.photo || currentUser.foto) { %>
               <img src="<%= currentUser.photo || currentUser.foto %>" alt="Foto" class="nav-user-photo">
             <% } else { %>
-              <div class="nav-user-avatar">
-                <%= displayName.charAt(0).toUpperCase() %>
-              </div>
+              <div class="nav-user-avatar monogram" style="<%= monogram.style %>"><%= monogram.initials %></div>
             <% } %>
           </button>
           <div class="nav-user-dropdown" role="menu">

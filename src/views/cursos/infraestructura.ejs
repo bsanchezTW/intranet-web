@@ -513,6 +513,8 @@
   function cerrarModalEditarMaterial() { IntranetModal.close('modalEditarMaterial'); }
 
   window.addEventListener('click', function(event) {
+    // Sólo cuenta como clic en el fondo si el gesto empezó y terminó ahí.
+    if (!IntranetModal.gestoCompletoSobre(event.target)) return;
     if (event.target === modal) cerrarModalReglas();
     if (event.target === document.getElementById('modalEditarSub')) cerrarModalEditarSub();
   });

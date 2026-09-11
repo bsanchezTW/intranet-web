@@ -465,7 +465,7 @@ html[data-theme="dark"] .area-card__jefe--vacio {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
+  font-size: 0.58rem;
   font-weight: 700;
   color: #ffffff;
 }
@@ -648,6 +648,7 @@ html[data-theme="dark"] .area-card__jefe--vacio {
   align-items: center;
   justify-content: center;
   font-weight: 700;
+  font-size: 0.65rem;
   color: #ffffff;
   border: none;
 }
@@ -753,20 +754,28 @@ html[data-theme="dark"] .area-card__jefe--vacio {
 /* ── Paleta de color (modal) ──────────────────────────────────────────────── */
 
 .area-palette {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  gap: 6px;
   margin: 6px 0 10px;
 }
 
 .area-palette__swatch {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.area-palette__swatch:hover,
+.area-palette__swatch:focus-visible {
+  transform: scale(1.08);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2), 0 1px 4px rgba(0, 0, 0, 0.18);
 }
 
 .area-palette__swatch.is-selected {

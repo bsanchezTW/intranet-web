@@ -7,6 +7,7 @@
 
 const attachmentModel = require("./attachmentModel");
 const { toTitleCase } = require("../../utils/formatName");
+const { monogramInitials } = require("../../utils/monogram");
 const { minutosDeLectura, etiquetaDeLectura } = require("../../utils/readingTime");
 
 const { getLocale } = require("../../config/country");
@@ -49,9 +50,8 @@ function nombreAutor(author, nombres = {}) {
  * @returns {string}
  */
 function iniciales(nombre) {
-  const partes = String(nombre || "").trim().split(/\s+/).filter(Boolean);
-  const letras = partes.slice(0, 2).map((parte) => parte.charAt(0).toUpperCase());
-  return letras.join("") || "T";
+  const letras = monogramInitials({ nombre });
+  return letras === "?" ? "T" : letras;
 }
 
 /**

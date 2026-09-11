@@ -1,0 +1,8 @@
+<%
+  const data = {
+    initials: typeof initials !== 'undefined' && initials ? initials : '?',
+    style: typeof style !== 'undefined' ? style : '',
+  };
+  const extraClass = typeof className !== 'undefined' ? className : '';
+%>
+<span class="monogram<%= extraClass ? ' ' + extraClass : '' %>"<% if (data.style) { %> style="<%= data.style %>"<% } %> aria-hidden="true"><%= data.initials %></span>

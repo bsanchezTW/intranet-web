@@ -54,10 +54,6 @@
     if (window.IntranetModal) window.IntranetModal.open(overlay);
   }
 
-  function cerrarModal(overlay) {
-    if (window.IntranetModal) window.IntranetModal.close(overlay);
-  }
-
   /* ── Filtros de la barra superior ──────────────────────────────────────── */
 
   var PREDICADOS = {
@@ -172,8 +168,8 @@
         return img;
       }
       var span = document.createElement("span");
-      span.className =
-        "avatar-fallback ac-lista__avatar " + (persona.paleta || "");
+      span.className = "monogram avatar-fallback ac-lista__avatar";
+      if (persona.monogramStyle) span.style.cssText = persona.monogramStyle;
       span.setAttribute("aria-hidden", "true");
       span.textContent = persona.inicial || "?";
       return span;
@@ -428,18 +424,14 @@
         return;
       }
 
-      // Los dos modales comparten z-index: en vez de apilarlos, el de origen
-      // se cierra antes de abrir el siguiente.
+      // "Agregar" y "mover" se piden desde la lista de colaboradores y abren
+      // un segundo modal encima. La lista se queda detrás a propósito: cerrarla
+      // hacía desaparecer el contexto de lo que se estaba decidiendo, y al
+      // cancelar el usuario quedaba en la página en vez de volver a la lista.
+      // IntranetModal apila: el segundo modal sube por encima del primero.
       if (destino.closest("#modalMiembrosAgregar")) {
-        cerrarModal(modalMiembros);
         if (actual) abrirAgregar(actual.id);
         return;
-      }
-
-      // Mover de área abre el modal propio de areas.js: aquí sólo hay que
-      // quitar de en medio la lista desde la que se pidió.
-      if (destino.closest("[data-mover-miembro]")) {
-        cerrarModal(modalMiembros);
       }
     });
 

@@ -26,6 +26,54 @@
     cierresPendientes.delete(overlay);
   }
 
+  /**
+   * Modales apilados.
+   *
+   * Un modal puede abrirse encima de otro: la lista de colaboradores y, sobre
+   * ella, el de mover de área o el de agregar. Antes el de abajo se cerraba a
+   * mano porque todos comparten el z-index de la hoja de estilos y era el
+   * orden en el DOM —no el de apertura— quien decidía cuál tapaba a cuál.
+   * Aquí se lleva el orden real: cada modal se sitúa un escalón por encima del
+   * que ya estaba, y Escape cierra el de más arriba, no el primero del DOM.
+   */
+  const Z_PASO = 10;
+  const Z_BASE = 2000;
+  const pila = [];
+
+  function zDe(overlay) {
+    const inline = parseInt(overlay.style.zIndex, 10);
+    if (!Number.isNaN(inline)) return inline;
+    const css = parseInt(window.getComputedStyle(overlay).zIndex, 10);
+    return Number.isNaN(css) ? Z_BASE : css;
+  }
+
+  function apilar(overlay) {
+    const i = pila.indexOf(overlay);
+    if (i !== -1) pila.splice(i, 1);
+    const debajo = pila[pila.length - 1];
+    pila.push(overlay);
+    // Dos fondos al 72 % dejan el modal de abajo casi negro. El de encima se
+    // aclara para que siga leyéndose lo que hay detrás.
+    overlay.classList.toggle('is-apilado', !!debajo);
+    // El primero conserva el z-index de su hoja de estilos; sólo los que se
+    // abren encima necesitan subir, y suben respecto al que tapan, que puede
+    // venir de otra familia de modales con su propio z-index.
+    if (debajo) overlay.style.zIndex = String(zDe(debajo) + Z_PASO);
+  }
+
+  function desapilar(overlay) {
+    const i = pila.indexOf(overlay);
+    if (i !== -1) pila.splice(i, 1);
+  }
+
+  function topeDePila() {
+    for (let i = pila.length - 1; i >= 0; i -= 1) {
+      if (pila[i].classList.contains('is-open')) return pila[i];
+    }
+    // Modales abiertos sin pasar por aquí (vistas con su propio display:flex).
+    return document.querySelector('.modal-overlay.is-open, .modal-imagen.is-open');
+  }
+
   function resolve(el) {
     if (!el) return null;
     return typeof el === 'string' ? document.getElementById(el) : el;
@@ -105,6 +153,7 @@
     overlay.classList.remove('is-closing');
     overlay.style.display = 'flex';
     overlay.setAttribute('aria-hidden', 'false');
+    apilar(overlay);
     lockFor(overlay);
 
     // Force visible immediately; rAF only for enter transform.
@@ -117,8 +166,10 @@
 
     if (!overlay.classList.contains('is-open')) {
       cancelarCierrePendiente(overlay);
+      desapilar(overlay);
+      overlay.style.zIndex = '';
       overlay.style.display = 'none';
-      overlay.classList.remove('is-open', 'is-closing');
+      overlay.classList.remove('is-open', 'is-closing', 'is-apilado');
       overlay.setAttribute('aria-hidden', 'true');
       unlockFor(overlay);
       syncScrollLock();
@@ -126,6 +177,10 @@
     }
 
     cancelarCierrePendiente(overlay);
+    // Sale de la pila en el acto —Escape ya debe apuntar al de abajo— pero
+    // conserva su z-index hasta que acabe la animación: quitárselo ahora lo
+    // hundiría bajo el modal que estaba tapando a mitad del fundido.
+    desapilar(overlay);
     overlay.classList.remove('is-open');
     overlay.classList.add('is-closing');
 
@@ -138,8 +193,9 @@
       // Y si ya volvió a abrirse, este cierre perdió vigencia.
       if (overlay.classList.contains('is-open')) return;
 
+      overlay.style.zIndex = '';
       overlay.style.display = 'none';
-      overlay.classList.remove('is-closing');
+      overlay.classList.remove('is-closing', 'is-apilado');
       overlay.setAttribute('aria-hidden', 'true');
       unlockFor(overlay);
       syncScrollLock();
@@ -166,7 +222,33 @@
     }
   }
 
+  /**
+   * ¿El clic fue realmente sobre el fondo?
+   *
+   * El evento `click` se dispara en el ancestro común del punto donde se
+   * apretó y donde se soltó: arrastrar desde dentro del modal —recortar una
+   * foto, seleccionar texto, mover un slider— y soltar fuera lo reporta sobre
+   * el overlay, y el modal se cerraba solo. Para cerrar exigimos que el gesto
+   * entero, apretar y soltar, ocurra sobre el fondo.
+   *
+   * Los dos oyentes van en captura sobre `document`: así el gesto se registra
+   * aunque algún control de dentro detenga la propagación del evento.
+   */
+  let apretadoEn = null;
+  let soltadoEn = null;
+
+  function seguirGesto() {
+    document.addEventListener('pointerdown', (e) => { apretadoEn = e.target; }, true);
+    document.addEventListener('pointerup', (e) => { soltadoEn = e.target; }, true);
+  }
+
+  function gestoCompletoSobre(overlay) {
+    return apretadoEn === overlay && soltadoEn === overlay;
+  }
+
   function bindOverlayDismiss() {
+    seguirGesto();
+
     document.addEventListener('click', (e) => {
       const target = e.target;
       const closeButton = target.closest('[data-modal-close]');
@@ -182,7 +264,8 @@
         (target.classList.contains('modal-overlay') ||
           target.classList.contains('modal-imagen')) &&
         target.classList.contains('is-open') &&
-        target.dataset.dismiss !== 'false'
+        target.dataset.dismiss !== 'false' &&
+        gestoCompletoSobre(target)
       ) {
         close(target);
       }
@@ -190,14 +273,21 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      const openOverlay = document.querySelector(
-        '.modal-overlay.is-open, .modal-imagen.is-open',
-      );
+      // Con modales apilados, Escape cierra sólo el de arriba.
+      const openOverlay = topeDePila();
       if (openOverlay && openOverlay.dataset.dismiss !== 'false') close(openOverlay);
     });
   }
 
-  global.IntranetModal = { open, close, isOpen, lockScroll, unlockScroll, ANIM_MS };
+  global.IntranetModal = {
+    open,
+    close,
+    isOpen,
+    lockScroll,
+    unlockScroll,
+    gestoCompletoSobre,
+    ANIM_MS,
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bindOverlayDismiss);

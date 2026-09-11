@@ -190,15 +190,15 @@ function formatNewsDate(fecha) {
           </div>
 
           <div class="correo-lista" id="correo-lista-usuarios">
-            <% if (usuariosCorreo.length) { %>
+              <% if (usuariosCorreo.length) { %>
               <% usuariosCorreo.forEach(function (u) {
                 const nombre = [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email;
-                const ini = nombre.split(/\s+/).slice(0, 2).map(p => p.charAt(0).toUpperCase()).join('');
+                const monogram = u.monogram;
                 const area = u.area || '';
               %>
                 <label class="correo-item" data-search="<%= [nombre, u.email, area].join(' ').toLowerCase() %>">
                   <input type="checkbox" name="usuarios" value="<%= u.id %>" class="correo-usuario-check">
-                  <span class="correo-avatar" aria-hidden="true"><%= ini %></span>
+                  <span class="correo-avatar monogram" style="<%= monogram.style %>" aria-hidden="true"><%= monogram.initials %></span>
                   <span class="correo-datos">
                     <span class="correo-nombre"><%= nombre %></span>
                     <span class="correo-email"><%= u.email %></span>

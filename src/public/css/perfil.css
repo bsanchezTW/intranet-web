@@ -77,11 +77,21 @@
   color: var(--color-heading);
 }
 
-/* Inicial cuando no hay foto: el mismo recurso que la tabla de colaboradores. */
+/* Inicial cuando no hay foto: el mismo círculo de área que lista y navbar. */
+.perfil-ficha__foto .profile-photo-placeholder.monogram {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--mono-h) var(--mono-s) 36%),
+    hsl(var(--mono-h) var(--mono-s) 48%)
+  );
+  color: #fff;
+}
+
 .perfil-inicial {
-  font-size: 2.4rem;
+  font-size: 2.1rem;
   font-weight: 800;
-  color: var(--brand);
+  letter-spacing: 0.06em;
+  color: inherit;
 }
 
 .perfil-correo {
@@ -345,10 +355,4 @@ html[data-theme="dark"] .perfil-ficha__banda {
   background:
     radial-gradient(120% 140% at 50% 0%, rgba(166, 216, 74, 0.16), transparent 62%),
     linear-gradient(135deg, #1c3252 0%, #14243c 100%);
-}
-
-/* Sin foto, el círculo interior es un disco claro: en oscuro cantaría sobre la
-   ficha. La foto real lo tapa, así que sólo afecta a la inicial. */
-html[data-theme="dark"] .perfil-ficha__foto .profile-photo-preview--light {
-  --photo-fill: var(--color-surface-muted);
 }

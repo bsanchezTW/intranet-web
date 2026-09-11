@@ -8,12 +8,12 @@
   const passwordErrorModal = typeof passwordError !== 'undefined' ? passwordError : null;
   const abrirModalPassword = typeof openPasswordModal !== 'undefined' ? openPasswordModal : false;
   const nombreCompleto = [usuario.first_name, usuario.last_name].filter(Boolean).join(' ') || sinDato;
-  const inicial = (usuario.first_name || usuario.last_name || '?').charAt(0).toUpperCase();
+  const monogram = getMonogram(usuario);
 %>
 <link rel="stylesheet" href="/css/phone.css">
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260910a">
 <link rel="stylesheet" href="/css/change-password-modal.css">
-<link rel="stylesheet" href="/css/perfil.css?v=20260910v">
+<link rel="stylesheet" href="/css/perfil.css?v=20260911w">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
 <div class="contenedor perfil-page">
@@ -56,8 +56,8 @@
           <div class="profile-photo-preview-wrap">
             <div class="profile-photo-preview profile-photo-preview--light" id="photo-preview">
               <img id="photo-preview-img" <% if (tieneFoto) { %>src="<%= usuario.photo %>"<% } else { %>hidden<% } %>>
-              <div class="profile-photo-placeholder" id="photo-placeholder" <%= tieneFoto ? 'hidden' : '' %>>
-                <span class="perfil-inicial" aria-hidden="true"><%= inicial %></span>
+              <div class="profile-photo-placeholder monogram" id="photo-placeholder" style="<%= monogram.style %>" <%= tieneFoto ? 'hidden' : '' %>>
+                <span class="perfil-inicial" aria-hidden="true"><%= monogram.initials %></span>
               </div>
             </div>
           </div>
@@ -171,7 +171,6 @@
             </div>
           <% } %>
         </dl>
-        <p class="perfil-rrhh__nota">Si algo de aquí no cuadra, escríbele a RRHH: no se edita desde la intranet.</p>
       </section>
     </div>
 

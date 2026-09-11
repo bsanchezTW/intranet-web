@@ -417,8 +417,10 @@
         container.innerHTML = '';
     }
     if (cerrar) cerrar.addEventListener('click', closeModal);
-    window.addEventListener('click', (e) => { 
-        if (e.target === modal || e.target.classList.contains('modal-imagen-contenido')) closeModal(); 
+    window.addEventListener('click', (e) => {
+        // Sólo cuenta como clic en el fondo si el gesto empezó y terminó ahí.
+        if (!IntranetModal.gestoCompletoSobre(e.target)) return;
+        if (e.target === modal || e.target.classList.contains('modal-imagen-contenido')) closeModal();
     });
 
     // ====== LÓGICA DE SUBIDA DIRECTA LOCAL ======

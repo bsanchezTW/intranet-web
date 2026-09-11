@@ -13,6 +13,12 @@
   const pillArea = areaActual
     ? getWorkAreaPill(areaActual.area_name, areaActual.color)
     : null;
+  const monogram = getMonogram({
+    first_name: persona.first_name,
+    last_name: persona.last_name,
+    area: areaActual ? areaActual.area_name : null,
+    area_color: areaActual ? areaActual.color : null,
+  });
 %>
 
 <div class="modal-editar-layout">
@@ -21,8 +27,8 @@
       <div class="profile-photo-preview-wrap">
         <div class="profile-photo-preview profile-photo-preview--light" id="photo-preview">
           <img id="photo-preview-img" <% if (tieneFoto) { %>src="<%= persona.photo %>"<% } else { %>hidden<% } %>>
-          <div class="profile-photo-placeholder" id="photo-placeholder" <%= tieneFoto ? 'hidden' : '' %>>
-            <%- include('../../partials/icon', { name: 'user' }) %>
+          <div class="profile-photo-placeholder monogram" id="photo-placeholder" style="<%= monogram.style %>" <%= tieneFoto ? 'hidden' : '' %>>
+            <span aria-hidden="true"><%= monogram.initials %></span>
           </div>
         </div>
         <div class="profile-photo-actions">

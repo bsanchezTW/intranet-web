@@ -42,6 +42,14 @@
   opacity: 0;
 }
 
+/* Modal abierto encima de otro: el fondo se aclara para no sepultar al de
+   abajo. Dos capas al 72 % dejan la lista de detrás prácticamente negra. */
+.modal-overlay.is-apilado,
+.modal-imagen.is-apilado {
+  --modal-overlay-bg: rgba(0, 0, 0, 0.38);
+  background: rgba(0, 0, 0, 0.38);
+}
+
 /* Panel enter animation — transform only, NEVER opacity 0 */
 .modal-overlay > .modal-content,
 .modal-overlay > .modal-content2,

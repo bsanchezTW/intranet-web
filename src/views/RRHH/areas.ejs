@@ -15,8 +15,8 @@
   const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260911a">
-<link rel="stylesheet" href="/css/areas.css?v=20260911a">
+<link rel="stylesheet" href="/css/personal.css?v=20260911c">
+<link rel="stylesheet" href="/css/areas.css?v=20260911d">
 
 <div id="popup" class="popup-notification <%= successMsg ? 'success show' : errorMsg ? 'error show' : '' %>" role="status">
   <span><%= successMsg || errorMsg || '' %></span>
@@ -155,7 +155,7 @@
                 <% if (m.photo) { %>
                   <img src="<%= m.photo %>" alt="" class="avatar area-stack__item" loading="lazy" decoding="async">
                 <% } else { %>
-                  <span class="avatar-fallback <%= m.paletaAvatar %> area-stack__item"><%= m.inicial %></span>
+                  <%- include('../partials/monogram', { initials: m.inicial, style: m.monogramStyle, className: 'avatar-fallback area-stack__item' }) %>
                 <% } %>
               <% }) %>
               <% if (restantes > 0) { %>
@@ -210,7 +210,7 @@
                 <% if (m.photo) { %>
                   <img src="<%= m.photo %>" alt="" class="avatar area-stack__item" loading="lazy" decoding="async">
                 <% } else { %>
-                  <span class="avatar-fallback <%= m.paletaAvatar %> area-stack__item"><%= m.inicial %></span>
+                  <%- include('../partials/monogram', { initials: m.inicial, style: m.monogramStyle, className: 'avatar-fallback area-stack__item' }) %>
                 <% } %>
               <% }) %>
               <% if (restantesSA > 0) { %>
@@ -322,7 +322,7 @@
     detalle: p.area_name || 'Sin área',
     photo: p.photo || null,
     inicial: p.inicial,
-    paleta: p.paletaAvatar,
+    monogramStyle: p.monogramStyle,
     // Quien ya tiene área cambia de jefe al pasar a otra: se avisa al agregar.
     mueve: !!p.area_name,
   })),
@@ -357,5 +357,5 @@
     members: a.members.map((m) => ({ id: m.id, nombre: m.nombreLista })),
   })),
 }).replace(/</g, '\\u003c') %></script>
-<script src="/js/ac-cards.js?v=20260911a" defer></script>
+<script src="/js/ac-cards.js?v=20260911d" defer></script>
 <script src="/js/areas.js?v=20260911a" defer></script>

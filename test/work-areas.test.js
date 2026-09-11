@@ -7,6 +7,7 @@ const {
   WORK_AREA_ID_MAX,
   isWorkAreaPublicId,
   WORK_AREA_COLORS,
+  COLOR_PALETTE,
   hslToHex,
   hexToHsl,
   normalizeHex,
@@ -87,5 +88,16 @@ describe("workAreas — color persistido", () => {
     assert.equal(area.color, WORK_AREA_COLORS.Gerencia);
     assert.equal(area.pillClass, "pill pill-area");
     assert.match(area.pillStyle, /--pill-h:/);
+  });
+
+  it("ofrece una paleta amplia, única y con los colores históricos", () => {
+    const hexes = COLOR_PALETTE.map((c) => c.hex);
+    assert.ok(COLOR_PALETTE.length >= 36, `size=${COLOR_PALETTE.length}`);
+    assert.equal(new Set(hexes).size, hexes.length);
+    assert.ok(hexes.every((hex) => /^#[0-9a-f]{6}$/.test(hex)));
+    assert.ok(hexes.includes(DEFAULT_COLOR));
+    Object.values(WORK_AREA_COLORS).forEach((hex) => {
+      assert.ok(hexes.includes(hex), `falta ${hex}`);
+    });
   });
 });

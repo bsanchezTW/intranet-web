@@ -59,9 +59,14 @@
       prevEl.addEventListener("click", function () { mover(-1); });
       nextEl.addEventListener("click", function () { mover(1); });
 
-      // Solo cierra al pulsar el fondo, no la imagen.
+      // Solo cierra al pulsar el fondo, no la imagen, y sólo si el gesto
+      // entero ocurrió sobre el fondo: al soltar fuera un arrastre iniciado
+      // dentro (seleccionar el pie de foto) el `click` se reporta aquí.
       overlay.addEventListener("click", function (event) {
-        if (event.target === overlay) cerrar();
+        if (event.target !== overlay) return;
+        var modal = window.IntranetModal;
+        if (modal && !modal.gestoCompletoSobre(overlay)) return;
+        cerrar();
       });
     }
 
