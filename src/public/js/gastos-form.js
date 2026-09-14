@@ -63,6 +63,34 @@
   // Comprobantes ya subidos al bucket, pendientes de asociarse a la solicitud.
   var adjuntos = [];
 
+  /* Referencias de los subidos desde el último guardado. Si el usuario los
+     quita o cierra sin guardar, se borran del bucket en vez de quedar
+     huérfanos. Los ya guardados en el borrador los administra el servidor. */
+  var subidosSinGuardar = [];
+
+  function descartarArchivos(refs, alSalir) {
+    if (!refs.length) return;
+    var cuerpo = JSON.stringify({ refs: refs });
+    // Al abandonar la página un fetch normal se cancela; el beacon no.
+    if (alSalir && navigator.sendBeacon) {
+      navigator.sendBeacon("/gastos/adjuntos/descartar", new Blob([cuerpo], { type: "application/json" }));
+      return;
+    }
+    fetch("/gastos/adjuntos/descartar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: cuerpo,
+      keepalive: true,
+    }).catch(function () {});
+  }
+
+  function descartarPendientes(alSalir) {
+    var refs = subidosSinGuardar;
+    subidosSinGuardar = [];
+    descartarArchivos(refs, alSalir);
+  }
+
   // ── Montos ───────────────────────────────────────────────────────────────
 
   /* Acepta "45.000" y "45000,50": se descartan los separadores de miles y la
@@ -101,13 +129,12 @@
     input.value = digitos ? agruparMiles(digitos) : "";
   }
 
-  /* Monto guardado ("64990.00") tal como se escribiría en el campo. Un borrador
-     guarda 0 en las líneas sin monto: se muestra vacío. */
+  /* Monto guardado ("64990.00") tal como se escribiría en el campo. Una línea
+     de borrador sin monto llega como null y queda vacía; un 0 escrito, como 0. */
   function montoParaCampo(valor) {
+    if (valor === null || valor === undefined || valor === "") return "";
     var n = Number(valor);
-    if (valor === null || valor === undefined || valor === "" || !Number.isFinite(n) || n === 0) {
-      return "";
-    }
+    if (!Number.isFinite(n)) return "";
     return DECIMALES ? String(n).replace(".", ",") : agruparMiles(String(Math.round(n)));
   }
 
@@ -543,6 +570,13 @@
       quitar.textContent = "×";
       quitar.addEventListener("click", function () {
         adjuntos.splice(index, 1);
+        // Recién subido y nunca guardado: nadie más lo usa, se borra ya.
+        var ref = adj.public_id || adj.url;
+        var pendiente = subidosSinGuardar.indexOf(ref);
+        if (pendiente !== -1) {
+          subidosSinGuardar.splice(pendiente, 1);
+          descartarArchivos([ref]);
+        }
         pintarAdjuntos();
         marcarSucio();
       });
@@ -577,6 +611,7 @@
           url: data.secure_url,
           public_id: data.public_id,
         });
+        subidosSinGuardar.push(data.public_id || data.secure_url);
       });
   }
 
@@ -732,6 +767,7 @@
   }
 
   function reiniciar() {
+    descartarPendientes();
     form.reset();
     todos(".gasto-item-fila", contenedor).forEach(function (fila) {
       fila.remove();
@@ -804,6 +840,8 @@
       return;
     }
     estado.sucio = false;
+    // Lo subido y no guardado se pierde al cerrar: se borra del bucket.
+    descartarPendientes();
     window.IntranetModal.close(overlay);
     if (estado.listaDesactualizada) {
       setTimeout(function () { window.location.reload(); }, window.IntranetModal.ANIM_MS);
@@ -825,6 +863,12 @@
       e.preventDefault();
       e.returnValue = "";
     }
+  });
+
+  // pagehide y no beforeunload: éste se dispara aunque el usuario luego
+  // cancele la salida, y borraría archivos de un formulario que sigue abierto.
+  window.addEventListener("pagehide", function () {
+    descartarPendientes(true);
   });
 
   // ── Guardar, enviar, eliminar ────────────────────────────────────────────
@@ -899,6 +943,8 @@
     try {
       ocupar(true, btnBorrador, "Guardando…");
       var data = await enviar(cuerpo);
+      // Ya viven en el borrador: dejan de ser descartables desde el cliente.
+      subidosSinGuardar = [];
       estado.borradorId = data.id;
       estado.sucio = false;
       estado.listaDesactualizada = true;
@@ -924,6 +970,7 @@
     try {
       ocupar(true, btnEnviar, "Enviando…");
       await enviar(cuerpo);
+      subidosSinGuardar = [];
       estado.sucio = false;
       window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Solicitud enviada.");
     } catch (err) {
@@ -934,9 +981,12 @@
 
   btnEliminarBorrador.addEventListener("click", async function () {
     if (!estado.borradorId || estado.ocupado) return;
-    if (!window.confirm("¿Eliminar este borrador? No se puede deshacer.")) return;
+    if (!window.confirm("¿Descartar este borrador? Se borran también sus comprobantes.")) return;
     try {
       ocupar(true, btnEliminarBorrador, "Eliminando…");
+      // Los guardados los borra el servidor con el borrador; los subidos
+      // después del último guardado sólo los conoce el cliente.
+      descartarPendientes();
       var res = await fetch("/gastos/" + estado.borradorId + "/borrador/eliminar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

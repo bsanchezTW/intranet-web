@@ -136,6 +136,7 @@ router.get("/", async (req, res) => {
       requisitos,
       esRevisor,
       formulario,
+      diasBorrador: expenses.DRAFT_TTL_DAYS,
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
@@ -278,6 +279,25 @@ router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
   } catch (err) {
     console.error("[Gastos] Error subiendo comprobante:", err);
     res.status(500).json({ error: err.message || "Error al subir el archivo" });
+  }
+});
+
+/**
+ * Borra del bucket comprobantes subidos que no llegaron a guardarse (el
+ * usuario los quitó o cerró el formulario). El servicio sólo toca archivos de
+ * la carpeta del usuario que no pertenezcan a ninguna solicitud. Lo llama
+ * también navigator.sendBeacon al salir de la página.
+ */
+router.post("/adjuntos/descartar", async (req, res) => {
+  try {
+    const result = await expenses.discardUploads({
+      user: req.session.user,
+      refs: (req.body || {}).refs,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[Gastos] Error descartando comprobantes:", err);
+    res.status(500).json({ error: "No se pudieron descartar los archivos." });
   }
 });
 

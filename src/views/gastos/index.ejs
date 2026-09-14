@@ -149,6 +149,11 @@
                 <span class="gasto-item__meta">
                   <span><%= expenseKindLabel(s.kind) %></span>
                   <span><%= esBorrador ? 'Guardado el' : 'Enviada el' %> <%= fecha %></span>
+                  <% if (esBorrador && fechaRef && typeof diasBorrador !== 'undefined') {
+                       const restantes = Math.max(0, diasBorrador - Math.floor((Date.now() - new Date(fechaRef).getTime()) / 86400000));
+                  %>
+                    <span><%= restantes === 0 ? 'Se elimina hoy' : 'Se elimina en ' + restantes + (restantes === 1 ? ' día' : ' días') %></span>
+                  <% } %>
                   <span><%= s.item_count %> <%= s.item_count === 1 ? 'ítem' : 'ítems' %></span>
                   <% if (s.attachment_count > 0) { %>
                     <span><%= s.attachment_count %> <%= s.attachment_count === 1 ? 'adjunto' : 'adjuntos' %></span>

@@ -138,8 +138,9 @@ function normalizeItems(rawItems) {
 
 /**
  * Desglose de un borrador: se conserva toda línea con algo escrito, aunque esté
- * a medias. Lo que no valida se guarda vacío (las columnas NOT NULL con '' o 0)
- * y normalizeItems lo exigirá al enviar.
+ * a medias. Lo que no valida se guarda vacío —el detalle como '' y el monto
+ * como NULL, no 0, para que al retomarlo se vea tal como quedó— y
+ * normalizeItems lo exigirá al enviar.
  */
 function normalizeDraftItems(rawItems) {
   if (!Array.isArray(rawItems)) return { items: [], total: 0 };
@@ -155,14 +156,14 @@ function normalizeDraftItems(rawItems) {
 
     items.push({
       detail: detail || "",
-      amount: amount ?? 0,
+      amount,
       category,
       days: categoryRequiresDays(category) ? parseDays(raw && raw.days) : null,
       itemDate,
     });
   }
 
-  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const total = items.reduce((sum, item) => sum + (item.amount || 0), 0);
   return { items, total: roundMoney(total) };
 }
 
@@ -213,6 +214,147 @@ function normalizeAttachments(rawAttachments) {
       publicId: String((raw && raw.public_id) || "").trim() || null,
     }))
     .filter((a) => a.url.startsWith("/content/"));
+}
+
+// ---------------------------------------------------------------------------
+// Comprobantes en el bucket
+// ---------------------------------------------------------------------------
+
+/** Días sin cambios tras los que un borrador se elimina solo. */
+const DRAFT_TTL_DAYS = 30;
+
+/**
+ * Clave de bucket de un comprobante subido por este usuario, o null.
+ *
+ * /gastos/adjuntos/upload los deja siempre en gastos/<año>/<userId>/. Fuera de
+ * esa carpeta un comprobante no es suyo: no se acepta en su solicitud y, sobre
+ * todo, nunca se borra por una acción suya. Sin esta barrera, adjuntar a un
+ * borrador la ruta de un comprobante ajeno y descartarlo lo eliminaría.
+ */
+function ownUploadPath(userId, ref) {
+  const path = String(ref || "")
+    .trim()
+    .replace(/^\/?content\//, "")
+    .replace(/^\/+/, "");
+  const id = Number(userId);
+  if (!path || !Number.isInteger(id) || path.split("/").includes("..")) return null;
+  return new RegExp(`^gastos/\\d{4}/${id}/[^/]+$`).test(path) ? path : null;
+}
+
+function attachmentPath(userId, attachment) {
+  if (!attachment) return null;
+  return (
+    ownUploadPath(userId, attachment.publicId || attachment.public_id) ||
+    ownUploadPath(userId, attachment.url)
+  );
+}
+
+/**
+ * Borrado de objetos del bucket, siempre después del COMMIT: si la transacción
+ * falla, los archivos siguen ahí. Un fallo del bucket sólo deja un huérfano, y
+ * no debe tumbar la acción del usuario.
+ */
+async function removeStoredFiles(paths) {
+  const unique = [...new Set(paths.filter(Boolean))];
+  if (!unique.length) return 0;
+  try {
+    // Carga diferida: el cliente de storage no hace falta para validar datos
+    // y así los tests de normalización no dependen de él.
+    const fileStorage = require("../fileStorage");
+    const result = await fileStorage.deleteFiles(unique);
+    if (result.failed) {
+      console.error(`[Gastos] ${result.failed} comprobante(s) no se pudieron borrar del bucket.`);
+    }
+    return result.deleted;
+  } catch (err) {
+    console.error("[Gastos] No se pudieron borrar comprobantes:", err.message);
+    return 0;
+  }
+}
+
+/**
+ * Comprobantes subidos que no llegaron a guardarse: el usuario los quitó o
+ * cerró el formulario sin guardar. Sólo se borran los de su carpeta que no
+ * estén asociados a ninguna solicitud.
+ */
+async function discardUploads({ user, refs }) {
+  if (!Array.isArray(refs)) return { ok: true, deleted: 0 };
+  const paths = [
+    ...new Set(
+      refs
+        .slice(0, MAX_ATTACHMENTS * 2)
+        .map((ref) => ownUploadPath(user.id, ref))
+        .filter(Boolean),
+    ),
+  ];
+  if (!paths.length) return { ok: true, deleted: 0 };
+
+  const { rows } = await db.query(
+    `SELECT url, public_id
+       FROM expense_request_attachments
+      WHERE public_id = ANY($1::text[]) OR url = ANY($2::text[])`,
+    [paths, paths.map((path) => `/content/${path}`)],
+  );
+  const inUse = new Set(rows.map((a) => attachmentPath(user.id, a)));
+  const free = paths.filter((path) => !inUse.has(path));
+
+  await removeStoredFiles(free);
+  return { ok: true, deleted: free.length };
+}
+
+/**
+ * Elimina los borradores sin cambios hace más de `days` días, con sus líneas,
+ * adjuntos y archivos. Lo corre un job diario (app.js).
+ */
+async function purgeStaleDrafts(days = DRAFT_TTL_DAYS) {
+  const client = await db.getClient();
+  let files = [];
+  let drafts = 0;
+  try {
+    await client.query("BEGIN");
+
+    // SKIP LOCKED: un borrador que alguien está guardando en este instante
+    // acaba de tocarse y no debe borrarse.
+    const { rows: stale } = await client.query(
+      `SELECT id, user_id
+         FROM expense_requests
+        WHERE status = $1
+          AND updated_at < NOW() - make_interval(days => $2::int)
+        FOR UPDATE SKIP LOCKED`,
+      [EXPENSE_STATUS.DRAFT, days],
+    );
+    if (!stale.length) {
+      await client.query("ROLLBACK");
+      return { drafts: 0, files: 0 };
+    }
+
+    const ids = stale.map((row) => row.id);
+    const ownerOf = new Map(stale.map((row) => [Number(row.id), row.user_id]));
+    const { rows: attachments } = await client.query(
+      `SELECT request_id, url, public_id
+         FROM expense_request_attachments
+        WHERE request_id = ANY($1::int[])`,
+      [ids],
+    );
+    files = attachments.map((a) => attachmentPath(ownerOf.get(Number(a.request_id)), a));
+
+    // Líneas y adjuntos caen por ON DELETE CASCADE.
+    const deleted = await client.query(
+      "DELETE FROM expense_requests WHERE id = ANY($1::int[]) AND status = $2",
+      [ids, EXPENSE_STATUS.DRAFT],
+    );
+    drafts = deleted.rowCount;
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const removed = await removeStoredFiles(files);
+  return { drafts, files: removed };
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +515,9 @@ async function prepareSubmission({
   const assigned = parseAssignedAmount(kind, assignedAmount);
   if (!assigned.ok) return assigned;
 
-  const attachments = normalizeAttachments(rawAttachments);
+  const attachments = normalizeAttachments(rawAttachments).filter((a) =>
+    attachmentPath(user.id, a),
+  );
   if (kind === EXPENSE_KIND.RENDICION && !attachments.length) {
     return {
       ok: false,
@@ -455,7 +599,9 @@ async function prepareDraft({
   const parsedTitle = parseText(title, 200);
   const parsedDescription = parseText(description, 4000);
   const draft = normalizeDraftItems(rawItems);
-  const attachments = normalizeAttachments(rawAttachments);
+  const attachments = normalizeAttachments(rawAttachments).filter((a) =>
+    attachmentPath(user.id, a),
+  );
   if (!parsedTitle && !parsedDescription && !draft.items.length && !attachments.length) {
     return { ok: false, error: "Todavía no hay nada que guardar." };
   }
@@ -527,6 +673,10 @@ async function saveRequest(input) {
   const prepared = input.asDraft ? await prepareDraft(input) : await prepareSubmission(input);
   if (!prepared.ok) return prepared;
 
+  // Archivos que el borrador tenía antes de este guardado; los que ya no
+  // vengan se borran del bucket tras el COMMIT.
+  let previousFiles = [];
+
   const client = await db.getClient();
   try {
     await client.query("BEGIN");
@@ -551,6 +701,12 @@ async function saveRequest(input) {
         return { ok: false, error: "El borrador es de otro tipo de solicitud." };
       }
 
+      const { rows: previous } = await client.query(
+        "SELECT url, public_id FROM expense_request_attachments WHERE request_id = $1",
+        [draftId],
+      );
+      previousFiles = previous.map((a) => attachmentPath(input.user.id, a));
+
       saved = await updateRequest(client, draftId, prepared.row, {
         resetCreatedAt: !input.asDraft,
       });
@@ -569,6 +725,10 @@ async function saveRequest(input) {
     }
 
     await client.query("COMMIT");
+
+    const kept = new Set(prepared.attachments.map((a) => attachmentPath(input.user.id, a)));
+    await removeStoredFiles(previousFiles.filter((path) => path && !kept.has(path)));
+
     return {
       ok: true,
       request: saved,
@@ -666,18 +826,36 @@ async function updateRequest(client, id, row, { resetCreatedAt }) {
   return rows[0];
 }
 
-/** Borra un borrador propio. Lo ya enviado nunca se borra, se anula. */
+/**
+ * Descarta un borrador propio con todo lo suyo: líneas y adjuntos (por
+ * CASCADE) y sus archivos del bucket. Lo ya enviado nunca se borra, se anula.
+ */
 async function deleteDraft({ requestId, user }) {
   const id = Number(requestId);
   if (!Number.isInteger(id)) return { ok: false, error: "Borrador inválido." };
 
+  // Los adjuntos se leen en la misma sentencia que borra: el CASCADE se los
+  // lleva, y en un CTE todas las partes ven la foto previa al DELETE.
   const { rows } = await db.query(
-    `DELETE FROM expense_requests
-      WHERE id = $1 AND user_id = $2 AND status = $3
-      RETURNING id`,
+    `WITH adjuntos AS (
+       SELECT a.url, a.public_id
+         FROM expense_request_attachments a
+         JOIN expense_requests r ON r.id = a.request_id
+        WHERE r.id = $1 AND r.user_id = $2 AND r.status = $3
+     ), borrado AS (
+       DELETE FROM expense_requests
+        WHERE id = $1 AND user_id = $2 AND status = $3
+       RETURNING id
+     )
+     SELECT (SELECT COUNT(*)::int FROM borrado) AS borrados,
+            COALESCE((SELECT json_agg(adjuntos) FROM adjuntos), '[]'::json) AS adjuntos`,
     [id, user.id, EXPENSE_STATUS.DRAFT],
   );
-  if (!rows.length) return { ok: false, error: "Ese borrador ya no existe o ya fue enviado." };
+  if (!rows[0] || !rows[0].borrados) {
+    return { ok: false, error: "Ese borrador ya no existe o ya fue enviado." };
+  }
+
+  await removeStoredFiles(rows[0].adjuntos.map((a) => attachmentPath(user.id, a)));
   return { ok: true };
 }
 
@@ -1028,6 +1206,9 @@ module.exports = {
   saveRequest,
   deleteDraft,
   getDraftForEdit,
+  discardUploads,
+  purgeStaleDrafts,
+  DRAFT_TTL_DAYS,
   elegirCentro,
   approveRequest,
   rejectRequest,
@@ -1046,5 +1227,6 @@ module.exports = {
   normalizePeriod,
   parseAssignedAmount,
   normalizeAttachments,
+  ownUploadPath,
   isoDate,
 };

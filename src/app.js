@@ -508,6 +508,28 @@ function iniciarLimpiezaHistorial() {
 }
 
 // ==========================================
+// TAREA 2b: BORRADORES DE GASTOS CADUCADOS
+// ==========================================
+// Un borrador sin cambios en DRAFT_TTL_DAYS días se elimina con sus líneas y
+// sus comprobantes del bucket: nadie va a volver por él y sólo ocupa espacio.
+function iniciarPurgaBorradoresGastos() {
+  const expenseRequests = require("./services/expenses/expenseRequestService");
+  const ejecutar = async () => {
+    try {
+      const { drafts, files } = await expenseRequests.purgeStaleDrafts();
+      if (drafts > 0) {
+        logger.info("cron", `eliminados ${drafts} borrador(es) de gastos y ${files} comprobante(s)`);
+      }
+    } catch (err) {
+      logger.error("cron", err);
+    }
+  };
+
+  ejecutar();
+  setInterval(ejecutar, 43200000);
+}
+
+// ==========================================
 // TAREA 3: TRANSICIONES DE ESTADO DE VACACIONES
 // ==========================================
 function iniciarTransicionesVacaciones() {
@@ -727,6 +749,8 @@ function startBackgroundJobs() {
     asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),
   ]).finally(() => {
     iniciarTransicionesVacaciones();
+    // Después del schema: la purga usa el estado 'draft' y su índice.
+    iniciarPurgaBorradoresGastos();
   });
 }
 

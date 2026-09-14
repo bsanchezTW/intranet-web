@@ -24,6 +24,7 @@ const {
   parseAssignedAmount,
   normalizeAttachments,
   normalizeDraftItems,
+  ownUploadPath,
   isoDate,
 } = require("../src/services/expenses/expenseRequestService");
 const {
@@ -377,7 +378,8 @@ describe("borradores", () => {
       { detail: "  ", amount: "", category: "" },
     ]);
     assert.equal(r.items.length, 3);
-    assert.deepEqual(r.items[0], { detail: "Disco SSD", amount: 0, category: null, days: null, itemDate: null });
+    // Sin monto queda NULL, no 0: al retomarlo el campo debe verse vacío.
+    assert.deepEqual(r.items[0], { detail: "Disco SSD", amount: null, category: null, days: null, itemDate: null });
     assert.equal(r.items[1].amount, 12000);
     assert.equal(r.items[1].category, null);
     assert.equal(r.items[2].itemDate, "2026-09-10");
@@ -407,6 +409,25 @@ describe("borradores", () => {
 
     assert.equal(normalizeDraftBankAccount({ bank_code: "999", account_number: "" }, opts), null);
     assert.equal(normalizeDraftBankAccount(null, opts), null);
+  });
+
+  it("un 0 escrito en un borrador se conserva como 0", () => {
+    const r = normalizeDraftItems([{ detail: "Regalo", amount: "0" }]);
+    assert.equal(r.items[0].amount, 0);
+  });
+
+  it("sólo reconoce como propios los comprobantes de la carpeta del usuario", () => {
+    assert.equal(ownUploadPath(123, "gastos/2026/123/boleta.pdf"), "gastos/2026/123/boleta.pdf");
+    assert.equal(ownUploadPath(123, "/content/gastos/2026/123/boleta.pdf"), "gastos/2026/123/boleta.pdf");
+    assert.equal(ownUploadPath("123", "gastos/2026/123/boleta.pdf"), "gastos/2026/123/boleta.pdf");
+    // Ajenos, fuera de gastos/ o con trucos de ruta: nunca.
+    assert.equal(ownUploadPath(123, "gastos/2026/456/boleta.pdf"), null);
+    assert.equal(ownUploadPath(123, "gastos/2026/1234/boleta.pdf"), null);
+    assert.equal(ownUploadPath(123, "noticias/2026/123/foto.jpg"), null);
+    assert.equal(ownUploadPath(123, "gastos/2026/123/../456/boleta.pdf"), null);
+    assert.equal(ownUploadPath(123, "gastos/2026/123/sub/boleta.pdf"), null);
+    assert.equal(ownUploadPath(null, "gastos/2026/123/boleta.pdf"), null);
+    assert.equal(ownUploadPath(123, ""), null);
   });
 
   it("isoDate no corre las fechas por zona horaria", () => {
