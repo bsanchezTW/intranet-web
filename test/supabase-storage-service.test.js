@@ -76,6 +76,31 @@ function createHarness(overrides = {}, configOverrides = {}, serviceOptions = {}
 }
 
 describe("supabaseStorageService", () => {
+  it("mueve un objeto normalizando ambas rutas", async () => {
+    const moves = [];
+    const { service } = createHarness({
+      async move(...args) {
+        moves.push(args);
+        return { data: { message: "Successfully moved" }, error: null };
+      },
+    });
+    const result = await service.moveFile(
+      "/content/gastos/2026/5/boleta-1789-ab12.pdf",
+      "gastos/2026/5/765876_1.pdf",
+    );
+    assert.deepEqual(moves, [["gastos/2026/5/boleta-1789-ab12.pdf", "gastos/2026/5/765876_1.pdf"]]);
+    assert.equal(result.relativePath, "gastos/2026/5/765876_1.pdf");
+  });
+
+  it("propaga el error cuando el bucket no puede mover", async () => {
+    const { service } = createHarness({
+      async move() {
+        return { data: null, error: { message: "The resource already exists", statusCode: "409" } };
+      },
+    });
+    await assert.rejects(service.moveFile("gastos/2026/5/a.pdf", "gastos/2026/5/765876_1.pdf"));
+  });
+
   it("sube buffers pequeños con MIME inferido y upsert por defecto", async () => {
     const { service, calls } = createHarness();
     const result = await service.uploadFile(

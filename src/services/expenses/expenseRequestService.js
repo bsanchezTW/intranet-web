@@ -232,13 +232,56 @@ const DRAFT_TTL_DAYS = 30;
  * borrador la ruta de un comprobante ajeno y descartarlo lo eliminaría.
  */
 function ownUploadPath(userId, ref) {
-  const path = String(ref || "")
+  const parsed = parseUploadPath(ref);
+  const id = Number(userId);
+  return parsed && Number.isInteger(id) && parsed.userId === id ? parsed.path : null;
+}
+
+const UPLOAD_PATH = /^gastos\/\d{4}\/(\d+)\/([^/]+)$/;
+
+/** Ruta de bucket de un comprobante de gastos, con su dueño y nombre, o null. */
+function parseUploadPath(ref) {
+  let path = String(ref || "")
     .trim()
     .replace(/^\/?content\//, "")
     .replace(/^\/+/, "");
-  const id = Number(userId);
-  if (!path || !Number.isInteger(id) || path.split("/").includes("..")) return null;
-  return new RegExp(`^gastos/\\d{4}/${id}/[^/]+$`).test(path) ? path : null;
+  // getPublicUrl codifica cada segmento de la URL; la clave del bucket no.
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    return null;
+  }
+  if (!path || path.split("/").includes("..")) return null;
+  const match = UPLOAD_PATH.exec(path);
+  return match ? { path, userId: Number(match[1]), fileName: match[2] } : null;
+}
+
+// Nombre definitivo: <id de 6 dígitos>_<n><ext>. Un nombre temporal nunca lo
+// cumple: generateFileName le agrega marca de tiempo y sufijo aleatorio.
+const FINAL_NAME = /^(\d{6})_(\d+)(\.[a-z0-9]{1,8})?$/;
+
+/** El n de "765876_2.pdf" si el archivo ya es de esta solicitud; si no, null. */
+function finalAttachmentNumber(requestId, fileName) {
+  const match = FINAL_NAME.exec(String(fileName || ""));
+  if (!match || Number(match[1]) !== Number(requestId)) return null;
+  return Number(match[2]);
+}
+
+function finalAttachmentName(requestId, n, fileName) {
+  const ext = /(\.[a-z0-9]{1,8})$/i.exec(String(fileName || ""));
+  return `${requestId}_${n}${ext ? ext[1].toLowerCase() : ""}`;
+}
+
+/**
+ * ¿Puede este comprobante ir en esta solicitud? Tiene que ser del usuario y,
+ * si ya tiene nombre definitivo, de esta misma solicitud: renombrarlo aquí
+ * dejaría a la otra apuntando a un archivo que ya no existe.
+ */
+function acceptsAttachment(userId, requestId, attachment) {
+  const path = attachmentPath(userId, attachment);
+  if (!path) return false;
+  const match = FINAL_NAME.exec(parseUploadPath(path).fileName);
+  return !match || (requestId != null && Number(match[1]) === Number(requestId));
 }
 
 function attachmentPath(userId, attachment) {
@@ -300,6 +343,97 @@ async function discardUploads({ user, refs }) {
 
   await removeStoredFiles(free);
   return { ok: true, deleted: free.length };
+}
+
+/**
+ * Renombra los comprobantes a su nombre definitivo <id>_<n><ext>.
+ *
+ * La numeración es estable: los que ya lo tienen conservan su número y los
+ * nuevos toman el siguiente. Renumerar en cada guardado obligaría a mover
+ * archivos sobre nombres ocupados, y el bucket no sobrescribe al mover.
+ * Cada movimiento se anota en `moves` al hacerse, para poder deshacerlo si
+ * el guardado falla a medio camino.
+ */
+async function renameAttachments(userId, requestId, attachments, moves) {
+  const fileStorage = require("../fileStorage");
+  const files = attachments.map((a) => parseUploadPath(attachmentPath(userId, a)));
+  let next =
+    files.reduce(
+      (max, file) => Math.max(max, finalAttachmentNumber(requestId, file && file.fileName) || 0),
+      0,
+    ) + 1;
+
+  const renamed = [];
+  for (let i = 0; i < attachments.length; i += 1) {
+    const file = files[i];
+    if (!file || finalAttachmentNumber(requestId, file.fileName)) {
+      renamed.push(attachments[i]);
+      continue;
+    }
+    const folder = file.path.slice(0, file.path.lastIndexOf("/"));
+    const target = `${folder}/${finalAttachmentName(requestId, next, file.fileName)}`;
+    next += 1;
+    const moved = await fileStorage.moveFile(file.path, target);
+    moves.push({ from: file.path, to: target });
+    renamed.push({ ...attachments[i], url: moved.secure_url, publicId: moved.public_id });
+  }
+  return renamed;
+}
+
+/** Devuelve los archivos a su nombre anterior, del último al primero. */
+async function revertMoves(moves) {
+  if (!moves.length) return;
+  const fileStorage = require("../fileStorage");
+  for (const move of moves.slice().reverse()) {
+    try {
+      await fileStorage.moveFile(move.to, move.from);
+    } catch (err) {
+      console.error("[Gastos] No se pudo deshacer el renombre de un comprobante:", err.message);
+    }
+  }
+}
+
+/** Horas de gracia para un archivo recién subido antes de darlo por abandonado. */
+const ORPHAN_UPLOAD_GRACE_HOURS = 24;
+
+/**
+ * Barrido del bucket: borra los archivos de gastos/ con más de 24 h que no
+ * pertenecen a ninguna solicitud. Son los que se subieron y nunca se guardaron
+ * (siguen con su nombre temporal) y cualquier resto de un borrado fallido. La
+ * gracia protege lo que alguien tiene subido en un formulario abierto.
+ */
+async function purgeOrphanUploads({ graceHours = ORPHAN_UPLOAD_GRACE_HOURS, now = Date.now() } = {}) {
+  const storage = require("../storage/storageService");
+  const files = await storage.listFilesRecursive("gastos");
+  const limit = now - graceHours * 3600 * 1000;
+
+  const candidates = files
+    .filter((file) => file.created_at && file.created_at.getTime() < limit)
+    .map((file) => parseUploadPath(file.relativePath))
+    .filter(Boolean)
+    .map((file) => file.path);
+  if (!candidates.length) return { scanned: files.length, deleted: 0 };
+
+  const inUse = new Set();
+  for (let i = 0; i < candidates.length; i += 500) {
+    const chunk = candidates.slice(i, i + 500);
+    const { rows } = await db.query(
+      `SELECT url, public_id
+         FROM expense_request_attachments
+        WHERE public_id = ANY($1::text[]) OR url = ANY($2::text[])`,
+      [chunk, chunk.map((path) => `/content/${path}`)],
+    );
+    rows.forEach((row) => {
+      [row.public_id, row.url].forEach((ref) => {
+        const file = parseUploadPath(ref);
+        if (file) inUse.add(file.path);
+      });
+    });
+  }
+
+  const orphans = candidates.filter((path) => !inUse.has(path));
+  const deleted = await removeStoredFiles(orphans);
+  return { scanned: files.length, deleted };
 }
 
 /**
@@ -459,6 +593,7 @@ async function prepareSubmission({
   periodStart,
   periodEnd,
   assignedAmount,
+  draftIdNumber,
 }) {
   const parsedTitle = parseText(title, 200);
   if (!parsedTitle) {
@@ -516,7 +651,7 @@ async function prepareSubmission({
   if (!assigned.ok) return assigned;
 
   const attachments = normalizeAttachments(rawAttachments).filter((a) =>
-    attachmentPath(user.id, a),
+    acceptsAttachment(user.id, draftIdNumber, a),
   );
   if (kind === EXPENSE_KIND.RENDICION && !attachments.length) {
     return {
@@ -587,6 +722,7 @@ async function prepareDraft({
   periodStart,
   periodEnd,
   assignedAmount,
+  draftIdNumber,
 }) {
   const [context, requester, centros, banks] = await Promise.all([
     areaManager.getUserAreaContext(user.id),
@@ -600,7 +736,7 @@ async function prepareDraft({
   const parsedDescription = parseText(description, 4000);
   const draft = normalizeDraftItems(rawItems);
   const attachments = normalizeAttachments(rawAttachments).filter((a) =>
-    attachmentPath(user.id, a),
+    acceptsAttachment(user.id, draftIdNumber, a),
   );
   if (!parsedTitle && !parsedDescription && !draft.items.length && !attachments.length) {
     return { ok: false, error: "Todavía no hay nada que guardar." };
@@ -670,12 +806,15 @@ async function saveRequest(input) {
     return { ok: false, error: "Borrador inválido." };
   }
 
-  const prepared = input.asDraft ? await prepareDraft(input) : await prepareSubmission(input);
+  const payload = { ...input, draftIdNumber: draftId };
+  const prepared = input.asDraft ? await prepareDraft(payload) : await prepareSubmission(payload);
   if (!prepared.ok) return prepared;
 
   // Archivos que el borrador tenía antes de este guardado; los que ya no
   // vengan se borran del bucket tras el COMMIT.
   let previousFiles = [];
+  // Renombres hechos en el bucket, para deshacerlos si la transacción falla.
+  const moves = [];
 
   const client = await db.getClient();
   try {
@@ -716,7 +855,10 @@ async function saveRequest(input) {
       saved = await insertRequestWithRetry(client, prepared.row);
     }
 
-    await insertChildren(client, saved.id, prepared.items, prepared.attachments);
+    // Con el id ya asignado, los comprobantes toman su nombre definitivo antes
+    // del COMMIT; si algo falla después, el catch deshace los movimientos.
+    const renamed = await renameAttachments(input.user.id, saved.id, prepared.attachments, moves);
+    await insertChildren(client, saved.id, prepared.items, renamed);
 
     if (prepared.account) {
       await bankAccounts.touchUserAccount(client, input.user.id, prepared.account, {
@@ -726,7 +868,7 @@ async function saveRequest(input) {
 
     await client.query("COMMIT");
 
-    const kept = new Set(prepared.attachments.map((a) => attachmentPath(input.user.id, a)));
+    const kept = new Set(renamed.map((a) => attachmentPath(input.user.id, a)));
     await removeStoredFiles(previousFiles.filter((path) => path && !kept.has(path)));
 
     return {
@@ -736,9 +878,12 @@ async function saveRequest(input) {
       requiresAdmin: prepared.approver ? prepared.approver.requiresAdmin : false,
       manager: prepared.approver ? prepared.approver.manager : null,
       area: prepared.area,
+      // Con sus nombres nuevos: el cliente debe seguir el borrador con estos.
+      attachments: renamed.map((a) => ({ name: a.name, url: a.url, public_id: a.publicId })),
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
+    await revertMoves(moves);
     throw err;
   } finally {
     client.release();
@@ -1208,6 +1353,7 @@ module.exports = {
   getDraftForEdit,
   discardUploads,
   purgeStaleDrafts,
+  purgeOrphanUploads,
   DRAFT_TTL_DAYS,
   elegirCentro,
   approveRequest,
@@ -1228,5 +1374,9 @@ module.exports = {
   parseAssignedAmount,
   normalizeAttachments,
   ownUploadPath,
+  parseUploadPath,
+  finalAttachmentName,
+  finalAttachmentNumber,
+  acceptsAttachment,
   isoDate,
 };

@@ -25,6 +25,10 @@ const {
   normalizeAttachments,
   normalizeDraftItems,
   ownUploadPath,
+  parseUploadPath,
+  finalAttachmentName,
+  finalAttachmentNumber,
+  acceptsAttachment,
   isoDate,
 } = require("../src/services/expenses/expenseRequestService");
 const {
@@ -434,6 +438,41 @@ describe("borradores", () => {
     assert.equal(isoDate(new Date(2026, 8, 1)), "2026-09-01");
     assert.equal(isoDate("2026-09-01"), "2026-09-01");
     assert.equal(isoDate(null), "");
+  });
+});
+
+describe("comprobantes — nombre definitivo", () => {
+  it("nombra con el id de la solicitud y conserva la extensión", () => {
+    assert.equal(finalAttachmentName(765876, 1, "boleta-1789398610958-ab12cd34.PDF"), "765876_1.pdf");
+    assert.equal(finalAttachmentName(765876, 3, "sin-extension"), "765876_3");
+  });
+
+  it("reconoce el nombre definitivo sólo para su propia solicitud", () => {
+    assert.equal(finalAttachmentNumber(765876, "765876_2.pdf"), 2);
+    assert.equal(finalAttachmentNumber(765876, "111111_2.pdf"), null);
+    assert.equal(finalAttachmentNumber(765876, "boleta-1789398610958-ab12cd34.pdf"), null);
+  });
+
+  it("no acepta el comprobante ya renombrado de otra solicitud", () => {
+    const temporal = { url: "/content/gastos/2026/5/boleta-1789398610958-ab12cd34.pdf", publicId: "gastos/2026/5/boleta-1789398610958-ab12cd34.pdf" };
+    const propio = { url: "", publicId: "gastos/2026/5/765876_1.pdf" };
+    const deOtra = { url: "", publicId: "gastos/2026/5/111111_1.pdf" };
+    assert.equal(acceptsAttachment(5, null, temporal), true);
+    assert.equal(acceptsAttachment(5, 765876, propio), true);
+    assert.equal(acceptsAttachment(5, null, propio), false);
+    assert.equal(acceptsAttachment(5, 765876, deOtra), false);
+    assert.equal(acceptsAttachment(6, null, temporal), false);
+  });
+
+  it("parseUploadPath extrae dueño y nombre, también desde la URL codificada", () => {
+    assert.deepEqual(parseUploadPath("/content/gastos/2026/5/765876_1.pdf"), {
+      path: "gastos/2026/5/765876_1.pdf",
+      userId: 5,
+      fileName: "765876_1.pdf",
+    });
+    assert.equal(parseUploadPath("/content/gastos/2026/5/a%20b.pdf").fileName, "a b.pdf");
+    assert.equal(parseUploadPath("noticias/2026/5/x.pdf"), null);
+    assert.equal(parseUploadPath("/content/gastos/2026/5/%E0%A4%A.pdf"), null);
   });
 });
 

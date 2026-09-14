@@ -945,6 +945,14 @@
       var data = await enviar(cuerpo);
       // Ya viven en el borrador: dejan de ser descartables desde el cliente.
       subidosSinGuardar = [];
+      // Al guardar se renombran (<id>_<n>): el próximo guardado debe mandar
+      // las rutas nuevas, porque las temporales ya no existen.
+      if (Array.isArray(data.attachments)) {
+        adjuntos = data.attachments.map(function (a) {
+          return { name: a.name, url: a.url, public_id: a.public_id };
+        });
+        pintarAdjuntos();
+      }
       estado.borradorId = data.id;
       estado.sucio = false;
       estado.listaDesactualizada = true;

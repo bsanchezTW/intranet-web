@@ -150,6 +150,19 @@ async function deleteFiles(publicIdsOrUrls = []) {
   return { deleted, failed, paths: uniquePaths };
 }
 
+/**
+ * Mueve un archivo dentro del storage y devuelve su nueva referencia pública.
+ * Falla si el destino ya existe.
+ * @returns {Promise<{secure_url: string, url: string, public_id: string}>}
+ */
+async function moveFile(fromPublicIdOrUrl, toRelativePath) {
+  const from = resolveStoredPath(fromPublicIdOrUrl);
+  const to = storage.normalizeRelativePath(toRelativePath);
+  if (!from || !to) throw new Error("Ruta de archivo inválida para mover.");
+  await storage.moveFile(from, to);
+  return { secure_url: getPublicUrl(to), url: getPublicUrl(to), public_id: to };
+}
+
 async function deleteFolder(folder) {
   return storage.deleteFolder(folder);
 }
@@ -180,6 +193,7 @@ module.exports = {
   saveFileFromPath,
   deleteFile,
   deleteFiles,
+  moveFile,
   deleteFolder,
   listFiles,
   getPublicUrl,

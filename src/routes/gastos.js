@@ -354,6 +354,7 @@ router.post("/", async (req, res) => {
         draft: true,
         id: result.request.id,
         updatedAt: result.request.updated_at,
+        attachments: result.attachments,
       });
     }
 

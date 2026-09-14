@@ -520,6 +520,11 @@ function iniciarPurgaBorradoresGastos() {
       if (drafts > 0) {
         logger.info("cron", `eliminados ${drafts} borrador(es) de gastos y ${files} comprobante(s)`);
       }
+      // Después de la purga, para que sus archivos no cuenten como en uso.
+      const huerfanos = await expenseRequests.purgeOrphanUploads();
+      if (huerfanos.deleted > 0) {
+        logger.info("cron", `eliminados ${huerfanos.deleted} comprobante(s) de gastos sin solicitud`);
+      }
     } catch (err) {
       logger.error("cron", err);
     }

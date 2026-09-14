@@ -820,6 +820,25 @@ function createSupabaseStorageService(options = {}) {
     return Array.isArray(response.data) ? response.data.length > 0 : true;
   }
 
+  /**
+   * Mueve (renombra) un objeto dentro del bucket. Supabase no sobrescribe: si
+   * el destino ya existe falla, y el origen queda intacto.
+   */
+  async function moveFile(fromRelative, toRelative) {
+    const from = requireFilePath(fromRelative);
+    const to = requireFilePath(toRelative);
+    let response;
+    try {
+      response = await bucket.move(from, to);
+    } catch (error) {
+      throw toStorageError(error, { operation: "move", relativePath: from });
+    }
+    if (response.error) {
+      throw toStorageError(response.error, { operation: "move", relativePath: from });
+    }
+    return { relativePath: to };
+  }
+
   async function listFilesInFolder(folderRelative, { limit } = {}) {
     const normalizedLimit = normalizeOptionalLimit(limit);
     const folder = normalizeRelativePath(folderRelative);
@@ -927,6 +946,7 @@ function createSupabaseStorageService(options = {}) {
     downloadStream,
     statFile,
     deleteFile,
+    moveFile,
     deleteFolder,
     listFilesInFolder,
     listFilesRecursive,
@@ -956,6 +976,7 @@ module.exports = {
   downloadStream: delegate("downloadStream"),
   statFile: delegate("statFile"),
   deleteFile: delegate("deleteFile"),
+  moveFile: delegate("moveFile"),
   deleteFolder: delegate("deleteFolder"),
   listFilesInFolder: delegate("listFilesInFolder"),
   listFilesRecursive: delegate("listFilesRecursive"),
