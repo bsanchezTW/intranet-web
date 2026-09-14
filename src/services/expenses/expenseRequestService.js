@@ -13,6 +13,13 @@ const financeTeam = require("./financeTeam");
 const costCenters = require("../costCenters/costCenterService");
 const { formatNationalId } = require("../../utils/nationalId");
 const { getDocumentConfig } = require("../../config/country");
+const {
+  MAX_LODGING_DAYS,
+  isExpenseCategory,
+  categoryRequiresDays,
+} = require("../../constants/expenseCategories");
+const bankAccounts = require("./bankAccountService");
+const { isExpenseFundType } = require("../../constants/expenseFundTypes");
 
 /**
  * Reglas del centro de gastos.
@@ -22,6 +29,10 @@ const { getDocumentConfig } = require("../../config/country");
  * cambios de estado toman SELECT ... FOR UPDATE porque dos aprobaciones
  * simultáneas sobre la misma solicitud son perfectamente posibles (el jefe
  * desde la bandeja y un administrador desde el detalle).
+ *
+ * Borradores: una solicitud en estado 'draft' es privada de su dueño, se valida
+ * con manga ancha (se guarda lo que haya) y sólo al enviarla pasa por las
+ * reglas completas, se congela la ficha y se resuelve el aprobador.
  */
 
 const MAX_ITEMS = 50;
@@ -57,6 +68,17 @@ function parseDate(value) {
   return raw;
 }
 
+function parseDays(value) {
+  const raw = String(value ?? "").trim();
+  if (!/^\d{1,3}$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= 1 && n <= MAX_LODGING_DAYS ? n : null;
+}
+
+function roundMoney(value) {
+  return Math.round(value * 100) / 100;
+}
+
 /**
  * Valida el desglose. El total NUNCA se toma del cliente: se recalcula aquí,
  * porque el formulario lo muestra sólo como conveniencia y un POST a mano
@@ -69,13 +91,37 @@ function normalizeItems(rawItems) {
   for (const raw of rawItems.slice(0, MAX_ITEMS)) {
     const detail = parseText(raw && raw.detail, 300);
     const amount = parseAmount(raw && raw.amount);
+    const category = String((raw && raw.category) || "").trim();
     // Una fila totalmente vacía es la última del formulario, no un error.
-    if (!detail && amount === null) continue;
+    if (!detail && amount === null && !category) continue;
     if (!detail) return { ok: false, error: "Cada ítem necesita un detalle." };
     if (amount === null) {
       return { ok: false, error: `El monto de «${detail}» no es válido.` };
     }
-    items.push({ detail, amount, itemDate: parseDate(raw && raw.item_date) });
+    if (!isExpenseCategory(category)) {
+      return { ok: false, error: `Elige la categoría de «${detail}».` };
+    }
+
+    // Los días sólo tienen sentido en hospedaje; en cualquier otra categoría se
+    // descartan aunque el cliente los mande.
+    let days = null;
+    if (categoryRequiresDays(category)) {
+      days = parseDays(raw && raw.days);
+      if (!days) {
+        return {
+          ok: false,
+          error: `Indica cuántos días de hospedaje cubre «${detail}» (entre 1 y ${MAX_LODGING_DAYS}).`,
+        };
+      }
+    }
+
+    items.push({
+      detail,
+      amount,
+      category,
+      days,
+      itemDate: parseDate(raw && raw.item_date),
+    });
   }
 
   if (!items.length) {
@@ -87,7 +133,74 @@ function normalizeItems(rawItems) {
     return { ok: false, error: "El total debe ser mayor que cero." };
   }
 
-  return { ok: true, items, total: Math.round(total * 100) / 100 };
+  return { ok: true, items, total: roundMoney(total) };
+}
+
+/**
+ * Desglose de un borrador: se conserva toda línea con algo escrito, aunque esté
+ * a medias. Lo que no valida se guarda vacío (las columnas NOT NULL con '' o 0)
+ * y normalizeItems lo exigirá al enviar.
+ */
+function normalizeDraftItems(rawItems) {
+  if (!Array.isArray(rawItems)) return { items: [], total: 0 };
+  const items = [];
+
+  for (const raw of rawItems.slice(0, MAX_ITEMS)) {
+    const detail = parseText(raw && raw.detail, 300);
+    const amount = parseAmount(raw && raw.amount);
+    const rawCategory = String((raw && raw.category) || "").trim();
+    const category = isExpenseCategory(rawCategory) ? rawCategory : null;
+    const itemDate = parseDate(raw && raw.item_date);
+    if (!detail && amount === null && !category && !itemDate) continue;
+
+    items.push({
+      detail: detail || "",
+      amount: amount ?? 0,
+      category,
+      days: categoryRequiresDays(category) ? parseDays(raw && raw.days) : null,
+      itemDate,
+    });
+  }
+
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  return { items, total: roundMoney(total) };
+}
+
+/**
+ * Fondo asignado: sólo en rendiciones y opcional, porque una compra pagada con
+ * dinero propio no tiene fondo. Vacío se guarda como NULL.
+ */
+function parseAssignedAmount(kind, raw) {
+  if (kind !== EXPENSE_KIND.RENDICION) return { ok: true, value: null };
+  if (String(raw ?? "").trim() === "") return { ok: true, value: null };
+  const value = parseAmount(raw);
+  if (value === null) return { ok: false, error: "El fondo asignado no es válido." };
+  return { ok: true, value };
+}
+
+/**
+ * Período de gastos, opcional. Si el formulario no lo trae (o trae sólo un
+ * extremo), se completa con las fechas del desglose, igual que en el cliente.
+ * Sin fechas en ningún lado queda vacío: una suscripción no tiene período.
+ */
+function normalizePeriod(rawStart, rawEnd, items) {
+  let start = parseDate(rawStart);
+  let end = parseDate(rawEnd);
+
+  const dates = (items || [])
+    .map((item) => item.itemDate)
+    .filter(Boolean)
+    .sort();
+  if (!start && dates.length) start = dates[0];
+  if (!end && dates.length) end = dates[dates.length - 1];
+  if (start && !end) end = start;
+  if (end && !start) start = end;
+
+  if (!start) return { ok: true, start: null, end: null };
+  if (start > end) {
+    return { ok: false, error: "El período de gastos termina antes de empezar." };
+  }
+  return { ok: true, start, end };
 }
 
 function normalizeAttachments(rawAttachments) {
@@ -103,7 +216,7 @@ function normalizeAttachments(rawAttachments) {
 }
 
 // ---------------------------------------------------------------------------
-// Creación
+// Preparación de la fila
 // ---------------------------------------------------------------------------
 
 /**
@@ -152,7 +265,43 @@ function elegirCentro(centros, costCenterId) {
   return centros.find((c) => Number(c.id) === id) || null;
 }
 
-async function createRequest({
+/**
+ * Columnas de expense_requests en un solo lugar, para que el INSERT de una
+ * solicitud nueva y el UPDATE de un borrador no puedan desalinearse.
+ */
+function requestRow(d) {
+  return {
+    kind: d.kind,
+    status: d.status,
+    user_id: d.userId,
+    work_area_id: d.areaId,
+    title: d.title,
+    description: d.description,
+    currency_code: currentCurrencyCode(),
+    total_amount: d.total,
+    needed_by: d.neededBy,
+    manager_user_id: d.managerId,
+    requester_name: d.requester.name,
+    requester_national_id: d.requester.nationalId,
+    requester_email: d.requester.email,
+    requester_area_name: d.requester.areaName,
+    cost_center_id: d.costCenter ? d.costCenter.id : null,
+    cost_center_code: d.costCenter ? d.costCenter.code : null,
+    cost_center_name: d.costCenter ? d.costCenter.name : null,
+    bank_code: d.bankAccount ? d.bankAccount.bankCode : null,
+    bank_name: d.bankAccount ? d.bankAccount.bankName : null,
+    bank_account_type: d.bankAccount ? d.bankAccount.accountType : null,
+    bank_account_number: d.bankAccount ? d.bankAccount.accountNumber : null,
+    fund_type: d.fundType,
+    destination: d.destination,
+    period_start: d.periodStart,
+    period_end: d.periodEnd,
+    assigned_amount: d.assignedAmount,
+  };
+}
+
+/** Reglas completas: lo que se exige para enviar a aprobación. */
+async function prepareSubmission({
   user,
   kind,
   title,
@@ -161,14 +310,21 @@ async function createRequest({
   attachments: rawAttachments,
   neededBy,
   costCenterId,
+  bankAccount: rawBankAccount,
+  saveBankAccount,
+  fundType,
+  destination,
+  periodStart,
+  periodEnd,
+  assignedAmount,
 }) {
-  if (!isExpenseKind(kind)) {
-    return { ok: false, error: "Tipo de solicitud inválido." };
-  }
-
   const parsedTitle = parseText(title, 200);
   if (!parsedTitle) {
     return { ok: false, error: "El asunto es obligatorio." };
+  }
+
+  if (!isExpenseFundType(fundType)) {
+    return { ok: false, error: "Elige el tipo de fondo." };
   }
 
   const context = await areaManager.getUserAreaContext(user.id);
@@ -211,6 +367,12 @@ async function createRequest({
   const normalized = normalizeItems(rawItems);
   if (!normalized.ok) return normalized;
 
+  const period = normalizePeriod(periodStart, periodEnd, normalized.items);
+  if (!period.ok) return period;
+
+  const assigned = parseAssignedAmount(kind, assignedAmount);
+  if (!assigned.ok) return assigned;
+
   const attachments = normalizeAttachments(rawAttachments);
   if (kind === EXPENSE_KIND.RENDICION && !attachments.length) {
     return {
@@ -219,69 +381,242 @@ async function createRequest({
     };
   }
 
-  const client = await db.getClient();
-  try {
-    await client.query("BEGIN");
+  // Cuenta de destino. Una instancia sin catálogo de bancos (Perú, por ahora)
+  // no la exige: no habría con qué validarla.
+  const banks = await bankAccounts.listBanks();
+  let account = null;
+  if (banks.length) {
+    const bank = bankAccounts.normalizeBankAccount(rawBankAccount, {
+      banks,
+      nationalId: requester.nationalId,
+    });
+    if (!bank.ok) return bank;
+    account = bank.account;
+  }
 
-    // queryRetryIdCollision no acepta un client, así que el reintento del ID
-    // aleatorio de 6 dígitos se hace aquí sobre la misma transacción.
-    const inserted = await insertRequestWithRetry(client, {
+  return {
+    ok: true,
+    row: requestRow({
       kind,
+      status: EXPENSE_STATUS.PENDING,
       userId: user.id,
       areaId: context.area.id,
       title: parsedTitle,
       description: parseText(description, 4000),
-      currency: currentCurrencyCode(),
       total: normalized.total,
       neededBy: kind === EXPENSE_KIND.FONDOS ? parseDate(neededBy) : null,
       managerId: approver.managerId,
       requester,
       costCenter: centro,
-    });
+      bankAccount: account,
+      fundType,
+      destination: parseText(destination, 150),
+      periodStart: period.start,
+      periodEnd: period.end,
+      assignedAmount: assigned.value,
+    }),
+    items: normalized.items,
+    attachments,
+    account,
+    saveAccount: saveBankAccount === true || saveBankAccount === "true",
+    approver,
+    area: context.area,
+  };
+}
 
-    const requestId = inserted.id;
+/**
+ * Borrador: se guarda lo que haya. Sólo se exige que exista algo que guardar,
+ * para no llenar la lista de borradores vacíos por un click distraído.
+ */
+async function prepareDraft({
+  user,
+  kind,
+  title,
+  description,
+  items: rawItems,
+  attachments: rawAttachments,
+  neededBy,
+  costCenterId,
+  bankAccount: rawBankAccount,
+  fundType,
+  destination,
+  periodStart,
+  periodEnd,
+  assignedAmount,
+}) {
+  const [context, requester, centros, banks] = await Promise.all([
+    areaManager.getUserAreaContext(user.id),
+    fetchRequesterSnapshot(user.id),
+    costCenters.listUserCostCenters(user.id),
+    bankAccounts.listBanks(),
+  ]);
+  if (!requester) return { ok: false, error: "No se encontró tu ficha de colaborador." };
 
-    await client.query(
-      `INSERT INTO expense_request_items (request_id, item_date, detail, amount, sort_order)
-       SELECT $1, d, det, amt, ord
-         FROM UNNEST($2::date[], $3::text[], $4::numeric[], $5::int[])
-           AS t(d, det, amt, ord)`,
-      [
-        requestId,
-        normalized.items.map((i) => i.itemDate),
-        normalized.items.map((i) => i.detail),
-        normalized.items.map((i) => i.amount),
-        normalized.items.map((_, index) => index),
-      ],
-    );
+  const parsedTitle = parseText(title, 200);
+  const parsedDescription = parseText(description, 4000);
+  const draft = normalizeDraftItems(rawItems);
+  const attachments = normalizeAttachments(rawAttachments);
+  if (!parsedTitle && !parsedDescription && !draft.items.length && !attachments.length) {
+    return { ok: false, error: "Todavía no hay nada que guardar." };
+  }
 
-    if (attachments.length) {
-      await client.query(
-        `INSERT INTO expense_request_attachments (request_id, name, url, public_id)
-         SELECT $1, n, u, p
-           FROM UNNEST($2::text[], $3::text[], $4::text[]) AS t(n, u, p)`,
-        [
-          requestId,
-          attachments.map((a) => a.name),
-          attachments.map((a) => a.url),
-          attachments.map((a) => a.publicId),
-        ],
+  const period = normalizePeriod(periodStart, periodEnd, draft.items);
+  const assigned = parseAssignedAmount(kind, assignedAmount);
+
+  return {
+    ok: true,
+    row: requestRow({
+      kind,
+      status: EXPENSE_STATUS.DRAFT,
+      userId: user.id,
+      areaId: context.area ? context.area.id : null,
+      title: parsedTitle || "",
+      description: parsedDescription,
+      total: draft.total,
+      neededBy: kind === EXPENSE_KIND.FONDOS ? parseDate(neededBy) : null,
+      // El aprobador se resuelve al enviar: hasta entonces nadie debe verlo.
+      managerId: null,
+      requester,
+      costCenter: elegirCentro(centros, costCenterId),
+      bankAccount: banks.length
+        ? bankAccounts.normalizeDraftBankAccount(rawBankAccount, {
+            banks,
+            nationalId: requester.nationalId,
+          })
+        : null,
+      fundType: isExpenseFundType(fundType) ? fundType : null,
+      destination: parseText(destination, 150),
+      periodStart: period.ok ? period.start : null,
+      periodEnd: period.ok ? period.end : null,
+      assignedAmount: assigned.ok ? assigned.value : null,
+    }),
+    items: draft.items,
+    attachments,
+    account: null,
+    saveAccount: false,
+    approver: null,
+    area: context.area,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Guardado (crear, guardar borrador, enviar borrador)
+// ---------------------------------------------------------------------------
+
+/**
+ * Guarda una solicitud.
+ *
+ *   asDraft = true  → crea o actualiza el borrador `draftId`.
+ *   asDraft = false → la envía a aprobación: nueva, o a partir del borrador.
+ *
+ * Al enviar un borrador se reutiliza su fila (y su número), se reemplazan
+ * líneas y adjuntos, y created_at pasa a ser el momento del envío: es la fecha
+ * que ven el jefe y Finanzas.
+ */
+async function saveRequest(input) {
+  if (!isExpenseKind(input.kind)) {
+    return { ok: false, error: "Tipo de solicitud inválido." };
+  }
+
+  const rawDraftId = String(input.draftId ?? "").trim();
+  const draftId = rawDraftId ? Number(rawDraftId) : null;
+  if (draftId !== null && !Number.isInteger(draftId)) {
+    return { ok: false, error: "Borrador inválido." };
+  }
+
+  const prepared = input.asDraft ? await prepareDraft(input) : await prepareSubmission(input);
+  if (!prepared.ok) return prepared;
+
+  const client = await db.getClient();
+  try {
+    await client.query("BEGIN");
+
+    let saved;
+    if (draftId !== null) {
+      const { rows } = await client.query(
+        "SELECT id, user_id, status, kind FROM expense_requests WHERE id = $1 FOR UPDATE",
+        [draftId],
       );
+      const current = rows[0];
+      if (
+        !current ||
+        Number(current.user_id) !== Number(input.user.id) ||
+        current.status !== EXPENSE_STATUS.DRAFT
+      ) {
+        await client.query("ROLLBACK");
+        return { ok: false, error: "Ese borrador ya no existe o ya fue enviado." };
+      }
+      if (current.kind !== input.kind) {
+        await client.query("ROLLBACK");
+        return { ok: false, error: "El borrador es de otro tipo de solicitud." };
+      }
+
+      saved = await updateRequest(client, draftId, prepared.row, {
+        resetCreatedAt: !input.asDraft,
+      });
+      await client.query("DELETE FROM expense_request_items WHERE request_id = $1", [draftId]);
+      await client.query("DELETE FROM expense_request_attachments WHERE request_id = $1", [draftId]);
+    } else {
+      saved = await insertRequestWithRetry(client, prepared.row);
+    }
+
+    await insertChildren(client, saved.id, prepared.items, prepared.attachments);
+
+    if (prepared.account) {
+      await bankAccounts.touchUserAccount(client, input.user.id, prepared.account, {
+        save: prepared.saveAccount,
+      });
     }
 
     await client.query("COMMIT");
     return {
       ok: true,
-      request: inserted,
-      requiresAdmin: approver.requiresAdmin,
-      manager: approver.manager,
-      area: context.area,
+      request: saved,
+      draft: !!input.asDraft,
+      requiresAdmin: prepared.approver ? prepared.approver.requiresAdmin : false,
+      manager: prepared.approver ? prepared.approver.manager : null,
+      area: prepared.area,
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     throw err;
   } finally {
     client.release();
+  }
+}
+
+async function insertChildren(client, requestId, items, attachments) {
+  if (items.length) {
+    await client.query(
+      `INSERT INTO expense_request_items
+         (request_id, item_date, category, days, detail, amount, sort_order)
+       SELECT $1, d, cat, dys, det, amt, ord
+         FROM UNNEST($2::date[], $3::text[], $4::smallint[], $5::text[], $6::numeric[], $7::int[])
+           AS t(d, cat, dys, det, amt, ord)`,
+      [
+        requestId,
+        items.map((i) => i.itemDate),
+        items.map((i) => i.category),
+        items.map((i) => i.days),
+        items.map((i) => i.detail),
+        items.map((i) => i.amount),
+        items.map((_, index) => index),
+      ],
+    );
+  }
+
+  if (attachments.length) {
+    await client.query(
+      `INSERT INTO expense_request_attachments (request_id, name, url, public_id)
+       SELECT $1, n, u, p
+         FROM UNNEST($2::text[], $3::text[], $4::text[]) AS t(n, u, p)`,
+      [
+        requestId,
+        attachments.map((a) => a.name),
+        attachments.map((a) => a.url),
+        attachments.map((a) => a.publicId),
+      ],
+    );
   }
 }
 
@@ -294,38 +629,18 @@ async function createRequest({
  * entera, así que sin él el segundo intento fallaría con "current transaction
  * is aborted".
  */
-async function insertRequestWithRetry(client, data, maxAttempts = 8) {
+async function insertRequestWithRetry(client, row, maxAttempts = 8) {
+  // Los nombres de columna salen de requestRow, nunca del cliente.
+  const columns = Object.keys(row);
+  const placeholders = columns.map((_, i) => `$${i + 1}`);
+  const sql = `INSERT INTO expense_requests (${columns.join(", ")})
+               VALUES (${placeholders.join(", ")})
+               RETURNING *`;
+
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     await client.query("SAVEPOINT insert_expense");
     try {
-      const { rows } = await client.query(
-        `INSERT INTO expense_requests
-           (kind, user_id, work_area_id, title, description,
-            currency_code, total_amount, needed_by, manager_user_id,
-            requester_name, requester_national_id, requester_email, requester_area_name,
-            cost_center_id, cost_center_code, cost_center_name)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-                 $10, $11, $12, $13, $14, $15, $16)
-         RETURNING *`,
-        [
-          data.kind,
-          data.userId,
-          data.areaId,
-          data.title,
-          data.description,
-          data.currency,
-          data.total,
-          data.neededBy,
-          data.managerId,
-          data.requester.name,
-          data.requester.nationalId,
-          data.requester.email,
-          data.requester.areaName,
-          data.costCenter.id,
-          data.costCenter.code,
-          data.costCenter.name,
-        ],
-      );
+      const { rows } = await client.query(sql, Object.values(row));
       await client.query("RELEASE SAVEPOINT insert_expense");
       return rows[0];
     } catch (err) {
@@ -334,6 +649,99 @@ async function insertRequestWithRetry(client, data, maxAttempts = 8) {
     }
   }
   throw new Error("No fue posible generar un ID para la solicitud.");
+}
+
+async function updateRequest(client, id, row, { resetCreatedAt }) {
+  const columns = Object.keys(row);
+  const sets = columns.map((column, i) => `${column} = $${i + 1}`);
+  sets.push("updated_at = NOW()");
+  if (resetCreatedAt) sets.push("created_at = NOW()");
+
+  const { rows } = await client.query(
+    `UPDATE expense_requests SET ${sets.join(", ")}
+      WHERE id = $${columns.length + 1}
+      RETURNING *`,
+    [...Object.values(row), id],
+  );
+  return rows[0];
+}
+
+/** Borra un borrador propio. Lo ya enviado nunca se borra, se anula. */
+async function deleteDraft({ requestId, user }) {
+  const id = Number(requestId);
+  if (!Number.isInteger(id)) return { ok: false, error: "Borrador inválido." };
+
+  const { rows } = await db.query(
+    `DELETE FROM expense_requests
+      WHERE id = $1 AND user_id = $2 AND status = $3
+      RETURNING id`,
+    [id, user.id, EXPENSE_STATUS.DRAFT],
+  );
+  if (!rows.length) return { ok: false, error: "Ese borrador ya no existe o ya fue enviado." };
+  return { ok: true };
+}
+
+/**
+ * "YYYY-MM-DD" para un <input type="date">. node-pg entrega las columnas DATE
+ * como Date a medianoche local: toISOString() las correría un día al oeste de
+ * Greenwich, así que se arma con la fecha local.
+ */
+function isoDate(value) {
+  if (!value) return "";
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${value.getFullYear()}-${month}-${day}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+/** Un borrador propio, con la forma que espera el formulario. */
+async function getDraftForEdit(requestId, user) {
+  const request = await getRequestDetail(requestId);
+  if (
+    !request ||
+    request.status !== EXPENSE_STATUS.DRAFT ||
+    Number(request.user_id) !== Number(user.id)
+  ) {
+    return null;
+  }
+
+  const hasBank = request.bank_code || request.bank_account_number;
+  return {
+    id: request.id,
+    kind: request.kind,
+    title: request.title || "",
+    description: request.description || "",
+    destination: request.destination || "",
+    fund_type: request.fund_type || "",
+    cost_center_id: request.cost_center_id || "",
+    needed_by: isoDate(request.needed_by),
+    period_start: isoDate(request.period_start),
+    period_end: isoDate(request.period_end),
+    assigned_amount: request.assigned_amount,
+    updated_at: request.updated_at,
+    items: request.items.map((item) => ({
+      item_date: isoDate(item.item_date),
+      category: item.category || "",
+      days: item.days || "",
+      detail: item.detail || "",
+      amount: item.amount,
+    })),
+    attachments: request.attachments.map((a) => ({
+      name: a.name,
+      url: a.url,
+      public_id: a.public_id,
+    })),
+    bank_account: hasBank
+      ? {
+          bank_code: request.bank_code || "",
+          account_type: request.bank_account_type || "",
+          account_number: request.bank_account_number || "",
+        }
+      : null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -490,6 +898,7 @@ const LIST_SELECT = `
     LEFT JOIN work_areas w ON w.id = r.work_area_id
     JOIN users u ON u.id = r.user_id`;
 
+/** Las del colaborador, borradores incluidos (son sólo suyos). */
 async function listForUser(userId) {
   const { rows } = await db.query(
     `${LIST_SELECT} WHERE r.user_id = $1 ORDER BY r.created_at DESC`,
@@ -524,7 +933,10 @@ async function listPendingForReviewer(user) {
   return rows;
 }
 
-/** Todo lo que ya pasó por este revisor, más lo que gestiona su área. */
+/**
+ * Todo lo que ya pasó por este revisor, más lo que gestiona su área. Los
+ * borradores quedan fuera siempre: nadie más que su dueño debe verlos.
+ */
 async function listHistoryForReviewer(user) {
   const isAdmin = isAdministrador(normalizeRole(user.role));
   const isFinance = await financeTeam.isFinanceApprover(user);
@@ -532,11 +944,12 @@ async function listHistoryForReviewer(user) {
 
   const { rows } = await db.query(
     `${LIST_SELECT}
-      WHERE r.manager_reviewed_by = $1
-         OR r.finance_reviewed_by = $1
-         OR r.work_area_id = ANY($2::int[])
-         OR $3
-         OR ($4 AND r.status <> $5)
+      WHERE r.status <> $6
+        AND (r.manager_reviewed_by = $1
+          OR r.finance_reviewed_by = $1
+          OR r.work_area_id = ANY($2::int[])
+          OR $3
+          OR ($4 AND r.status <> $5))
       ORDER BY r.created_at DESC
       LIMIT 500`,
     [
@@ -545,6 +958,7 @@ async function listHistoryForReviewer(user) {
       isAdmin,
       isFinance,
       EXPENSE_STATUS.PENDING,
+      EXPENSE_STATUS.DRAFT,
     ],
   );
   return rows;
@@ -561,7 +975,7 @@ async function getRequestDetail(requestId) {
       [id],
     ),
     db.query(
-      `SELECT id, item_date, detail, amount
+      `SELECT id, item_date, category, days, detail, amount
          FROM expense_request_items
         WHERE request_id = $1
         ORDER BY sort_order ASC, id ASC`,
@@ -591,7 +1005,9 @@ async function getRequestDetail(requestId) {
 
 /** ¿Puede este usuario ver el detalle de esta solicitud? */
 async function canViewRequest(request, user) {
-  if (Number(request.user_id) === Number(user.id)) return true;
+  const isOwner = Number(request.user_id) === Number(user.id);
+  if (request.status === EXPENSE_STATUS.DRAFT) return isOwner;
+  if (isOwner) return true;
   if (isAdministrador(normalizeRole(user.role))) return true;
   if (Number(request.manager_user_id) === Number(user.id)) return true;
   if (await financeTeam.isFinanceApprover(user)) return true;
@@ -609,7 +1025,9 @@ async function countPendingForReviewer(user) {
 }
 
 module.exports = {
-  createRequest,
+  saveRequest,
+  deleteDraft,
+  getDraftForEdit,
   elegirCentro,
   approveRequest,
   rejectRequest,
@@ -624,5 +1042,9 @@ module.exports = {
   // exportados para tests
   parseAmount,
   normalizeItems,
+  normalizeDraftItems,
+  normalizePeriod,
+  parseAssignedAmount,
   normalizeAttachments,
+  isoDate,
 };

@@ -1,0 +1,308 @@
+<%
+  /*
+    Modal del formulario de gastos (rendición y solicitud de fondos).
+    Un solo modal para los dos tipos: lo propio de cada uno lleva data-solo y
+    gastos-form.js lo muestra u oculta al abrir. También retoma borradores.
+  */
+  const f = formulario;
+  const reqF = requisitos;
+  const centros = reqF.centros || [];
+  // Con un solo centro no hay decisión que tomar: se muestra como dato.
+  const centroUnico = centros.length === 1 ? centros[0] : null;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const nombre = usuario.nombre || usuario.first_name || '—';
+  const documento = formatNationalId(reqF.documento) || '—';
+  const moneda = countryConfig.currency;
+  const obligatorio = '<span class="required-mark">*</span>';
+%>
+
+<div id="modalGasto" class="modal-overlay gasto-modal" role="dialog" aria-modal="true"
+     aria-labelledby="modalGastoTitulo" aria-hidden="true" data-dismiss="false">
+  <div class="modal-content modal-panel--flush gasto-modal__panel">
+
+    <%# div y no <header>/<footer>: intranet.css da estilo global a esas etiquetas
+        (son las del sitio) y pintaba la cabecera del modal de azul. %>
+    <div class="gasto-modal__head">
+      <div class="gasto-modal__cabecera">
+        <h2 class="modal-title gasto-modal__titulo" id="modalGastoTitulo">Rendición de gastos</h2>
+        <p class="gasto-modal__estado" id="modalGastoEstado" aria-live="polite"></p>
+      </div>
+      <button type="button" class="gasto-modal__cerrar" data-gasto-cerrar aria-label="Cerrar">&times;</button>
+    </div>
+
+    <form class="gasto-form" id="formGasto" novalidate
+          data-max-mb="<%= f.maxAdjuntoMb %>"
+          data-decimales="<%= moneda.decimals %>"
+          data-hoy="<%= hoy %>">
+
+      <div class="gasto-modal__body">
+
+        <%# 1. Solicitante: datos de la ficha, sólo lectura. %>
+        <section class="gasto-ficha" aria-labelledby="secSolicitante">
+          <h3 class="gasto-ficha__titulo" id="secSolicitante">Solicitante</h3>
+          <dl class="gasto-resumen">
+            <div><dt>Nombre</dt><dd><%= nombre %></dd></div>
+            <div><dt><%= reqF.documentoLabel %></dt><dd><%= documento %></dd></div>
+            <div><dt>Área</dt><dd><%= reqF.area.area_name %></dd></div>
+            <div><dt>Jefatura</dt><dd><%= reqF.manager.name %></dd></div>
+            <% if (centroUnico) { %>
+              <div><dt>Centro de costo</dt><dd><%= centroUnico.code %> · <%= centroUnico.name %></dd></div>
+            <% } %>
+          </dl>
+          <% if (centroUnico) { %>
+            <input type="hidden" id="centroCostoValor" value="<%= centroUnico.id %>">
+          <% } else { %>
+            <div class="gasto-centros-campo">
+              <span class="gasto-label" id="labelCentro">Centro de costo <%- obligatorio %></span>
+              <div class="gasto-centros" role="radiogroup" aria-labelledby="labelCentro">
+                <% centros.forEach(c => { %>
+                  <label class="gasto-centro">
+                    <input type="radio" name="cost_center_id" value="<%= c.id %>">
+                    <span class="gasto-centro__texto">
+                      <strong><%= c.code %></strong>
+                      <span><%= c.name %></span>
+                    </span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+        </section>
+
+        <%# 2. Solicitud. Destino y período son opcionales: una compra de
+            hardware o una suscripción no los tienen. %>
+        <section class="gasto-seccion" aria-labelledby="secSolicitud">
+          <h3 class="gasto-seccion__titulo" id="secSolicitud">Solicitud</h3>
+
+          <div class="gasto-grid-2">
+            <div class="campo-form">
+              <label for="titulo">Asunto <%- obligatorio %></label>
+              <input type="text" id="titulo" maxlength="200"
+                     data-placeholder-rendicion="Ej: Compra de disco SSD para notebook"
+                     data-placeholder-fondos="Ej: Compra de insumos de bodega">
+            </div>
+            <div class="campo-form">
+              <span class="gasto-label" id="labelTipoFondo">Tipo de fondo <%- obligatorio %></span>
+              <div class="gasto-segmento" role="radiogroup" aria-labelledby="labelTipoFondo">
+                <% f.tiposFondo.forEach(t => { %>
+                  <label class="gasto-segmento__opcion">
+                    <input type="radio" name="fund_type" value="<%= t %>">
+                    <span><%= expenseFundTypeLabel(t) %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+
+          <div class="gasto-grid-2">
+            <div class="campo-form">
+              <label for="destino">Lugar de destino</label>
+              <input type="text" id="destino" maxlength="150" placeholder="Ej: Antofagasta">
+            </div>
+            <div class="campo-form">
+              <span class="gasto-label" id="labelPeriodo">Período de gastos</span>
+              <%# Se completa solo con las fechas del desglose hasta que el usuario lo toque. %>
+              <div class="gasto-periodo" role="group" aria-labelledby="labelPeriodo">
+                <input type="date" id="periodoDesde" aria-label="Desde">
+                <span aria-hidden="true">a</span>
+                <input type="date" id="periodoHasta" aria-label="Hasta">
+              </div>
+            </div>
+          </div>
+
+          <div class="gasto-grid-2" data-solo="fondos">
+            <div class="campo-form">
+              <label for="neededBy">Requerido para</label>
+              <input type="date" id="neededBy" min="<%= hoy %>">
+            </div>
+          </div>
+
+          <div class="campo-form">
+            <label for="descripcion">Descripción</label>
+            <textarea id="descripcion" maxlength="4000" rows="2"></textarea>
+          </div>
+        </section>
+
+        <%# 3. Desglose %>
+        <section class="gasto-seccion" aria-labelledby="secDesglose">
+          <h3 class="gasto-seccion__titulo" id="secDesglose">Desglose <%- obligatorio %></h3>
+
+          <div class="gasto-items" id="gastoItems" role="group" aria-labelledby="secDesglose">
+            <div class="gasto-items__head" aria-hidden="true">
+              <span>Fecha</span>
+              <span>Categoría</span>
+              <span>Días</span>
+              <span>Detalle</span>
+              <span>Monto</span>
+              <span></span>
+            </div>
+            <!-- Las filas las genera gastos-form.js a partir de esta plantilla. -->
+          </div>
+
+          <template id="plantillaFila">
+            <div class="gasto-item-fila">
+              <div data-col="date">
+                <label class="sr-only">Fecha</label>
+                <input type="date" data-campo="item_date">
+              </div>
+              <div data-col="category">
+                <label class="sr-only">Categoría</label>
+                <select data-campo="category">
+                  <option value="">Categoría…</option>
+                  <% f.categorias.forEach(c => { %>
+                    <option value="<%= c %>"><%= expenseCategoryLabel(c) %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <%# Sólo el hospedaje pide días; en el resto la celda muestra un guion. %>
+              <div data-col="days">
+                <label class="sr-only">Días de hospedaje</label>
+                <input type="number" data-campo="days" min="1" max="<%= f.maxDiasHospedaje %>" step="1"
+                       inputmode="numeric" placeholder="Días" hidden>
+                <span class="gasto-item-fila__na" data-dias-na aria-hidden="true">—</span>
+              </div>
+              <div data-col="detail">
+                <label class="sr-only">Detalle</label>
+                <input type="text" data-campo="detail" maxlength="300" placeholder="Ej: Disco SSD 1 TB">
+              </div>
+              <div data-col="amount" class="gasto-monto">
+                <label class="sr-only">Monto</label>
+                <span class="gasto-monto__simbolo" aria-hidden="true"><%= moneda.symbol %></span>
+                <input type="text" data-campo="amount" inputmode="<%= moneda.decimals ? 'decimal' : 'numeric' %>" placeholder="0">
+              </div>
+              <button type="button" class="gasto-item-fila__quitar" data-quitar-fila
+                      aria-label="Quitar esta línea">&times;</button>
+            </div>
+          </template>
+
+          <div class="gasto-items__pie">
+            <button type="button" class="gasto-btn-secundario" id="btnAgregarFila">+ Agregar línea</button>
+            <%# Pie de la planilla. El saldo lo calcula el cliente; el servidor lo deriva. %>
+            <dl class="gasto-montos">
+              <div class="gasto-montos__total">
+                <dt>Total gastos</dt>
+                <dd><strong id="totalCalculado"><%= formatMoney(0) %></strong></dd>
+              </div>
+              <div data-solo="rendicion">
+                <dt><label for="fondoAsignado">Fondo asignado</label></dt>
+                <dd class="gasto-monto">
+                  <span class="gasto-monto__simbolo" aria-hidden="true"><%= moneda.symbol %></span>
+                  <input type="text" id="fondoAsignado" inputmode="<%= moneda.decimals ? 'decimal' : 'numeric' %>" placeholder="0">
+                </dd>
+              </div>
+              <div class="gasto-montos__saldo" data-solo="rendicion">
+                <dt id="saldoEtiqueta">A reintegrar</dt>
+                <dd id="saldoValor" aria-live="polite"><%= formatMoney(0) %></dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+
+        <%# 4. Comprobantes: arrastrar o elegir. %>
+        <section class="gasto-seccion" aria-labelledby="secComprobantes">
+          <h3 class="gasto-seccion__titulo" id="secComprobantes">
+            Comprobantes <span data-solo="rendicion"><%- obligatorio %></span>
+          </h3>
+
+          <%# El input queda fuera de la zona: su click programático burbujearía
+              hasta el listener de la zona y volvería a abrir el selector. %>
+          <input type="file" id="adjuntoInput" multiple hidden>
+          <div class="gasto-dropzone" id="dropzone">
+            <span class="gasto-dropzone__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'upload-cloud' }) %></span>
+            <p id="dropzoneTexto">
+              Arrastra tus archivos aquí o
+              <button type="button" class="gasto-dropzone__boton">elige archivos</button>
+            </p>
+            <span class="gasto-dropzone__nota">Máx. <%= f.maxAdjuntoMb %> MB por archivo</span>
+          </div>
+          <ul class="gasto-adjuntos" id="listaAdjuntos"></ul>
+        </section>
+
+        <%# 5. Transferencia: sólo cuentas propias. El número de la CuentaRUT lo
+            vuelve a calcular el servidor a partir del RUT. %>
+        <% if (f.bancos.length) { %>
+        <section class="gasto-ficha" id="datosBancarios" aria-labelledby="secBanco"
+                 data-banco-estado="<%= f.bancoEstadoCode %>"
+                 data-cuenta-rut="<%= f.cuentaRut || '' %>">
+          <h3 class="gasto-ficha__titulo" id="secBanco">Transferencia</h3>
+          <p class="gasto-titular">
+            A nombre de <strong><%= nombre %></strong> · <%= documento %> · <%= usuario.email || '—' %>
+          </p>
+
+          <% if (f.cuentasGuardadas.length) { %>
+          <div class="gasto-cuentas" id="cuentasGuardadas" role="radiogroup" aria-label="Cuenta de destino">
+            <% f.cuentasGuardadas.forEach((c, i) => { %>
+              <div class="gasto-cuenta" data-cuenta>
+                <label class="gasto-cuenta__opcion">
+                  <input type="radio" name="cuentaDestino" value="guardada"
+                         data-bank="<%= c.bank_code %>"
+                         data-type="<%= c.account_type %>"
+                         data-number="<%= c.account_number %>"
+                         <%= i === 0 ? 'checked' : '' %>>
+                  <span class="gasto-cuenta__texto">
+                    <strong><%= c.bank_name %></strong>
+                    <span><%= bankAccountTypeLabel(c.account_type) %> · <%= c.account_number %></span>
+                  </span>
+                </label>
+                <button type="button" class="gasto-cuenta__eliminar" data-eliminar-cuenta
+                        title="Eliminar cuenta guardada"
+                        aria-label="Eliminar cuenta <%= c.bank_name %> <%= c.account_number %>">
+                  <%- include('../../partials/icon', { name: 'trash' }) %>
+                </button>
+              </div>
+            <% }) %>
+            <label class="gasto-cuenta gasto-cuenta--nueva">
+              <input type="radio" name="cuentaDestino" value="nueva">
+              <span class="gasto-cuenta__texto"><strong>+ Otra cuenta</strong></span>
+            </label>
+          </div>
+          <% } %>
+
+          <div id="cuentaNueva">
+            <div class="gasto-banco__campos">
+              <div class="campo-form">
+                <label for="bancoCodigo">Banco <%- obligatorio %></label>
+                <select id="bancoCodigo">
+                  <option value="">Elige…</option>
+                  <% f.bancos.forEach(b => { %>
+                    <option value="<%= b.code %>"><%= b.name %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="campo-form">
+                <label for="bancoTipo">Tipo de cuenta <%- obligatorio %></label>
+                <select id="bancoTipo">
+                  <option value="">Elige…</option>
+                  <% f.tiposCuenta.forEach(t => { %>
+                    <option value="<%= t %>"><%= bankAccountTypeLabel(t) %></option>
+                  <% }) %>
+                </select>
+              </div>
+              <div class="campo-form">
+                <label for="bancoNumero">Número de cuenta <%- obligatorio %></label>
+                <input type="text" id="bancoNumero" inputmode="numeric" maxlength="24" autocomplete="off">
+                <span class="campo-form__ayuda" id="bancoNumeroAyuda" hidden>Tu RUT sin dígito verificador.</span>
+              </div>
+            </div>
+            <label class="gasto-banco__guardar">
+              <input type="checkbox" id="guardarCuenta" checked>
+              <span>Guardar para próximas solicitudes</span>
+            </label>
+          </div>
+        </section>
+        <% } %>
+
+      </div>
+
+      <div class="gasto-modal__foot">
+        <div class="gasto-form-error" id="formError" role="alert"></div>
+        <div class="gasto-modal__acciones">
+          <button type="button" class="gasto-modal__eliminar" id="btnEliminarBorrador" hidden>Eliminar borrador</button>
+          <span class="gasto-modal__espacio" aria-hidden="true"></span>
+          <button type="button" class="btn-secundario" id="btnGuardarBorrador">Guardar borrador</button>
+          <button type="submit" class="btn-primario" id="btnEnviar">Enviar solicitud</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>

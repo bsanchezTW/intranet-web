@@ -20,12 +20,34 @@ const { requiresAdminApproval } = require("../src/services/expenses/areaManager"
 const {
   parseAmount,
   normalizeItems,
+  normalizePeriod,
+  parseAssignedAmount,
   normalizeAttachments,
+  normalizeDraftItems,
+  isoDate,
 } = require("../src/services/expenses/expenseRequestService");
+const {
+  ALL_EXPENSE_FUND_TYPES,
+  isExpenseFundType,
+  expenseFundTypeLabel,
+} = require("../src/constants/expenseFundTypes");
+const {
+  cuentaRutNumber,
+  parseAccountNumber,
+  normalizeBankAccount,
+  normalizeDraftBankAccount,
+} = require("../src/services/expenses/bankAccountService");
+const {
+  BANKS_BY_COUNTRY,
+  BANCO_ESTADO_CODE,
+  banksForCountry,
+  isAccountTypeAllowedForBank,
+} = require("../src/constants/banks");
 
 describe("expenseStatuses — estados y etiquetas", () => {
   it("declara el flujo de dos etapas", () => {
     assert.deepEqual(ALL_EXPENSE_STATUSES, [
+      "draft",
       "pending",
       "approved_manager",
       "approved_finance",
@@ -130,8 +152,8 @@ describe("expenseRequestService — montos del desglose", () => {
 describe("expenseRequestService — normalización del desglose", () => {
   it("calcula el total desde los ítems, no desde el cliente", () => {
     const r = normalizeItems([
-      { detail: "Peaje", amount: "12.500", item_date: "2026-09-01" },
-      { detail: "Hotel", amount: "70000", item_date: "2026-09-02" },
+      { detail: "Peaje", category: "peajes", amount: "12.500", item_date: "2026-09-01" },
+      { detail: "Hotel", category: "hospedaje", days: "2", amount: "70000", item_date: "2026-09-02" },
     ]);
     assert.equal(r.ok, true);
     assert.equal(r.total, 82500);
@@ -141,8 +163,8 @@ describe("expenseRequestService — normalización del desglose", () => {
 
   it("ignora la última fila vacía del formulario", () => {
     const r = normalizeItems([
-      { detail: "Peaje", amount: "1000" },
-      { detail: "", amount: "" },
+      { detail: "Peaje", category: "peajes", amount: "1000" },
+      { detail: "", amount: "", category: "" },
       { detail: "  ", amount: null },
     ]);
     assert.equal(r.ok, true);
@@ -151,18 +173,20 @@ describe("expenseRequestService — normalización del desglose", () => {
   });
 
   it("exige detalle y monto en toda fila iniciada", () => {
-    assert.equal(normalizeItems([{ detail: "", amount: "500" }]).ok, false);
-    assert.equal(normalizeItems([{ detail: "Peaje", amount: "abc" }]).ok, false);
+    assert.equal(normalizeItems([{ detail: "", category: "peajes", amount: "500" }]).ok, false);
+    assert.equal(normalizeItems([{ detail: "Peaje", category: "peajes", amount: "abc" }]).ok, false);
   });
 
   it("rechaza un desglose vacío o sin monto", () => {
     assert.equal(normalizeItems([]).ok, false);
     assert.equal(normalizeItems(null).ok, false);
-    assert.equal(normalizeItems([{ detail: "Nada", amount: "0" }]).ok, false);
+    assert.equal(normalizeItems([{ detail: "Nada", category: "otros", amount: "0" }]).ok, false);
   });
 
   it("descarta una fecha que no sea ISO", () => {
-    const r = normalizeItems([{ detail: "Peaje", amount: "100", item_date: "01/09/2026" }]);
+    const r = normalizeItems([
+      { detail: "Peaje", category: "peajes", amount: "100", item_date: "01/09/2026" },
+    ]);
     assert.equal(r.ok, true);
     assert.equal(r.items[0].itemDate, null);
   });
@@ -170,11 +194,235 @@ describe("expenseRequestService — normalización del desglose", () => {
   it("acota el número de líneas", () => {
     const muchas = Array.from({ length: 80 }, (_, i) => ({
       detail: "Línea " + i,
+      category: "otros",
       amount: "1",
     }));
     const r = normalizeItems(muchas);
     assert.equal(r.ok, true);
     assert.equal(r.items.length, 50);
+  });
+});
+
+describe("expenseRequestService — categoría y días", () => {
+  it("exige una categoría conocida en cada línea", () => {
+    const sin = normalizeItems([{ detail: "Alargador 3M", amount: "8990" }]);
+    assert.equal(sin.ok, false);
+    assert.match(sin.error, /categoría/);
+    assert.equal(
+      normalizeItems([{ detail: "Alargador 3M", category: "marciano", amount: "8990" }]).ok,
+      false,
+    );
+    const ok = normalizeItems([{ detail: "Alargador 3M", category: "otros", amount: "8990" }]);
+    assert.equal(ok.ok, true);
+    assert.equal(ok.items[0].category, "otros");
+    assert.equal(ok.items[0].days, null);
+  });
+
+  it("una fila con sólo la categoría elegida no es una fila vacía", () => {
+    assert.equal(normalizeItems([{ detail: "", amount: "", category: "comidas" }]).ok, false);
+  });
+
+  it("el hospedaje exige días entre 1 y 365", () => {
+    const base = { detail: "Hotel Antofagasta", category: "hospedaje", amount: "90000" };
+    assert.equal(normalizeItems([base]).ok, false);
+    assert.equal(normalizeItems([{ ...base, days: "0" }]).ok, false);
+    assert.equal(normalizeItems([{ ...base, days: "366" }]).ok, false);
+    assert.equal(normalizeItems([{ ...base, days: "2,5" }]).ok, false);
+    const r = normalizeItems([{ ...base, days: 3 }]);
+    assert.equal(r.ok, true);
+    assert.equal(r.items[0].days, 3);
+  });
+
+  it("descarta los días en cualquier categoría que no sea hospedaje", () => {
+    const r = normalizeItems([{ detail: "Almuerzo", category: "comidas", days: "4", amount: "12000" }]);
+    assert.equal(r.ok, true);
+    assert.equal(r.items[0].days, null);
+  });
+});
+
+describe("bankAccountService — cuenta de destino", () => {
+  const banks = BANKS_BY_COUNTRY.CL;
+  const nationalId = "12345678-5";
+
+  it("el catálogo usa el código SBIF como clave, sin repetidos", () => {
+    const codes = banks.map((b) => b.code);
+    assert.equal(new Set(codes).size, codes.length);
+    for (const code of codes) assert.match(code, /^\d{3}$/);
+    assert.equal(banks.find((b) => b.code === BANCO_ESTADO_CODE).name, "Banco Estado");
+    assert.deepEqual(banksForCountry("PE"), []);
+  });
+
+  it("la CuentaRUT es el RUT sin puntos ni dígito verificador", () => {
+    assert.equal(cuentaRutNumber("12345678-5"), "12345678");
+    assert.equal(cuentaRutNumber("12.345.678-5"), "12345678");
+    assert.equal(cuentaRutNumber(null), null);
+    assert.equal(cuentaRutNumber("12345678-9"), null);
+  });
+
+  it("en CuentaRUT ignora el número que manda el cliente", () => {
+    const r = normalizeBankAccount(
+      { bank_code: "012", account_type: "rut", account_number: "999999" },
+      { banks, nationalId },
+    );
+    assert.equal(r.ok, true);
+    assert.equal(r.account.accountNumber, "12345678");
+    assert.equal(r.account.bankName, "Banco Estado");
+  });
+
+  it("la CuentaRUT sólo existe en Banco Estado", () => {
+    const r = normalizeBankAccount(
+      { bank_code: "001", account_type: "rut", account_number: "12345678" },
+      { banks, nationalId },
+    );
+    assert.equal(r.ok, false);
+    assert.equal(isAccountTypeAllowedForBank("rut", "012"), true);
+    assert.equal(isAccountTypeAllowedForBank("vista", "012"), true);
+    assert.equal(isAccountTypeAllowedForBank("corriente", "037"), true);
+  });
+
+  it("limpia guiones y espacios del número y exige sólo dígitos", () => {
+    const r = normalizeBankAccount(
+      { bank_code: "001", account_type: "corriente", account_number: " 00-123-45678-09 " },
+      { banks, nationalId },
+    );
+    assert.equal(r.ok, true);
+    assert.equal(r.account.accountNumber, "001234567809");
+    assert.equal(parseAccountNumber("12a45"), null);
+    assert.equal(parseAccountNumber("123"), null);
+    assert.equal(parseAccountNumber(""), null);
+  });
+
+  it("rechaza bancos fuera del catálogo y tipos desconocidos", () => {
+    assert.equal(
+      normalizeBankAccount({ bank_code: "999", account_type: "vista", account_number: "1234" }, { banks, nationalId }).ok,
+      false,
+    );
+    assert.equal(
+      normalizeBankAccount({ bank_code: "001", account_type: "bitcoin", account_number: "1234" }, { banks, nationalId }).ok,
+      false,
+    );
+    assert.equal(normalizeBankAccount(null, { banks, nationalId }).ok, false);
+  });
+});
+
+describe("expenseRequestService — encabezado del fondo", () => {
+  it("reconoce los dos tipos de fondo de la planilla", () => {
+    assert.deepEqual(ALL_EXPENSE_FUND_TYPES, ["fijo", "rendir"]);
+    assert.equal(expenseFundTypeLabel("fijo"), "Fondo fijo");
+    assert.equal(expenseFundTypeLabel("rendir"), "Fondo a rendir");
+    assert.equal(isExpenseFundType("caja"), false);
+    assert.equal(expenseFundTypeLabel(null), "—");
+  });
+
+  const items = [
+    { itemDate: "2026-09-03" },
+    { itemDate: null },
+    { itemDate: "2026-09-01" },
+  ];
+
+  it("respeta el período que indica el usuario", () => {
+    const r = normalizePeriod("2026-08-30", "2026-09-05", items);
+    assert.deepEqual(r, { ok: true, start: "2026-08-30", end: "2026-09-05" });
+  });
+
+  it("sin período lo deduce de las fechas del desglose", () => {
+    assert.deepEqual(normalizePeriod("", "", items), {
+      ok: true,
+      start: "2026-09-01",
+      end: "2026-09-03",
+    });
+  });
+
+  it("con un solo extremo y sin fechas usa el mismo día", () => {
+    assert.deepEqual(normalizePeriod("2026-09-10", "", []), {
+      ok: true,
+      start: "2026-09-10",
+      end: "2026-09-10",
+    });
+  });
+
+  it("sin fechas en ningún lado el período queda vacío (compras, suscripciones)", () => {
+    const vacio = { ok: true, start: null, end: null };
+    assert.deepEqual(normalizePeriod("", "", [{ itemDate: null }]), vacio);
+    assert.deepEqual(normalizePeriod("10/09/2026", "", []), vacio);
+  });
+
+  it("rechaza un período invertido", () => {
+    assert.equal(normalizePeriod("2026-09-10", "2026-09-01", []).ok, false);
+  });
+
+  it("el fondo asignado es opcional y sólo aplica a rendiciones", () => {
+    assert.deepEqual(parseAssignedAmount("rendicion", ""), { ok: true, value: null });
+    assert.deepEqual(parseAssignedAmount("rendicion", null), { ok: true, value: null });
+    assert.deepEqual(parseAssignedAmount("rendicion", "100.000"), { ok: true, value: 100000 });
+    assert.deepEqual(parseAssignedAmount("rendicion", "0"), { ok: true, value: 0 });
+    assert.equal(parseAssignedAmount("rendicion", "abc").ok, false);
+    assert.equal(parseAssignedAmount("rendicion", "-5").ok, false);
+    assert.deepEqual(parseAssignedAmount("fondos", "50000"), { ok: true, value: null });
+  });
+});
+
+describe("borradores", () => {
+  it("el borrador es un estado propio, con etiqueta y badge", () => {
+    assert.equal(EXPENSE_STATUS.DRAFT, "draft");
+    assert.equal(expenseStatusLabel("draft"), "Borrador");
+    assert.match(expenseStatusBadge("draft"), /gasto-badge--draft/);
+  });
+
+  it("conserva las líneas a medias y descarta las vacías", () => {
+    const r = normalizeDraftItems([
+      { detail: "Disco SSD", amount: "", category: "" },
+      { detail: "", amount: "12.000", category: "marciano" },
+      { detail: "", amount: "", category: "", item_date: "2026-09-10" },
+      { detail: "  ", amount: "", category: "" },
+    ]);
+    assert.equal(r.items.length, 3);
+    assert.deepEqual(r.items[0], { detail: "Disco SSD", amount: 0, category: null, days: null, itemDate: null });
+    assert.equal(r.items[1].amount, 12000);
+    assert.equal(r.items[1].category, null);
+    assert.equal(r.items[2].itemDate, "2026-09-10");
+    assert.equal(r.total, 12000);
+  });
+
+  it("guarda los días sólo si la línea es de hospedaje y son válidos", () => {
+    const r = normalizeDraftItems([
+      { detail: "Hotel", category: "hospedaje", days: "2" },
+      { detail: "Hotel", category: "hospedaje", days: "0" },
+      { detail: "Almuerzo", category: "comidas", days: "3" },
+    ]);
+    assert.deepEqual(r.items.map((i) => i.days), [2, null, null]);
+    assert.deepEqual(normalizeDraftItems(null), { items: [], total: 0 });
+  });
+
+  it("de la cuenta de un borrador conserva lo que sirva", () => {
+    const opts = { banks: BANKS_BY_COUNTRY.CL, nationalId: "12345678-5" };
+    const completa = normalizeDraftBankAccount(
+      { bank_code: "012", account_type: "rut", account_number: "" },
+      opts,
+    );
+    assert.equal(completa.accountNumber, "12345678");
+
+    const aMedias = normalizeDraftBankAccount({ bank_code: "001", account_type: "", account_number: "" }, opts);
+    assert.deepEqual(aMedias, { bankCode: "001", bankName: "Banco de Chile", accountType: null, accountNumber: null });
+
+    assert.equal(normalizeDraftBankAccount({ bank_code: "999", account_number: "" }, opts), null);
+    assert.equal(normalizeDraftBankAccount(null, opts), null);
+  });
+
+  it("isoDate no corre las fechas por zona horaria", () => {
+    assert.equal(isoDate(new Date(2026, 8, 1)), "2026-09-01");
+    assert.equal(isoDate("2026-09-01"), "2026-09-01");
+    assert.equal(isoDate(null), "");
+  });
+});
+
+describe("expenseCategories — compras fuera de viaje", () => {
+  it("admite hardware y suscripciones sin pedir días", () => {
+    for (const category of ["hardware", "software"]) {
+      const r = normalizeItems([{ detail: "Compra", category, amount: "15990" }]);
+      assert.equal(r.ok, true, category);
+      assert.equal(r.items[0].days, null, category);
+    }
   });
 });
 

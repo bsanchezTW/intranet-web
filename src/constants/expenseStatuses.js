@@ -4,6 +4,8 @@
  * Corresponden a los enums expense_request_status y expense_request_kind en BD
  * (services/expenses/expenseSchema.js). El flujo es de dos etapas:
  *
+ *   draft ──(el solicitante la envía)──▶ pending
+ *
  *   pending ──(jefe de área)──▶ approved_manager ──(Finanzas)──▶ approved_finance
  *      │                              │
  *      ├──▶ rejected                  └──▶ rejected
@@ -11,9 +13,12 @@
  *
  * `rejected_stage` guarda en qué etapa se rechazó; el estado no se desdobla
  * para no multiplicar los casos que la UI debe conocer.
+ *
+ * Un borrador es privado de su dueño: no aparece en bandejas ni historiales.
  */
 
 const EXPENSE_STATUS = {
+  DRAFT: "draft",
   PENDING: "pending",
   APPROVED_MANAGER: "approved_manager",
   APPROVED_FINANCE: "approved_finance",
@@ -24,6 +29,7 @@ const EXPENSE_STATUS = {
 const ALL_EXPENSE_STATUSES = Object.values(EXPENSE_STATUS);
 
 const EXPENSE_STATUS_LABELS = {
+  draft: "Borrador",
   pending: "Pendiente de jefatura",
   approved_manager: "Aprobada por jefatura",
   approved_finance: "Aprobada por Finanzas",
@@ -33,6 +39,7 @@ const EXPENSE_STATUS_LABELS = {
 
 /** Clase CSS del badge por estado (ver public/css/gastos.css). */
 const EXPENSE_STATUS_BADGE = {
+  draft: "gasto-badge gasto-badge--draft",
   pending: "gasto-badge gasto-badge--pending",
   approved_manager: "gasto-badge gasto-badge--manager",
   approved_finance: "gasto-badge gasto-badge--finance",

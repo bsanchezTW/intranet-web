@@ -4,7 +4,8 @@
 (function () {
   "use strict";
 
-  var ACTIVOS = ["pending", "approved_manager"];
+  // Un borrador también está "en curso": es trabajo que el colaborador dejó a medias.
+  var ACTIVOS = ["draft", "pending", "approved_manager"];
 
   document.querySelectorAll("[data-gastos-lista]").forEach(function (lista) {
     // El panel es el ancestro común de la barra de filtros y de la lista.

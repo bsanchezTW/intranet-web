@@ -7,6 +7,12 @@
   const conHora = { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
 
   const solicitante = s.requester_display_name || 'Colaborador';
+  // La columna de días sólo aparece si alguna línea es de hospedaje.
+  const hayDias = s.items.some((item) => item.days);
+  const columnasTotal = hayDias ? 4 : 3;
+  // El saldo no se guarda: total gastado menos el fondo asignado (NULL = 0).
+  const esRendicion = s.kind === 'rendicion';
+  const saldo = Number(s.total_amount) - Number(s.assigned_amount || 0);
   const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaLarga) : '—';
 
   function fecha(valor, opts) {
@@ -73,6 +79,38 @@
         </dl>
       </section>
 
+      <% if (s.fund_type || s.period_start || s.destination) { %>
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Fondo</h3>
+        <dl class="gasto-ficha__lista">
+          <div><dt>Tipo de fondo</dt><dd><%= expenseFundTypeLabel(s.fund_type) %></dd></div>
+          <div><dt>Lugar de destino</dt><dd><%= s.destination || '—' %></dd></div>
+          <div>
+            <dt>Período de gastos</dt>
+            <dd>
+              <%= fecha(s.period_start, fechaCorta) %><% if (s.period_end && String(s.period_end) !== String(s.period_start)) { %> – <%= fecha(s.period_end, fechaCorta) %><% } %>
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <% } %>
+
+      <% if (s.bank_code) { %>
+      <%# Cuenta congelada al enviar. El titular son los datos del solicitante:
+          sólo se admiten cuentas propias. %>
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Datos para la transferencia</h3>
+        <dl class="gasto-ficha__lista">
+          <div><dt>Titular</dt><dd><%= solicitante %></dd></div>
+          <div><dt>Documento</dt><dd><%= s.requester_document_display || '—' %></dd></div>
+          <div><dt>Correo</dt><dd><%= s.requester_contact_email || '—' %></dd></div>
+          <div><dt>Banco</dt><dd><%= s.bank_name %> <span class="gasto-banco__codigo">(<%= s.bank_code %>)</span></dd></div>
+          <div><dt>Tipo de cuenta</dt><dd><%= bankAccountTypeLabel(s.bank_account_type) %></dd></div>
+          <div><dt>Número de cuenta</dt><dd><strong><%= s.bank_account_number %></strong></dd></div>
+        </dl>
+      </section>
+      <% } %>
+
       <% if (s.description) { %>
       <section class="gasto-bloque">
         <h3 class="gasto-bloque__title">Descripción</h3>
@@ -93,8 +131,10 @@
           <table class="gasto-tabla">
             <thead>
               <tr>
-                <th style="width: 120px;">Fecha</th>
+                <th style="width: 110px;">Fecha</th>
+                <th style="width: 150px;">Categoría</th>
                 <th>Detalle</th>
+                <% if (hayDias) { %><th class="gasto-tabla__monto" style="width: 70px;">Días</th><% } %>
                 <th class="gasto-tabla__monto" style="width: 140px;">Monto</th>
               </tr>
             </thead>
@@ -102,16 +142,28 @@
               <% s.items.forEach((item) => { %>
                 <tr>
                   <td><%= fecha(item.item_date, fechaCorta) %></td>
+                  <td><%= expenseCategoryLabel(item.category) %></td>
                   <td><%= item.detail %></td>
+                  <% if (hayDias) { %><td class="gasto-tabla__monto"><%= item.days || '—' %></td><% } %>
                   <td class="gasto-tabla__monto"><%= formatMoney(item.amount) %></td>
                 </tr>
               <% }) %>
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="2">Total</td>
+                <td colspan="<%= columnasTotal %>">Total gastos</td>
                 <td class="gasto-tabla__monto"><%= formatMoney(s.total_amount) %></td>
               </tr>
+              <% if (esRendicion) { %>
+              <tr class="gasto-tabla__sub">
+                <td colspan="<%= columnasTotal %>">Fondo asignado</td>
+                <td class="gasto-tabla__monto"><%= s.assigned_amount != null ? formatMoney(s.assigned_amount) : '—' %></td>
+              </tr>
+              <tr>
+                <td colspan="<%= columnasTotal %>"><%= saldo < 0 ? 'A devolver' : 'A reintegrar' %></td>
+                <td class="gasto-tabla__monto"><%= formatMoney(Math.abs(saldo)) %></td>
+              </tr>
+              <% } %>
             </tfoot>
           </table>
         </div>

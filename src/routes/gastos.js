@@ -9,6 +9,7 @@ const { UPLOAD_LIMITS_BYTES, UPLOAD_LIMITS_MB } = require("../config/uploadLimit
 const { isAdministrador, normalizeRole } = require("../constants/roles");
 const {
   EXPENSE_STAGE,
+  EXPENSE_STATUS,
   EXPENSE_KIND_LABELS,
   expenseStatusLabel,
   expenseStatusBadge,
@@ -23,6 +24,22 @@ const expenses = require("../services/expenses/expenseRequestService");
 const areaManager = require("../services/expenses/areaManager");
 const financeTeam = require("../services/expenses/financeTeam");
 const notifications = require("../services/expenses/expenseNotificationService");
+const bankAccounts = require("../services/expenses/bankAccountService");
+const {
+  BANCO_ESTADO_CODE,
+  ALL_BANK_ACCOUNT_TYPES,
+  bankAccountTypeLabel,
+} = require("../constants/banks");
+const {
+  ALL_EXPENSE_CATEGORIES,
+  MAX_LODGING_DAYS,
+  expenseCategoryLabel,
+  categoryRequiresDays,
+} = require("../constants/expenseCategories");
+const {
+  ALL_EXPENSE_FUND_TYPES,
+  expenseFundTypeLabel,
+} = require("../constants/expenseFundTypes");
 
 /**
  * Centro de gastos: rendiciones y solicitudes de fondos.
@@ -30,6 +47,9 @@ const notifications = require("../services/expenses/expenseNotificationService")
  * Se monta en /gastos y no bajo /procesos aunque la UI viva ahí: el router de
  * procesos termina en un catch-all /:seccion/:area que se tragaría cualquier
  * ruta hija.
+ *
+ * El formulario no tiene página propia: es un modal de /gastos que sirve para
+ * crear, guardar como borrador y retomar borradores.
  */
 
 const upload = multer({
@@ -48,6 +68,10 @@ const VIEW_HELPERS = {
   expenseStatusBadge,
   expenseKindLabel,
   expenseStageLabel,
+  expenseCategoryLabel,
+  categoryRequiresDays,
+  bankAccountTypeLabel,
+  expenseFundTypeLabel,
 };
 
 function redirectOk(res, path, msg) {
@@ -90,7 +114,7 @@ async function fetchRequester(userId) {
 }
 
 // ---------------------------------------------------------------------------
-// Mis solicitudes
+// Mis solicitudes (con el formulario en modal)
 // ---------------------------------------------------------------------------
 
 router.get("/", async (req, res) => {
@@ -102,16 +126,23 @@ router.get("/", async (req, res) => {
       puedeRevisar(user),
     ]);
 
+    // Los catálogos del formulario sólo se cargan si el colaborador puede
+    // abrirlo: sin requisitos el modal no se pinta.
+    const formulario = requisitos.ok ? await datosFormulario(user, requisitos) : null;
+
     res.render("gastos/index", {
       titulo: "Mis solicitudes de gastos",
       solicitudes,
       requisitos,
       esRevisor,
+      formulario,
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
       extraCss: ["/css/gastos.css"],
-      extraJs: ["/js/gastos-lista.js"],
+      extraJs: formulario
+        ? ["/js/gastos-lista.js", "/js/gastos-form.js"]
+        : ["/js/gastos-lista.js"],
     });
   } catch (err) {
     console.error("[Gastos] Error listando solicitudes:", err);
@@ -178,6 +209,25 @@ async function requisitosParaRendir(user) {
   return { ...base, ok: true, motivo: null };
 }
 
+/** Catálogos y datos propios que necesita el modal del formulario. */
+async function datosFormulario(user, requisitos) {
+  const [bancos, cuentasGuardadas] = await Promise.all([
+    bankAccounts.listBanks(),
+    bankAccounts.listUserAccounts(user.id),
+  ]);
+  return {
+    categorias: ALL_EXPENSE_CATEGORIES,
+    tiposFondo: ALL_EXPENSE_FUND_TYPES,
+    maxDiasHospedaje: MAX_LODGING_DAYS,
+    bancos,
+    cuentasGuardadas,
+    tiposCuenta: ALL_BANK_ACCOUNT_TYPES,
+    bancoEstadoCode: BANCO_ESTADO_CODE,
+    cuentaRut: bankAccounts.cuentaRutNumber(requisitos.documento),
+    maxAdjuntoMb: UPLOAD_LIMITS_MB.PROCESS_DOCUMENT,
+  };
+}
+
 async function puedeRevisar(user) {
   if (isAdministrador(normalizeRole(user.role))) return true;
   if (await financeTeam.isFinanceApprover(user)) return true;
@@ -188,31 +238,11 @@ async function puedeRevisar(user) {
 // Formulario
 // ---------------------------------------------------------------------------
 
-router.get("/nueva/:kind", async (req, res) => {
+/** El formulario es un modal de /gastos; esta URL queda por enlaces antiguos. */
+router.get("/nueva/:kind", (req, res) => {
   const { kind } = req.params;
   if (!isExpenseKind(kind)) return res.redirect("/gastos");
-
-  try {
-    const requisitos = await requisitosParaRendir(req.session.user);
-    if (!requisitos.ok) {
-      return redirectError(res, "/gastos", requisitos.motivo);
-    }
-
-    res.render("gastos/formulario", {
-      titulo: EXPENSE_KIND_LABELS[kind],
-      kind,
-      requisitos,
-      maxAdjuntoMb: UPLOAD_LIMITS_MB.PROCESS_DOCUMENT,
-      ...flashFrom(req),
-      user: req.session.user,
-      ...VIEW_HELPERS,
-      extraCss: ["/css/gastos.css"],
-      extraJs: ["/js/gastos-form.js"],
-    });
-  } catch (err) {
-    console.error("[Gastos] Error abriendo el formulario:", err);
-    res.status(500).send("Error cargando el formulario");
-  }
+  res.redirect(`/gastos?nueva=${kind}`);
 });
 
 /**
@@ -251,29 +281,60 @@ router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
   }
 });
 
+/** Borra una cuenta guardada. Sólo toca las del usuario de la sesión. */
+router.post("/cuentas/eliminar", async (req, res) => {
+  try {
+    const deleted = await bankAccounts.deleteUserAccount(req.session.user.id, req.body);
+    if (!deleted) {
+      return res.status(404).json({ error: "Esa cuenta ya no estaba guardada." });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[Gastos] Error eliminando cuenta guardada:", err);
+    res.status(500).json({ error: "No se pudo eliminar la cuenta." });
+  }
+});
+
+/**
+ * Crea o envía una solicitud, o guarda un borrador.
+ * `draft: true` guarda sin exigir nada; `id` apunta al borrador que se retoma.
+ */
 router.post("/", async (req, res) => {
-  const {
-    kind,
-    title,
-    description,
-    needed_by: neededBy,
-    cost_center_id: costCenterId,
-  } = req.body;
+  const body = req.body || {};
+  const asDraft = body.draft === true || body.draft === "true";
 
   try {
-    const result = await expenses.createRequest({
+    const result = await expenses.saveRequest({
       user: req.session.user,
-      kind,
-      title,
-      description,
-      neededBy,
-      costCenterId,
-      items: req.body.items,
-      attachments: req.body.attachments,
+      kind: body.kind,
+      draftId: body.id,
+      asDraft,
+      title: body.title,
+      description: body.description,
+      neededBy: body.needed_by,
+      costCenterId: body.cost_center_id,
+      items: body.items,
+      attachments: body.attachments,
+      bankAccount: body.bank_account,
+      saveBankAccount: body.save_bank_account,
+      fundType: body.fund_type,
+      destination: body.destination,
+      periodStart: body.period_start,
+      periodEnd: body.period_end,
+      assignedAmount: body.assigned_amount,
     });
 
     if (!result.ok) {
       return res.status(400).json({ error: result.error });
+    }
+
+    if (asDraft) {
+      return res.json({
+        ok: true,
+        draft: true,
+        id: result.request.id,
+        updatedAt: result.request.updated_at,
+      });
     }
 
     const requester = await fetchRequester(req.session.user.id);
@@ -285,14 +346,14 @@ router.post("/", async (req, res) => {
     });
     logChange(
       req.session.user.id,
-      `envió una ${EXPENSE_KIND_LABELS[kind].toLowerCase()}`,
+      `envió una ${EXPENSE_KIND_LABELS[body.kind].toLowerCase()}`,
       result.request.id,
     );
 
     res.json({ ok: true, id: result.request.id });
   } catch (err) {
-    console.error("[Gastos] Error creando solicitud:", err);
-    res.status(500).json({ error: "No se pudo registrar la solicitud." });
+    console.error("[Gastos] Error guardando solicitud:", err);
+    res.status(500).json({ error: "No se pudo guardar la solicitud." });
   }
 });
 
@@ -330,6 +391,38 @@ router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Borradores
+// ---------------------------------------------------------------------------
+
+/** Datos de un borrador propio para rellenar el modal. */
+router.get("/:id/borrador", async (req, res) => {
+  try {
+    const draft = await expenses.getDraftForEdit(req.params.id, req.session.user);
+    if (!draft) {
+      return res.status(404).json({ error: "Ese borrador ya no existe o ya fue enviado." });
+    }
+    res.json(draft);
+  } catch (err) {
+    console.error("[Gastos] Error abriendo borrador:", err);
+    res.status(500).json({ error: "No se pudo abrir el borrador." });
+  }
+});
+
+router.post("/:id/borrador/eliminar", async (req, res) => {
+  try {
+    const result = await expenses.deleteDraft({
+      requestId: req.params.id,
+      user: req.session.user,
+    });
+    if (!result.ok) return res.status(404).json({ error: result.error });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[Gastos] Error eliminando borrador:", err);
+    res.status(500).json({ error: "No se pudo eliminar el borrador." });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Detalle y acciones
 // ---------------------------------------------------------------------------
 
@@ -339,6 +432,14 @@ router.get("/:id", async (req, res) => {
     if (!request) return res.status(404).redirect("/gastos");
 
     const user = req.session.user;
+
+    // Un borrador no tiene detalle: se retoma en el modal de Mis solicitudes.
+    if (request.status === EXPENSE_STATUS.DRAFT) {
+      return Number(request.user_id) === Number(user.id)
+        ? res.redirect(`/gastos?borrador=${request.id}`)
+        : res.redirect("/gastos");
+    }
+
     if (!(await expenses.canViewRequest(request, user))) {
       return res
         .status(403)

@@ -1,7 +1,8 @@
 const db = require("../../db");
 const logger = require("../../utils/logger");
-const { getCountryConfig } = require("../../config/country");
+const { getCountryConfig, getCurrentCountry } = require("../../config/country");
 const { areaSlug } = require("../../constants/workAreas");
+const { banksForCountry } = require("../../constants/banks");
 
 /**
  * Schema del centro de gastos, aplicado de forma idempotente al arrancar
@@ -55,7 +56,7 @@ const DDL_STATEMENTS = [
        WHERE t.typname = 'expense_request_status' AND n.nspname = current_schema()
      ) THEN
        CREATE TYPE expense_request_status AS ENUM
-         ('pending','approved_manager','approved_finance','rejected','cancelled');
+         ('pending','approved_manager','approved_finance','rejected','cancelled','draft');
      END IF;
    END$$`,
 
@@ -116,6 +117,57 @@ const DDL_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_expense_attachments_request
      ON expense_request_attachments (request_id)`,
+
+  // --- Categoría y días por línea ------------------------------------------
+  // Admiten NULL por las líneas anteriores a la categoría; las nuevas las exige
+  // expenseRequestService.normalizeItems. Los días sólo aplican a hospedaje.
+  `ALTER TABLE expense_request_items ADD COLUMN IF NOT EXISTS category VARCHAR(30)`,
+  `ALTER TABLE expense_request_items ADD COLUMN IF NOT EXISTS days SMALLINT
+     CHECK (days IS NULL OR days > 0)`,
+
+  // --- Datos bancarios -----------------------------------------------------
+  // PK = código SBIF: es el identificador que citan las nóminas de pago.
+  // Un banco que desaparece se desactiva: las solicitudes lo siguen citando.
+  `CREATE TABLE IF NOT EXISTS banks (
+    code        VARCHAR(3) PRIMARY KEY,
+    name        VARCHAR(120) NOT NULL,
+    entity_type VARCHAR(40) NOT NULL,
+    active      BOOLEAN NOT NULL DEFAULT TRUE
+  )`,
+
+  // Cuentas propias guardadas para futuras solicitudes. La clave es la cuenta
+  // misma: no hay id que exponer y guardar dos veces la misma no la duplica.
+  `CREATE TABLE IF NOT EXISTS user_bank_accounts (
+    user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    bank_code      VARCHAR(3) NOT NULL REFERENCES banks(code) ON UPDATE CASCADE,
+    account_type   VARCHAR(20) NOT NULL,
+    account_number VARCHAR(20) NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at   TIMESTAMPTZ,
+    PRIMARY KEY (user_id, bank_code, account_type, account_number)
+  )`,
+
+  // Cuenta de destino congelada en la solicitud, igual que el solicitante: si
+  // mañana el colaborador borra o cambia su cuenta, lo que Finanzas transfirió
+  // sigue registrado. El titular son los requester_* (sólo cuentas propias).
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS bank_code
+     VARCHAR(3) REFERENCES banks(code) ON UPDATE CASCADE`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS bank_name VARCHAR(120)`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS bank_account_type VARCHAR(20)`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(20)`,
+
+  // --- Encabezado de la planilla -------------------------------------------
+  // NULL en las solicitudes anteriores; las nuevas los exige createRequest
+  // (salvo el destino, que no aplica a pagos directos).
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS fund_type VARCHAR(10)
+     CHECK (fund_type IS NULL OR fund_type IN ('fijo', 'rendir'))`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS destination VARCHAR(150)`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS period_start DATE`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS period_end DATE`,
+  // Fondo asignado de una rendición. NULL = sin fondo (compra con dinero
+  // propio). El saldo a reintegrar no se guarda: es total_amount - esto.
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS assigned_amount NUMERIC(14,2)
+     CHECK (assigned_amount IS NULL OR assigned_amount >= 0)`,
 
   // ID de 6 dígitos reutilizando la función ya instalada por schema.sql.
   `DO $$
@@ -212,11 +264,33 @@ async function backfillDocKind(client) {
   );
 }
 
+/**
+ * Siembra el catálogo de bancos del país de la instancia.
+ *
+ * Actualiza nombre y tipo si cambiaron en constants/banks.js, pero no toca
+ * `active`: desactivar un banco es una decisión que se toma en la base.
+ */
+async function seedBanks(client) {
+  const banks = banksForCountry(getCurrentCountry());
+  if (!banks.length) return;
+  await client.query(
+    `INSERT INTO banks (code, name, entity_type)
+     SELECT c, n, t FROM UNNEST($1::text[], $2::text[], $3::text[]) AS s(c, n, t)
+     ON CONFLICT (code) DO UPDATE
+       SET name = EXCLUDED.name, entity_type = EXCLUDED.entity_type`,
+    [banks.map((b) => b.code), banks.map((b) => b.name), banks.map((b) => b.entityType)],
+  );
+}
+
 async function ensureExpenseSchema() {
   const client = await db.getClient();
   try {
     // Un solo round-trip: cada ALTER/CREATE por separado suma ~175ms a us-west-2.
     await client.query(DDL_STATEMENTS.join(";\n"));
+    // Bases creadas antes de los borradores. Va sola y fuera del lote: un valor
+    // nuevo de un enum no puede usarse en la misma transacción que lo agrega.
+    await client.query("ALTER TYPE expense_request_status ADD VALUE IF NOT EXISTS 'draft'");
+    await seedBanks(client);
     const migrated = await backfillDocumentAreas(client);
     await backfillDocKind(client);
     if (migrated > 0) {

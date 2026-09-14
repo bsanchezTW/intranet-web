@@ -2,8 +2,11 @@
   const lista = (typeof solicitudes !== 'undefined' && Array.isArray(solicitudes)) ? solicitudes : [];
   const req = (typeof requisitos !== 'undefined' && requisitos) ? requisitos : { ok: false, motivo: null, area: null, manager: null, centros: [] };
   const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
-  const puedeSolicitar = req.ok;
+  // El modal sólo existe si el colaborador cumple los requisitos.
+  const puedeSolicitar = req.ok && typeof formulario !== 'undefined' && !!formulario;
 
+  const borradores = lista.filter((s) => s.status === 'draft').length;
+  const enviadas = lista.length - borradores;
   const abiertas = lista.filter((s) => s.status === 'pending' || s.status === 'approved_manager').length;
   const fechaOpts = { year: 'numeric', month: '2-digit', day: '2-digit' };
 %>
@@ -14,8 +17,9 @@
     <div class="page-header__text">
       <h2 class="page-title">Mis solicitudes</h2>
       <p class="page-description">
-        <%= lista.length %> <%= lista.length === 1 ? 'solicitud' : 'solicitudes' %> ·
+        <%= enviadas %> <%= enviadas === 1 ? 'solicitud' : 'solicitudes' %> ·
         <%= abiertas %> en curso
+        <% if (borradores) { %> · <%= borradores %> <%= borradores === 1 ? 'borrador' : 'borradores' %><% } %>
         <% if (req.area) { %> · Área <%= req.area.area_name %><% } %>
         <% if (req.centros && req.centros.length) { %>
           · <%= req.centros.map(c => c.code).join(' / ') %>
@@ -62,15 +66,16 @@
     </div>
 
     <% if (puedeSolicitar) { %>
+      <%# Los href quedan como respaldo sin JS; gastos-form.js abre el modal. %>
       <div class="procesos-grid">
-        <a href="/gastos/nueva/rendicion" class="procesos-card">
+        <a href="/gastos/nueva/rendicion" class="procesos-card" data-abrir-gasto="rendicion">
           <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'receipt' }) %></span>
           <div class="procesos-card__cuerpo">
             <h4 class="procesos-card__titulo">Rendir gastos</h4>
-            <p class="procesos-card__desc">Gastos que ya pagaste, con sus comprobantes.</p>
+            <p class="procesos-card__desc">Gastos o compras que ya pagaste, con sus comprobantes.</p>
           </div>
         </a>
-        <a href="/gastos/nueva/fondos" class="procesos-card">
+        <a href="/gastos/nueva/fondos" class="procesos-card" data-abrir-gasto="fondos">
           <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
           <div class="procesos-card__cuerpo">
             <h4 class="procesos-card__titulo">Solicitar fondos</h4>
@@ -98,7 +103,7 @@
           <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'clipboard' }) %></span>
           Historial
         </h3>
-        <p class="seccion__desc">Todo lo que has enviado, con su estado actual.</p>
+        <p class="seccion__desc">Tus solicitudes y borradores.</p>
       </div>
     </div>
 
@@ -113,6 +118,9 @@
         </div>
         <div class="gastos-chips" role="group" aria-label="Filtrar por estado">
           <button type="button" class="gastos-chip is-active" data-filtro-estado="activos">En curso</button>
+          <% if (borradores) { %>
+            <button type="button" class="gastos-chip" data-filtro-estado="draft">Borradores</button>
+          <% } %>
           <button type="button" class="gastos-chip" data-filtro-estado="approved_finance">Aprobadas</button>
           <button type="button" class="gastos-chip" data-filtro-estado="rejected">Rechazadas</button>
           <button type="button" class="gastos-chip" data-filtro-estado="todos">Todas</button>
@@ -122,19 +130,25 @@
 
       <ul class="gastos-lista" data-gastos-lista>
         <% lista.forEach((s) => {
-             const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaOpts) : '—';
-             const buscable = [s.title, String(s.id), expenseKindLabel(s.kind)].filter(Boolean).join(' ').toLowerCase();
+             const esBorrador = s.status === 'draft';
+             const fechaRef = esBorrador ? (s.updated_at || s.created_at) : s.created_at;
+             const fecha = fechaRef ? new Date(fechaRef).toLocaleDateString(countryConfig.locale, fechaOpts) : '—';
+             const buscable = [s.title, String(s.id), expenseKindLabel(s.kind), esBorrador ? 'borrador' : '']
+               .filter(Boolean).join(' ').toLowerCase();
         %>
           <li class="gasto-item" data-estado="<%= s.status %>" data-buscar="<%= buscable %>">
-            <a class="gasto-item__link" href="/gastos/<%= s.id %>">
+            <%# Un borrador no tiene detalle: se retoma en el modal. %>
+            <a class="gasto-item__link"
+               href="<%= esBorrador ? '/gastos?borrador=' + s.id : '/gastos/' + s.id %>"
+               <% if (esBorrador) { %>data-abrir-borrador="<%= s.id %>"<% } %>>
               <span class="gasto-item__main">
                 <span class="gasto-item__top">
                   <span class="gasto-item__id">#<%= s.id %></span>
-                  <span class="gasto-item__titulo"><%= s.title %></span>
+                  <span class="gasto-item__titulo"><%= s.title || 'Sin asunto' %></span>
                 </span>
                 <span class="gasto-item__meta">
                   <span><%= expenseKindLabel(s.kind) %></span>
-                  <span>Enviada el <%= creado %></span>
+                  <span><%= esBorrador ? 'Guardado el' : 'Enviada el' %> <%= fecha %></span>
                   <span><%= s.item_count %> <%= s.item_count === 1 ? 'ítem' : 'ítems' %></span>
                   <% if (s.attachment_count > 0) { %>
                     <span><%= s.attachment_count %> <%= s.attachment_count === 1 ? 'adjunto' : 'adjuntos' %></span>
@@ -162,3 +176,7 @@
   </section>
 
 </div>
+
+<% if (puedeSolicitar) { %>
+  <%- include('partials/formulario_modal') %>
+<% } %>
