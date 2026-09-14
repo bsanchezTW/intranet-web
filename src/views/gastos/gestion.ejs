@@ -4,11 +4,14 @@
   const areas = (typeof areasACargo !== 'undefined' && Array.isArray(areasACargo)) ? areasACargo : [];
   const finanzas = (typeof esFinanzas !== 'undefined' && esFinanzas);
   const admin = (typeof esAdmin !== 'undefined' && esAdmin);
+  const listaPorLiquidar = (typeof porLiquidar !== 'undefined' && Array.isArray(porLiquidar)) ? porLiquidar : [];
 
   const fechaOpts = { year: 'numeric', month: '2-digit', day: '2-digit' };
 
+  // Un colaborador eliminado conserva su nombre congelado en la solicitud.
   function nombreDe(s) {
-    return s.requester_display_name || 'Colaborador';
+    const nombre = s.requester_display_name || 'Colaborador';
+    return s.requester_deleted ? nombre + ' (usuario eliminado)' : nombre;
   }
   // El documento y el código de centro entran en la búsqueda: Finanzas suele
   // buscar por RUT o por centro, no por el título de la solicitud.
@@ -109,6 +112,56 @@
       <% } %>
     </div>
   </section>
+
+  <% if (finanzas) { %>
+  <!-- ═══════════ Por liquidar ═══════════ -->
+  <section class="seccion" aria-labelledby="gestion-liquidar">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="gestion-liquidar">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
+          Por liquidar
+        </h3>
+        <p class="seccion__desc">Rendiciones aprobadas con saldo por devolver o por pagar.</p>
+      </div>
+    </div>
+
+    <div class="gastos-panel">
+      <ul class="gastos-lista">
+        <% listaPorLiquidar.forEach((s) => {
+             const b = fundBalance(s.total_amount, s.assigned_amount);
+        %>
+          <li class="gasto-item">
+            <a class="gasto-item__link" href="/gastos/<%= s.id %>?volver=gestion">
+              <span class="gasto-item__main">
+                <span class="gasto-item__top">
+                  <span class="gasto-item__id">#<%= s.id %></span>
+                  <span class="gasto-item__titulo"><%= s.title %></span>
+                </span>
+                <span class="gasto-item__meta">
+                  <span><%= nombreDe(s) %></span>
+                  <% if (s.cost_center_code) { %><span><%= s.cost_center_code %></span><% } %>
+                  <span><%= s.fund_request_id ? 'Fondo #' + s.fund_request_id : 'Reembolso' %></span>
+                </span>
+              </span>
+
+              <span class="gasto-item__lado">
+                <span class="gasto-item__monto gasto-saldo--<%= b.sentido %>"><%= formatMoney(b.monto) %></span>
+                <span class="fondo-estado fondo-estado--<%= b.sentido %>"><%= b.sentido === 'devolver' ? 'Debe devolver' : 'Pagar' %></span>
+              </span>
+
+              <span class="gasto-item__chevron" aria-hidden="true"><%- include('../partials/icon', { name: 'chevron-right' }) %></span>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+
+      <% if (!listaPorLiquidar.length) { %>
+        <p class="gastos-vacio">No hay rendiciones por liquidar.</p>
+      <% } %>
+    </div>
+  </section>
+  <% } %>
 
   <!-- ═══════════ Historial ═══════════ -->
   <section class="seccion" aria-labelledby="gestion-historial">

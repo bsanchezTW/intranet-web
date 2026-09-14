@@ -1,0 +1,32 @@
+<%
+  /* Mismas secciones que la portada de /procesos: Finanzas, Documentos generales, Mi área/Áreas. */
+  const adminNav = typeof isAdministrador !== 'undefined' && isAdministrador;
+  const areaNavId = (typeof currentUser !== 'undefined' && currentUser && currentUser.work_area_id)
+    ? currentUser.work_area_id
+    : null;
+  const hrefProcedimientos = (!adminNav && areaNavId)
+    ? ('/procesos/procedimientos/' + areaNavId)
+    : '/procesos/procedimientos';
+  const hrefProtocolos = (!adminNav && areaNavId)
+    ? ('/procesos/protocolos/' + areaNavId)
+    : '/procesos/protocolos';
+  const labelArea = adminNav ? 'Áreas' : 'Mi área';
+%>
+<% if (features.expenseCenter) { %>
+<div class="nav-menu-group">
+  <span class="nav-menu-group__label">Finanzas</span>
+  <a href="/gastos/nueva/rendicion">Rendir gastos</a>
+  <a href="/gastos/nueva/fondos">Solicitar fondos</a>
+  <a href="/gastos">Mis solicitudes</a>
+</div>
+<% } %>
+<div class="nav-menu-group">
+  <span class="nav-menu-group__label">Documentos generales</span>
+  <a href="/procesos/reglamento">Reglamento interno</a>
+  <a href="/procesos/otros">Otros documentos</a>
+</div>
+<div class="nav-menu-group">
+  <span class="nav-menu-group__label"><%= labelArea %></span>
+  <a href="<%= hrefProcedimientos %>">Procedimientos</a>
+  <a href="<%= hrefProtocolos %>">Protocolos</a>
+</div>

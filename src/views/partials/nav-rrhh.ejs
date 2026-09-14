@@ -1,0 +1,19 @@
+<%
+  /* Mismas secciones que /RRHH: Plataformas internas y Portales externos. */
+%>
+<div class="nav-menu-group">
+  <span class="nav-menu-group__label">Plataformas internas</span>
+  <a href="/RRHH/organigrama">Organigrama</a>
+  <a href="/RRHH/personal">Personal</a>
+  <a href="/RRHH/areas">Áreas</a>
+  <a href="/RRHH/centros-costo">Centros de costo</a>
+  <a href="/RRHH/vacaciones">Vacaciones</a>
+</div>
+<% if (features.chileHrPortals) { %>
+<div class="nav-menu-group">
+  <span class="nav-menu-group__label">Portales externos</span>
+  <a href="https://transworld.mirexmas.com/" target="_blank" rel="noopener noreferrer">Rex+</a>
+  <a href="https://www.achs.cl/" target="_blank" rel="noopener noreferrer">ACHS</a>
+  <a href="https://www.cajalosandes.cl/" target="_blank" rel="noopener noreferrer">Caja los Andes</a>
+</div>
+<% } %>

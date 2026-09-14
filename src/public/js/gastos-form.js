@@ -36,7 +36,8 @@
   var campoTitulo = byId("titulo");
   var periodoDesde = byId("periodoDesde");
   var periodoHasta = byId("periodoHasta");
-  var fondoAsignado = byId("fondoAsignado");
+  var fondoAsignadoValor = byId("fondoAsignadoValor");
+  var avisoFondo = byId("avisoFondo");
   var saldoEtiqueta = byId("saldoEtiqueta");
   var saldoValor = byId("saldoValor");
   // Con un solo centro asignado el id viaja en un hidden; con dos, en radios.
@@ -68,6 +69,29 @@
      huérfanos. Los ya guardados en el borrador los administra el servidor. */
   var subidosSinGuardar = [];
 
+  var JSON_HEADERS = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-Requested-With": "fetch",
+  };
+
+  function mensajeDeRed(err, fallback) {
+    var msg = err && err.message ? String(err.message) : "";
+    if (/NetworkError|Failed to fetch|Load failed|network error/i.test(msg)) {
+      return "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.";
+    }
+    return msg || fallback || "No se pudo completar la operación.";
+  }
+
+  function leerRespuestaJson(res) {
+    return res.json().catch(function () { return {}; }).then(function (data) {
+      if (res.status === 401) {
+        throw new Error("Tu sesión expiró. Recarga la página e inicia sesión.");
+      }
+      return data;
+    });
+  }
+
   function descartarArchivos(refs, alSalir) {
     if (!refs.length) return;
     var cuerpo = JSON.stringify({ refs: refs });
@@ -78,7 +102,7 @@
     }
     fetch("/gastos/adjuntos/descartar", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
       credentials: "same-origin",
       body: cuerpo,
       keepalive: true,
@@ -145,11 +169,13 @@
     });
     totalEl.textContent = formatearMoneda(total);
 
-    /* Saldo = total gastado - fondo asignado. Positivo: la empresa le debe al
-       colaborador; negativo: el colaborador devuelve lo que sobró. */
-    if (estado.kind !== "rendicion" || !fondoAsignado) return;
-    var saldo = total - parseMonto(fondoAsignado.value);
-    saldoEtiqueta.textContent = saldo < 0 ? "A devolver" : "A reintegrar";
+    /* Saldo = gastado - asignado. Positivo: la empresa le paga al colaborador;
+       negativo: el colaborador devuelve lo que sobró. El servidor lo recalcula. */
+    if (estado.kind !== "rendicion") return;
+    var asignado = montoFondoElegido();
+    fondoAsignadoValor.textContent = asignado === null ? "Sin fondo" : formatearMoneda(asignado);
+    var saldo = Math.round((total - (asignado || 0)) * 100) / 100;
+    saldoEtiqueta.textContent = saldo < 0 ? "Debes devolver" : saldo > 0 ? "Te reembolsan" : "Sin saldo";
     saldoValor.textContent = formatearMoneda(Math.abs(saldo));
   }
 
@@ -246,9 +272,39 @@
     agregarFila(true);
   });
 
-  fondoAsignado.addEventListener("input", recalcular);
-  fondoAsignado.addEventListener("focusout", function () {
-    formatearCampoMonto(fondoAsignado);
+  // ── Fondo que se rinde ───────────────────────────────────────────────────
+
+  function fondoElegido() {
+    return form.querySelector('input[name="fund_request_id"]:checked');
+  }
+
+  function hayFondosPorRendir() {
+    return !!form.querySelector('input[name="fund_request_id"]');
+  }
+
+  /* Monto del fondo elegido, o null si es un reembolso o todavía no se eligió. */
+  function montoFondoElegido() {
+    var radio = fondoElegido();
+    return radio && radio.value !== "reembolso" ? Number(radio.dataset.monto) || 0 : null;
+  }
+
+  /* Marca un fondo (al abrir desde "Rendir" o al retomar un borrador). Devuelve
+     false si ese fondo ya no está entre los por rendir. */
+  function elegirFondo(id) {
+    if (!/^\d+$/.test(String(id || ""))) return false;
+    var radio = form.querySelector('input[name="fund_request_id"][value="' + id + '"]');
+    if (!radio) return false;
+    radio.checked = true;
+    if (radio.dataset.centro) cargarCentro(radio.dataset.centro);
+    return true;
+  }
+
+  form.addEventListener("change", function (e) {
+    if (e.target.name !== "fund_request_id") return;
+    // El centro del fondo es el más probable; el usuario puede cambiarlo.
+    if (e.target.dataset.centro) cargarCentro(e.target.dataset.centro);
+    if (avisoFondo) avisoFondo.hidden = true;
+    recalcular();
   });
 
   function valorDe(fila, campo) {
@@ -430,7 +486,7 @@
       limpiarError();
       fetch("/gastos/cuentas/eliminar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: JSON_HEADERS,
         credentials: "same-origin",
         body: JSON.stringify({
           bank_code: radio.dataset.bank,
@@ -439,9 +495,9 @@
         }),
       })
         .then(function (res) {
-          // 404: ya no estaba guardada; para la pantalla es lo mismo.
-          if (res.ok || res.status === 404) return;
-          return res.json().catch(function () { return {}; }).then(function (data) {
+          return leerRespuestaJson(res).then(function (data) {
+            // 404: ya no estaba guardada; para la pantalla es lo mismo.
+            if (res.ok || res.status === 404) return;
             throw new Error(data.error || "No se pudo eliminar la cuenta.");
           });
         })
@@ -459,7 +515,7 @@
         })
         .catch(function (err) {
           btn.disabled = false;
-          mostrarError(err.message);
+          mostrarError(mensajeDeRed(err, "No se pudo eliminar la cuenta."));
         });
     }
 
@@ -592,13 +648,14 @@
     datos.append("archivo", file);
     return fetch("/gastos/adjuntos/upload", {
       method: "POST",
+      headers: { Accept: "application/json", "X-Requested-With": "fetch" },
       body: datos,
       credentials: "same-origin",
     })
       .then(function (res) {
         // Un 413 del proxy o una página de error no traen JSON: el usuario
         // debe ver un mensaje, no el error de parseo.
-        return res.json().catch(function () { return {}; }).then(function (data) {
+        return leerRespuestaJson(res).then(function (data) {
           if (!res.ok || !data.secure_url) {
             throw new Error(data.error || 'No se pudo subir "' + file.name + '".');
           }
@@ -640,7 +697,7 @@
         pintarAdjuntos();
         marcarSucio();
       } catch (err) {
-        mostrarError(err.message);
+        mostrarError(mensajeDeRed(err, 'No se pudo subir "' + file.name + '".'));
       }
     }
 
@@ -776,6 +833,7 @@
     pintarAdjuntos();
     delete periodoDesde.dataset.manual;
     delete periodoHasta.dataset.manual;
+    if (avisoFondo) avisoFondo.hidden = true;
     estado.borradorId = null;
     limpiarError();
     if (banco) banco.reiniciar();
@@ -787,11 +845,10 @@
     byId("descripcion").value = borrador.description || "";
     byId("destino").value = borrador.destination || "";
     byId("neededBy").value = borrador.needed_by || "";
-    fondoAsignado.value = montoParaCampo(borrador.assigned_amount);
 
-    if (/^[a-z]+$/.test(borrador.fund_type || "")) {
-      var radio = form.querySelector('input[name="fund_type"][value="' + borrador.fund_type + '"]');
-      if (radio) radio.checked = true;
+    // Primero el fondo (propone su centro) y después el centro guardado, que manda.
+    if (borrador.fund_request_id && !elegirFondo(borrador.fund_request_id) && avisoFondo) {
+      avisoFondo.hidden = false;
     }
     cargarCentro(borrador.cost_center_id);
 
@@ -812,7 +869,7 @@
     if (banco) banco.cargar(borrador.bank_account);
   }
 
-  function abrir(kind, borrador) {
+  function abrir(kind, borrador, opciones) {
     reiniciar();
     aplicarKind(kind);
     if (borrador) {
@@ -821,6 +878,8 @@
       agregarFila(false);
       derivarPeriodo();
     }
+    // Desde el botón "Rendir" de un fondo, ese fondo llega elegido.
+    if (opciones && opciones.fondoId) elegirFondo(opciones.fondoId);
     recalcular();
     btnEliminarBorrador.hidden = !estado.borradorId;
     mostrarEstado(borrador ? textoBorrador(borrador.id, borrador.updated_at) : "");
@@ -874,11 +933,12 @@
   // ── Guardar, enviar, eliminar ────────────────────────────────────────────
 
   function leerCuerpo() {
-    var tipoFondo = form.querySelector('input[name="fund_type"]:checked');
+    var fondo = fondoElegido();
     var cuerpo = {
       id: estado.borradorId,
       kind: estado.kind,
-      fund_type: tipoFondo ? tipoFondo.value : "",
+      // "" sin elegir, "reembolso" o el id del fondo. El servidor lo valida.
+      fund_request_id: estado.kind === "rendicion" && fondo ? fondo.value : "",
       title: campoTitulo.value,
       destination: byId("destino").value,
       period_start: periodoDesde.value || periodoHasta.value,
@@ -886,7 +946,6 @@
       description: byId("descripcion").value,
       items: leerItems(),
       attachments: adjuntos,
-      assigned_amount: estado.kind === "rendicion" ? fondoAsignado.value : "",
       needed_by: estado.kind === "fondos" ? byId("neededBy").value : "",
       cost_center_id: centroElegido(),
     };
@@ -895,13 +954,13 @@
   }
 
   function enviar(cuerpo) {
-    return fetch("/gastos", {
+    return fetch("/gastos/guardar", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: JSON_HEADERS,
       credentials: "same-origin",
       body: JSON.stringify(cuerpo),
     }).then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (data) {
+      return leerRespuestaJson(res).then(function (data) {
         if (!res.ok) throw new Error(data.error || "No se pudo guardar la solicitud.");
         return data;
       });
@@ -911,13 +970,16 @@
   /* Valida en el orden en que se ven las secciones, para que el primer error
      sea el que el usuario tiene más arriba. */
   function validar() {
+    if (estado.kind === "rendicion" && hayFondosPorRendir() && !fondoElegido()) {
+      return {
+        msg: "Elige qué fondo vas a rendir o marca «Sin fondo».",
+        campo: form.querySelector('input[name="fund_request_id"]'),
+      };
+    }
     if (!centroElegido()) {
       return { msg: "Elige el centro de costo.", campo: form.querySelector('input[name="cost_center_id"]') };
     }
     if (!campoTitulo.value.trim()) return { msg: "Indica el asunto.", campo: campoTitulo };
-    if (!form.querySelector('input[name="fund_type"]:checked')) {
-      return { msg: "Elige el tipo de fondo.", campo: form.querySelector('input[name="fund_type"]') };
-    }
 
     var problemaItems = validarItems();
     if (problemaItems) return problemaItems;
@@ -959,7 +1021,7 @@
       btnEliminarBorrador.hidden = false;
       mostrarEstado(textoBorrador(data.id, data.updatedAt));
     } catch (err) {
-      mostrarError(err.message);
+      mostrarError(mensajeDeRed(err, "No se pudo guardar el borrador."));
     } finally {
       ocupar(false);
     }
@@ -982,7 +1044,7 @@
       estado.sucio = false;
       window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Solicitud enviada.");
     } catch (err) {
-      mostrarError(err.message);
+      mostrarError(mensajeDeRed(err, "No se pudo enviar la solicitud."));
       ocupar(false);
     }
   });
@@ -997,18 +1059,18 @@
       descartarPendientes();
       var res = await fetch("/gastos/" + estado.borradorId + "/borrador/eliminar", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: JSON_HEADERS,
         credentials: "same-origin",
         body: "{}",
       });
+      var data = await leerRespuestaJson(res);
       if (!res.ok && res.status !== 404) {
-        var data = await res.json().catch(function () { return {}; });
         throw new Error(data.error || "No se pudo eliminar el borrador.");
       }
       estado.sucio = false;
       window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Borrador eliminado.");
     } catch (err) {
-      mostrarError(err.message);
+      mostrarError(mensajeDeRed(err, "No se pudo eliminar el borrador."));
       ocupar(false);
     }
   });
@@ -1019,10 +1081,10 @@
     if (!/^\d+$/.test(String(id))) return;
     fetch("/gastos/" + id + "/borrador", {
       credentials: "same-origin",
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", "X-Requested-With": "fetch" },
     })
       .then(function (res) {
-        return res.json().catch(function () { return {}; }).then(function (data) {
+        return leerRespuestaJson(res).then(function (data) {
           if (!res.ok) throw new Error(data.error || "No se pudo abrir el borrador.");
           return data;
         });
@@ -1031,7 +1093,7 @@
         abrir(borrador.kind, borrador);
       })
       .catch(function (err) {
-        window.alert(err.message);
+        window.alert(mensajeDeRed(err, "No se pudo abrir el borrador."));
       });
   }
 
@@ -1039,7 +1101,7 @@
     var nueva = e.target.closest("[data-abrir-gasto]");
     if (nueva) {
       e.preventDefault();
-      abrir(nueva.dataset.abrirGasto);
+      abrir(nueva.dataset.abrirGasto, null, { fondoId: nueva.dataset.fondo });
       return;
     }
     var borrador = e.target.closest("[data-abrir-borrador]");

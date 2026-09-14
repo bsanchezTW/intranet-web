@@ -19,7 +19,7 @@ const {
   categoryRequiresDays,
 } = require("../../constants/expenseCategories");
 const bankAccounts = require("./bankAccountService");
-const { isExpenseFundType } = require("../../constants/expenseFundTypes");
+const funds = require("./expenseFundService");
 
 /**
  * Reglas del centro de gastos.
@@ -168,18 +168,6 @@ function normalizeDraftItems(rawItems) {
 }
 
 /**
- * Fondo asignado: sólo en rendiciones y opcional, porque una compra pagada con
- * dinero propio no tiene fondo. Vacío se guarda como NULL.
- */
-function parseAssignedAmount(kind, raw) {
-  if (kind !== EXPENSE_KIND.RENDICION) return { ok: true, value: null };
-  if (String(raw ?? "").trim() === "") return { ok: true, value: null };
-  const value = parseAmount(raw);
-  if (value === null) return { ok: false, error: "El fondo asignado no es válido." };
-  return { ok: true, value };
-}
-
-/**
  * Período de gastos, opcional. Si el formulario no lo trae (o trae sólo un
  * extremo), se completa con las fechas del desglose, igual que en el cliente.
  * Sin fechas en ningún lado queda vacío: una suscripción no tiene período.
@@ -256,11 +244,11 @@ function parseUploadPath(ref) {
   return match ? { path, userId: Number(match[1]), fileName: match[2] } : null;
 }
 
-// Nombre definitivo: <id de 6 dígitos>_<n><ext>. Un nombre temporal nunca lo
+// Nombre definitivo: <id de 8 dígitos>_<n><ext>. Un nombre temporal nunca lo
 // cumple: generateFileName le agrega marca de tiempo y sufijo aleatorio.
-const FINAL_NAME = /^(\d{6})_(\d+)(\.[a-z0-9]{1,8})?$/;
+const FINAL_NAME = /^(\d{8})_(\d+)(\.[a-z0-9]{1,8})?$/;
 
-/** El n de "765876_2.pdf" si el archivo ya es de esta solicitud; si no, null. */
+/** El n de "76587612_2.pdf" si el archivo ya es de esta solicitud; si no, null. */
 function finalAttachmentNumber(requestId, fileName) {
   const match = FINAL_NAME.exec(String(fileName || ""));
   if (!match || Number(match[1]) !== Number(requestId)) return null;
@@ -568,11 +556,12 @@ function requestRow(d) {
     bank_name: d.bankAccount ? d.bankAccount.bankName : null,
     bank_account_type: d.bankAccount ? d.bankAccount.accountType : null,
     bank_account_number: d.bankAccount ? d.bankAccount.accountNumber : null,
-    fund_type: d.fundType,
     destination: d.destination,
     period_start: d.periodStart,
     period_end: d.periodEnd,
-    assigned_amount: d.assignedAmount,
+    // Ambos los fija saveRequest con el fondo bloqueado; nunca el cliente.
+    assigned_amount: d.assignedAmount ?? null,
+    fund_request_id: d.fundRequestId ?? null,
   };
 }
 
@@ -588,20 +577,15 @@ async function prepareSubmission({
   costCenterId,
   bankAccount: rawBankAccount,
   saveBankAccount,
-  fundType,
+  fundRequestId,
   destination,
   periodStart,
   periodEnd,
-  assignedAmount,
   draftIdNumber,
 }) {
   const parsedTitle = parseText(title, 200);
   if (!parsedTitle) {
     return { ok: false, error: "El asunto es obligatorio." };
-  }
-
-  if (!isExpenseFundType(fundType)) {
-    return { ok: false, error: "Elige el tipo de fondo." };
   }
 
   const context = await areaManager.getUserAreaContext(user.id);
@@ -647,8 +631,12 @@ async function prepareSubmission({
   const period = normalizePeriod(periodStart, periodEnd, normalized.items);
   if (!period.ok) return period;
 
-  const assigned = parseAssignedAmount(kind, assignedAmount);
-  if (!assigned.ok) return assigned;
+  // El fondo se valida y se reserva dentro de la transacción (saveRequest):
+  // aquí sólo se interpreta la elección.
+  const fundChoice = funds.parseFundChoice(kind === EXPENSE_KIND.RENDICION ? fundRequestId : "");
+  if (fundChoice.type === "invalid") {
+    return { ok: false, error: "El fondo elegido no es válido." };
+  }
 
   const attachments = normalizeAttachments(rawAttachments).filter((a) =>
     acceptsAttachment(user.id, draftIdNumber, a),
@@ -688,16 +676,15 @@ async function prepareSubmission({
       requester,
       costCenter: centro,
       bankAccount: account,
-      fundType,
       destination: parseText(destination, 150),
       periodStart: period.start,
       periodEnd: period.end,
-      assignedAmount: assigned.value,
     }),
     items: normalized.items,
     attachments,
     account,
     saveAccount: saveBankAccount === true || saveBankAccount === "true",
+    fundChoice,
     approver,
     area: context.area,
   };
@@ -717,11 +704,10 @@ async function prepareDraft({
   neededBy,
   costCenterId,
   bankAccount: rawBankAccount,
-  fundType,
+  fundRequestId,
   destination,
   periodStart,
   periodEnd,
-  assignedAmount,
   draftIdNumber,
 }) {
   const [context, requester, centros, banks] = await Promise.all([
@@ -743,7 +729,9 @@ async function prepareDraft({
   }
 
   const period = normalizePeriod(periodStart, periodEnd, draft.items);
-  const assigned = parseAssignedAmount(kind, assignedAmount);
+  // En un borrador una elección inválida simplemente no se guarda.
+  const parsedChoice = funds.parseFundChoice(kind === EXPENSE_KIND.RENDICION ? fundRequestId : "");
+  const fundChoice = parsedChoice.type === "invalid" ? { type: "none" } : parsedChoice;
 
   return {
     ok: true,
@@ -766,16 +754,15 @@ async function prepareDraft({
             nationalId: requester.nationalId,
           })
         : null,
-      fundType: isExpenseFundType(fundType) ? fundType : null,
       destination: parseText(destination, 150),
       periodStart: period.ok ? period.start : null,
       periodEnd: period.ok ? period.end : null,
-      assignedAmount: assigned.ok ? assigned.value : null,
     }),
     items: draft.items,
     attachments,
     account: null,
     saveAccount: false,
+    fundChoice,
     approver: null,
     area: context.area,
   };
@@ -819,6 +806,30 @@ async function saveRequest(input) {
   const client = await db.getClient();
   try {
     await client.query("BEGIN");
+
+    // --- Fondos -----------------------------------------------------------
+    // Una rendición resuelve aquí el fondo que rinde, con la fila del fondo
+    // bloqueada; el índice único del 1:1 es la última barrera. Una solicitud
+    // de fondos comprueba el cupo de 3. Ambos bajo un bloqueo por usuario.
+    if (input.kind === EXPENSE_KIND.RENDICION) {
+      const fund = await funds.resolveFundForRendicion(client, {
+        userId: input.user.id,
+        choice: prepared.fundChoice,
+        asDraft: !!input.asDraft,
+      });
+      if (!fund.ok) {
+        await client.query("ROLLBACK");
+        return fund;
+      }
+      prepared.row.fund_request_id = fund.fundRequestId;
+      prepared.row.assigned_amount = fund.assignedAmount;
+    } else if (!input.asDraft) {
+      const cupo = await funds.checkFundLimit(client, { userId: input.user.id });
+      if (!cupo.ok) {
+        await client.query("ROLLBACK");
+        return cupo;
+      }
+    }
 
     let saved;
     if (draftId !== null) {
@@ -884,6 +895,9 @@ async function saveRequest(input) {
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
     await revertMoves(moves);
+    if (funds.isFundRendicionConflict(err)) {
+      return { ok: false, error: "Ese fondo ya tiene una rendición en curso." };
+    }
     throw err;
   } finally {
     client.release();
@@ -926,7 +940,7 @@ async function insertChildren(client, requestId, items, attachments) {
 }
 
 /**
- * INSERT con reintento por colisión del ID aleatorio de 6 dígitos.
+ * INSERT con reintento por colisión del ID aleatorio de 8 dígitos.
  *
  * db.queryRetryIdCollision no sirve aquí porque no acepta un client, y el
  * INSERT tiene que ir dentro de la misma transacción que los ítems. El
@@ -1038,12 +1052,11 @@ async function getDraftForEdit(requestId, user) {
     title: request.title || "",
     description: request.description || "",
     destination: request.destination || "",
-    fund_type: request.fund_type || "",
+    fund_request_id: request.fund_request_id || "",
     cost_center_id: request.cost_center_id || "",
     needed_by: isoDate(request.needed_by),
     period_start: isoDate(request.period_start),
     period_end: isoDate(request.period_end),
-    assigned_amount: request.assigned_amount,
     updated_at: request.updated_at,
     items: request.items.map((item) => ({
       item_date: isoDate(item.item_date),
@@ -1139,6 +1152,13 @@ async function transition(requestId, user, { approve, notes }) {
         ? EXPENSE_STATUS.APPROVED_MANAGER
         : EXPENSE_STATUS.APPROVED_FINANCE;
 
+    // Una rendición que Finanzas aprueba sin saldo no tiene nada que liquidar.
+    const autoSettle =
+      approve &&
+      stage === EXPENSE_STAGE.FINANCE &&
+      request.kind === EXPENSE_KIND.RENDICION &&
+      funds.fundBalance(request.total_amount, request.assigned_amount).sentido === "cerrado";
+
     const columnPrefix = stage === EXPENSE_STAGE.MANAGER ? "manager" : "finance";
     const { rows: updated } = await client.query(
       `UPDATE expense_requests
@@ -1147,10 +1167,11 @@ async function transition(requestId, user, { approve, notes }) {
               ${columnPrefix}_reviewed_at = NOW(),
               ${columnPrefix}_notes       = $3,
               rejected_stage         = $4,
+              settled_at             = CASE WHEN $6::boolean THEN NOW() ELSE settled_at END,
               updated_at             = NOW()
         WHERE id = $5
         RETURNING *`,
-      [nextStatus, user.id, reviewerNotes, approve ? null : stage, id],
+      [nextStatus, user.id, reviewerNotes, approve ? null : stage, id, autoSettle],
     );
 
     await client.query("COMMIT");
@@ -1194,6 +1215,55 @@ async function cancelRequest({ requestId, user }) {
   return { ok: true, request: rows[0] };
 }
 
+/**
+ * Liquidar: Finanzas confirma que el saldo de una rendición aprobada ya se
+ * devolvió o se pagó. Una rendición sin saldo se liquida sola al aprobarse.
+ */
+async function settleRequest({ requestId, reviewer, notes }) {
+  const id = Number(requestId);
+  if (!Number.isInteger(id)) return { ok: false, error: "Solicitud inválida." };
+  if (!(await financeTeam.isFinanceApprover(reviewer))) {
+    return { ok: false, error: "Sólo Finanzas puede liquidar una rendición." };
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      "SELECT * FROM expense_requests WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    const request = rows[0];
+    if (
+      !request ||
+      request.kind !== EXPENSE_KIND.RENDICION ||
+      request.status !== EXPENSE_STATUS.APPROVED_FINANCE
+    ) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "Sólo se liquidan rendiciones aprobadas por Finanzas." };
+    }
+    if (request.settled_at) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "Esta rendición ya está liquidada." };
+    }
+
+    const { rows: updated } = await client.query(
+      `UPDATE expense_requests
+          SET settled_at = NOW(), settled_by = $1, settlement_notes = $2, updated_at = NOW()
+        WHERE id = $3
+        RETURNING *`,
+      [reviewer.id, parseText(notes, 2000), id],
+    );
+    await client.query("COMMIT");
+    return { ok: true, request: updated[0] };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Consultas
 // ---------------------------------------------------------------------------
@@ -1202,9 +1272,13 @@ async function cancelRequest({ requestId, user }) {
  * Los datos del solicitante salen de lo congelado en la solicitud; el JOIN a
  * users queda sólo como respaldo para filas anteriores a la copia y para la
  * foto, que sí conviene que sea la actual.
+ *
+ * LEFT JOIN: si el colaborador fue eliminado, user_id es NULL y la solicitud
+ * debe seguir apareciendo en Gestión, en el historial y en su detalle.
  */
 const LIST_SELECT = `
   SELECT r.*,
+         (r.user_id IS NULL) AS requester_deleted,
          COALESCE(r.requester_area_name, w.area_name) AS area_name,
          w.color AS area_color,
          COALESCE(
@@ -1219,7 +1293,7 @@ const LIST_SELECT = `
          (SELECT COUNT(*)::int FROM expense_request_attachments a WHERE a.request_id = r.id) AS attachment_count
     FROM expense_requests r
     LEFT JOIN work_areas w ON w.id = r.work_area_id
-    JOIN users u ON u.id = r.user_id`;
+    LEFT JOIN users u ON u.id = r.user_id`;
 
 /** Las del colaborador, borradores incluidos (son sólo suyos). */
 async function listForUser(userId) {
@@ -1287,6 +1361,17 @@ async function listHistoryForReviewer(user) {
   return rows;
 }
 
+/** Rendiciones aprobadas con saldo que Finanzas aún no liquida. */
+async function listPendingSettlements() {
+  const { rows } = await db.query(
+    `${LIST_SELECT}
+      WHERE r.kind = $1 AND r.status = $2 AND r.settled_at IS NULL
+      ORDER BY r.finance_reviewed_at ASC NULLS LAST`,
+    [EXPENSE_KIND.RENDICION, EXPENSE_STATUS.APPROVED_FINANCE],
+  );
+  return rows;
+}
+
 async function getRequestDetail(requestId) {
   const id = Number(requestId);
   if (!Number.isInteger(id)) return null;
@@ -1316,8 +1401,12 @@ async function getRequestDetail(requestId) {
   const request = requestResult.rows[0];
   if (!request) return null;
 
+  // Fondo que rinde (rendición) o rendiciones que tiene (solicitud de fondos).
+  const links = await funds.fundLinksFor(request);
+
   return {
     ...request,
+    ...links,
     // El documento se guarda normalizado ("12345678-5"); los puntos son
     // decoración de pantalla y se agregan aquí.
     requester_document_display: formatNationalId(request.requester_document),
@@ -1359,6 +1448,8 @@ module.exports = {
   approveRequest,
   rejectRequest,
   cancelRequest,
+  settleRequest,
+  listPendingSettlements,
   reviewerStageFor,
   listForUser,
   listPendingForReviewer,
@@ -1371,7 +1462,6 @@ module.exports = {
   normalizeItems,
   normalizeDraftItems,
   normalizePeriod,
-  parseAssignedAmount,
   normalizeAttachments,
   ownUploadPath,
   parseUploadPath,

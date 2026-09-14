@@ -49,6 +49,8 @@ const VACATION_MESSAGES = {
     "Entiendo la recomendación y quiero continuar con este tramo corto.",
 
   collaboratorNotFound: "No encontramos a ese colaborador.",
+  collaboratorDeleted:
+    "El colaborador fue eliminado: esta solicitud ya no se puede aprobar, sólo rechazar.",
   noHireDate: "No tienes una fecha de ingreso registrada. Contacta a RRHH.",
   noHireDateInfo:
     "No tienes una fecha de ingreso registrada. Contacta a RRHH para poder calcular tu saldo de vacaciones.",

@@ -37,6 +37,38 @@
 
       <div class="gasto-modal__body">
 
+        <%# 0. Fondo que se rinde (sólo rendiciones y sólo si hay fondos por rendir).
+            Relación 1:1: cada fondo aprobado se rinde en una rendición. Sin
+            fondos por rendir no se pregunta: la rendición es un reembolso. %>
+        <% if (f.fondosPorRendir.length) { %>
+        <section class="gasto-seccion" id="seccionFondo" data-solo="rendicion" aria-labelledby="secFondo">
+          <h3 class="gasto-seccion__titulo" id="secFondo">¿Qué vas a rendir? <%- obligatorio %></h3>
+          <div class="gasto-cuentas" role="radiogroup" aria-labelledby="secFondo">
+            <% f.fondosPorRendir.forEach(fd => { %>
+              <label class="gasto-cuenta gasto-cuenta__opcion gasto-fondo">
+                <input type="radio" name="fund_request_id" value="<%= fd.id %>"
+                       data-monto="<%= fd.total_amount %>"
+                       data-centro="<%= fd.cost_center_id || '' %>">
+                <span class="gasto-cuenta__texto">
+                  <strong>#<%= fd.id %> · <%= formatMoney(fd.total_amount) %></strong>
+                  <span><%= fd.title %></span>
+                </span>
+              </label>
+            <% }) %>
+            <label class="gasto-cuenta gasto-cuenta--nueva">
+              <input type="radio" name="fund_request_id" value="reembolso">
+              <span class="gasto-cuenta__texto">
+                <strong>Sin fondo</strong>
+                <span>Reembolso de lo que pagaste</span>
+              </span>
+            </label>
+          </div>
+          <p class="gasto-fondo-aviso" id="avisoFondo" hidden>
+            El fondo de este borrador ya no está por rendir. Elige otro o marca «Sin fondo».
+          </p>
+        </section>
+        <% } %>
+
         <%# 1. Solicitante: datos de la ficha, sólo lectura. %>
         <section class="gasto-ficha" aria-labelledby="secSolicitante">
           <h3 class="gasto-ficha__titulo" id="secSolicitante">Solicitante</h3>
@@ -74,24 +106,11 @@
         <section class="gasto-seccion" aria-labelledby="secSolicitud">
           <h3 class="gasto-seccion__titulo" id="secSolicitud">Solicitud</h3>
 
-          <div class="gasto-grid-2">
-            <div class="campo-form">
-              <label for="titulo">Asunto <%- obligatorio %></label>
-              <input type="text" id="titulo" maxlength="200"
-                     data-placeholder-rendicion="Ej: Compra de disco SSD para notebook"
-                     data-placeholder-fondos="Ej: Compra de insumos de bodega">
-            </div>
-            <div class="campo-form">
-              <span class="gasto-label" id="labelTipoFondo">Tipo de fondo <%- obligatorio %></span>
-              <div class="gasto-segmento" role="radiogroup" aria-labelledby="labelTipoFondo">
-                <% f.tiposFondo.forEach(t => { %>
-                  <label class="gasto-segmento__opcion">
-                    <input type="radio" name="fund_type" value="<%= t %>">
-                    <span><%= expenseFundTypeLabel(t) %></span>
-                  </label>
-                <% }) %>
-              </div>
-            </div>
+          <div class="campo-form">
+            <label for="titulo">Asunto <%- obligatorio %></label>
+            <input type="text" id="titulo" maxlength="200"
+                   data-placeholder-rendicion="Ej: Compra de disco SSD para notebook"
+                   data-placeholder-fondos="Ej: Compra de insumos de bodega">
           </div>
 
           <div class="gasto-grid-2">
@@ -183,15 +202,13 @@
                 <dt>Total gastos</dt>
                 <dd><strong id="totalCalculado"><%= formatMoney(0) %></strong></dd>
               </div>
+              <%# El asignado lo pone el sistema (monto del fondo elegido); no se escribe. %>
               <div data-solo="rendicion">
-                <dt><label for="fondoAsignado">Fondo asignado</label></dt>
-                <dd class="gasto-monto">
-                  <span class="gasto-monto__simbolo" aria-hidden="true"><%= moneda.symbol %></span>
-                  <input type="text" id="fondoAsignado" inputmode="<%= moneda.decimals ? 'decimal' : 'numeric' %>" placeholder="0">
-                </dd>
+                <dt>Fondo asignado</dt>
+                <dd id="fondoAsignadoValor">Sin fondo</dd>
               </div>
               <div class="gasto-montos__saldo" data-solo="rendicion">
-                <dt id="saldoEtiqueta">A reintegrar</dt>
+                <dt id="saldoEtiqueta">Sin saldo</dt>
                 <dd id="saldoValor" aria-live="polite"><%= formatMoney(0) %></dd>
               </div>
             </dl>

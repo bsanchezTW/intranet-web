@@ -21,7 +21,6 @@ const {
   parseAmount,
   normalizeItems,
   normalizePeriod,
-  parseAssignedAmount,
   normalizeAttachments,
   normalizeDraftItems,
   ownUploadPath,
@@ -32,10 +31,13 @@ const {
   isoDate,
 } = require("../src/services/expenses/expenseRequestService");
 const {
-  ALL_EXPENSE_FUND_TYPES,
-  isExpenseFundType,
-  expenseFundTypeLabel,
-} = require("../src/constants/expenseFundTypes");
+  MAX_OPEN_FUNDS,
+  fundState,
+  countsTowardLimit,
+  fundBalance,
+  parseFundChoice,
+  summarizeFunds,
+} = require("../src/services/expenses/expenseFundService");
 const {
   cuentaRutNumber,
   parseAccountNumber,
@@ -254,6 +256,9 @@ describe("bankAccountService — cuenta de destino", () => {
     assert.equal(new Set(codes).size, codes.length);
     for (const code of codes) assert.match(code, /^\d{3}$/);
     assert.equal(banks.find((b) => b.code === BANCO_ESTADO_CODE).name, "Banco Estado");
+    assert.equal(banks.find((b) => b.code === "028").name, "Banco BICE");
+    assert.equal(banks.find((b) => b.code === "041").entityType, "Sucursal Extranjera");
+    assert.equal(banks.find((b) => b.code === "875").name, "Mercado Pago");
     assert.deepEqual(banksForCountry("PE"), []);
   });
 
@@ -310,15 +315,7 @@ describe("bankAccountService — cuenta de destino", () => {
   });
 });
 
-describe("expenseRequestService — encabezado del fondo", () => {
-  it("reconoce los dos tipos de fondo de la planilla", () => {
-    assert.deepEqual(ALL_EXPENSE_FUND_TYPES, ["fijo", "rendir"]);
-    assert.equal(expenseFundTypeLabel("fijo"), "Fondo fijo");
-    assert.equal(expenseFundTypeLabel("rendir"), "Fondo a rendir");
-    assert.equal(isExpenseFundType("caja"), false);
-    assert.equal(expenseFundTypeLabel(null), "—");
-  });
-
+describe("expenseRequestService — período de gastos", () => {
   const items = [
     { itemDate: "2026-09-03" },
     { itemDate: null },
@@ -356,15 +353,6 @@ describe("expenseRequestService — encabezado del fondo", () => {
     assert.equal(normalizePeriod("2026-09-10", "2026-09-01", []).ok, false);
   });
 
-  it("el fondo asignado es opcional y sólo aplica a rendiciones", () => {
-    assert.deepEqual(parseAssignedAmount("rendicion", ""), { ok: true, value: null });
-    assert.deepEqual(parseAssignedAmount("rendicion", null), { ok: true, value: null });
-    assert.deepEqual(parseAssignedAmount("rendicion", "100.000"), { ok: true, value: 100000 });
-    assert.deepEqual(parseAssignedAmount("rendicion", "0"), { ok: true, value: 0 });
-    assert.equal(parseAssignedAmount("rendicion", "abc").ok, false);
-    assert.equal(parseAssignedAmount("rendicion", "-5").ok, false);
-    assert.deepEqual(parseAssignedAmount("fondos", "50000"), { ok: true, value: null });
-  });
 });
 
 describe("borradores", () => {
@@ -443,36 +431,102 @@ describe("borradores", () => {
 
 describe("comprobantes — nombre definitivo", () => {
   it("nombra con el id de la solicitud y conserva la extensión", () => {
-    assert.equal(finalAttachmentName(765876, 1, "boleta-1789398610958-ab12cd34.PDF"), "765876_1.pdf");
-    assert.equal(finalAttachmentName(765876, 3, "sin-extension"), "765876_3");
+    assert.equal(finalAttachmentName(76587612, 1, "boleta-1789398610958-ab12cd34.PDF"), "76587612_1.pdf");
+    assert.equal(finalAttachmentName(76587612, 3, "sin-extension"), "76587612_3");
   });
 
   it("reconoce el nombre definitivo sólo para su propia solicitud", () => {
-    assert.equal(finalAttachmentNumber(765876, "765876_2.pdf"), 2);
-    assert.equal(finalAttachmentNumber(765876, "111111_2.pdf"), null);
-    assert.equal(finalAttachmentNumber(765876, "boleta-1789398610958-ab12cd34.pdf"), null);
+    assert.equal(finalAttachmentNumber(76587612, "76587612_2.pdf"), 2);
+    assert.equal(finalAttachmentNumber(76587612, "11111111_2.pdf"), null);
+    assert.equal(finalAttachmentNumber(76587612, "boleta-1789398610958-ab12cd34.pdf"), null);
   });
 
   it("no acepta el comprobante ya renombrado de otra solicitud", () => {
     const temporal = { url: "/content/gastos/2026/5/boleta-1789398610958-ab12cd34.pdf", publicId: "gastos/2026/5/boleta-1789398610958-ab12cd34.pdf" };
-    const propio = { url: "", publicId: "gastos/2026/5/765876_1.pdf" };
-    const deOtra = { url: "", publicId: "gastos/2026/5/111111_1.pdf" };
+    const propio = { url: "", publicId: "gastos/2026/5/76587612_1.pdf" };
+    const deOtra = { url: "", publicId: "gastos/2026/5/11111111_1.pdf" };
     assert.equal(acceptsAttachment(5, null, temporal), true);
-    assert.equal(acceptsAttachment(5, 765876, propio), true);
+    assert.equal(acceptsAttachment(5, 76587612, propio), true);
     assert.equal(acceptsAttachment(5, null, propio), false);
-    assert.equal(acceptsAttachment(5, 765876, deOtra), false);
+    assert.equal(acceptsAttachment(5, 76587612, deOtra), false);
     assert.equal(acceptsAttachment(6, null, temporal), false);
   });
 
   it("parseUploadPath extrae dueño y nombre, también desde la URL codificada", () => {
-    assert.deepEqual(parseUploadPath("/content/gastos/2026/5/765876_1.pdf"), {
-      path: "gastos/2026/5/765876_1.pdf",
+    assert.deepEqual(parseUploadPath("/content/gastos/2026/5/76587612_1.pdf"), {
+      path: "gastos/2026/5/76587612_1.pdf",
       userId: 5,
-      fileName: "765876_1.pdf",
+      fileName: "76587612_1.pdf",
     });
     assert.equal(parseUploadPath("/content/gastos/2026/5/a%20b.pdf").fileName, "a b.pdf");
     assert.equal(parseUploadPath("noticias/2026/5/x.pdf"), null);
     assert.equal(parseUploadPath("/content/gastos/2026/5/%E0%A4%A.pdf"), null);
+  });
+});
+
+describe("fondos asignados", () => {
+  it("el saldo indica quién paga a quién", () => {
+    assert.deepEqual(fundBalance(80000, 100000), { saldo: -20000, monto: 20000, sentido: "devolver" });
+    assert.deepEqual(fundBalance(130000, 100000), { saldo: 30000, monto: 30000, sentido: "pagar" });
+    assert.deepEqual(fundBalance("50000.00", "50000.00"), { saldo: 0, monto: 0, sentido: "cerrado" });
+    // Reembolso sin fondo: la empresa paga todo lo gastado.
+    assert.deepEqual(fundBalance(15990, null), { saldo: 15990, monto: 15990, sentido: "pagar" });
+  });
+
+  it("el estado del fondo sale de su solicitud y de su rendición activa", () => {
+    assert.equal(fundState("pending", null), "en_aprobacion");
+    assert.equal(fundState("approved_manager", null), "en_aprobacion");
+    assert.equal(fundState("approved_finance", null), "por_rendir");
+    assert.equal(fundState("approved_finance", "pending"), "en_revision");
+    assert.equal(fundState("approved_finance", "approved_manager"), "en_revision");
+    assert.equal(fundState("approved_finance", "approved_finance"), "rendido");
+    assert.equal(fundState("rejected", null), null);
+    assert.equal(fundState("cancelled", null), null);
+    assert.equal(fundState("draft", null), null);
+  });
+
+  it("ocupan cupo los fondos no cerrados; los borradores no", () => {
+    assert.equal(MAX_OPEN_FUNDS, 3);
+    assert.equal(countsTowardLimit("pending", null), true);
+    assert.equal(countsTowardLimit("approved_finance", null), true);
+    assert.equal(countsTowardLimit("approved_finance", "pending"), true);
+    assert.equal(countsTowardLimit("approved_finance", "approved_finance"), false);
+    assert.equal(countsTowardLimit("rejected", null), false);
+    assert.equal(countsTowardLimit("cancelled", null), false);
+    assert.equal(countsTowardLimit("draft", null), false);
+  });
+
+  it("interpreta la elección de fondo del formulario", () => {
+    assert.deepEqual(parseFundChoice(""), { type: "none" });
+    assert.deepEqual(parseFundChoice(null), { type: "none" });
+    assert.deepEqual(parseFundChoice("reembolso"), { type: "reembolso" });
+    assert.deepEqual(parseFundChoice("12345678"), { type: "fondo", id: 12345678 });
+    assert.deepEqual(parseFundChoice("12345678; DROP"), { type: "invalid" });
+  });
+
+  it("resume los fondos para la card de Mis solicitudes", () => {
+    const r = summarizeFunds(
+      [
+        { id: 11111111, title: "A", total_amount: "50000.00", status: "approved_finance", rendicion_status: null },
+        { id: 22222222, title: "B", total_amount: "50000.00", status: "approved_finance", rendicion_status: "pending" },
+        { id: 33333333, title: "C", total_amount: "20000.00", status: "pending", rendicion_status: null },
+        { id: 44444444, title: "D", total_amount: "90000.00", status: "approved_finance", rendicion_status: "approved_finance" },
+        { id: 55555555, title: "E", total_amount: "10000.00", status: "rejected", rendicion_status: null },
+      ],
+      [{ id: 66666666, title: "R", total_amount: "80000.00", assigned_amount: "100000.00" }],
+    );
+    assert.equal(r.usados, 3);
+    assert.equal(r.lleno, true);
+    // Sólo suma lo que está por rendir: el fondo con rendición en revisión ya está en camino.
+    assert.equal(r.asignadoPorRendir, 50000);
+    assert.deepEqual(r.porRendir.map((f) => f.id), [11111111]);
+    assert.deepEqual(r.abiertos.map((f) => f.state), ["por_rendir", "en_revision", "en_aprobacion"]);
+    assert.equal(r.porLiquidar[0].balance.sentido, "devolver");
+    assert.equal(r.porLiquidar[0].balance.monto, 20000);
+  });
+
+  it("los nombres de comprobantes de 6 dígitos ya no son definitivos", () => {
+    assert.equal(finalAttachmentNumber(654321, "654321_2.pdf"), null);
   });
 });
 

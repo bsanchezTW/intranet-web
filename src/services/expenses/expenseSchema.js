@@ -15,8 +15,9 @@ const { banksForCountry } = require("../../constants/banks");
  *      vez del slug hardcodeado que vivía en routes/procesos.js.
  *   3. expense_requests y sus tablas hijas.
  *
- * IDs: expense_requests usa 6 dígitos, reutilizando assign_six_digit_id()
- * (definida en supabase/<pais>/schema.sql).
+ * IDs: expense_requests usa 8 dígitos aleatorios (assign_eight_digit_id). Las
+ * solicitudes de fondos y las rendiciones comparten tabla y, por lo tanto,
+ * numeración: un id nunca se repite entre ambas.
  */
 
 const DDL_STATEMENTS = [
@@ -67,7 +68,7 @@ const DDL_STATEMENTS = [
     id                  INTEGER PRIMARY KEY,
     kind                expense_request_kind   NOT NULL,
     status              expense_request_status NOT NULL DEFAULT 'pending',
-    user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id             INTEGER REFERENCES users(id) ON DELETE SET NULL,
     work_area_id        INTEGER REFERENCES work_areas(id) ON DELETE SET NULL,
     title               VARCHAR(200) NOT NULL,
     description         TEXT,
@@ -130,7 +131,8 @@ const DDL_STATEMENTS = [
 
   // --- Datos bancarios -----------------------------------------------------
   // PK = código SBIF: es el identificador que citan las nóminas de pago.
-  // Un banco que desaparece se desactiva: las solicitudes lo siguen citando.
+  // El formulario carga esta tabla. Un banco que sale de circulación se
+  // desactiva aquí: las solicitudes ya emitidas lo siguen citando.
   `CREATE TABLE IF NOT EXISTS banks (
     code        VARCHAR(3) PRIMARY KEY,
     name        VARCHAR(120) NOT NULL,
@@ -160,31 +162,131 @@ const DDL_STATEMENTS = [
   `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS bank_account_number VARCHAR(20)`,
 
   // --- Encabezado de la planilla -------------------------------------------
-  // NULL en las solicitudes anteriores; las nuevas los exige createRequest
-  // (salvo el destino, que no aplica a pagos directos).
-  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS fund_type VARCHAR(10)
-     CHECK (fund_type IS NULL OR fund_type IN ('fijo', 'rendir'))`,
+  // El tipo de fondo (fijo / a rendir) se eliminó: la relación con el fondo es
+  // fund_request_id. Destino y período son opcionales.
+  `ALTER TABLE expense_requests DROP COLUMN IF EXISTS fund_type`,
   `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS destination VARCHAR(150)`,
   `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS period_start DATE`,
   `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS period_end DATE`,
-  // Fondo asignado de una rendición. NULL = sin fondo (compra con dinero
-  // propio). El saldo a reintegrar no se guarda: es total_amount - esto.
+  // Fondo asignado de una rendición: lo copia el sistema del total de la
+  // solicitud de fondos que rinde (NULL = reembolso). Saldo = total - esto.
   `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS assigned_amount NUMERIC(14,2)
      CHECK (assigned_amount IS NULL OR assigned_amount >= 0)`,
 
-  // ID de 6 dígitos reutilizando la función ya instalada por schema.sql.
+  // --- Fondos: solicitud de fondos ↔ rendición (1:1) ------------------------
+  // Sin ON DELETE (NO ACTION): nada borra una solicitud de fondos enviada, ni
+  // siquiera borrar al usuario (ver user_id más abajo). Sólo se borran
+  // borradores, y un borrador nunca es el fondo de una rendición.
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS fund_request_id
+     INTEGER REFERENCES expense_requests(id)`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS settled_by
+     INTEGER REFERENCES users(id) ON DELETE SET NULL`,
+  `ALTER TABLE expense_requests ADD COLUMN IF NOT EXISTS settlement_notes TEXT`,
   `DO $$
    BEGIN
-     IF EXISTS (
+     IF NOT EXISTS (
+       SELECT 1 FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.conrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE c.conname = 'expense_requests_fund_request_kind'
+         AND n.nspname = current_schema()
+     ) THEN
+       ALTER TABLE expense_requests ADD CONSTRAINT expense_requests_fund_request_kind
+         CHECK (fund_request_id IS NULL OR kind = 'rendicion');
+     END IF;
+   END$$`,
+  // Barrera final del 1:1: un fondo no puede tener dos rendiciones en curso o
+  // aprobadas. expenseFundService traduce la violación a un mensaje.
+  `CREATE UNIQUE INDEX IF NOT EXISTS expense_requests_fund_rendicion_unique
+     ON expense_requests (fund_request_id)
+     WHERE kind = 'rendicion' AND status IN ('pending', 'approved_manager', 'approved_finance')`,
+  `CREATE INDEX IF NOT EXISTS idx_expense_requests_fund
+     ON expense_requests (fund_request_id) WHERE fund_request_id IS NOT NULL`,
+
+  // --- Usuario eliminado: los registros se conservan ------------------------
+  // Una solicitud o rendición es un documento contable: borrar al colaborador
+  // no la borra. user_id queda NULL y la solicitud sigue mostrando la ficha
+  // congelada (requester_*). Antes era ON DELETE CASCADE: se reemplaza la FK
+  // en las bases existentes.
+  `ALTER TABLE expense_requests ALTER COLUMN user_id DROP NOT NULL`,
+  `DO $$
+   DECLARE
+     fk record;
+   BEGIN
+     FOR fk IN
+       SELECT c.conname
+         FROM pg_constraint c
+         JOIN pg_class t ON t.oid = c.conrelid
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+        WHERE c.contype = 'f'
+          AND n.nspname = current_schema()
+          AND t.relname = 'expense_requests'
+          AND a.attname = 'user_id'
+          AND c.confdeltype <> 'n'
+     LOOP
+       EXECUTE format('ALTER TABLE expense_requests DROP CONSTRAINT %I', fk.conname);
+     END LOOP;
+
+     IF NOT EXISTS (
+       SELECT 1
+         FROM pg_constraint c
+         JOIN pg_class t ON t.oid = c.conrelid
+         JOIN pg_namespace n ON n.oid = t.relnamespace
+         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+        WHERE c.contype = 'f'
+          AND n.nspname = current_schema()
+          AND t.relname = 'expense_requests'
+          AND a.attname = 'user_id'
+     ) THEN
+       ALTER TABLE expense_requests
+         ADD CONSTRAINT expense_requests_user_id_fkey
+         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+     END IF;
+   END$$`,
+
+  // --- ID de 8 dígitos -------------------------------------------------------
+  // La función se crea sólo si falta: schema.sql instala la suya (con
+  // search_path fijado) y un CREATE OR REPLACE aquí la pisaría en cada arranque.
+  `DO $$
+   BEGIN
+     IF NOT EXISTS (
        SELECT 1 FROM pg_proc p
        JOIN pg_namespace n ON n.oid = p.pronamespace
-       WHERE p.proname = 'assign_six_digit_id' AND n.nspname = current_schema()
+       WHERE p.proname = 'assign_eight_digit_id' AND n.nspname = current_schema()
      ) THEN
-       DROP TRIGGER IF EXISTS trg_six_digit_id ON expense_requests;
-       CREATE TRIGGER trg_six_digit_id
-         BEFORE INSERT ON expense_requests
-         FOR EACH ROW EXECUTE FUNCTION assign_six_digit_id();
+       EXECUTE $fn$
+         CREATE FUNCTION assign_eight_digit_id() RETURNS trigger
+         LANGUAGE plpgsql AS $body$
+         DECLARE
+           candidate integer;
+           found_id integer;
+         BEGIN
+           IF NEW.id IS NOT NULL AND NEW.id >= 10000000 THEN
+             RETURN NEW;
+           END IF;
+           FOR i IN 1..80 LOOP
+             candidate := 10000000 + floor(random() * 90000000)::integer;
+             found_id := NULL;
+             EXECUTE format('SELECT 1 FROM %I.%I WHERE id = $1', TG_TABLE_SCHEMA, TG_TABLE_NAME)
+               INTO found_id USING candidate;
+             IF found_id IS NULL THEN
+               NEW.id := candidate;
+               RETURN NEW;
+             END IF;
+           END LOOP;
+           RAISE EXCEPTION 'No fue posible generar un ID de 8 dígitos para %.%',
+             TG_TABLE_SCHEMA, TG_TABLE_NAME;
+         END;
+         $body$
+       $fn$;
      END IF;
+     DROP TRIGGER IF EXISTS trg_six_digit_id ON expense_requests;
+     DROP TRIGGER IF EXISTS trg_eight_digit_id ON expense_requests;
+     CREATE TRIGGER trg_eight_digit_id
+       BEFORE INSERT ON expense_requests
+       FOR EACH ROW EXECUTE FUNCTION assign_eight_digit_id();
    END$$`,
 ];
 
@@ -268,19 +370,19 @@ async function backfillDocKind(client) {
 }
 
 /**
- * Siembra el catálogo de bancos del país de la instancia.
- *
- * Actualiza nombre y tipo si cambiaron en constants/banks.js, pero no toca
- * `active`: desactivar un banco es una decisión que se toma en la base.
+ * Siembra `banks` sólo si la tabla está vacía (base nueva). El catálogo vivo
+ * es la tabla: un arranque posterior no la pisa con constants/banks.js.
  */
 async function seedBanks(client) {
+  const { rows } = await client.query("SELECT 1 FROM banks LIMIT 1");
+  if (rows.length) return;
+
   const banks = banksForCountry(getCurrentCountry());
   if (!banks.length) return;
   await client.query(
     `INSERT INTO banks (code, name, entity_type)
      SELECT c, n, t FROM UNNEST($1::text[], $2::text[], $3::text[]) AS s(c, n, t)
-     ON CONFLICT (code) DO UPDATE
-       SET name = EXCLUDED.name, entity_type = EXCLUDED.entity_type`,
+     ON CONFLICT (code) DO NOTHING`,
     [banks.map((b) => b.code), banks.map((b) => b.name), banks.map((b) => b.entityType)],
   );
 }

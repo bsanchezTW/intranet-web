@@ -11,11 +11,10 @@
 
 const BANK_ENTITY_TYPE = Object.freeze({
   TRADICIONAL: "Banco Tradicional",
-  SUCURSAL_EXTRANJERA: "Sucursal Extranjera",
   EMISOR_NO_BANCARIO: "Emisor No Bancario",
 });
 
-const { TRADICIONAL, SUCURSAL_EXTRANJERA, EMISOR_NO_BANCARIO } = BANK_ENTITY_TYPE;
+const { TRADICIONAL, EMISOR_NO_BANCARIO } = BANK_ENTITY_TYPE;
 
 const BANKS_BY_COUNTRY = Object.freeze({
   CL: Object.freeze([
@@ -24,23 +23,19 @@ const BANKS_BY_COUNTRY = Object.freeze({
     { code: "012", name: "Banco Estado", entityType: TRADICIONAL },
     { code: "014", name: "Scotiabank Chile", entityType: TRADICIONAL },
     { code: "016", name: "Banco de Crédito e Inversiones (BCI)", entityType: TRADICIONAL },
-    { code: "028", name: "Banco BICE (incluye fusión Security)", entityType: TRADICIONAL },
+    { code: "028", name: "Banco BICE", entityType: TRADICIONAL },
     { code: "031", name: "HSBC Bank Chile", entityType: TRADICIONAL },
     { code: "037", name: "Banco Santander-Chile", entityType: TRADICIONAL },
     { code: "039", name: "Itaú Chile", entityType: TRADICIONAL },
-    { code: "041", name: "JP Morgan Chase Bank", entityType: SUCURSAL_EXTRANJERA },
     { code: "051", name: "Banco Falabella", entityType: TRADICIONAL },
     { code: "053", name: "Banco Ripley", entityType: TRADICIONAL },
     { code: "055", name: "Banco Consorcio", entityType: TRADICIONAL },
     { code: "059", name: "Banco BTG Pactual Chile", entityType: TRADICIONAL },
-    { code: "060", name: "China Construction Bank", entityType: SUCURSAL_EXTRANJERA },
-    { code: "061", name: "Bank of China", entityType: SUCURSAL_EXTRANJERA },
     { code: "062", name: "Tanner Banco", entityType: TRADICIONAL },
     { code: "063", name: "Tenpo Banco", entityType: TRADICIONAL },
-    { code: "730", name: "Tenpo Payments (Prepago)", entityType: EMISOR_NO_BANCARIO },
-    { code: "875", name: "Mercado Pago Emisora", entityType: EMISOR_NO_BANCARIO },
     { code: "729", name: "Los Héroes Prepago", entityType: EMISOR_NO_BANCARIO },
     { code: "732", name: "Caja Los Andes Prepago", entityType: EMISOR_NO_BANCARIO },
+    { code: "875", name: "Mercado Pago", entityType: EMISOR_NO_BANCARIO },
   ]),
   PE: Object.freeze([]),
 });
@@ -51,15 +46,13 @@ const BANCO_ESTADO_CODE = "012";
 const BANK_ACCOUNT_TYPE = Object.freeze({
   CORRIENTE: "corriente",
   VISTA: "vista",
-  AHORRO: "ahorro",
   RUT: "rut",
 });
 
 const BANK_ACCOUNT_TYPE_LABELS = Object.freeze({
-  corriente: "Cuenta corriente",
-  vista: "Cuenta vista",
-  ahorro: "Cuenta de ahorro",
-  rut: "CuentaRUT",
+  corriente: "Cuenta Corriente",
+  vista: "Cuenta Vista",
+  rut: "Cuenta RUT",
 });
 
 const ALL_BANK_ACCOUNT_TYPES = Object.freeze(Object.values(BANK_ACCOUNT_TYPE));

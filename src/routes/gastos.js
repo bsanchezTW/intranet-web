@@ -36,10 +36,7 @@ const {
   expenseCategoryLabel,
   categoryRequiresDays,
 } = require("../constants/expenseCategories");
-const {
-  ALL_EXPENSE_FUND_TYPES,
-  expenseFundTypeLabel,
-} = require("../constants/expenseFundTypes");
+const funds = require("../services/expenses/expenseFundService");
 
 /**
  * Centro de gastos: rendiciones y solicitudes de fondos.
@@ -71,7 +68,8 @@ const VIEW_HELPERS = {
   expenseCategoryLabel,
   categoryRequiresDays,
   bankAccountTypeLabel,
-  expenseFundTypeLabel,
+  fundBalance: funds.fundBalance,
+  fundStateLabel: funds.fundStateLabel,
 };
 
 function redirectOk(res, path, msg) {
@@ -120,15 +118,16 @@ async function fetchRequester(userId) {
 router.get("/", async (req, res) => {
   try {
     const user = req.session.user;
-    const [solicitudes, requisitos, esRevisor] = await Promise.all([
+    const [solicitudes, requisitos, esRevisor, fondos] = await Promise.all([
       expenses.listForUser(user.id),
       requisitosParaRendir(user),
       puedeRevisar(user),
+      funds.getFundSummary(user.id),
     ]);
 
     // Los catálogos del formulario sólo se cargan si el colaborador puede
     // abrirlo: sin requisitos el modal no se pinta.
-    const formulario = requisitos.ok ? await datosFormulario(user, requisitos) : null;
+    const formulario = requisitos.ok ? await datosFormulario(user, requisitos, fondos) : null;
 
     res.render("gastos/index", {
       titulo: "Mis solicitudes de gastos",
@@ -136,14 +135,17 @@ router.get("/", async (req, res) => {
       requisitos,
       esRevisor,
       formulario,
+      fondos,
       diasBorrador: expenses.DRAFT_TTL_DAYS,
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
-      extraCss: ["/css/gastos.css"],
+      // procesos.css: las tarjetas de "Nueva solicitud" y el aviso de
+      // requisitos son las de Procesos y Documentos.
+      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260914b"],
       extraJs: formulario
-        ? ["/js/gastos-lista.js", "/js/gastos-form.js"]
-        : ["/js/gastos-lista.js"],
+        ? ["/js/gastos-lista.js?v=20260914b", "/js/gastos-form.js?v=20260914b"]
+        : ["/js/gastos-lista.js?v=20260914b"],
     });
   } catch (err) {
     console.error("[Gastos] Error listando solicitudes:", err);
@@ -211,14 +213,15 @@ async function requisitosParaRendir(user) {
 }
 
 /** Catálogos y datos propios que necesita el modal del formulario. */
-async function datosFormulario(user, requisitos) {
+async function datosFormulario(user, requisitos, fondos) {
   const [bancos, cuentasGuardadas] = await Promise.all([
     bankAccounts.listBanks(),
     bankAccounts.listUserAccounts(user.id),
   ]);
   return {
     categorias: ALL_EXPENSE_CATEGORIES,
-    tiposFondo: ALL_EXPENSE_FUND_TYPES,
+    // Fondos aprobados sin rendición activa: lo que se puede rendir ahora.
+    fondosPorRendir: fondos ? fondos.porRendir : [],
     maxDiasHospedaje: MAX_LODGING_DAYS,
     bancos,
     cuentasGuardadas,
@@ -268,6 +271,7 @@ router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
       req.file.buffer,
       folder,
       req.file.originalname,
+      req.file.mimetype ? { contentType: req.file.mimetype } : {},
     );
 
     res.json({
@@ -278,7 +282,11 @@ router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
     });
   } catch (err) {
     console.error("[Gastos] Error subiendo comprobante:", err);
-    res.status(500).json({ error: err.message || "Error al subir el archivo" });
+    const raw = err.message || "";
+    const error = /fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(raw)
+      ? "No se pudo guardar el comprobante en el almacenamiento. Inténtalo de nuevo."
+      : raw || "Error al subir el archivo";
+    res.status(500).json({ error });
   }
 });
 
@@ -318,8 +326,12 @@ router.post("/cuentas/eliminar", async (req, res) => {
 /**
  * Crea o envía una solicitud, o guarda un borrador.
  * `draft: true` guarda sin exigir nada; `id` apunta al borrador que se retoma.
+ *
+ * Vive en /gastos/guardar y no en POST /gastos: en Express 5 un POST al mismo
+ * path del GET de la lista puede redirigir por la barra final, y Firefox
+ * aborta ese fetch con "NetworkError when attempting to fetch resource".
  */
-router.post("/", async (req, res) => {
+router.post("/guardar", async (req, res) => {
   const body = req.body || {};
   const asDraft = body.draft === true || body.draft === "true";
 
@@ -337,11 +349,10 @@ router.post("/", async (req, res) => {
       attachments: body.attachments,
       bankAccount: body.bank_account,
       saveBankAccount: body.save_bank_account,
-      fundType: body.fund_type,
+      fundRequestId: body.fund_request_id,
       destination: body.destination,
       periodStart: body.period_start,
       periodEnd: body.period_end,
-      assignedAmount: body.assigned_amount,
     });
 
     if (!result.ok) {
@@ -391,6 +402,7 @@ router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
       areaManager.listManagedAreas(user.id),
       financeTeam.isFinanceApprover(user),
     ]);
+    const porLiquidar = esFinanzas ? await expenses.listPendingSettlements() : [];
 
     res.render("gastos/gestion", {
       titulo: "Gestión de solicitudes",
@@ -398,12 +410,13 @@ router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
       historial,
       areasACargo,
       esFinanzas,
+      porLiquidar,
       esAdmin: isAdministrador(normalizeRole(user.role)),
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
-      extraCss: ["/css/gastos.css"],
-      extraJs: ["/js/gastos-lista.js"],
+      extraCss: ["/css/gastos.css?v=20260914b"],
+      extraJs: ["/js/gastos-lista.js?v=20260914b"],
     });
   } catch (err) {
     console.error("[Gastos] Error cargando la gestión:", err);
@@ -468,17 +481,26 @@ router.get("/:id", async (req, res) => {
     }
 
     const stage = await expenses.reviewerStageFor(request, user);
+    // Liquidar es de Finanzas, sólo sobre rendiciones aprobadas con saldo
+    // pendiente (las sin saldo se liquidan solas al aprobarse).
+    const puedeLiquidar =
+      request.kind === "rendicion" &&
+      request.status === EXPENSE_STATUS.APPROVED_FINANCE &&
+      !request.settled_at &&
+      (await financeTeam.isFinanceApprover(user));
 
     res.render("gastos/detalle", {
       titulo: `Solicitud #${request.id}`,
       solicitud: request,
       etapaRevisor: stage,
+      puedeLiquidar,
       esDueno: Number(request.user_id) === Number(user.id),
       volverA: req.query.volver === "gestion" ? "/gastos/gestion" : "/gastos",
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
-      extraCss: ["/css/gastos.css"],
+      // procesos.css: las migas de navegación son las de Procesos.
+      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260914b"],
     });
   } catch (err) {
     console.error("[Gastos] Error abriendo el detalle:", err);
@@ -542,6 +564,28 @@ function resolver(approve) {
 
 router.post("/:id/aprobar", requireExpenseReviewer(), resolver(true));
 router.post("/:id/rechazar", requireExpenseReviewer(), resolver(false));
+
+/** Finanzas marca la rendición como liquidada (saldo devuelto o pagado). */
+router.post("/:id/liquidar", requireExpenseReviewer(), async (req, res) => {
+  const volver =
+    req.body.volver === "gestion" ? "/gastos/gestion" : `/gastos/${req.params.id}`;
+  try {
+    const result = await expenses.settleRequest({
+      requestId: req.params.id,
+      reviewer: req.session.user,
+      notes: req.body.notes,
+    });
+    if (!result.ok) return redirectError(res, volver, result.error);
+
+    const requester = await fetchRequester(result.request.user_id);
+    notifications.notifySettled({ request: result.request, user: requester });
+    logChange(req.session.user.id, "liquidó una rendición de gastos", result.request.id);
+    return redirectOk(res, volver, "Rendición liquidada.");
+  } catch (err) {
+    console.error("[Gastos] Error liquidando la rendición:", err);
+    return redirectError(res, volver, "No se pudo liquidar la rendición.");
+  }
+});
 
 router.post("/:id/cancelar", async (req, res) => {
   try {

@@ -50,7 +50,12 @@
           <% requests.forEach(r => { %>
             <tr>
               <td>
-                <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
+                <% if (r.requester_deleted) { %>
+                  <%# Colaborador eliminado: se conserva el nombre, pero ya no hay ficha a la que enlazar. %>
+                  <span class="vac-link-colaborador"><%= r.collaboratorName || 'Colaborador' %> <small>(usuario eliminado)</small></span>
+                <% } else { %>
+                  <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
+                <% } %>
               </td>
               <td><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
               <td><%= r.days %> <%= r.dayUnit %></td>

@@ -411,6 +411,75 @@ header {
   padding-left: 25px;
 }
 
+.dropdown-menu--grouped {
+  min-width: 260px;
+  padding: 6px 0 8px;
+}
+
+.dropdown-menu--grouped a {
+  border-bottom: none;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.dropdown-menu .nav-menu-group:not(:last-child) {
+  border-bottom: 1px solid rgba(15, 76, 129, 0.1);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+
+.dropdown-menu .nav-menu-group__label,
+.mobile-sidebar .nav-menu-group__label,
+.footer-col .nav-menu-group__label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.dropdown-menu .nav-menu-group__label {
+  padding: 8px 20px 2px;
+  color: #6b7c8d;
+}
+
+html[data-theme="dark"] .dropdown-menu .nav-menu-group:not(:last-child) {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="dark"] .dropdown-menu .nav-menu-group__label {
+  color: rgba(232, 238, 245, 0.5);
+}
+
+.mobile-sidebar .sub-menu .nav-menu-group:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-sidebar .nav-menu-group__label {
+  padding: 12px 20px 2px 40px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.footer-col .nav-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.footer-col .nav-menu-group:not(:last-child) {
+  margin-bottom: 4px;
+}
+
+.footer-col .nav-menu-group__label {
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 4px;
+}
+
+.footer-col .nav-menu-group:first-child .nav-menu-group__label {
+  margin-top: 0;
+}
+
 /* Grupo Derecho */
 .header-right {
   flex: 0 0 auto;

@@ -5,6 +5,7 @@ const {
   expenseStageLabel,
 } = require("../../constants/expenseStatuses");
 const financeTeam = require("./financeTeam");
+const { fundBalance } = require("./expenseFundService");
 
 /**
  * Notificaciones por correo del centro de gastos.
@@ -48,6 +49,13 @@ function summary(request) {
   ];
   if (request.area_name) {
     parts.push(`<p><strong>Área:</strong> ${request.area_name}</p>`);
+  }
+  if (request.kind === "rendicion") {
+    parts.push(
+      request.fund_request_id
+        ? `<p><strong>Rinde la solicitud de fondos:</strong> #${request.fund_request_id} (${formatMoney(request.assigned_amount)})</p>`
+        : "<p><strong>Rinde:</strong> sin fondo (reembolso)</p>",
+    );
   }
   if (request.needed_by) {
     parts.push(
@@ -113,6 +121,8 @@ async function notifyManagerApproved({ request }) {
 
 /** Aprobación final de Finanzas → solicitante. */
 function notifyFinanceApproved({ request, user }) {
+  // Colaborador eliminado: la solicitud sigue su curso, pero no hay a quién avisar.
+  if (!user) return Promise.resolve();
   return safeSend({
     to: user.email,
     subject: "Tu solicitud fue aprobada por Finanzas",
@@ -128,6 +138,7 @@ function notifyFinanceApproved({ request, user }) {
 
 /** Rechazo en cualquiera de las dos etapas → solicitante, con el motivo. */
 function notifyRejected({ request, user, stage }) {
+  if (!user) return Promise.resolve();
   const notes =
     stage === "finance" ? request.finance_notes : request.manager_notes;
   return safeSend({
@@ -144,9 +155,31 @@ function notifyRejected({ request, user, stage }) {
   });
 }
 
+/** Finanzas liquidó la rendición: el saldo ya se devolvió o se pagó. */
+function notifySettled({ request, user }) {
+  if (!user) return Promise.resolve();
+  const balance = fundBalance(request.total_amount, request.assigned_amount);
+  const detalle =
+    balance.sentido === "devolver"
+      ? `Finanzas registró tu devolución de ${formatMoney(balance.monto)}.`
+      : `Finanzas registró el pago de ${formatMoney(balance.monto)} a tu favor.`;
+  return safeSend({
+    to: user.email,
+    subject: "Tu rendición fue liquidada",
+    html: `
+      <h3>Hola ${fullName(user)},</h3>
+      <p>Tu rendición <strong>#${request.id}</strong> quedó <strong>liquidada</strong>. ${detalle}</p>
+      ${summary(request)}
+      ${request.settlement_notes ? `<p><strong>Comentario de Finanzas:</strong> ${request.settlement_notes}</p>` : ""}
+    `,
+    text: `Tu rendición #${request.id} fue liquidada. ${detalle}`,
+  });
+}
+
 module.exports = {
   notifyNewRequest,
   notifyManagerApproved,
   notifyFinanceApproved,
   notifyRejected,
+  notifySettled,
 };

@@ -47,7 +47,8 @@ function notifyNewRequest({ request, user, accumulationAlert = false }) {
 
 /** Solicitud aprobada → colaborador. */
 function notifyApproved({ request, user }) {
-  if (!user.email) return Promise.resolve();
+  // Sin usuario (colaborador eliminado) no hay a quién avisar.
+  if (!user || !user.email) return Promise.resolve();
   return safeSend({
     to: user.email,
     subject: "Tu solicitud de vacaciones fue aprobada",
@@ -63,7 +64,7 @@ function notifyApproved({ request, user }) {
 
 /** Solicitud rechazada → colaborador (incluye motivo). */
 function notifyRejected({ request, user }) {
-  if (!user.email) return Promise.resolve();
+  if (!user || !user.email) return Promise.resolve();
   return safeSend({
     to: user.email,
     subject: "Tu solicitud de vacaciones fue rechazada",

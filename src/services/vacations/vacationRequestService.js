@@ -131,11 +131,22 @@ async function createRequest({
       ? new Date()
       : null;
 
+  // La ficha se copia en la solicitud: si mañana se elimina al colaborador,
+  // su historial sigue mostrando de quién era.
+  const { rows: areaRows } = await db.query(
+    `SELECT w.area_name
+       FROM users u
+       LEFT JOIN work_areas w ON w.id = u.work_area_id
+      WHERE u.id = $1`,
+    [userId],
+  );
+
   const { rows } = await db.queryRetryIdCollision(
     `INSERT INTO vacation_requests
        (user_id, country_code, start_date, end_date, business_days, calendar_days,
-        status, requester_notes, fraction_ack_at, policy_warning_ack)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        status, requester_notes, fraction_ack_at, policy_warning_ack,
+        requester_first_name, requester_last_name, requester_email, requester_area_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
       userId,
@@ -148,6 +159,10 @@ async function createRequest({
       notes ? String(notes).trim() : null,
       fractionAckAt,
       Boolean(policyWarningAck),
+      user.first_name || null,
+      user.last_name || null,
+      user.email || null,
+      areaRows[0] ? areaRows[0].area_name : null,
     ],
   );
 
@@ -206,6 +221,12 @@ async function approveRequest({ requestId, reviewerId, notes }) {
     if (!requestBelongsToInstance(request)) {
       await client.query("ROLLBACK");
       return { ok: false, error: VACATION_MESSAGES.requestNotFound };
+    }
+    // Colaborador eliminado: sus períodos ya no son de nadie, así que no hay
+    // saldo que consumir. La solicitud sólo puede rechazarse.
+    if (request.user_id == null) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: VACATION_MESSAGES.collaboratorDeleted };
     }
 
     const days = requestDays(request);
@@ -420,11 +441,18 @@ async function listForAdmin({ workAreaId, status } = {}) {
   }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
+  // LEFT JOIN: la solicitud de un colaborador eliminado (user_id NULL) sigue
+  // en la gestión, con la ficha que se copió al crearla.
   const { rows } = await db.query(
-    `SELECT r.*, u.first_name, u.last_name, u.email, u.work_area_id,
-            wa.area_name AS area
+    `SELECT r.*,
+            COALESCE(u.first_name, r.requester_first_name) AS first_name,
+            COALESCE(u.last_name, r.requester_last_name)   AS last_name,
+            COALESCE(u.email, r.requester_email)           AS email,
+            u.work_area_id,
+            COALESCE(wa.area_name, r.requester_area_name)  AS area,
+            (r.user_id IS NULL) AS requester_deleted
      FROM vacation_requests r
-     JOIN users u ON u.id = r.user_id
+     LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN work_areas wa ON wa.id = u.work_area_id
      ${where}
      ORDER BY
@@ -442,9 +470,12 @@ async function listApprovedInRange({ startDate, endDate, userId } = {}) {
     [VACATION_STATUS.APPROVED, VACATION_STATUS.IN_PROGRESS, VACATION_STATUS.COMPLETED],
     getCurrentCountry(),
   ];
-  let sql = `SELECT r.*, u.first_name, u.last_name
+  let sql = `SELECT r.*,
+                    COALESCE(u.first_name, r.requester_first_name) AS first_name,
+                    COALESCE(u.last_name, r.requester_last_name)   AS last_name,
+                    (r.user_id IS NULL) AS requester_deleted
              FROM vacation_requests r
-             JOIN users u ON u.id = r.user_id
+             LEFT JOIN users u ON u.id = r.user_id
              WHERE r.status = ANY($3)
                AND r.start_date <= $2 AND r.end_date >= $1
                AND r.country_code = $4`;

@@ -4,6 +4,9 @@
   const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
   // El modal sólo existe si el colaborador cumple los requisitos.
   const puedeSolicitar = req.ok && typeof formulario !== 'undefined' && !!formulario;
+  // Fondos del colaborador: abiertos, por rendir y rendiciones por liquidar.
+  const misFondos = (typeof fondos !== 'undefined' && fondos) ? fondos : null;
+  const verFondos = !!misFondos && (misFondos.abiertos.length > 0 || misFondos.porLiquidar.length > 0);
 
   const borradores = lista.filter((s) => s.status === 'draft').length;
   const enviadas = lista.length - borradores;
@@ -48,6 +51,60 @@
     </div>
   <% } %>
 
+  <% if (verFondos) { %>
+  <section class="seccion" aria-labelledby="gastos-fondos">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="gastos-fondos">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
+          Mis fondos
+        </h3>
+      </div>
+    </div>
+
+    <div class="fondos-card">
+      <div class="fondos-resumen">
+        <div class="fondos-resumen__dato">
+          <span class="fondos-resumen__label">Asignado por rendir</span>
+          <strong><%= formatMoney(misFondos.asignadoPorRendir) %></strong>
+        </div>
+        <div class="fondos-resumen__dato">
+          <span class="fondos-resumen__label">Fondos abiertos</span>
+          <strong><%= misFondos.usados %>/<%= misFondos.max %></strong>
+        </div>
+      </div>
+
+      <ul class="fondos-lista">
+        <% misFondos.abiertos.forEach((f) => { %>
+          <li class="fondos-fila">
+            <a class="fondos-fila__info" href="/gastos/<%= f.id %>">
+              <span class="gasto-item__id">#<%= f.id %></span>
+              <span class="fondos-fila__titulo"><%= f.title %></span>
+            </a>
+            <span class="fondos-fila__monto"><%= formatMoney(f.total_amount) %></span>
+            <span class="fondo-estado fondo-estado--<%= f.state %>"><%= f.stateLabel %></span>
+            <% if (f.state === 'por_rendir' && puedeSolicitar) { %>
+              <button type="button" class="fondos-fila__rendir" data-abrir-gasto="rendicion" data-fondo="<%= f.id %>">Rendir</button>
+            <% } %>
+          </li>
+        <% }) %>
+        <% misFondos.porLiquidar.forEach((r) => { %>
+          <li class="fondos-fila fondos-fila--liquidar">
+            <a class="fondos-fila__info" href="/gastos/<%= r.id %>">
+              <span class="gasto-item__id">#<%= r.id %></span>
+              <span class="fondos-fila__titulo"><%= r.title %></span>
+            </a>
+            <span class="fondos-fila__saldo fondos-fila__saldo--<%= r.balance.sentido %>">
+              <%= r.balance.sentido === 'devolver' ? 'Debes devolver' : 'Te pagaremos' %>
+              <strong><%= formatMoney(r.balance.monto) %></strong>
+            </span>
+          </li>
+        <% }) %>
+      </ul>
+    </div>
+  </section>
+  <% } %>
+
   <section class="seccion" aria-labelledby="gastos-nueva">
     <div class="seccion__head">
       <div class="seccion__heading">
@@ -75,6 +132,17 @@
             <p class="procesos-card__desc">Gastos o compras que ya pagaste, con sus comprobantes.</p>
           </div>
         </a>
+        <% if (misFondos && misFondos.lleno) { %>
+          <%# Cupo lleno: la acción existe pero no se puede ejercer hasta rendir un fondo. %>
+          <div class="procesos-card procesos-card--bloqueada" aria-disabled="true">
+            <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
+            <div class="procesos-card__cuerpo">
+              <h4 class="procesos-card__titulo">Solicitar fondos</h4>
+              <p class="procesos-card__desc">Tienes <%= misFondos.max %> solicitudes de fondos sin cerrar. Rinde una para liberar cupo.</p>
+              <span class="procesos-card__meta"><span class="procesos-card__badge procesos-card__badge--alerta"><%= misFondos.usados %>/<%= misFondos.max %></span></span>
+            </div>
+          </div>
+        <% } else { %>
         <a href="/gastos/nueva/fondos" class="procesos-card" data-abrir-gasto="fondos">
           <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
           <div class="procesos-card__cuerpo">
@@ -82,6 +150,7 @@
             <p class="procesos-card__desc">Dinero por adelantado para una compra o gestión.</p>
           </div>
         </a>
+        <% } %>
       </div>
     <% } else { %>
       <div class="procesos-aviso">

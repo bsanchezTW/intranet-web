@@ -10,9 +10,11 @@
   // La columna de días sólo aparece si alguna línea es de hospedaje.
   const hayDias = s.items.some((item) => item.days);
   const columnasTotal = hayDias ? 4 : 3;
-  // El saldo no se guarda: total gastado menos el fondo asignado (NULL = 0).
+  // El saldo no se guarda: gastado menos asignado (NULL = reembolso).
   const esRendicion = s.kind === 'rendicion';
-  const saldo = Number(s.total_amount) - Number(s.assigned_amount || 0);
+  const balance = esRendicion ? fundBalance(s.total_amount, s.assigned_amount) : null;
+  const textoSaldo = { devolver: 'Debe devolver', pagar: 'A pagar al colaborador', cerrado: 'Sin saldo' };
+  const liquidar = (typeof puedeLiquidar !== 'undefined' && puedeLiquidar);
   const creado = s.created_at ? new Date(s.created_at).toLocaleDateString(countryConfig.locale, fechaLarga) : '—';
 
   function fecha(valor, opts) {
@@ -51,7 +53,7 @@
       </div>
       <h2 class="gasto-detalle__titulo"><%= s.title %></h2>
       <p class="gasto-detalle__sub">
-        <%= solicitante %><% if (s.area_name) { %> · <%= s.area_name %><% } %> · Enviada el <%= creado %>
+        <%= solicitante %><% if (s.requester_deleted) { %> <span class="gasto-usuario-eliminado">Usuario eliminado</span><% } %><% if (s.area_name) { %> · <%= s.area_name %><% } %> · Enviada el <%= creado %>
       </p>
     </header>
 
@@ -79,11 +81,48 @@
         </dl>
       </section>
 
-      <% if (s.fund_type || s.period_start || s.destination) { %>
+      <% if (esRendicion) { %>
+      <%# Relación con el fondo y saldo: es lo que Finanzas liquida. %>
       <section class="gasto-bloque">
         <h3 class="gasto-bloque__title">Fondo</h3>
         <dl class="gasto-ficha__lista">
-          <div><dt>Tipo de fondo</dt><dd><%= expenseFundTypeLabel(s.fund_type) %></dd></div>
+          <div>
+            <dt>Rinde</dt>
+            <dd>
+              <% if (s.fund) { %>
+                <a href="/gastos/<%= s.fund.id %>">Solicitud de fondos #<%= s.fund.id %></a> · <%= s.fund.title %>
+              <% } else { %>Sin fondo (reembolso)<% } %>
+            </dd>
+          </div>
+          <div><dt>Fondo asignado</dt><dd><%= s.assigned_amount != null ? formatMoney(s.assigned_amount) : '—' %></dd></div>
+          <div>
+            <dt><%= textoSaldo[balance.sentido] %></dt>
+            <dd><strong class="gasto-saldo gasto-saldo--<%= balance.sentido %>"><%= formatMoney(balance.monto) %></strong></dd>
+          </div>
+          <% if (s.status === 'approved_finance') { %>
+            <div><dt>Liquidación</dt><dd><%= s.settled_at ? 'Liquidada el ' + fecha(s.settled_at, fechaCorta) : 'Por liquidar' %></dd></div>
+          <% } %>
+        </dl>
+      </section>
+      <% } else if (s.status === 'approved_finance') { %>
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Rendición del fondo</h3>
+        <dl class="gasto-ficha__lista">
+          <div><dt>Estado</dt><dd><%= fundStateLabel(s.fundState) %></dd></div>
+          <% (s.rendiciones || []).forEach((r) => { %>
+            <div>
+              <dt>Rendición #<%= r.id %></dt>
+              <dd><a href="/gastos/<%= r.id %>"><%= expenseStatusLabel(r.status) %></a> · <%= formatMoney(r.total_amount) %></dd>
+            </div>
+          <% }) %>
+        </dl>
+      </section>
+      <% } %>
+
+      <% if (s.period_start || s.destination) { %>
+      <section class="gasto-bloque">
+        <h3 class="gasto-bloque__title">Destino y período</h3>
+        <dl class="gasto-ficha__lista">
           <div><dt>Lugar de destino</dt><dd><%= s.destination || '—' %></dd></div>
           <div>
             <dt>Período de gastos</dt>
@@ -157,11 +196,11 @@
               <% if (esRendicion) { %>
               <tr class="gasto-tabla__sub">
                 <td colspan="<%= columnasTotal %>">Fondo asignado</td>
-                <td class="gasto-tabla__monto"><%= s.assigned_amount != null ? formatMoney(s.assigned_amount) : '—' %></td>
+                <td class="gasto-tabla__monto"><%= s.assigned_amount != null ? formatMoney(s.assigned_amount) : 'Sin fondo' %></td>
               </tr>
               <tr>
-                <td colspan="<%= columnasTotal %>"><%= saldo < 0 ? 'A devolver' : 'A reintegrar' %></td>
-                <td class="gasto-tabla__monto"><%= formatMoney(Math.abs(saldo)) %></td>
+                <td colspan="<%= columnasTotal %>"><%= textoSaldo[balance.sentido] %></td>
+                <td class="gasto-tabla__monto gasto-saldo--<%= balance.sentido %>"><%= formatMoney(balance.monto) %></td>
               </tr>
               <% } %>
             </tfoot>
@@ -247,6 +286,22 @@
             </li>
           <% } %>
 
+          <% if (s.settled_at) { %>
+            <li class="gasto-traza__item">
+              <span class="gasto-traza__punto" aria-hidden="true"></span>
+              <div>
+                <div>
+                  <span class="gasto-traza__quien">Finanzas</span>
+                  <%= balance && balance.sentido === 'cerrado' ? 'cerró la rendición sin saldo' : 'marcó la rendición como liquidada' %>
+                </div>
+                <div class="gasto-traza__cuando"><%= fecha(s.settled_at, conHora) %></div>
+                <% if (s.settlement_notes) { %>
+                  <div class="gasto-traza__nota">«<%= s.settlement_notes %>»</div>
+                <% } %>
+              </div>
+            </li>
+          <% } %>
+
           <% if (s.status === 'cancelled') { %>
             <li class="gasto-traza__item">
               <span class="gasto-traza__punto" style="background: var(--color-text-subtle);" aria-hidden="true"></span>
@@ -258,7 +313,7 @@
 
     </div>
 
-    <% if (puedeResolver || puedeAnular) { %>
+    <% if (puedeResolver || puedeAnular || liquidar) { %>
     <footer class="gasto-detalle__foot">
       <% if (puedeResolver) { %>
         <form method="POST" id="formResolver" action="/gastos/<%= s.id %>/aprobar">
@@ -279,6 +334,24 @@
             </button>
             <button type="submit" class="gasto-btn-peligro" data-accion="rechazar"
                     formaction="/gastos/<%= s.id %>/rechazar">Rechazar</button>
+          </div>
+        </form>
+      <% } %>
+
+      <% if (liquidar) { %>
+        <%# Finanzas confirma que el saldo ya se movió. Irreversible desde la UI. %>
+        <form method="POST" action="/gastos/<%= s.id %>/liquidar"
+              onsubmit="return confirm('<%= balance.sentido === 'devolver' ? '¿Confirmas que el colaborador ya devolvió el saldo?' : '¿Confirmas que ya se le pagó el saldo al colaborador?' %>');">
+          <input type="hidden" name="volver" value="<%= volverA === '/gastos/gestion' ? 'gestion' : 'detalle' %>">
+          <div class="campo-form" style="margin-bottom: 0;">
+            <label for="notasLiquidacion">
+              Liquidación · <%= textoSaldo[balance.sentido] %> <%= formatMoney(balance.monto) %>
+            </label>
+            <textarea id="notasLiquidacion" name="notes" maxlength="2000"
+                      placeholder="Ej: transferencia n.º 123456 del 14-09-2026"></textarea>
+          </div>
+          <div class="gasto-acciones">
+            <button type="submit" class="gasto-btn-primario">Marcar como liquidada</button>
           </div>
         </form>
       <% } %>

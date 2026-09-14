@@ -250,8 +250,8 @@ CREATE INDEX IF NOT EXISTS idx_user_cost_centers_center
 
 -- ===========================================================
 -- BANCOS Y CUENTAS DE DESTINO
--- PK = código SBIF: es lo que citan las nóminas de pago. Fuente del catálogo:
--- src/constants/banks.js (ensureExpenseSchema lo vuelve a sembrar al arrancar).
+-- PK = código SBIF: es lo que citan las nóminas de pago.
+-- El formulario carga esta tabla. constants/banks.js es un snapshot.
 -- ===========================================================
 CREATE TABLE IF NOT EXISTS chile.banks (
   code character varying(3) PRIMARY KEY,
@@ -260,31 +260,30 @@ CREATE TABLE IF NOT EXISTS chile.banks (
   active boolean NOT NULL DEFAULT true
 );
 
-INSERT INTO chile.banks (code, name, entity_type) VALUES
-  ('001', 'Banco de Chile', 'Banco Tradicional'),
-  ('009', 'Banco Internacional', 'Banco Tradicional'),
-  ('012', 'Banco Estado', 'Banco Tradicional'),
-  ('014', 'Scotiabank Chile', 'Banco Tradicional'),
-  ('016', 'Banco de Crédito e Inversiones (BCI)', 'Banco Tradicional'),
-  ('028', 'Banco BICE (incluye fusión Security)', 'Banco Tradicional'),
-  ('031', 'HSBC Bank Chile', 'Banco Tradicional'),
-  ('037', 'Banco Santander-Chile', 'Banco Tradicional'),
-  ('039', 'Itaú Chile', 'Banco Tradicional'),
-  ('041', 'JP Morgan Chase Bank', 'Sucursal Extranjera'),
-  ('051', 'Banco Falabella', 'Banco Tradicional'),
-  ('053', 'Banco Ripley', 'Banco Tradicional'),
-  ('055', 'Banco Consorcio', 'Banco Tradicional'),
-  ('059', 'Banco BTG Pactual Chile', 'Banco Tradicional'),
-  ('060', 'China Construction Bank', 'Sucursal Extranjera'),
-  ('061', 'Bank of China', 'Sucursal Extranjera'),
-  ('062', 'Tanner Banco', 'Banco Tradicional'),
-  ('063', 'Tenpo Banco', 'Banco Tradicional'),
-  ('730', 'Tenpo Payments (Prepago)', 'Emisor No Bancario'),
-  ('875', 'Mercado Pago Emisora', 'Emisor No Bancario'),
-  ('729', 'Los Héroes Prepago', 'Emisor No Bancario'),
-  ('732', 'Caja Los Andes Prepago', 'Emisor No Bancario')
-ON CONFLICT (code) DO UPDATE
-  SET name = EXCLUDED.name, entity_type = EXCLUDED.entity_type;
+INSERT INTO chile.banks (code, name, entity_type, active) VALUES
+  ('001', 'Banco de Chile', 'Banco Tradicional', TRUE),
+  ('009', 'Banco Internacional', 'Banco Tradicional', TRUE),
+  ('012', 'Banco Estado', 'Banco Tradicional', TRUE),
+  ('014', 'Scotiabank Chile', 'Banco Tradicional', TRUE),
+  ('016', 'Banco de Crédito e Inversiones (BCI)', 'Banco Tradicional', TRUE),
+  ('028', 'Banco BICE', 'Banco Tradicional', TRUE),
+  ('031', 'HSBC Bank Chile', 'Banco Tradicional', TRUE),
+  ('037', 'Banco Santander-Chile', 'Banco Tradicional', TRUE),
+  ('039', 'Itaú Chile', 'Banco Tradicional', TRUE),
+  ('041', 'JP Morgan Chase Bank', 'Sucursal Extranjera', TRUE),
+  ('051', 'Banco Falabella', 'Banco Tradicional', TRUE),
+  ('053', 'Banco Ripley', 'Banco Tradicional', TRUE),
+  ('055', 'Banco Consorcio', 'Banco Tradicional', TRUE),
+  ('059', 'Banco BTG Pactual Chile', 'Banco Tradicional', TRUE),
+  ('060', 'China Construction Bank', 'Sucursal Extranjera', TRUE),
+  ('061', 'Bank of China', 'Sucursal Extranjera', TRUE),
+  ('062', 'Tanner Banco', 'Banco Tradicional', TRUE),
+  ('063', 'Tenpo Banco', 'Banco Tradicional', TRUE),
+  ('729', 'Los Héroes Prepago', 'Emisor No Bancario', TRUE),
+  ('730', 'Tenpo Payments (Prepago)', 'Emisor No Bancario', TRUE),
+  ('732', 'Caja Los Andes Prepago', 'Emisor No Bancario', TRUE),
+  ('875', 'Mercado Pago', 'Emisor No Bancario', TRUE)
+ON CONFLICT (code) DO NOTHING;
 
 -- Cuentas propias guardadas. Sin id: la clave es la cuenta misma.
 -- account_type: 'corriente' | 'vista' | 'ahorro' | 'rut' (sólo Banco Estado).
@@ -323,10 +322,12 @@ $do$;
 ALTER TYPE chile.expense_request_status ADD VALUE IF NOT EXISTS 'draft';
 
 CREATE TABLE IF NOT EXISTS chile.expense_requests (
-  id integer PRIMARY KEY,                        -- 6 dígitos (trg_six_digit_id)
+  id integer PRIMARY KEY,                        -- 8 dígitos (trg_eight_digit_id)
   kind chile.expense_request_kind NOT NULL,
   status chile.expense_request_status NOT NULL DEFAULT 'pending',
-  user_id integer NOT NULL REFERENCES chile.users(id) ON DELETE CASCADE,
+  -- Borrar al colaborador no borra sus solicitudes: quedan con la ficha
+  -- congelada (requester_*) y user_id NULL.
+  user_id integer REFERENCES chile.users(id) ON DELETE SET NULL,
   -- Se congela al crear: si el colaborador cambia de área, la solicitud sigue
   -- perteneciendo al área que la aprobó.
   work_area_id integer REFERENCES chile.work_areas(id) ON DELETE SET NULL,
@@ -364,15 +365,22 @@ CREATE TABLE IF NOT EXISTS chile.expense_requests (
   bank_account_type character varying(20),
   bank_account_number character varying(20),
   -- Encabezado de la planilla de rendición.
-  fund_type character varying(10)
-    CHECK (fund_type IS NULL OR fund_type IN ('fijo', 'rendir')),
   destination character varying(150),
   period_start date,
   period_end date,
-  -- Fondo asignado (sólo rendiciones; NULL = sin fondo). A reintegrar se
-  -- deriva: total_amount - assigned_amount.
+  -- Fondo asignado: lo copia el sistema del total de la solicitud de fondos
+  -- que se rinde (NULL = reembolso). Saldo = total_amount - assigned_amount.
   assigned_amount numeric(14,2)
     CHECK (assigned_amount IS NULL OR assigned_amount >= 0),
+  -- Solicitud de fondos que esta rendición rinde (1:1). NULL = reembolso.
+  -- NO ACTION: nada borra una solicitud de fondos enviada (ni borrar al usuario).
+  fund_request_id integer REFERENCES chile.expense_requests(id),
+  -- Liquidación: Finanzas confirma la devolución o el pago del saldo.
+  settled_at timestamp with time zone,
+  settled_by integer REFERENCES chile.users(id) ON DELETE SET NULL,
+  settlement_notes text,
+  CONSTRAINT expense_requests_fund_request_kind
+    CHECK (fund_request_id IS NULL OR kind = 'rendicion'),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now()
 );
@@ -392,6 +400,13 @@ CREATE INDEX IF NOT EXISTS idx_expense_requests_manager
 CREATE INDEX IF NOT EXISTS idx_expense_requests_drafts
   ON chile.expense_requests (updated_at)
   WHERE status = 'draft';
+-- 1:1 fondo ↔ rendición: un fondo no puede tener dos rendiciones en curso o aprobadas.
+CREATE UNIQUE INDEX IF NOT EXISTS expense_requests_fund_rendicion_unique
+  ON chile.expense_requests (fund_request_id)
+  WHERE kind = 'rendicion' AND status IN ('pending', 'approved_manager', 'approved_finance');
+CREATE INDEX IF NOT EXISTS idx_expense_requests_fund
+  ON chile.expense_requests (fund_request_id)
+  WHERE fund_request_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS chile.expense_request_items (
   id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
@@ -569,7 +584,8 @@ CREATE TABLE IF NOT EXISTS chile.user_course_progress (
 
 CREATE TABLE IF NOT EXISTS chile.vacation_periods (
   id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-  user_id integer NOT NULL REFERENCES chile.users(id) ON DELETE CASCADE,
+  -- Borrar al colaborador conserva sus períodos (y sus ajustes): user_id NULL.
+  user_id integer REFERENCES chile.users(id) ON DELETE SET NULL,
   country_code character varying(2) NOT NULL CHECK (country_code IN ('CL', 'PE')),
   period_start date NOT NULL,
   period_end date NOT NULL,
@@ -591,7 +607,9 @@ CREATE INDEX IF NOT EXISTS idx_vacation_periods_user ON chile.vacation_periods (
 
 CREATE TABLE IF NOT EXISTS chile.vacation_requests (
   id integer PRIMARY KEY,
-  user_id integer NOT NULL REFERENCES chile.users(id) ON DELETE CASCADE,
+  -- Borrar al colaborador conserva sus solicitudes: user_id NULL y la ficha
+  -- queda en requester_*.
+  user_id integer REFERENCES chile.users(id) ON DELETE SET NULL,
   country_code character varying(2) NOT NULL CHECK (country_code IN ('CL', 'PE')),
   vacation_period_id integer REFERENCES chile.vacation_periods(id) ON DELETE SET NULL,
   start_date date NOT NULL,
@@ -608,6 +626,11 @@ CREATE TABLE IF NOT EXISTS chile.vacation_requests (
   fraction_ack_at timestamp with time zone,
   policy_warning_ack boolean NOT NULL DEFAULT false,
   period_allocations jsonb,
+  -- Ficha del solicitante copiada al crear la solicitud.
+  requester_first_name character varying(150),
+  requester_last_name character varying(150),
+  requester_email character varying(150),
+  requester_area_name character varying(150),
   CHECK (end_date >= start_date)
 );
 CREATE INDEX IF NOT EXISTS idx_vacation_requests_user ON chile.vacation_requests (user_id);
@@ -617,7 +640,7 @@ CREATE INDEX IF NOT EXISTS idx_vacation_requests_dates ON chile.vacation_request
 CREATE TABLE IF NOT EXISTS chile.vacation_balance_adjustments (
   id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
   vacation_period_id integer NOT NULL REFERENCES chile.vacation_periods(id) ON DELETE CASCADE,
-  adjusted_by integer NOT NULL REFERENCES chile.users(id),
+  adjusted_by integer REFERENCES chile.users(id) ON DELETE SET NULL,
   days_delta numeric(5,2) NOT NULL,
   reason text NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now()
@@ -724,6 +747,7 @@ BEGIN
 END$$;
 
 -- IDs: 6 dígitos aleatorios (100000-999999) en users y vacation_requests.
+-- 8 dígitos aleatorios (10000000-99999999) en expense_requests (fondos y rendiciones).
 -- 4 dígitos aleatorios (1111-9999) en work_areas y support_tickets.
 -- integer IDENTITY en catálogo (noticias, eventos, apps, cursos, períodos,
 -- documentos, feriados, menú, fotos, linkedin, progreso, conversaciones Claude).
@@ -766,6 +790,44 @@ AS $fn$
 BEGIN
   IF NEW.id IS NULL OR NEW.id < 100000 THEN
     NEW.id := chile.next_six_digit_id(TG_TABLE_NAME);
+  END IF;
+  RETURN NEW;
+END;
+$fn$;
+
+CREATE OR REPLACE FUNCTION chile.next_eight_digit_id(p_table text)
+RETURNS integer
+LANGUAGE plpgsql
+AS $fn$
+DECLARE
+  candidate integer;
+  found_id integer;
+  i integer;
+BEGIN
+  IF p_table IS NULL OR p_table !~ '^[a-z0-9_]+$' THEN
+    RAISE EXCEPTION 'tabla inválida para ID de 8 dígitos';
+  END IF;
+  FOR i IN 1..80 LOOP
+    candidate := 10000000 + floor(random() * 90000000)::integer;
+    found_id := NULL;
+    EXECUTE format('SELECT 1 FROM chile.%I WHERE id = $1', p_table)
+      INTO found_id
+      USING candidate;
+    IF found_id IS NULL THEN
+      RETURN candidate;
+    END IF;
+  END LOOP;
+  RAISE EXCEPTION 'No fue posible generar un ID de 8 dígitos para chile.%', p_table;
+END;
+$fn$;
+
+CREATE OR REPLACE FUNCTION chile.assign_eight_digit_id()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $fn$
+BEGIN
+  IF NEW.id IS NULL OR NEW.id < 10000000 THEN
+    NEW.id := chile.next_eight_digit_id(TG_TABLE_NAME);
   END IF;
   RETURN NEW;
 END;
@@ -818,7 +880,10 @@ DECLARE
   p_role constant text := 'intranet_chile';
   staging_offset constant bigint := 2000000000;
   six_digit_tables constant text[] := ARRAY[
-    'users', 'vacation_requests', 'expense_requests'
+    'users', 'vacation_requests'
+  ];
+  eight_digit_tables constant text[] := ARRAY[
+    'expense_requests'
   ];
   four_digit_tables constant text[] := ARRAY[
     'work_areas', 'support_tickets'
@@ -947,6 +1012,40 @@ BEGIN
           );
         IF i = 80 THEN
           RAISE EXCEPTION 'No fue posible generar un ID de 6 dígitos para %.%', p_schema, tname;
+        END IF;
+      END LOOP;
+      INSERT INTO _id_map (table_name, old_id, new_id)
+      VALUES (tname, rec.id, candidate);
+    END LOOP;
+  END LOOP;
+
+  FOREACH tname IN ARRAY eight_digit_tables LOOP
+    SELECT EXISTS (
+      SELECT 1 FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = p_schema AND c.relkind = 'r' AND c.relname = tname
+    ) INTO table_ok;
+    IF NOT table_ok THEN
+      CONTINUE;
+    END IF;
+
+    FOR rec IN EXECUTE format(
+      'SELECT id FROM %I.%I WHERE id < 10000000 ORDER BY id',
+      p_schema, tname
+    ) LOOP
+      FOR i IN 1..80 LOOP
+        candidate := 10000000 + floor(random() * 90000000)::integer;
+        found_id := NULL;
+        EXECUTE format('SELECT 1 FROM %I.%I WHERE id = $1', p_schema, tname)
+          INTO found_id
+          USING candidate;
+        EXIT WHEN found_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM _id_map m
+            WHERE m.table_name = tname AND m.new_id = candidate
+          );
+        IF i = 80 THEN
+          RAISE EXCEPTION 'No fue posible generar un ID de 8 dígitos para %.%', p_schema, tname;
         END IF;
       END LOOP;
       INSERT INTO _id_map (table_name, old_id, new_id)
@@ -1151,6 +1250,7 @@ BEGIN
   LOOP
     EXECUTE format('DROP TRIGGER IF EXISTS trg_six_digit_id ON %I.%I', p_schema, t.relname);
     EXECUTE format('DROP TRIGGER IF EXISTS trg_four_digit_id ON %I.%I', p_schema, t.relname);
+    EXECUTE format('DROP TRIGGER IF EXISTS trg_eight_digit_id ON %I.%I', p_schema, t.relname);
   END LOOP;
 
   FOREACH tname IN ARRAY six_digit_tables LOOP
@@ -1177,6 +1277,34 @@ BEGIN
 
     EXECUTE format(
       'CREATE TRIGGER trg_six_digit_id BEFORE INSERT ON %I.%I FOR EACH ROW EXECUTE FUNCTION chile.assign_six_digit_id()',
+      p_schema, tname
+    );
+  END LOOP;
+
+  FOREACH tname IN ARRAY eight_digit_tables LOOP
+    SELECT EXISTS (
+      SELECT 1 FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = p_schema AND c.relkind = 'r' AND c.relname = tname
+    ) INTO table_ok;
+    IF NOT table_ok THEN
+      CONTINUE;
+    END IF;
+
+    seq_name := pg_get_serial_sequence(format('%I.%I', p_schema, tname), 'id');
+    EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN id DROP DEFAULT', p_schema, tname);
+    BEGIN
+      EXECUTE format('ALTER TABLE %I.%I ALTER COLUMN id DROP IDENTITY IF EXISTS', p_schema, tname);
+    EXCEPTION
+      WHEN undefined_object THEN
+        NULL;
+    END;
+    IF seq_name IS NOT NULL THEN
+      EXECUTE format('DROP SEQUENCE IF EXISTS %s', seq_name);
+    END IF;
+
+    EXECUTE format(
+      'CREATE TRIGGER trg_eight_digit_id BEFORE INSERT ON %I.%I FOR EACH ROW EXECUTE FUNCTION chile.assign_eight_digit_id()',
       p_schema, tname
     );
   END LOOP;
@@ -1268,6 +1396,8 @@ $fn$;
 
 ALTER FUNCTION chile.next_six_digit_id(text) SET search_path = chile, pg_temp;
 ALTER FUNCTION chile.assign_six_digit_id() SET search_path = chile, pg_temp;
+ALTER FUNCTION chile.next_eight_digit_id(text) SET search_path = chile, pg_temp;
+ALTER FUNCTION chile.assign_eight_digit_id() SET search_path = chile, pg_temp;
 ALTER FUNCTION chile.next_four_digit_id(text) SET search_path = chile, pg_temp;
 ALTER FUNCTION chile.assign_four_digit_id() SET search_path = chile, pg_temp;
 ALTER FUNCTION chile.ensure_id_strategy() SET search_path = chile, pg_temp;
@@ -1275,6 +1405,8 @@ ALTER FUNCTION chile.ensure_six_digit_ids() SET search_path = chile, pg_temp;
 
 REVOKE ALL ON FUNCTION chile.next_six_digit_id(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION chile.assign_six_digit_id() FROM PUBLIC;
+REVOKE ALL ON FUNCTION chile.next_eight_digit_id(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION chile.assign_eight_digit_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION chile.next_four_digit_id(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION chile.assign_four_digit_id() FROM PUBLIC;
 REVOKE ALL ON FUNCTION chile.ensure_id_strategy() FROM PUBLIC;
@@ -1282,6 +1414,8 @@ REVOKE ALL ON FUNCTION chile.ensure_six_digit_ids() FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION chile.next_six_digit_id(text) TO intranet_chile;
 GRANT EXECUTE ON FUNCTION chile.assign_six_digit_id() TO intranet_chile;
+GRANT EXECUTE ON FUNCTION chile.next_eight_digit_id(text) TO intranet_chile;
+GRANT EXECUTE ON FUNCTION chile.assign_eight_digit_id() TO intranet_chile;
 GRANT EXECUTE ON FUNCTION chile.next_four_digit_id(text) TO intranet_chile;
 GRANT EXECUTE ON FUNCTION chile.assign_four_digit_id() TO intranet_chile;
 GRANT EXECUTE ON FUNCTION chile.ensure_id_strategy() TO intranet_chile;
@@ -1292,6 +1426,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
     GRANT EXECUTE ON FUNCTION chile.next_six_digit_id(text) TO service_role;
     GRANT EXECUTE ON FUNCTION chile.assign_six_digit_id() TO service_role;
+    GRANT EXECUTE ON FUNCTION chile.next_eight_digit_id(text) TO service_role;
+    GRANT EXECUTE ON FUNCTION chile.assign_eight_digit_id() TO service_role;
     GRANT EXECUTE ON FUNCTION chile.next_four_digit_id(text) TO service_role;
     GRANT EXECUTE ON FUNCTION chile.assign_four_digit_id() TO service_role;
     GRANT EXECUTE ON FUNCTION chile.ensure_id_strategy() TO service_role;

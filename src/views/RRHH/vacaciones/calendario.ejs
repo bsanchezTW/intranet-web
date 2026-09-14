@@ -36,7 +36,7 @@
         <tbody>
           <% events.forEach(e => { %>
             <tr>
-              <% if (isAdmin) { %><td><%= e.collaboratorName || ('#' + e.user_id) %></td><% } %>
+              <% if (isAdmin) { %><td><%= e.collaboratorName || 'Colaborador' %><% if (e.requester_deleted) { %> <small>(usuario eliminado)</small><% } %></td><% } %>
               <td><%= e.startDateFmt %></td>
               <td><%= e.endDateFmt %></td>
               <td><%= e.days %> <%= e.dayUnit %></td>
