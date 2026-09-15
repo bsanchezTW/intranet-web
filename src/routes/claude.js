@@ -31,7 +31,7 @@ router.use((req, res, next) => {
 
 /** Mismo criterio que requireExpenseReviewer; un fallo de BD cuenta como "no revisa". */
 async function resolveExpenseReviewer(user, { isAdmin, features }) {
-  if (!features.expenseCenter) return false;
+  if (!features.expenseRequests) return false;
   if (isAdmin) return true;
   try {
     return (await isFinanceApprover(user)) || (await isAreaManager(user));

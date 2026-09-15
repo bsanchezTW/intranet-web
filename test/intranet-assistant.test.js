@@ -21,8 +21,8 @@ const {
   documentLabel,
 } = require("../src/services/assistant/directorySearch");
 
-const CL_FEATURES = { supportTickets: true, expenseCenter: true, chileHrPortals: true, lunchMenu: true };
-const PE_FEATURES = { supportTickets: false, expenseCenter: true, chileHrPortals: false, lunchMenu: false };
+const CL_FEATURES = { supportTickets: true, expenseCenter: true, expenseRequests: true, chileHrPortals: true, lunchMenu: true };
+const PE_FEATURES = { supportTickets: false, expenseCenter: true, expenseRequests: true, chileHrPortals: false, lunchMenu: false };
 const ids = (entries) => entries.map((entry) => entry.id);
 
 describe("intranetGuide — catálogo filtrado", () => {
@@ -33,6 +33,12 @@ describe("intranetGuide — catálogo filtrado", () => {
     assert.equal(ids(user).includes("vacaciones-gestion"), false);
     assert.equal(ids(user).includes("gastos-gestion"), false);
     assert.equal(ids(user).includes("gastos-rendicion"), true);
+  });
+
+  it("sin rendiciones no ofrece gastos, pero sí los centros de costo", () => {
+    const entries = ids(guideForUser({ features: { ...CL_FEATURES, expenseRequests: false }, isAdmin: true }));
+    assert.equal(entries.some((id) => id.startsWith("gastos-")), false);
+    assert.ok(entries.includes("centros-costo"));
   });
 
   it("la gestión de gastos es para revisores y administradores", () => {

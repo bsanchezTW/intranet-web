@@ -84,9 +84,9 @@ router.get("/", async (req, res) => {
   try {
     const context = await areaManager.getUserAreaContext(user.id);
 
-    // El centro de gastos puede estar apagado por país; la sección de Finanzas
-    // desaparece entera en ese caso en vez de mostrar botones muertos.
-    const gastosActivos = isFeatureEnabled("expenseCenter");
+    // Las rendiciones pueden estar apagadas; la sección de Finanzas desaparece
+    // entera en ese caso en vez de mostrar botones muertos.
+    const gastosActivos = isFeatureEnabled("expenseRequests");
     let esRevisor = false;
     let pendientes = 0;
     let fondosVencidos = 0;

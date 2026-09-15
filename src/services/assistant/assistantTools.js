@@ -137,7 +137,7 @@ function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReview
 - Página actual: ${page.title || "sin título"} — ruta ${page.path} — ${pageLine}
 - Usuario: ${name}; área: ${user.area || "sin área asignada"}
 - Administrador: ${yesNo(isAdmin)}; revisor de gastos: ${yesNo(isExpenseReviewer)}
-- En esta intranet: Soporte TI ${yesNo(features.supportTickets)}; centro de gastos ${yesNo(features.expenseCenter)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}
+- En esta intranet: Soporte TI ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}
 
 ## CATÁLOGO DE LA INTRANET (sólo lo que este usuario puede ver)
 ${formatGuideForPrompt(entries)}`;

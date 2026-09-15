@@ -43,7 +43,7 @@ const ticketsRoutes = isFeatureEnabled("supportTickets")
 const claudeRoutes = isFeatureEnabled("claudeAssistant")
   ? require("./routes/claude")
   : null;
-const gastosRoutes = isFeatureEnabled("expenseCenter")
+const gastosRoutes = isFeatureEnabled("expenseRequests")
   ? require("./routes/gastos")
   : null;
 const { syncUnverifiedUsersToDisabled } = require("./utils/syncDisabledUsers");
@@ -414,7 +414,7 @@ app.use("/", requireAuth, indexRoutes);
 app.use("/procesos", requireAuth, procesosRoutes);
 app.use("/RRHH", requireAuth, personasRoutes);
 if (gastosRoutes) {
-  app.use("/gastos", requireAuth, requireFeature("expenseCenter"), gastosRoutes);
+  app.use("/gastos", requireAuth, requireFeature("expenseRequests"), gastosRoutes);
 }
 if (ticketsRoutes) {
   app.use("/sistemas", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
