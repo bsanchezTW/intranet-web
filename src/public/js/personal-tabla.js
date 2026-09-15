@@ -91,6 +91,15 @@
         estado.texto = '';
         aplicar();
       });
+
+      // /RRHH/personal?q=… (enlace del asistente) llega con la búsqueda aplicada.
+      var consulta = new URLSearchParams(window.location.search).get('q');
+      if (consulta) {
+        buscador.value = consulta;
+        estado.texto = consulta.trim().toLowerCase();
+        aplicar();
+        limpiarQuery(['q']);
+      }
     }
 
     chips.forEach(function (chip) {

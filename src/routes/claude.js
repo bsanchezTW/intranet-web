@@ -22,6 +22,18 @@ const {
   LIMITS_NOTICE,
 } = require("../constants/claudeLimits");
 const { isAdministrador } = require("../constants/roles");
+const { getFeatures } = require("../config/features");
+const { guideForUser } = require("../constants/intranetGuide");
+const {
+  STATUS_LABELS,
+  buildToolDefinitions,
+  createToolExecutor,
+  sanitizePage,
+  buildContextPrompt,
+} = require("../services/assistant/assistantTools");
+const { searchPeople, searchDocuments } = require("../services/assistant/directorySearch");
+const { isAreaManager } = require("../services/expenses/areaManager");
+const { isFinanceApprover } = require("../services/expenses/financeTeam");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -106,6 +118,18 @@ setInterval(() => {
 
 const userIsAdmin = (req) => isAdministrador(req.session.user?.role);
 const unlimitedUsage = (req) => Boolean(req.claudeUnlimitedUsage);
+
+/** Mismo criterio que requireExpenseReviewer; un fallo de BD cuenta como "no revisa". */
+async function resolveExpenseReviewer(user, { isAdmin, features }) {
+  if (!features.expenseCenter) return false;
+  if (isAdmin) return true;
+  try {
+    return (await isFinanceApprover(user)) || (await isAreaManager(user));
+  } catch (err) {
+    console.error("[Claude Chat] Error resolviendo revisor de gastos:", err.message);
+    return false;
+  }
+}
 
 // GET /claude - Abrir asistente como modal en la intranet
 router.get("/", (req, res) => {
@@ -258,7 +282,15 @@ router.post("/api/upload", upload.single("file"), async (req, res) => {
 
 // POST /api/claude/chat - Enviar mensaje (respuesta en streaming SSE)
 router.post("/api/chat", async (req, res) => {
-  const { conversationId, message, model, systemPrompt, attachmentId, attachmentIds } = req.body;
+  const {
+    conversationId,
+    message,
+    model,
+    systemPrompt,
+    attachmentId,
+    attachmentIds,
+    page: rawPage,
+  } = req.body;
   const userId = req.session.user.id;
   const isUnlimited = unlimitedUsage(req);
 
@@ -400,19 +432,52 @@ router.post("/api/chat", async (req, res) => {
       ]);
     }
 
+    // Contexto de ayuda: catálogo filtrado por features y permisos, página
+    // actual y tools. Va en el system prompt, no en el mensaje persistido.
+    const sessionUser = req.session.user;
+    const features = res.locals.features || getFeatures();
+    const isAdmin = userIsAdmin(req);
+    const isExpenseReviewer = await resolveExpenseReviewer(sessionUser, { isAdmin, features });
+    const guide = guideForUser({
+      features,
+      isAdmin,
+      isExpenseReviewer,
+      workAreaId: sessionUser.work_area_id,
+    });
+    const page = sanitizePage(rawPage);
+    const toolExecutor = createToolExecutor({
+      entries: guide,
+      currentPath: page.path,
+      searchPeople,
+      searchDocuments,
+    });
+
     const system = claudeService.buildSystemPrompt({
       customPrompt: systemPrompt,
+      context: buildContextPrompt({
+        entries: guide,
+        page,
+        user: sessionUser,
+        isAdmin,
+        isExpenseReviewer,
+        features,
+      }),
       attachments,
     });
 
-    let fullText = "";
-    const final = await claudeService.streamMessage(messages, selectedModel, {
+    const final = await claudeService.runAssistantTurn(messages, selectedModel, {
       system,
+      tools: buildToolDefinitions(guide),
+      executeTool: toolExecutor.execute,
       onEvent: (ev) => {
-        if (ev.type === "text") fullText += ev.text;
+        if (ev.type === "tool") {
+          sse({ type: "status", text: STATUS_LABELS[ev.name] || "Consultando…" });
+          return;
+        }
         sse(ev);
       },
     });
+    const fullText = final.text;
 
     // Guardar respuesta del asistente
     if (fullText.trim()) {
@@ -444,7 +509,13 @@ router.post("/api/chat", async (req, res) => {
       sse({ type: "title", title: generatedTitle });
     }
 
-    sse({ type: "done", usage: final.usage, stopReason: final.stop_reason, dailyUsage });
+    sse({
+      type: "done",
+      usage: final.usage,
+      stopReason: final.stopReason,
+      dailyUsage,
+      navigate: toolExecutor.getNavigation(),
+    });
     res.end();
   } catch (error) {
     console.error("[Claude Chat] Error:", error);

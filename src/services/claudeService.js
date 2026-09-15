@@ -3,25 +3,42 @@ const path = require("path");
 const officeDocumentParser = require("./officeDocumentParser");
 const { isUnlimitedUsage } = require("./claudeDailyLimits");
 
-// Modelo por defecto: Haiku 4.5 (el más económico). Los administradores pueden elegir otro modelo.
+// Usuarios normales: Haiku 4.5 (el más económico). Los administradores pueden elegir otro modelo.
 const DEFAULT_SYSTEM_PROMPT = `
 ## IDENTIDAD
-Eres Claude, el asistente de IA de la Intranet de Transworld.
+Eres el asistente de ayuda de la Intranet de Transworld.
 Fuiste integrado por Bastián Abarca, ingeniero de software del área de TI de la empresa.
-Tu propósito es ayudar a los colaboradores a resolver dudas y realizar tareas operativas de forma eficiente.
+Tu trabajo es guiar a los colaboradores por la intranet: dónde está cada función, cómo se usa, encontrar personas y documentos, y llevarlos a la página que necesitan.
 
-## PERSONALIDAD
-- Tono amigable y profesional en todo momento.
-- Respondes siempre en español, de forma clara y directa.
-- Usas Markdown (encabezados, listas, tablas) cuando explicas algo en texto.
-- Cuando el usuario adjunta un documento, lo analizas con cuidado.
-- Si el usuario lo pide responde de manera coloquial y amigable, no uses frases largas y complejas, usa frases cortas y directas.
+## CÓMO RESPONDER
+- Siempre en español, con tono amigable y profesional. Frases cortas y directas.
+- Cuando expliques cómo hacer algo, usa pasos numerados. Markdown liviano, sin tablas largas.
+- Enlaza las páginas internas con Markdown usando la ruta del catálogo, por ejemplo [Rendir gastos](/gastos/nueva/rendicion).
+- Usa el contexto de la página actual: si preguntan "qué puedo hacer aquí", responde sobre esa página.
 
-## REGLAS DE CONDUCTA
-- No inventes información que no tienes; si no sabes algo, admítelo y ofrece alternativas concretas.
-- No afirmes que el usuario tiene razón solo para complacerlo; sé objetivo y honesto.
-- Si el usuario insiste en pedirte algo que está fuera de tu alcance, indícale amablemente que se comunique con Bastián Abarca del área de TI.
+## FUENTES DE VERDAD
+- Sólo existen las páginas del CATÁLOGO DE LA INTRANET que viene más abajo. No inventes menús, botones, rutas ni procesos.
+- Personas: sólo lo que devuelva search_people. Documentos: sólo lo que devuelva search_documents, que busca por nombre y no lee el contenido.
+- Si algo no está en el catálogo ni en el resultado de una búsqueda, dilo con claridad y sugiere abrir un ticket en Soporte TI (si está en el catálogo) o escribir a Bastián Abarca de TI.
+- No ves la pantalla del usuario ni puedes completar formularios, crear, enviar o aprobar nada por él. Tú orientas; la acción la hace el usuario.
+- No afirmes que el usuario tiene razón sólo para complacerlo; sé objetivo y honesto.
 
+## NAVEGACIÓN CON open_page
+- Llama a open_page cuando el usuario pregunte dónde está algo o pida ir a una página ("dónde rindo gastos", "llévame a vacaciones").
+- No la llames en preguntas sólo explicativas ("qué necesito para rendir") ni si el usuario ya está en esa página.
+- Como máximo una navegación por respuesta. Escribe primero una respuesta breve: el cambio de página ocurre cuando terminas.
+- Los portales externos sólo se enlazan; nunca uses open_page para ellos.
+
+## PRIVACIDAD
+- De una persona sólo compartes nombre, correo, teléfono y área.
+`.trim();
+
+/**
+ * Reglas para devolver archivos. Sólo se agregan cuando el turno trae adjuntos:
+ * la UI del asistente de ayuda ya no ofrece adjuntar, pero el backend lo sigue
+ * soportando.
+ */
+const FILE_OUTPUT_PROMPT = `
 ## ARCHIVOS ADJUNTOS — DEVOLUCIÓN EN EL MISMO FORMATO
 Cuando el usuario adjunta uno o más archivos y pide editarlos, completarlos, traducirlos, resumirlos en archivo, exportarlos o devolverlos modificados:
 
@@ -115,7 +132,8 @@ class ClaudeService {
       { id: "claude-opus-4-8", name: "Claude Opus 4.8", tokens: 1000000 },
       { id: "claude-fable-5", name: "Claude Fable 5", tokens: 1000000},
     ];
-    
+    // Modelo inicial del selector de administradores.
+    this.defaultModel = this.models[0].id;
   }
 
   getAvailableModels() {
@@ -126,15 +144,22 @@ class ClaudeService {
     return this.defaultModel;
   }
 
+  getEconomicModel() {
+    return this.economicModel;
+  }
+
   getModelName(modelId) {
     return this.models.find((m) => m.id === modelId)?.name || modelId;
   }
 
-  /** System prompt base + reglas dinámicas cuando hay archivos adjuntos en el turno. */
-  buildSystemPrompt({ customPrompt, attachments = [] } = {}) {
-    const base = customPrompt?.trim() || DEFAULT_SYSTEM_PROMPT;
-    if (!attachments?.length) return base;
-    return `${base}\n\n${this.buildAttachmentOutputRules(attachments)}`;
+  /** System prompt base + contexto del turno + reglas de archivos si hay adjuntos. */
+  buildSystemPrompt({ customPrompt, context, attachments = [] } = {}) {
+    const parts = [customPrompt?.trim() || DEFAULT_SYSTEM_PROMPT];
+    if (context) parts.push(context);
+    if (attachments?.length) {
+      parts.push(FILE_OUTPUT_PROMPT, this.buildAttachmentOutputRules(attachments));
+    }
+    return parts.join("\n\n");
   }
 
   /** Instrucciones concretas por los archivos que el usuario acaba de subir. */
@@ -188,12 +213,14 @@ Si debes devolver un archivo procesado:
    * Invoca onEvent({ type: "thinking" | "text", text }) por cada delta.
    * Devuelve el mensaje final (incluye usage y stop_reason).
    */
-  async streamMessage(messages, model = this.defaultModel, { system, onEvent } = {}) {
+  async streamMessage(messages, model = this.defaultModel, { system, onEvent, tools, toolChoice } = {}) {
     const stream = this.client.messages.stream({
       model,
       max_tokens: 16000,
       system: system?.trim() || DEFAULT_SYSTEM_PROMPT,
       messages,
+      ...(tools?.length ? { tools } : {}),
+      ...(toolChoice ? { tool_choice: toolChoice } : {}),
       ...this._modelParams(model),
     });
 
@@ -207,6 +234,68 @@ Si debes devolver un archivo procesado:
     }
 
     return stream.finalMessage();
+  }
+
+  /**
+   * Un turno del asistente con tools: streamea, ejecuta en el servidor los
+   * tool_use que pida el modelo y vuelve a streamear con los resultados.
+   * En la última ronda permitida se fuerza tool_choice "none" para que cierre
+   * con texto (el historial ya trae bloques tool_use, así que tools no se omite).
+   *
+   * onEvent recibe además { type: "tool", name } antes de ejecutar cada tool.
+   * Devuelve { text, usage, stopReason } con el texto de todas las rondas.
+   */
+  async runAssistantTurn(
+    messages,
+    model = this.defaultModel,
+    { system, tools, executeTool, onEvent, maxToolRounds = 3 } = {}
+  ) {
+    const conversation = [...messages];
+    const usage = { input_tokens: 0, output_tokens: 0 };
+    const canUseTools = Boolean(tools?.length && executeTool);
+    let text = "";
+
+    for (let round = 0; ; round += 1) {
+      const lastRound = round >= maxToolRounds;
+      // El texto de cada ronda va en su propio párrafo.
+      let separated = !text;
+      const final = await this.streamMessage(conversation, model, {
+        system,
+        tools: canUseTools ? tools : undefined,
+        toolChoice: canUseTools && lastRound ? { type: "none" } : undefined,
+        onEvent: (ev) => {
+          if (ev.type === "text") {
+            if (!separated) {
+              separated = true;
+              text += "\n\n";
+              onEvent?.({ type: "text", text: "\n\n" });
+            }
+            text += ev.text;
+          }
+          onEvent?.(ev);
+        },
+      });
+      usage.input_tokens += final.usage?.input_tokens || 0;
+      usage.output_tokens += final.usage?.output_tokens || 0;
+
+      if (!canUseTools || lastRound || final.stop_reason !== "tool_use") {
+        return { text, usage, stopReason: final.stop_reason };
+      }
+
+      conversation.push({ role: "assistant", content: final.content });
+      const results = [];
+      for (const block of final.content.filter((b) => b.type === "tool_use")) {
+        onEvent?.({ type: "tool", name: block.name });
+        const result = await executeTool(block.name, block.input);
+        results.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: result.content,
+          ...(result.isError ? { is_error: true } : {}),
+        });
+      }
+      conversation.push({ role: "user", content: results });
+    }
   }
 
   /**

@@ -1,6 +1,12 @@
 /* Claude AI – cliente de chat (streaming SSE + Markdown + extracción de PDF) */
 const CLAUDE_LOGO_SVG = `<svg class="claude-ai-logo" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="m3.127 10.604 3.135-1.76.053-.153-.053-.085H6.11l-.525-.032-1.791-.048-1.554-.065-1.505-.08-.38-.081L0 7.832l.036-.234.32-.214.455.04 1.009.069 1.513.105 1.097.064 1.626.17h.259l.036-.105-.089-.065-.068-.064-1.566-1.062-1.695-1.121-.887-.646-.48-.327-.243-.306-.104-.67.435-.48.585.04.15.04.593.456 1.267.981 1.654 1.218.242.202.097-.068.012-.049-.109-.181-.9-1.626-.96-1.655-.428-.686-.113-.411a2 2 0 0 1-.068-.484l.496-.674L4.446 0l.662.089.279.242.411.94.666 1.48 1.033 2.014.302.597.162.553.06.17h.105v-.097l.085-1.134.157-1.392.154-1.792.052-.504.25-.605.497-.327.387.186.319.456-.045.294-.19 1.23-.37 1.93-.243 1.29h.142l.161-.16.654-.868 1.097-1.372.484-.545.565-.601.363-.287h.686l.505.751-.226.775-.707.895-.585.759-.839 1.13-.524.904.048.072.125-.012 1.897-.403 1.024-.186 1.223-.21.553.258.06.263-.218.536-1.307.323-1.533.307-2.284.54-.028.02.032.04 1.029.098.44.024h1.077l2.005.15.525.346.315.424-.053.323-.807.411-3.631-.863-.872-.218h-.12v.073l.726.71 1.331 1.202 1.667 1.55.084.383-.214.302-.226-.032-1.464-1.101-.565-.497-1.28-1.077h-.084v.113l.295.432 1.557 2.34.08.718-.112.234-.404.141-.444-.08-.911-1.28-.94-1.44-.759-1.291-.093.053-.448 4.821-.21.246-.484.186-.403-.307-.214-.496.214-.98.258-1.28.21-1.016.19-1.263.112-.42-.008-.028-.092.012-.953 1.307-1.448 1.957-1.146 1.227-.274.109-.477-.247.045-.44.266-.39 1.586-2.018.956-1.25.617-.723-.004-.105h-.036l-4.212 2.736-.75.096-.324-.302.04-.496.154-.162 1.267-.871z"/></svg>`;
 
+// La intranet recarga el documento al cambiar de página: la conversación a
+// retomar después de una navegación del asistente viaja en sessionStorage.
+const CLAUDE_RESUME_KEY = "claude-resume-conversation";
+const CLAUDE_RESUME_TTL_MS = 2 * 60 * 1000;
+const CLAUDE_NAVIGATE_DELAY_MS = 1200;
+
 class ClaudeChat {
   constructor() {
     this.currentConversationId = null;
@@ -140,6 +146,8 @@ class ClaudeChat {
     this.thread = document.getElementById("chatThread");
     this.scroll = document.getElementById("chatScroll");
     this.welcome = document.getElementById("welcomeSection");
+    // Copia de la bienvenida del servidor (quick actions filtradas por features) para "Nueva conversación".
+    this.welcomeTemplate = this.welcome ? this.welcome.cloneNode(true) : null;
     this.input = document.getElementById("messageInput");
     this.sendBtn = document.getElementById("sendBtn");
     this.modelSelect = document.getElementById("modelSelect");
@@ -258,6 +266,13 @@ class ClaudeChat {
     });
 
     this.thread.addEventListener("click", (e) => {
+      const ask = e.target.closest("[data-send]");
+      if (ask) {
+        this.input.value = ask.dataset.send;
+        this.onInput();
+        this.send();
+        return;
+      }
       const prompt = e.target.closest("[data-prompt]");
       if (prompt) { this.input.value = prompt.dataset.prompt; this.onInput(); this.input.focus(); }
       const extract = e.target.closest('[data-action="extract"]');
@@ -338,6 +353,7 @@ class ClaudeChat {
         </div>
         <div class="typing-dots"><span></span><span></span><span></span></div>
         <div class="msg-text"></div>
+        <div class="msg-status" role="status" hidden></div>
       </div>`;
     this.thread.appendChild(el);
     this.scrollToBottom();
@@ -347,6 +363,7 @@ class ClaudeChat {
       thinkingContent: el.querySelector(".thinking-content"),
       dots: el.querySelector(".typing-dots"),
       textEl: el.querySelector(".msg-text"),
+      statusEl: el.querySelector(".msg-status"),
     };
   }
 
@@ -375,6 +392,7 @@ class ClaudeChat {
 
     let acc = "";
     let firstText = true;
+    let navigation = null;
     try {
       const res = await fetch("/claude/api/chat", {
         method: "POST",
@@ -384,6 +402,7 @@ class ClaudeChat {
           message: text,
           model: this.getSelectedModel(),
           attachmentIds,
+          page: { path: window.location.pathname, title: document.title },
         }),
       });
 
@@ -415,27 +434,37 @@ class ClaudeChat {
               this.upsertSidebarItem(payload.conversationId, payload.title);
             }
           } else if (payload.type === "title") {
-            this.updateSidebarTitle(payload.conversationId, payload.title);
+            this.updateSidebarTitle(payload.conversationId || this.currentConversationId, payload.title);
+          } else if (payload.type === "status") {
+            if (firstText) { parts.dots.remove(); firstText = false; }
+            parts.statusEl.textContent = payload.text;
+            parts.statusEl.hidden = false;
+            this.scrollToBottom();
           } else if (payload.type === "thinking") {
             parts.thinkingBlock.hidden = false;
             parts.thinkingContent.hidden = false;
             parts.thinkingContent.textContent += payload.text;
           } else if (payload.type === "text") {
             if (firstText) { parts.dots.remove(); firstText = false; }
+            parts.statusEl.hidden = true;
             acc += payload.text;
             parts.textEl.innerHTML = this.renderMarkdown(acc);
             this.scrollToBottom();
           } else if (payload.type === "error") {
             throw new Error(payload.error);
-          } else if (payload.type === "done" && payload.dailyUsage) {
-            this.applyUsage(payload.dailyUsage);
+          } else if (payload.type === "done") {
+            if (payload.dailyUsage) this.applyUsage(payload.dailyUsage);
+            navigation = payload.navigate || null;
           }
         }
       }
       if (firstText) parts.dots.remove();
       parts.thinkingContent.hidden = true; // colapsar al terminar
+      parts.statusEl.hidden = true;
+      if (navigation) this.navigateAfterTurn(navigation, parts);
     } catch (err) {
       parts.dots.remove();
+      parts.statusEl.hidden = true;
       parts.textEl.innerHTML = `<span style="color:#c0392b">Error: ${this.escapeHtml(err.message)}</span>`;
       if (err.message.includes("límite")) this.thread.lastElementChild?.querySelector(".msg-body")?.prepend(
         Object.assign(document.createElement("p"), {
@@ -618,23 +647,54 @@ class ClaudeChat {
     this.uploadedFilenamesInConversation = [];
     this.clearAttachments();
     this.thread.innerHTML = "";
-    const w = document.createElement("div");
-    w.className = "welcome-section";
-    w.id = "welcomeSection";
-    w.innerHTML = `
-      <div class="welcome-logo">${CLAUDE_LOGO_SVG}</div>
-      <h2>¡Empecemos con algo nuevo!</h2>
-      <p>Pregúntame lo que quieras o adjunta un PDF, Word o Excel para analizarlo.</p>
-      <div class="quick-actions">
-        <button class="quick-action" data-prompt="Ayúdame a redactar un correo profesional sobre ">Redactar un correo</button>
-        <button class="quick-action" data-prompt="Resume y explica los puntos clave del siguiente texto: ">Resumir un texto</button>
-        <button class="quick-action" data-prompt="Explícame de forma sencilla cómo funciona ">Explicar un concepto</button>
-        <button class="quick-action" data-action="extract">Extraer datos de un documento</button>
-      </div>`;
-    this.thread.appendChild(w);
-    this.welcome = w;
+    this.welcome = null;
+    if (this.welcomeTemplate) {
+      this.welcome = this.welcomeTemplate.cloneNode(true);
+      this.thread.appendChild(this.welcome);
+    }
     document.querySelectorAll(".conversation-item").forEach((el) => el.classList.remove("active"));
     this.input.focus();
+  }
+
+  /**
+   * Lleva al usuario a la página que pidió el asistente. Sólo rutas internas;
+   * la conversación se reabre en la página destino (openClaude=1 + sessionStorage).
+   */
+  navigateAfterTurn(navigation, parts) {
+    if (!navigation?.href || !this.currentConversationId) return;
+    const url = new URL(navigation.href, window.location.origin);
+    if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+
+    try {
+      sessionStorage.setItem(
+        CLAUDE_RESUME_KEY,
+        JSON.stringify({ conversationId: this.currentConversationId, at: Date.now() })
+      );
+    } catch (_) {
+      /* sin sessionStorage igual navega; sólo no reabre la conversación */
+    }
+
+    const note = document.createElement("p");
+    note.className = "msg-navigate";
+    note.textContent = `Te llevo a ${navigation.label || url.pathname}…`;
+    parts.el.querySelector(".msg-body")?.appendChild(note);
+    this.scrollToBottom();
+
+    url.searchParams.set("openClaude", "1");
+    setTimeout(() => window.location.assign(url.pathname + url.search), CLAUDE_NAVIGATE_DELAY_MS);
+  }
+
+  /** Reabre la conversación pendiente de una navegación reciente, si la hay. */
+  resumePendingConversation() {
+    let pending = null;
+    try {
+      pending = JSON.parse(sessionStorage.getItem(CLAUDE_RESUME_KEY) || "null");
+      sessionStorage.removeItem(CLAUDE_RESUME_KEY);
+    } catch (_) {
+      return;
+    }
+    if (!pending?.conversationId || Date.now() - pending.at > CLAUDE_RESUME_TTL_MS) return;
+    this.loadConversation(pending.conversationId);
   }
 
   async loadConversation(convId) {
@@ -1020,6 +1080,8 @@ class ClaudeChat {
 
   setupDropZone() {
     if (!this.dropOverlay || !this.dropZoneChat || !this.dropZoneExtract) return;
+    // Sin botón de adjuntar visible, arrastrar archivos tampoco debe ofrecerlo.
+    if (this.btnAttach?.hidden) return;
 
     const main = this.dropOverlay.closest(".claude-main");
     if (!main) return;

@@ -128,7 +128,7 @@
   }
 
   let openingPromise = null;
-  const FAB_TOOLTIP_DEFAULT = "Trabajemos en un nuevo proyecto...";
+  const FAB_TOOLTIP_DEFAULT = "¿Te ayudo a encontrar algo?";
   const FAB_TOOLTIP_LOADING = "Cargando asistente…";
 
   function setTriggerLoading(loading, trigger) {
@@ -185,6 +185,9 @@
         document.documentElement.classList.add("modal-open");
         document.body.classList.add("modal-open");
       }
+
+      // Tras una navegación pedida por el asistente, retoma la misma conversación.
+      window.claudeChat.resumePendingConversation();
 
       requestAnimationFrame(() => {
         showLimitsNoticeIfNeeded();

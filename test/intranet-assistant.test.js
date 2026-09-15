@@ -1,0 +1,258 @@
+const { describe, it } = require("node:test");
+const assert = require("node:assert/strict");
+
+const {
+  guideForUser,
+  findEntryForPath,
+  resolvePage,
+  isSamePage,
+  formatGuideForPrompt,
+} = require("../src/constants/intranetGuide");
+const {
+  buildToolDefinitions,
+  createToolExecutor,
+  sanitizePage,
+  buildContextPrompt,
+} = require("../src/services/assistant/assistantTools");
+const {
+  searchTerms,
+  likePattern,
+  toPublicPerson,
+  documentLabel,
+} = require("../src/services/assistant/directorySearch");
+
+const CL_FEATURES = { supportTickets: true, expenseCenter: true, chileHrPortals: true, lunchMenu: true };
+const PE_FEATURES = { supportTickets: false, expenseCenter: true, chileHrPortals: false, lunchMenu: false };
+const ids = (entries) => entries.map((entry) => entry.id);
+
+describe("intranetGuide — catálogo filtrado", () => {
+  it("oculta lo que la instancia no tiene y lo que el rol no ve", () => {
+    const user = guideForUser({ features: PE_FEATURES, isAdmin: false, workAreaId: 7 });
+    assert.equal(ids(user).includes("soporte"), false);
+    assert.equal(ids(user).includes("rex"), false);
+    assert.equal(ids(user).includes("vacaciones-gestion"), false);
+    assert.equal(ids(user).includes("gastos-gestion"), false);
+    assert.equal(ids(user).includes("gastos-rendicion"), true);
+  });
+
+  it("la gestión de gastos es para revisores y administradores", () => {
+    assert.ok(ids(guideForUser({ features: CL_FEATURES, isExpenseReviewer: true })).includes("gastos-gestion"));
+    assert.ok(ids(guideForUser({ features: CL_FEATURES, isAdmin: true })).includes("vacaciones-gestion"));
+  });
+
+  it("procedimientos apunta a la carpeta del área para un usuario normal", () => {
+    const user = guideForUser({ features: CL_FEATURES, isAdmin: false, workAreaId: 7 });
+    const admin = guideForUser({ features: CL_FEATURES, isAdmin: true, workAreaId: 7 });
+    assert.equal(resolvePage("procedimientos", user).href, "/procesos/procedimientos/7");
+    assert.equal(resolvePage("procedimientos", admin).href, "/procesos/procedimientos");
+  });
+
+  it("reconoce la página actual por la ruta más específica", () => {
+    const admin = guideForUser({ features: CL_FEATURES, isAdmin: true });
+    assert.equal(findEntryForPath("/RRHH/vacaciones/gestion/12", admin).id, "vacaciones-gestion");
+    assert.equal(findEntryForPath("/RRHH/vacaciones", admin).id, "vacaciones");
+    assert.equal(findEntryForPath("/gastos/nueva/rendicion", admin).id, "gastos-rendicion");
+    assert.equal(findEntryForPath("/gastos/42", admin).id, "gastos-mis-solicitudes");
+    assert.equal(findEntryForPath("/no-existe", admin), null);
+  });
+
+  it("open_page no resuelve portales externos, ids desconocidos ni páginas ocultas", () => {
+    const user = guideForUser({ features: CL_FEATURES, isAdmin: false });
+    assert.equal(resolvePage("rex", user), null);
+    assert.equal(resolvePage("/gastos", user), null);
+    assert.equal(resolvePage("feriados", user), null);
+    assert.equal(resolvePage("mis-vacaciones", user).href, "/RRHH/vacaciones/mis-vacaciones");
+  });
+
+  it("compara rutas sin query ni barra final", () => {
+    assert.ok(isSamePage("/gastos", "/gastos/"));
+    assert.ok(isSamePage("/RRHH/personal", "/RRHH/personal?q=ana"));
+    assert.equal(isSamePage("/gastos", "/gastos/gestion"), false);
+  });
+
+  it("el prompt sólo lista lo visible", () => {
+    const text = formatGuideForPrompt(guideForUser({ features: PE_FEATURES, isAdmin: false }));
+    assert.match(text, /gastos-rendicion/);
+    assert.doesNotMatch(text, /Soporte TI/);
+    assert.doesNotMatch(text, /Rex\+/);
+  });
+});
+
+describe("assistantTools — ejecución en el servidor", () => {
+  const entries = guideForUser({ features: CL_FEATURES, isAdmin: false });
+
+  it("open_page ofrece sólo ids internos del catálogo del usuario", () => {
+    const openPage = buildToolDefinitions(entries).find((tool) => tool.name === "open_page");
+    const allowed = openPage.input_schema.properties.page_id.enum;
+    assert.ok(allowed.includes("gastos-rendicion"));
+    assert.equal(allowed.includes("salesforce"), false);
+    assert.equal(allowed.includes("feriados"), false);
+  });
+
+  it("open_page programa la navegación y no navega a la página actual", async () => {
+    const elsewhere = createToolExecutor({ entries, currentPath: "/" });
+    const ok = await elsewhere.execute("open_page", { page_id: "gastos-rendicion" });
+    assert.equal(ok.isError, undefined);
+    assert.deepEqual(elsewhere.getNavigation(), { href: "/gastos/nueva/rendicion", label: "Rendir gastos" });
+
+    const here = createToolExecutor({ entries, currentPath: "/gastos/nueva/rendicion/" });
+    await here.execute("open_page", { page_id: "gastos-rendicion" });
+    assert.equal(here.getNavigation(), null);
+  });
+
+  it("open_page rechaza lo que no está permitido", async () => {
+    const executor = createToolExecutor({ entries, currentPath: "/" });
+    const result = await executor.execute("open_page", { page_id: "feriados" });
+    assert.equal(result.isError, true);
+    assert.equal(executor.getNavigation(), null);
+  });
+
+  it("las búsquedas usan el servicio inyectado y devuelven un enlace al directorio", async () => {
+    const executor = createToolExecutor({
+      entries,
+      currentPath: "/",
+      searchPeople: async (query) => [{ nombre: `Ana ${query}` }],
+      searchDocuments: async () => {
+        throw new Error("BD caída");
+      },
+    });
+    const people = JSON.parse((await executor.execute("search_people", { query: "Pérez" })).content);
+    assert.equal(people.total, 1);
+    assert.equal(people.enlace_directorio, "/RRHH/personal?q=P%C3%A9rez");
+
+    const docs = await executor.execute("search_documents", { query: "reglamento" });
+    assert.equal(docs.isError, true);
+    assert.equal((await executor.execute("search_people", { query: "  " })).isError, true);
+  });
+
+  it("sanitizePage sólo acepta rutas internas", () => {
+    assert.deepEqual(sanitizePage({ path: "/gastos?x=1", title: "Gastos" }), { path: "/gastos", title: "Gastos" });
+    assert.equal(sanitizePage({ path: "https://evil.test/" }).path, "/");
+    assert.equal(sanitizePage({ path: "//evil.test" }).path, "/");
+    assert.equal(sanitizePage(null).path, "/");
+  });
+
+  it("el contexto nombra la página actual del catálogo", () => {
+    const prompt = buildContextPrompt({
+      entries,
+      page: { path: "/RRHH/vacaciones", title: "Vacaciones | Intranet" },
+      user: { nombre: "Ana Pérez", area: "TI" },
+      isAdmin: false,
+      isExpenseReviewer: false,
+      features: CL_FEATURES,
+    });
+    assert.match(prompt, /Vacaciones \(`vacaciones`\)/);
+    assert.match(prompt, /área: TI/);
+  });
+});
+
+describe("directorySearch — lo que viaja al modelo", () => {
+  it("una persona sólo expone nombre, correo, teléfono y área", () => {
+    const person = toPublicPerson({
+      first_name: "Ana",
+      last_name: "Pérez",
+      email: "ana@transworld.cl",
+      phone: null,
+      area_name: "TI",
+      national_id: "12345678-5",
+      birth_date: "1990-01-01",
+      role: "Administrador",
+    });
+    assert.deepEqual(Object.keys(person).sort(), ["area", "email", "nombre", "telefono"]);
+    assert.equal(person.nombre, "Ana Pérez");
+  });
+
+  it("los términos ignoran palabras de una letra y escapan comodines", () => {
+    assert.deepEqual(searchTerms("  a Ana  de   Pérez "), ["Ana", "de", "Pérez"]);
+    assert.equal(likePattern("50%_x"), "%50\\%\\_x%");
+  });
+
+  it("la ubicación de un documento sigue el menú de Procesos", () => {
+    assert.equal(documentLabel({ type: "reglamento" }), "Reglamento interno");
+    assert.equal(documentLabel({ type: "otros" }), "Otros documentos");
+    assert.equal(documentLabel({ doc_kind: "protocolo", area_name: "Logística" }), "Protocolos · Logística");
+  });
+});
+
+describe("claudeService.runAssistantTurn — ciclo de tools", () => {
+  process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "test-key";
+  const claudeService = require("../src/services/claudeService");
+
+  function fakeStream(message, deltas) {
+    return {
+      async *[Symbol.asyncIterator]() {
+        for (const text of deltas) {
+          yield { type: "content_block_delta", delta: { type: "text_delta", text } };
+        }
+      },
+      finalMessage: async () => message,
+    };
+  }
+
+  function withFakeClient(streams) {
+    const requests = [];
+    claudeService.client = {
+      messages: {
+        stream: (params) => {
+          requests.push(JSON.parse(JSON.stringify(params)));
+          return streams.shift();
+        },
+      },
+    };
+    return requests;
+  }
+
+  const toolUseRound = () =>
+    fakeStream(
+      {
+        stop_reason: "tool_use",
+        usage: { input_tokens: 10, output_tokens: 5 },
+        content: [
+          { type: "text", text: "Te llevo." },
+          { type: "tool_use", id: "tu_1", name: "open_page", input: { page_id: "vacaciones" } },
+        ],
+      },
+      ["Te llevo."],
+    );
+
+  it("ejecuta el tool, devuelve el resultado y junta el texto de las rondas", async () => {
+    const requests = withFakeClient([
+      toolUseRound(),
+      fakeStream({ stop_reason: "end_turn", usage: { input_tokens: 20, output_tokens: 3 }, content: [] }, ["Listo."]),
+    ]);
+    const events = [];
+    const calls = [];
+    const result = await claudeService.runAssistantTurn([{ role: "user", content: "vacaciones" }], "claude-haiku-4-5", {
+      system: "s",
+      tools: [{ name: "open_page", input_schema: { type: "object" } }],
+      executeTool: async (name, input) => {
+        calls.push([name, input]);
+        return { content: "ok" };
+      },
+      onEvent: (ev) => events.push(ev),
+    });
+
+    assert.equal(result.text, "Te llevo.\n\nListo.");
+    assert.deepEqual(result.usage, { input_tokens: 30, output_tokens: 8 });
+    assert.deepEqual(calls, [["open_page", { page_id: "vacaciones" }]]);
+    assert.ok(events.some((ev) => ev.type === "tool" && ev.name === "open_page"));
+    const toolResult = requests[1].messages.at(-1);
+    assert.equal(toolResult.role, "user");
+    assert.deepEqual(toolResult.content, [{ type: "tool_result", tool_use_id: "tu_1", content: "ok" }]);
+    assert.equal(requests[1].tool_choice, undefined);
+  });
+
+  it("en la última ronda obliga a responder con texto", async () => {
+    const requests = withFakeClient([
+      toolUseRound(),
+      fakeStream({ stop_reason: "end_turn", usage: {}, content: [] }, ["Fin."]),
+    ]);
+    await claudeService.runAssistantTurn([{ role: "user", content: "x" }], "claude-haiku-4-5", {
+      tools: [{ name: "open_page", input_schema: { type: "object" } }],
+      executeTool: async () => ({ content: "ok" }),
+      maxToolRounds: 1,
+    });
+    assert.deepEqual(requests[1].tool_choice, { type: "none" });
+    assert.equal(requests.length, 2);
+  });
+});
