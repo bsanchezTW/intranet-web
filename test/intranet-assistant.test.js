@@ -222,7 +222,7 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
     ]);
     const events = [];
     const calls = [];
-    const result = await claudeService.runAssistantTurn([{ role: "user", content: "vacaciones" }], "claude-haiku-4-5", {
+    const result = await claudeService.runAssistantTurn([{ role: "user", content: "vacaciones" }], {
       system: "s",
       tools: [{ name: "open_page", input_schema: { type: "object" } }],
       executeTool: async (name, input) => {
@@ -240,6 +240,10 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
     assert.equal(toolResult.role, "user");
     assert.deepEqual(toolResult.content, [{ type: "tool_result", tool_use_id: "tu_1", content: "ok" }]);
     assert.equal(requests[1].tool_choice, undefined);
+    // Un solo modelo, esfuerzo bajo y sin razonamiento extendido.
+    assert.equal(requests[0].model, "claude-sonnet-5");
+    assert.deepEqual(requests[0].output_config, { effort: "low" });
+    assert.equal(requests[0].thinking, undefined);
   });
 
   it("en la última ronda obliga a responder con texto", async () => {
@@ -247,12 +251,42 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
       toolUseRound(),
       fakeStream({ stop_reason: "end_turn", usage: {}, content: [] }, ["Fin."]),
     ]);
-    await claudeService.runAssistantTurn([{ role: "user", content: "x" }], "claude-haiku-4-5", {
+    await claudeService.runAssistantTurn([{ role: "user", content: "x" }], {
       tools: [{ name: "open_page", input_schema: { type: "object" } }],
       executeTool: async () => ({ content: "ok" }),
       maxToolRounds: 1,
     });
     assert.deepEqual(requests[1].tool_choice, { type: "none" });
     assert.equal(requests.length, 2);
+  });
+});
+
+describe("assistantConversation — una conversación por sesión", () => {
+  const {
+    MAX_HISTORY_MESSAGES,
+    getHistory,
+    appendExchange,
+    clearConversation,
+  } = require("../src/services/assistant/assistantConversation");
+
+  it("guarda pregunta y respuesta en la sesión y se borra al pedirlo", () => {
+    const session = {};
+    assert.deepEqual(getHistory(session), []);
+    appendExchange(session, "hola", "¡Hola!");
+    assert.deepEqual(getHistory(session), [
+      { role: "user", content: "hola" },
+      { role: "assistant", content: "¡Hola!" },
+    ]);
+    clearConversation(session);
+    assert.deepEqual(getHistory(session), []);
+  });
+
+  it("conserva sólo los últimos mensajes y siempre parte con el usuario", () => {
+    const session = {};
+    for (let i = 0; i < MAX_HISTORY_MESSAGES; i += 1) appendExchange(session, `p${i}`, `r${i}`);
+    const history = getHistory(session);
+    assert.equal(history.length, MAX_HISTORY_MESSAGES);
+    assert.equal(history[0].role, "user");
+    assert.equal(history.at(-1).content, `r${MAX_HISTORY_MESSAGES - 1}`);
   });
 });

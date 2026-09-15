@@ -1,0 +1,55 @@
+<%#
+  Asistente de ayuda: botón flotante y chat pequeño que sale de él.
+  Una sola conversación, guardada en la sesión (se borra al cerrar sesión).
+  El largo máximo del mensaje coincide con MAX_MESSAGE_CHARS del servidor.
+%>
+<%
+  const assistantFirstName = (typeof displayName === 'string' && displayName !== 'Usuario')
+    ? displayName.split(' ')[0]
+    : '';
+%>
+<button type="button" class="claude-fab" id="claudeFab" aria-controls="claudePanel" aria-expanded="false" aria-label="Abrir asistente de ayuda de la intranet">
+  <%- include('claude-logo', { logoClass: 'claude-fab-logo' }) %>
+  <svg class="claude-fab-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  <span class="claude-fab-tooltip" role="tooltip">¿Te ayudo a encontrar algo?</span>
+</button>
+
+<section class="claude-panel" id="claudePanel" role="dialog" aria-labelledby="claudePanelTitle" hidden>
+  <header class="claude-panel__header">
+    <span class="claude-panel__avatar"><%- include('claude-logo') %></span>
+    <div class="claude-panel__heading">
+      <h2 id="claudePanelTitle">Asistente Transworld</h2>
+      <p>Te ayudo a moverte por la intranet</p>
+    </div>
+    <button type="button" class="claude-panel__icon" id="claudeReset" title="Empezar de nuevo" aria-label="Borrar la conversación y empezar de nuevo">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    </button>
+    <button type="button" class="claude-panel__icon" id="claudeClose" title="Cerrar" aria-label="Cerrar asistente">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg>
+    </button>
+  </header>
+
+  <div class="claude-panel__body" id="claudeScroll">
+    <div class="claude-welcome" id="claudeWelcome">
+      <p class="claude-welcome__hello">¡Hola<%= assistantFirstName ? ', ' + assistantFirstName : '' %>! ¿En qué te ayudo?</p>
+      <p>Te digo dónde está cada cosa y cómo se usa, busco personas y documentos, y te llevo a la página que necesitas.</p>
+      <div class="claude-chips">
+        <button type="button" class="claude-chip" data-send="¿Cómo pido vacaciones?">¿Cómo pido vacaciones?</button>
+        <button type="button" class="claude-chip" data-prompt="Busca a ">Buscar a una persona</button>
+        <% if (features.expenseCenter) { %>
+        <button type="button" class="claude-chip" data-send="¿Dónde rindo gastos?">¿Dónde rindo gastos?</button>
+        <% } %>
+        <button type="button" class="claude-chip" data-send="¿Qué puedo hacer en esta página?">¿Qué puedo hacer aquí?</button>
+      </div>
+    </div>
+    <div class="claude-thread" id="claudeThread" aria-live="polite"></div>
+  </div>
+
+  <form class="claude-composer" id="claudeForm">
+    <textarea id="claudeInput" rows="1" maxlength="2000" placeholder="Escribe tu pregunta…" aria-label="Mensaje para el asistente"></textarea>
+    <button type="submit" class="claude-composer__send" id="claudeSend" aria-label="Enviar" disabled>
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+    </button>
+  </form>
+  <p class="claude-panel__hint">Puede equivocarse. La conversación se borra al cerrar sesión.</p>
+</section>

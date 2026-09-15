@@ -17,8 +17,7 @@
     <% } %>
     <link rel="stylesheet" href="/css/home.css?v=20260911a">
     <% if (typeof usuario !== 'undefined' && usuario && features.claudeAssistant) { %>
-    <link rel="stylesheet" href="/css/claude-fab.css?v=20260910n">
-    <link rel="stylesheet" href="/css/claude-chat.css?v=20260915a">
+    <link rel="stylesheet" href="/css/claude-assistant.css?v=20260915b">
     <% } %>
     <script>
       // Sin defer y en el head: la clase se pone en cuanto el documento está
@@ -259,12 +258,10 @@
 </footer>
 
 <% if (currentUser && features.claudeAssistant) { %>
-  <%- include('partials/claude-fab') %>
-  <%- include('partials/claude-modal') %>
+  <%- include('partials/claude-assistant', { displayName }) %>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.11/dist/purify.min.js"></script>
-  <script src="/js/claude-chat.js?v=20260915a"></script>
-  <script src="/js/claude-modal.js?v=20260915a"></script>
+  <script src="/js/claude-assistant.js?v=20260915b"></script>
 <% } %>
 
 <% if (typeof extraJs !== 'undefined' && Array.isArray(extraJs)) { %>
