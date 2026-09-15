@@ -121,13 +121,23 @@ const DDL_STATEMENTS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_expense_attachments_request
      ON expense_request_attachments (request_id)`,
+  // Rendición: el comprobante es de una línea. Fondos y solicitudes viejas
+  // siguen con item_id NULL (van al pie de la solicitud).
+  `ALTER TABLE expense_request_attachments
+     ADD COLUMN IF NOT EXISTS item_id BIGINT
+     REFERENCES expense_request_items(id) ON DELETE SET NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_expense_attachments_item
+     ON expense_request_attachments (item_id)
+     WHERE item_id IS NOT NULL`,
 
-  // --- Categoría y días por línea ------------------------------------------
+  // --- Categoría, días y extra por línea -----------------------------------
   // Admiten NULL por las líneas anteriores a la categoría; las nuevas las exige
   // expenseRequestService.normalizeItems. Los días sólo aplican a hospedaje.
+  // `details` guarda el extra de combustible (rendimiento, km, precio/L, litros).
   `ALTER TABLE expense_request_items ADD COLUMN IF NOT EXISTS category VARCHAR(30)`,
   `ALTER TABLE expense_request_items ADD COLUMN IF NOT EXISTS days SMALLINT
      CHECK (days IS NULL OR days > 0)`,
+  `ALTER TABLE expense_request_items ADD COLUMN IF NOT EXISTS details JSONB`,
 
   // --- Datos bancarios -----------------------------------------------------
   // PK = código SBIF: es el identificador que citan las nóminas de pago.

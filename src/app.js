@@ -790,6 +790,12 @@ function listenAndLog(args, bindLabel) {
   const server = app.listen(...args, () => onHttpListening(bindLabel));
   server.on("error", (err) => {
     logger.error("http", err);
+    // Si el puerto está ocupado el proceso igual abre el pool de Postgres.
+    // Varias instancias `npm run dev:cl` agotan el pooler (máx. 15) y /gastos
+    // responde "Error cargando tus solicitudes".
+    if (err && err.code === "EADDRINUSE") {
+      process.exit(1);
+    }
   });
   return server;
 }

@@ -1,15 +1,48 @@
 <%
-/* Menú del módulo. Cada acceso declara su destino en un solo lugar: así añadir
-   un portal es tocar el arreglo, no duplicar 12 líneas de marcado. */
+const admin = typeof isAdministrador !== 'undefined' && isAdministrador;
+const hayCentros = Boolean(features && features.expenseCenter);
+const hayPortales = Boolean(features && features.chileHrPortals);
+const pais = (typeof countryConfig !== 'undefined' && countryConfig && countryConfig.name)
+  ? countryConfig.name
+  : 'la empresa';
+
 const INTERNOS = [
   { href: '/RRHH/organigrama', icono: 'building', titulo: 'Organigrama', desc: 'Estructura general y departamentos.' },
-  { href: '/RRHH/personal', icono: 'users', titulo: 'Personal', desc: 'Directorio de gestión y registro de colaboradores.' },
-  { href: '/RRHH/areas', icono: 'layers', titulo: 'Áreas', desc: 'Gestionar áreas de trabajo y colaboradores asignados.' },
-  { href: '/RRHH/centros-costo', icono: 'briefcase', titulo: 'Centros de costo', desc: 'Definir centros y a cuáles rinde gastos cada colaborador.' },
-  { href: '/RRHH/vacaciones', icono: 'umbrella', titulo: 'Vacaciones', desc: 'Solicita y gestiona vacaciones.' },
+  { href: '/RRHH/personal', icono: 'users', titulo: 'Personal', desc: 'Directorio de gestión y registro de colaboradores.', verde: true },
+  { href: '/RRHH/vacaciones', icono: 'umbrella', titulo: 'Vacaciones', desc: 'Consulta tu saldo, solicita días y revisa el calendario.' },
 ];
 
-const EXTERNOS = features.chileHrPortals
+const ADMINISTRACION = [
+  { href: '/RRHH/areas', icono: 'layers', titulo: 'Áreas', desc: 'Gestionar áreas de trabajo y colaboradores asignados.' },
+];
+if (hayCentros) {
+  ADMINISTRACION.push({
+    href: '/RRHH/centros-costo',
+    icono: 'briefcase',
+    titulo: 'Centros de costo',
+    desc: 'Definir centros y a cuáles rinde gastos cada colaborador.',
+    verde: true,
+  });
+}
+if (admin) {
+  ADMINISTRACION.push(
+    {
+      href: '/RRHH/vacaciones/gestion',
+      icono: 'inbox',
+      titulo: 'Gestión de vacaciones',
+      desc: 'Aprueba o rechaza solicitudes y ajusta los saldos del equipo.',
+    },
+    {
+      href: '/RRHH/vacaciones/feriados',
+      icono: 'flag',
+      titulo: 'Feriados',
+      desc: 'Administra los feriados de ' + pais + '.',
+      verde: true,
+    },
+  );
+}
+
+const EXTERNOS = hayPortales
   ? [
       { href: 'https://transworld.rexmas.com/', img: '/img/logo_rex.png', titulo: 'Rex+', desc: 'Portal del colaborador y liquidaciones.' },
       { href: 'https://www.achs.cl/', img: '/img/achs.png', titulo: 'ACHS', desc: 'Seguridad y salud ocupacional.' },
@@ -18,7 +51,7 @@ const EXTERNOS = features.chileHrPortals
   : [];
 %>
 
-<link rel="stylesheet" href="/css/rrhh.css?v=20260729a">
+<link rel="stylesheet" href="/css/procesos.css?v=20260915a">
 
 <div class="contenedor">
   <div class="page-header">
@@ -28,33 +61,84 @@ const EXTERNOS = features.chileHrPortals
     </p>
   </div>
 
-  <h3 class="rrhh-section-title">Plataformas Internas</h3>
-  <div class="grid-opciones-exec">
-    <% INTERNOS.forEach(item => { %>
-      <a href="<%= item.href %>" class="card-opcion-exec">
-        <span class="link-type-badge badge-interno">Interno</span>
-        <div class="card-icon-wrapper"><%- include('../partials/icon', { name: item.icono }) %></div>
-        <div class="card-content">
-          <h3 class="card-title"><%= item.titulo %></h3>
-          <p class="card-desc"><%= item.desc %></p>
-        </div>
-      </a>
-    <% }) %>
-  </div>
+  <!-- ═══════════ Plataformas internas ═══════════ -->
+  <section class="seccion" aria-labelledby="seccion-internas">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="seccion-internas">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'users' }) %></span>
+          Plataformas internas
+        </h3>
+        <p class="seccion__desc">Organigrama, directorio de colaboradores y vacaciones.</p>
+      </div>
+    </div>
+
+    <div class="procesos-grid">
+      <% INTERNOS.forEach(item => { %>
+        <a href="<%= item.href %>" class="procesos-card">
+          <span class="procesos-card__tile<%= item.verde ? ' procesos-card__tile--green' : '' %>" aria-hidden="true"><%- include('../partials/icon', { name: item.icono }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo"><%= item.titulo %></h4>
+            <p class="procesos-card__desc"><%= item.desc %></p>
+          </div>
+        </a>
+      <% }) %>
+    </div>
+  </section>
+
+  <!-- ═══════════ Administración ═══════════ -->
+  <section class="seccion" aria-labelledby="seccion-admin">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="seccion-admin">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'settings' }) %></span>
+          Administración
+        </h3>
+        <p class="seccion__desc">
+          Áreas<% if (hayCentros) { %>, centros de costo<% } %><% if (admin) { %> y la gestión de vacaciones<% } %>.
+        </p>
+      </div>
+    </div>
+
+    <div class="procesos-grid">
+      <% ADMINISTRACION.forEach(item => { %>
+        <a href="<%= item.href %>" class="procesos-card">
+          <span class="procesos-card__tile<%= item.verde ? ' procesos-card__tile--green' : '' %>" aria-hidden="true"><%- include('../partials/icon', { name: item.icono }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo"><%= item.titulo %></h4>
+            <p class="procesos-card__desc"><%= item.desc %></p>
+          </div>
+        </a>
+      <% }) %>
+    </div>
+  </section>
 
   <% if (EXTERNOS.length) { %>
-  <h3 class="rrhh-section-title">Portales Externos</h3>
-  <div class="grid-opciones-exec">
-    <% EXTERNOS.forEach(item => { %>
-      <a href="<%= item.href %>" target="_blank" rel="noopener noreferrer" class="card-opcion-exec">
-        <span class="link-type-badge badge-externo">Externo <span class="external-icon" aria-hidden="true">↗</span></span>
-        <div class="card-icon-wrapper"><img src="<%= item.img %>" alt=""></div>
-        <div class="card-content">
-          <h3 class="card-title"><%= item.titulo %> <span class="sr-only">(se abre en una pestaña nueva)</span></h3>
-          <p class="card-desc"><%= item.desc %></p>
-        </div>
-      </a>
-    <% }) %>
-  </div>
+  <!-- ═══════════ Portales externos ═══════════ -->
+  <section class="seccion" aria-labelledby="seccion-externos">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="seccion-externos">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'external-link' }) %></span>
+          Portales externos
+        </h3>
+        <p class="seccion__desc">Sitios de beneficios, liquidaciones y salud ocupacional.</p>
+      </div>
+    </div>
+
+    <div class="procesos-grid">
+      <% EXTERNOS.forEach(item => { %>
+        <a href="<%= item.href %>" class="procesos-card" target="_blank" rel="noopener noreferrer">
+          <span class="procesos-card__tile procesos-card__tile--logo" aria-hidden="true">
+            <img src="<%= item.img %>" alt="">
+          </span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo"><%= item.titulo %> <span class="sr-only">(se abre en una pestaña nueva)</span></h4>
+            <p class="procesos-card__desc"><%= item.desc %></p>
+          </div>
+        </a>
+      <% }) %>
+    </div>
+  </section>
   <% } %>
 </div>

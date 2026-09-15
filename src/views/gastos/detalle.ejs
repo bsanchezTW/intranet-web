@@ -7,11 +7,12 @@
   const conHora = { year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
 
   const solicitante = s.requester_display_name || 'Colaborador';
-  // La columna de días sólo aparece si alguna línea es de hospedaje.
-  const hayDias = s.items.some((item) => item.days);
-  const columnasTotal = hayDias ? 4 : 3;
+  const columnasTotal = 3;
   // El saldo no se guarda: gastado menos asignado (NULL = reembolso).
   const esRendicion = s.kind === 'rendicion';
+  function esImagenComprobante(adjunto) {
+    return /\.(jpe?g|png|webp|gif)$/i.test(String((adjunto && (adjunto.name || adjunto.url)) || ''));
+  }
   const balance = esRendicion ? fundBalance(s.total_amount, s.assigned_amount) : null;
   const textoSaldo = { devolver: 'Debe devolver', pagar: 'A pagar al colaborador', cerrado: 'Sin saldo' };
   const liquidar = (typeof puedeLiquidar !== 'undefined' && puedeLiquidar);
@@ -108,7 +109,15 @@
       <section class="gasto-bloque">
         <h3 class="gasto-bloque__title">Rendición del fondo</h3>
         <dl class="gasto-ficha__lista">
-          <div><dt>Estado</dt><dd><%= fundStateLabel(s.fundState) %></dd></div>
+          <div><dt>Estado</dt><dd>
+            <% if (s.overdue) { %>
+              <span class="fondo-estado fondo-estado--vencido">Plazo vencido</span>
+              <span> · Debió rendir hasta el <%= formatExpenseDate(s.reportDueOn) %></span>
+            <% } else { %>
+              <%= fundStateLabel(s.fundState) %>
+              <% if (s.reportDueOn) { %> · Rinde hasta el <%= formatExpenseDate(s.reportDueOn) %><% } %>
+            <% } %>
+          </dd></div>
           <% (s.rendiciones || []).forEach((r) => { %>
             <div>
               <dt>Rendición #<%= r.id %></dt>
@@ -125,7 +134,7 @@
         <dl class="gasto-ficha__lista">
           <div><dt>Lugar de destino</dt><dd><%= s.destination || '—' %></dd></div>
           <div>
-            <dt>Período de gastos</dt>
+            <dt><%= s.kind === 'fondos' ? 'Período del viaje' : 'Período de gastos' %></dt>
             <dd>
               <%= fecha(s.period_start, fechaCorta) %><% if (s.period_end && String(s.period_end) !== String(s.period_start)) { %> – <%= fecha(s.period_end, fechaCorta) %><% } %>
             </dd>
@@ -157,13 +166,6 @@
       </section>
       <% } %>
 
-      <% if (s.needed_by) { %>
-      <section class="gasto-bloque">
-        <h3 class="gasto-bloque__title">Requerido para</h3>
-        <p><%= fecha(s.needed_by, fechaLarga) %></p>
-      </section>
-      <% } %>
-
       <section class="gasto-bloque">
         <h3 class="gasto-bloque__title">Desglose</h3>
         <div class="gasto-tabla-wrap">
@@ -173,7 +175,6 @@
                 <th style="width: 110px;">Fecha</th>
                 <th style="width: 150px;">Categoría</th>
                 <th>Detalle</th>
-                <% if (hayDias) { %><th class="gasto-tabla__monto" style="width: 70px;">Días</th><% } %>
                 <th class="gasto-tabla__monto" style="width: 140px;">Monto</th>
               </tr>
             </thead>
@@ -182,8 +183,25 @@
                 <tr>
                   <td><%= fecha(item.item_date, fechaCorta) %></td>
                   <td><%= expenseCategoryLabel(item.category) %></td>
-                  <td><%= item.detail %></td>
-                  <% if (hayDias) { %><td class="gasto-tabla__monto"><%= item.days || '—' %></td><% } %>
+                  <td>
+                    <%= item.detail %>
+                    <% if (formatFuelDetails(item.details)) { %>
+                      <span class="gasto-tabla__extra"><%= formatFuelDetails(item.details) %></span>
+                    <% } %>
+                    <% if (item.days) { %>
+                      <span class="gasto-tabla__extra"><%= item.days === 1 ? '1 día' : item.days + ' días' %></span>
+                    <% } %>
+                    <% (item.attachments || []).forEach((a) => { %>
+                      <% if (esImagenComprobante(a)) { %>
+                        <a class="gasto-tabla__extra gasto-tabla__adjunto gasto-tabla__adjunto--foto" href="<%= a.url %>" target="_blank" rel="noopener">
+                          <img class="gasto-tabla__thumb" src="<%= a.url %>" alt="<%= a.name %>">
+                          <span class="gasto-tabla__adjunto-nombre"><%= a.name %></span>
+                        </a>
+                      <% } else { %>
+                        <a class="gasto-tabla__extra gasto-tabla__adjunto" href="<%= a.url %>" target="_blank" rel="noopener"><%= a.name %></a>
+                      <% } %>
+                    <% }) %>
+                  </td>
                   <td class="gasto-tabla__monto"><%= formatMoney(item.amount) %></td>
                 </tr>
               <% }) %>
@@ -208,13 +226,20 @@
         </div>
       </section>
 
+      <% if (s.kind !== 'rendicion' || s.attachments.length) { %>
       <section class="gasto-bloque">
         <h3 class="gasto-bloque__title">Comprobantes</h3>
         <% if (s.attachments.length) { %>
           <ul class="gasto-adjuntos">
             <% s.attachments.forEach((a) => { %>
-              <li class="gasto-adjunto">
-                <span aria-hidden="true"><%- include('../partials/icon', { name: 'paperclip' }) %></span>
+              <li class="gasto-adjunto<%= esImagenComprobante(a) ? ' gasto-adjunto--foto' : '' %>">
+                <% if (esImagenComprobante(a)) { %>
+                  <a class="gasto-adjunto__foto" href="<%= a.url %>" target="_blank" rel="noopener">
+                    <img class="gasto-tabla__thumb" src="<%= a.url %>" alt="<%= a.name %>">
+                  </a>
+                <% } else { %>
+                  <span aria-hidden="true"><%- include('../partials/icon', { name: 'paperclip' }) %></span>
+                <% } %>
                 <a class="gasto-adjunto__nombre" href="<%= a.url %>" target="_blank" rel="noopener"><%= a.name %></a>
               </li>
             <% }) %>
@@ -223,6 +248,7 @@
           <p style="color: var(--color-text-muted); font-size: 0.92rem;">Sin comprobantes adjuntos.</p>
         <% } %>
       </section>
+      <% } %>
 
       <section class="gasto-bloque">
         <h3 class="gasto-bloque__title">Seguimiento</h3>
@@ -357,9 +383,8 @@
       <% } %>
 
       <% if (puedeAnular) { %>
-        <form method="POST" action="/gastos/<%= s.id %>/cancelar" class="gasto-acciones"
-              onsubmit="return confirm('¿Anular esta solicitud? No se puede deshacer.');">
-          <button type="submit" class="gasto-btn-secundario">Anular solicitud</button>
+        <form method="POST" action="/gastos/<%= s.id %>/cancelar" class="gasto-acciones" id="formAnularGasto">
+          <button type="button" class="gasto-btn-secundario" id="btnAnularGasto">Anular solicitud</button>
         </form>
       <% } %>
     </footer>
@@ -367,6 +392,46 @@
 
   </article>
 </div>
+
+<% if (puedeAnular) { %>
+<div id="modalAnularGasto" class="modal-overlay gasto-modal" role="dialog" aria-modal="true"
+     aria-labelledby="modalAnularTitulo" aria-hidden="true">
+  <div class="modal-content modal-panel--flush gasto-modal__panel gasto-confirm">
+    <div class="gasto-modal__head">
+      <h2 class="modal-title gasto-modal__titulo" id="modalAnularTitulo">Anular solicitud</h2>
+      <button type="button" class="gasto-modal__cerrar" data-modal-close aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="gasto-modal__body">
+      <p>La solicitud <strong>#<%= s.id %></strong> quedará anulada y se conservará en tu historial, con su desglose y comprobantes.</p>
+      <p class="gasto-confirm__aviso">Esta acción no se puede deshacer. Dejará de estar en curso y no se enviará a aprobación.</p>
+    </div>
+    <div class="gasto-modal__foot gasto-confirm__acciones">
+      <button type="button" class="gasto-btn-secundario" data-modal-close>Volver</button>
+      <button type="submit" class="gasto-btn-peligro" form="formAnularGasto" id="btnConfirmarAnular">Anular solicitud</button>
+    </div>
+  </div>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    "use strict";
+    var overlay = document.getElementById("modalAnularGasto");
+    var abrir = document.getElementById("btnAnularGasto");
+    var form = document.getElementById("formAnularGasto");
+    var confirmar = document.getElementById("btnConfirmarAnular");
+    if (!overlay || !abrir || !window.IntranetModal) return;
+
+    abrir.addEventListener("click", function () {
+      window.IntranetModal.open(overlay);
+    });
+    if (form && confirmar) {
+      form.addEventListener("submit", function () {
+        confirmar.disabled = true;
+        abrir.disabled = true;
+      });
+    }
+  });
+</script>
+<% } %>
 
 <% if (puedeResolver) { %>
 <script>

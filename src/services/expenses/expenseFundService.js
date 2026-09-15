@@ -1,5 +1,7 @@
 const db = require("../../db");
 const { EXPENSE_STATUS, EXPENSE_KIND } = require("../../constants/expenseStatuses");
+const { annotateFundDeadline, reportDueOn, asDateOnly } = require("./expenseReportDeadline");
+const { todayInCountry } = require("../../utils/vacationDateUtils");
 
 /**
  * Fondos asignados: la relación entre una solicitud de fondos y su rendición.
@@ -93,7 +95,7 @@ function parseFundChoice(raw) {
  */
 const FUNDS_SQL = `
   SELECT f.id, f.title, f.total_amount, f.status, f.cost_center_id, f.cost_center_code,
-         f.created_at, f.finance_reviewed_at,
+         f.created_at, f.finance_reviewed_at, f.destination, f.period_start, f.period_end,
          r.id AS rendicion_id, r.status AS rendicion_status
     FROM expense_requests f
     LEFT JOIN LATERAL (
@@ -112,19 +114,28 @@ const FUNDS_SQL = `
  * Resumen para la card "Mis fondos" y para el selector del modal.
  * `settlementRows` son las rendiciones aprobadas aún sin liquidar.
  */
-function summarizeFunds(fundRows, settlementRows = []) {
+function summarizeFunds(fundRows, settlementRows = [], today = todayInCountry()) {
   const abiertos = [];
   for (const row of fundRows) {
     if (!countsTowardLimit(row.status, row.rendicion_status)) continue;
     const state = fundState(row.status, row.rendicion_status);
-    abiertos.push({
-      ...row,
-      total_amount: Number(row.total_amount),
-      state,
-      stateLabel: fundStateLabel(state),
-    });
+    abiertos.push(
+      annotateFundDeadline(
+        {
+          ...row,
+          total_amount: Number(row.total_amount),
+          destination: row.destination || "",
+          period_start: asDateOnly(row.period_start),
+          period_end: asDateOnly(row.period_end),
+          state,
+          stateLabel: fundStateLabel(state),
+        },
+        today,
+      ),
+    );
   }
   const porRendir = abiertos.filter((fund) => fund.state === "por_rendir");
+  const vencidos = porRendir.filter((fund) => fund.overdue);
 
   return {
     max: MAX_OPEN_FUNDS,
@@ -133,6 +144,7 @@ function summarizeFunds(fundRows, settlementRows = []) {
     asignadoPorRendir: roundMoney(porRendir.reduce((sum, fund) => sum + fund.total_amount, 0)),
     abiertos,
     porRendir,
+    vencidos: vencidos.length,
     porLiquidar: settlementRows.map((row) => ({
       ...row,
       balance: fundBalance(row.total_amount, row.assigned_amount),
@@ -243,6 +255,69 @@ async function resolveFundForRendicion(client, { userId, choice, asDraft }) {
   return { ok: true, fundRequestId: null, assignedAmount: null };
 }
 
+async function tripFromFund(client, fundId) {
+  const { rows } = await client.query(
+    `SELECT destination, period_start, period_end
+       FROM expense_requests
+      WHERE id = $1 AND kind = $2`,
+    [fundId, EXPENSE_KIND.FONDOS],
+  );
+  return rows[0] || null;
+}
+
+const OVERDUE_FUNDS_SQL = `
+  SELECT f.id, f.title, f.total_amount, f.status, f.destination,
+         f.period_start, f.period_end, f.finance_reviewed_at,
+         f.cost_center_code, f.requester_name, f.requester_area_name,
+         COALESCE(
+           f.requester_name,
+           NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''),
+           u.email
+         ) AS requester_display_name
+    FROM expense_requests f
+    LEFT JOIN users u ON u.id = f.user_id
+    LEFT JOIN LATERAL (
+      SELECT x.status
+        FROM expense_requests x
+       WHERE x.fund_request_id = f.id
+         AND x.kind = 'rendicion'
+         AND x.status IN ('pending', 'approved_manager', 'approved_finance')
+       ORDER BY x.created_at DESC
+       LIMIT 1
+    ) r ON TRUE
+   WHERE f.kind = 'fondos'
+     AND f.status = 'approved_finance'
+     AND r.status IS NULL
+     AND f.period_end IS NOT NULL`;
+
+/** Fondos aprobados sin rendición enviada cuyo plazo de 1+5 ya venció. */
+async function listOverdueFunds(today = todayInCountry()) {
+  const { rows } = await db.query(`${OVERDUE_FUNDS_SQL} ORDER BY f.period_end ASC`);
+  return rows
+    .map((row) => {
+      const due = reportDueOn(row.period_end, row.finance_reviewed_at);
+      return {
+        ...row,
+        total_amount: Number(row.total_amount),
+        period_start: asDateOnly(row.period_start),
+        period_end: asDateOnly(row.period_end),
+        state: "por_rendir",
+        stateLabel: FUND_STATE_LABELS.por_rendir,
+        reportDueOn: due,
+        overdue: !!(due && today > due),
+      };
+    })
+    .filter((row) => row.overdue);
+}
+
+async function countOverdueFunds(today = todayInCountry()) {
+  try {
+    return (await listOverdueFunds(today)).length;
+  } catch {
+    return 0;
+  }
+}
+
 /** ¿Es esta la violación del 1:1 (dos rendiciones activas del mismo fondo)? */
 function isFundRendicionConflict(err) {
   return !!err && err.code === "23505" && err.constraint === FUND_RENDICION_UNIQUE;
@@ -292,6 +367,9 @@ module.exports = {
   getFundSummary,
   checkFundLimit,
   resolveFundForRendicion,
+  tripFromFund,
+  listOverdueFunds,
+  countOverdueFunds,
   isFundRendicionConflict,
   fundLinksFor,
 };

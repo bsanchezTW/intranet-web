@@ -31,11 +31,14 @@ const {
   bankAccountTypeLabel,
 } = require("../constants/banks");
 const {
-  ALL_EXPENSE_CATEGORIES,
+  EXPENSE_CATEGORY_GROUPS,
+  HIDDEN_EXPENSE_CATEGORIES,
   MAX_LODGING_DAYS,
   expenseCategoryLabel,
   categoryRequiresDays,
+  formatFuelDetails,
 } = require("../constants/expenseCategories");
+const { formatDisplay } = require("../utils/vacationDateUtils");
 const funds = require("../services/expenses/expenseFundService");
 
 /**
@@ -67,9 +70,11 @@ const VIEW_HELPERS = {
   expenseStageLabel,
   expenseCategoryLabel,
   categoryRequiresDays,
+  formatFuelDetails: (details) => formatFuelDetails(details, formatMoney),
   bankAccountTypeLabel,
   fundBalance: funds.fundBalance,
   fundStateLabel: funds.fundStateLabel,
+  formatExpenseDate: (value) => (value ? formatDisplay(value) : "—"),
 };
 
 function redirectOk(res, path, msg) {
@@ -142,10 +147,10 @@ router.get("/", async (req, res) => {
       ...VIEW_HELPERS,
       // procesos.css: las tarjetas de "Nueva solicitud" y el aviso de
       // requisitos son las de Procesos y Documentos.
-      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260914b"],
+      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260915g"],
       extraJs: formulario
-        ? ["/js/gastos-lista.js?v=20260914b", "/js/gastos-form.js?v=20260914b"]
-        : ["/js/gastos-lista.js?v=20260914b"],
+        ? ["/js/gastos-lista.js?v=20260915i", "/js/gastos-form.js?v=20260915g"]
+        : ["/js/gastos-lista.js?v=20260915i"],
     });
   } catch (err) {
     console.error("[Gastos] Error listando solicitudes:", err);
@@ -219,7 +224,8 @@ async function datosFormulario(user, requisitos, fondos) {
     bankAccounts.listUserAccounts(user.id),
   ]);
   return {
-    categorias: ALL_EXPENSE_CATEGORIES,
+    categoriaGrupos: EXPENSE_CATEGORY_GROUPS,
+    categoriasOcultas: HIDDEN_EXPENSE_CATEGORIES,
     // Fondos aprobados sin rendición activa: lo que se puede rendir ahora.
     fondosPorRendir: fondos ? fondos.porRendir : [],
     maxDiasHospedaje: MAX_LODGING_DAYS,
@@ -250,10 +256,9 @@ router.get("/nueva/:kind", (req, res) => {
 });
 
 /**
- * Subida de comprobantes, en dos pasos como en /procesos: este endpoint deja el
- * archivo en el bucket y devuelve la referencia; el POST de creación la
- * persiste. Un archivo subido y luego abandonado queda huérfano en el bucket,
- * igual que hoy en Procesos.
+ * Subida de comprobantes al bucket. El formulario los tiene en el navegador
+ * hasta guardar el borrador o enviar; entonces los manda aquí y el POST de
+ * /guardar los asocia y les pone el nombre definitivo.
  */
 router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
   try {
@@ -402,7 +407,9 @@ router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
       areaManager.listManagedAreas(user.id),
       financeTeam.isFinanceApprover(user),
     ]);
-    const porLiquidar = esFinanzas ? await expenses.listPendingSettlements() : [];
+    const [porLiquidar, sinRendir] = esFinanzas
+      ? await Promise.all([expenses.listPendingSettlements(), funds.listOverdueFunds()])
+      : [[], []];
 
     res.render("gastos/gestion", {
       titulo: "Gestión de solicitudes",
@@ -411,12 +418,13 @@ router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
       areasACargo,
       esFinanzas,
       porLiquidar,
+      sinRendir,
       esAdmin: isAdministrador(normalizeRole(user.role)),
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
-      extraCss: ["/css/gastos.css?v=20260914b"],
-      extraJs: ["/js/gastos-lista.js?v=20260914b"],
+      extraCss: ["/css/gastos.css?v=20260915g"],
+    extraJs: ["/js/gastos-lista.js?v=20260915i"],
     });
   } catch (err) {
     console.error("[Gastos] Error cargando la gestión:", err);
@@ -500,7 +508,7 @@ router.get("/:id", async (req, res) => {
       user,
       ...VIEW_HELPERS,
       // procesos.css: las migas de navegación son las de Procesos.
-      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260914b"],
+      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260915h"],
     });
   } catch (err) {
     console.error("[Gastos] Error abriendo el detalle:", err);

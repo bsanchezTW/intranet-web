@@ -12,6 +12,7 @@ const { isFeatureEnabled } = require("../config/features");
 const areaManager = require("../services/expenses/areaManager");
 const financeTeam = require("../services/expenses/financeTeam");
 const expenses = require("../services/expenses/expenseRequestService");
+const funds = require("../services/expenses/expenseFundService");
 
 /**
  * Procesos y Documentos.
@@ -21,8 +22,8 @@ const expenses = require("../services/expenses/expenseRequestService");
  * slugs que no tenía relación con las áreas reales: crear un área no le daba
  * carpeta y la mitad de las carpetas no correspondían a ningún área.
  *
- * `documents.type` sigue escribiéndose por compatibilidad con el buscador
- * global y con las filas históricas, pero ya no se lee para navegar.
+ * `documents.type` sigue escribiéndose por compatibilidad con las filas
+ * históricas, pero ya no se lee para navegar.
  */
 
 // Secciones que viven en `documents` con carpeta por área.
@@ -88,15 +89,20 @@ router.get("/", async (req, res) => {
     const gastosActivos = isFeatureEnabled("expenseCenter");
     let esRevisor = false;
     let pendientes = 0;
+    let fondosVencidos = 0;
+    let sinRendir = 0;
 
     if (gastosActivos) {
-      esRevisor =
-        admin ||
-        (await financeTeam.isFinanceApprover(user)) ||
-        (await areaManager.isAreaManager(user));
-      if (esRevisor) {
-        pendientes = await expenses.countPendingForReviewer(user);
-      }
+      const esFinanzas = admin || (await financeTeam.isFinanceApprover(user));
+      esRevisor = esFinanzas || (await areaManager.isAreaManager(user));
+      const [resumenFondos, pendientesCount, vencidosFinanzas] = await Promise.all([
+        funds.getFundSummary(user.id),
+        esRevisor ? expenses.countPendingForReviewer(user) : Promise.resolve(0),
+        esFinanzas ? funds.countOverdueFunds() : Promise.resolve(0),
+      ]);
+      pendientes = pendientesCount;
+      fondosVencidos = resumenFondos.vencidos || 0;
+      sinRendir = vencidosFinanzas;
     }
 
     // Conteos de la carpeta propia: el colaborador entra directo a su área, así
@@ -121,9 +127,10 @@ router.get("/", async (req, res) => {
       gastosActivos,
       esRevisor,
       pendientes,
+      fondosVencidos,
+      sinRendir,
       user,
       extraCss: ["/css/procesos.css"],
-      extraJs: ["/js/procesos-buscador.js"],
     });
   } catch (err) {
     console.error("[Procesos] Error cargando la portada:", err);
@@ -132,67 +139,7 @@ router.get("/", async (req, res) => {
 });
 
 // ==========================================
-// 2. BUSCADOR GLOBAL
-// ==========================================
-
-router.get("/api/buscar", async (req, res) => {
-  if (!req.session.user) return res.status(401).json({ error: "No autorizado" });
-
-  try {
-    const query = req.query.q || "";
-    if (query.length < 1) return res.json([]);
-    const searchParam = `%${query}%`;
-
-    const [docsRes, otrosRes] = await Promise.all([
-      db.query(
-        `SELECT d.name, d.url, d.type, d.doc_kind, d.work_area_id, w.area_name
-           FROM documents d
-           LEFT JOIN work_areas w ON w.id = d.work_area_id
-          WHERE d.name ILIKE $1
-          ORDER BY d.created_at DESC
-          LIMIT 10`,
-        [searchParam],
-      ),
-      db.query(
-        `SELECT name, url, 'otros' AS type
-           FROM other_documents
-          WHERE name ILIKE $1
-          ORDER BY created_at DESC
-          LIMIT 5`,
-        [searchParam],
-      ),
-    ]);
-
-    // La etiqueta se arma en el servidor: el cliente ya no tiene que adivinar
-    // el nombre del área partiendo el `type` por el guion bajo.
-    const resultados = [
-      ...docsRes.rows.map((row) => ({
-        name: row.name,
-        url: row.url,
-        etiqueta: etiquetaDocumento(row),
-      })),
-      ...otrosRes.rows.map((row) => ({
-        name: row.name,
-        url: row.url,
-        etiqueta: "Otros documentos",
-      })),
-    ];
-    res.json(resultados);
-  } catch (err) {
-    console.error("[Procesos] Error en el buscador global:", err);
-    res.status(500).json({ error: "Error en el servidor" });
-  }
-});
-
-function etiquetaDocumento(row) {
-  if (row.type === "reglamento") return "Reglamento interno";
-  const kind = row.doc_kind || String(row.type || "").split("_")[0];
-  const base = kind === "protocolo" ? "Protocolos" : "Procedimientos";
-  return row.area_name ? `${base} · ${row.area_name}` : base;
-}
-
-// ==========================================
-// 3. LISTADO DE CARPETAS POR ÁREA (solo administradores)
+// 2. LISTADO DE CARPETAS POR ÁREA (solo administradores)
 // ==========================================
 
 async function renderCarpetas(req, res, seccion) {
@@ -263,7 +210,7 @@ router.get("/protocolos", async (req, res) => {
 });
 
 // ==========================================
-// 4. SECCIONES GENERALES
+// 3. SECCIONES GENERALES
 // ==========================================
 
 async function renderGeneral(req, res, { seccion, titulo, sql, params }) {
@@ -314,7 +261,7 @@ router.get("/otros", async (req, res) => {
 });
 
 // ==========================================
-// 5. VISTA DE ARCHIVOS DE UN ÁREA
+// 4. VISTA DE ARCHIVOS DE UN ÁREA
 // ==========================================
 
 /**
@@ -420,7 +367,7 @@ router.get("/:seccion/:area", async (req, res) => {
 });
 
 // ==========================================
-// 6. SUBIDA (dos pasos: storage y luego base de datos)
+// 5. SUBIDA (dos pasos: storage y luego base de datos)
 // ==========================================
 
 router.post(
@@ -522,7 +469,7 @@ router.post("/:seccion/:area/subir", requireRole.administrador(), async (req, re
 });
 
 // ==========================================
-// 7. EDITAR Y ELIMINAR
+// 6. EDITAR Y ELIMINAR
 // ==========================================
 
 router.post("/documento/editar", requireRole.administrador(), async (req, res) => {

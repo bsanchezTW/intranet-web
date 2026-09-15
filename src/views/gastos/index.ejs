@@ -76,15 +76,26 @@
 
       <ul class="fondos-lista">
         <% misFondos.abiertos.forEach((f) => { %>
-          <li class="fondos-fila">
+          <li class="fondos-fila<%= f.overdue ? ' fondos-fila--vencida' : '' %>">
             <a class="fondos-fila__info" href="/gastos/<%= f.id %>">
               <span class="gasto-item__id">#<%= f.id %></span>
               <span class="fondos-fila__titulo"><%= f.title %></span>
             </a>
             <span class="fondos-fila__monto"><%= formatMoney(f.total_amount) %></span>
-            <span class="fondo-estado fondo-estado--<%= f.state %>"><%= f.stateLabel %></span>
+            <span class="fondo-estado fondo-estado--<%= f.overdue ? 'vencido' : f.state %>">
+              <%= f.overdue ? 'Plazo vencido' : f.stateLabel %>
+            </span>
             <% if (f.state === 'por_rendir' && puedeSolicitar) { %>
               <button type="button" class="fondos-fila__rendir" data-abrir-gasto="rendicion" data-fondo="<%= f.id %>">Rendir</button>
+            <% } %>
+            <% if (f.reportDueOn && f.state === 'por_rendir') { %>
+              <p class="fondos-fila__plazo">
+                <% if (f.overdue) { %>
+                  Debiste rendir hasta el <%= formatExpenseDate(f.reportDueOn) %>.
+                <% } else { %>
+                  Rinde hasta el <%= formatExpenseDate(f.reportDueOn) %>.
+                <% } %>
+              </p>
             <% } %>
           </li>
         <% }) %>
@@ -130,6 +141,13 @@
           <div class="procesos-card__cuerpo">
             <h4 class="procesos-card__titulo">Rendir gastos</h4>
             <p class="procesos-card__desc">Gastos o compras que ya pagaste, con sus comprobantes.</p>
+            <% if (misFondos && misFondos.vencidos) { %>
+              <span class="procesos-card__meta">
+                <span class="procesos-card__badge procesos-card__badge--alerta">
+                  <%= misFondos.vencidos %> <%= misFondos.vencidos === 1 ? 'fondo sin rendir' : 'fondos sin rendir' %>
+                </span>
+              </span>
+            <% } %>
           </div>
         </a>
         <% if (misFondos && misFondos.lleno) { %>
@@ -192,6 +210,7 @@
           <% } %>
           <button type="button" class="gastos-chip" data-filtro-estado="approved_finance">Aprobadas</button>
           <button type="button" class="gastos-chip" data-filtro-estado="rejected">Rechazadas</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="cancelled">Anuladas</button>
           <button type="button" class="gastos-chip" data-filtro-estado="todos">Todas</button>
         </div>
       </div>
@@ -202,7 +221,7 @@
              const esBorrador = s.status === 'draft';
              const fechaRef = esBorrador ? (s.updated_at || s.created_at) : s.created_at;
              const fecha = fechaRef ? new Date(fechaRef).toLocaleDateString(countryConfig.locale, fechaOpts) : '—';
-             const buscable = [s.title, String(s.id), expenseKindLabel(s.kind), esBorrador ? 'borrador' : '']
+             const buscable = [s.title, String(s.id), expenseKindLabel(s.kind), esBorrador ? 'borrador' : '', s.status === 'cancelled' ? 'anulada' : '']
                .filter(Boolean).join(' ').toLowerCase();
         %>
           <li class="gasto-item" data-estado="<%= s.status %>" data-buscar="<%= buscable %>">

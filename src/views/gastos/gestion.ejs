@@ -5,6 +5,7 @@
   const finanzas = (typeof esFinanzas !== 'undefined' && esFinanzas);
   const admin = (typeof esAdmin !== 'undefined' && esAdmin);
   const listaPorLiquidar = (typeof porLiquidar !== 'undefined' && Array.isArray(porLiquidar)) ? porLiquidar : [];
+  const listaSinRendir = (typeof sinRendir !== 'undefined' && Array.isArray(sinRendir)) ? sinRendir : [];
 
   const fechaOpts = { year: 'numeric', month: '2-digit', day: '2-digit' };
 
@@ -113,6 +114,56 @@
     </div>
   </section>
 
+  <% if (finanzas && listaSinRendir.length) { %>
+  <!-- ═══════════ Sin rendir ═══════════ -->
+  <section class="seccion" aria-labelledby="gestion-sin-rendir">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="gestion-sin-rendir">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+          Sin rendir
+        </h3>
+        <p class="seccion__desc">
+          Fondos aprobados cuyo viaje ya terminó y el colaborador no rindió dentro de los 5 días hábiles.
+        </p>
+      </div>
+    </div>
+
+    <div class="gastos-panel">
+      <ul class="gastos-lista">
+        <% listaSinRendir.forEach((s) => { %>
+          <li class="gasto-item gasto-item--vencido">
+            <a class="gasto-item__link" href="/gastos/<%= s.id %>?volver=gestion">
+              <span class="gasto-item__main">
+                <span class="gasto-item__top">
+                  <span class="gasto-item__id">#<%= s.id %></span>
+                  <span class="gasto-item__titulo"><%= s.title %></span>
+                </span>
+                <span class="gasto-item__meta">
+                  <span><%= s.requester_display_name || s.requester_name || 'Colaborador' %></span>
+                  <% if (s.requester_area_name) { %><span><%= s.requester_area_name %></span><% } %>
+                  <% if (s.cost_center_code) { %><span><%= s.cost_center_code %></span><% } %>
+                  <% if (s.period_end) { %>
+                    <span>Viaje hasta el <%= formatExpenseDate(s.period_end) %></span>
+                  <% } %>
+                  <span>Venció el <%= formatExpenseDate(s.reportDueOn) %></span>
+                </span>
+              </span>
+
+              <span class="gasto-item__lado">
+                <span class="gasto-item__monto"><%= formatMoney(s.total_amount) %></span>
+                <span class="fondo-estado fondo-estado--vencido">Plazo vencido</span>
+              </span>
+
+              <span class="gasto-item__chevron" aria-hidden="true"><%- include('../partials/icon', { name: 'chevron-right' }) %></span>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+    </div>
+  </section>
+  <% } %>
+
   <% if (finanzas) { %>
   <!-- ═══════════ Por liquidar ═══════════ -->
   <section class="seccion" aria-labelledby="gestion-liquidar">
@@ -187,11 +238,11 @@
                  placeholder="Buscar por asunto, solicitante, área o número…" autocomplete="off">
         </div>
         <div class="gastos-chips" role="group" aria-label="Filtrar por estado">
-          <button type="button" class="gastos-chip is-active" data-filtro-estado="todos">Todas</button>
-          <button type="button" class="gastos-chip" data-filtro-estado="activos">En curso</button>
+          <button type="button" class="gastos-chip is-active" data-filtro-estado="activos">En curso</button>
           <button type="button" class="gastos-chip" data-filtro-estado="approved_finance">Aprobadas</button>
           <button type="button" class="gastos-chip" data-filtro-estado="rejected">Rechazadas</button>
           <button type="button" class="gastos-chip" data-filtro-estado="cancelled">Anuladas</button>
+          <button type="button" class="gastos-chip" data-filtro-estado="todos">Todas</button>
         </div>
       </div>
       <% } %>

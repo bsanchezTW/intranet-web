@@ -57,11 +57,6 @@ function summary(request) {
         : "<p><strong>Rinde:</strong> sin fondo (reembolso)</p>",
     );
   }
-  if (request.needed_by) {
-    parts.push(
-      `<p><strong>Requerido para:</strong> ${new Date(request.needed_by).toLocaleDateString(getCountryConfig().locale)}</p>`,
-    );
-  }
   return parts.join("\n");
 }
 

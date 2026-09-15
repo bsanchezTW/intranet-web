@@ -48,7 +48,10 @@
               <label class="gasto-cuenta gasto-cuenta__opcion gasto-fondo">
                 <input type="radio" name="fund_request_id" value="<%= fd.id %>"
                        data-monto="<%= fd.total_amount %>"
-                       data-centro="<%= fd.cost_center_id || '' %>">
+                       data-centro="<%= fd.cost_center_id || '' %>"
+                       data-destino="<%= fd.destination || '' %>"
+                       data-desde="<%= fd.period_start || '' %>"
+                       data-hasta="<%= fd.period_end || '' %>">
                 <span class="gasto-cuenta__texto">
                   <strong>#<%= fd.id %> · <%= formatMoney(fd.total_amount) %></strong>
                   <span><%= fd.title %></span>
@@ -101,8 +104,8 @@
           <% } %>
         </section>
 
-        <%# 2. Solicitud. Destino y período son opcionales: una compra de
-            hardware o una suscripción no los tienen. %>
+        <%# 2. Solicitud. En fondos el período es el viaje (obligatorio al
+            enviar). En un reembolso sigue siendo opcional. %>
         <section class="gasto-seccion" aria-labelledby="secSolicitud">
           <h3 class="gasto-seccion__titulo" id="secSolicitud">Solicitud</h3>
 
@@ -119,20 +122,15 @@
               <input type="text" id="destino" maxlength="150" placeholder="Ej: Antofagasta">
             </div>
             <div class="campo-form">
-              <span class="gasto-label" id="labelPeriodo">Período de gastos</span>
-              <%# Se completa solo con las fechas del desglose hasta que el usuario lo toque. %>
+              <span class="gasto-label" id="labelPeriodo">
+                <span data-solo="fondos">Período del viaje <%- obligatorio %></span>
+                <span data-solo="rendicion">Período de gastos</span>
+              </span>
               <div class="gasto-periodo" role="group" aria-labelledby="labelPeriodo">
                 <input type="date" id="periodoDesde" aria-label="Desde">
                 <span aria-hidden="true">a</span>
                 <input type="date" id="periodoHasta" aria-label="Hasta">
               </div>
-            </div>
-          </div>
-
-          <div class="gasto-grid-2" data-solo="fondos">
-            <div class="campo-form">
-              <label for="neededBy">Requerido para</label>
-              <input type="date" id="neededBy" min="<%= hoy %>">
             </div>
           </div>
 
@@ -150,7 +148,6 @@
             <div class="gasto-items__head" aria-hidden="true">
               <span>Fecha</span>
               <span>Categoría</span>
-              <span>Días</span>
               <span>Detalle</span>
               <span>Monto</span>
               <span></span>
@@ -168,17 +165,17 @@
                 <label class="sr-only">Categoría</label>
                 <select data-campo="category">
                   <option value="">Categoría…</option>
-                  <% f.categorias.forEach(c => { %>
-                    <option value="<%= c %>"><%= expenseCategoryLabel(c) %></option>
+                  <% f.categoriaGrupos.forEach(g => { %>
+                    <optgroup label="<%= g.label %>">
+                      <% g.codes.forEach(c => { %>
+                        <option value="<%= c %>"><%= expenseCategoryLabel(c) %></option>
+                      <% }) %>
+                    </optgroup>
+                  <% }) %>
+                  <% (f.categoriasOcultas || []).forEach(c => { %>
+                    <option value="<%= c %>" hidden><%= expenseCategoryLabel(c) %></option>
                   <% }) %>
                 </select>
-              </div>
-              <%# Sólo el hospedaje pide días; en el resto la celda muestra un guion. %>
-              <div data-col="days">
-                <label class="sr-only">Días de hospedaje</label>
-                <input type="number" data-campo="days" min="1" max="<%= f.maxDiasHospedaje %>" step="1"
-                       inputmode="numeric" placeholder="Días" hidden>
-                <span class="gasto-item-fila__na" data-dias-na aria-hidden="true">—</span>
               </div>
               <div data-col="detail">
                 <label class="sr-only">Detalle</label>
@@ -191,6 +188,40 @@
               </div>
               <button type="button" class="gasto-item-fila__quitar" data-quitar-fila
                       aria-label="Quitar esta línea">&times;</button>
+
+              <div class="gasto-item-extra" data-extra hidden>
+                <div class="gasto-item-extra__linea" data-extra-combustible hidden>
+                  <div class="campo-form">
+                    <label>km/L</label>
+                    <input type="text" data-campo="yield_km_l" inputmode="decimal" placeholder="12,5">
+                  </div>
+                  <div class="campo-form">
+                    <label>Distancia</label>
+                    <input type="text" data-campo="distance_km" inputmode="decimal" placeholder="530 km">
+                  </div>
+                  <div class="campo-form">
+                    <label>Precio/L</label>
+                    <input type="text" data-campo="price_per_liter" inputmode="<%= moneda.decimals ? 'decimal' : 'numeric' %>" placeholder="1.349">
+                  </div>
+                </div>
+                <div class="gasto-item-extra__linea gasto-item-extra__linea--dias" data-extra-hospedaje hidden>
+                  <div class="campo-form">
+                    <label>Días</label>
+                    <input type="number" data-campo="days" min="1" max="<%= f.maxDiasHospedaje %>" step="1"
+                           inputmode="numeric" placeholder="3">
+                  </div>
+                </div>
+              </div>
+
+              <div class="gasto-item-adjuntos" data-col="attachments" data-solo="rendicion">
+                <ul class="gasto-item-adjuntos__lista" data-adjuntos-lista></ul>
+                <button type="button" class="gasto-item-adjuntos__boton" data-adjuntar
+                        title="Máx. <%= f.maxAdjuntoMb %> MB por archivo">
+                  <span class="gasto-item-adjuntos__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'paperclip' }) %></span>
+                  <span data-adjuntar-texto>Adjuntar comprobante</span>
+                  <span class="required-mark">*</span>
+                </button>
+              </div>
             </div>
           </template>
 
@@ -215,15 +246,14 @@
           </div>
         </section>
 
-        <%# 4. Comprobantes: arrastrar o elegir. %>
-        <section class="gasto-seccion" aria-labelledby="secComprobantes">
-          <h3 class="gasto-seccion__titulo" id="secComprobantes">
-            Comprobantes <span data-solo="rendicion"><%- obligatorio %></span>
-          </h3>
+        <%# 4. Comprobantes de la solicitud de fondos (opcionales). En una
+            rendición cada línea del desglose lleva el suyo. %>
+        <input type="file" id="adjuntoInput" multiple hidden>
+        <section class="gasto-seccion" aria-labelledby="secComprobantes" data-solo="fondos">
+          <h3 class="gasto-seccion__titulo" id="secComprobantes">Comprobantes</h3>
 
           <%# El input queda fuera de la zona: su click programático burbujearía
               hasta el listener de la zona y volvería a abrir el selector. %>
-          <input type="file" id="adjuntoInput" multiple hidden>
           <div class="gasto-dropzone" id="dropzone">
             <span class="gasto-dropzone__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'upload-cloud' }) %></span>
             <p id="dropzoneTexto">

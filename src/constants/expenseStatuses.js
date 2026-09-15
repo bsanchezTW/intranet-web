@@ -11,6 +11,9 @@
  *      ├──▶ rejected                  └──▶ rejected
  *      └──▶ cancelled  (sólo el solicitante, y sólo mientras está pending)
  *
+ * Un borrador propio se puede eliminar: CASCADE borra líneas, adjuntos y
+ * archivos. Lo ya enviado, si se anula, permanece en el historial.
+ *
  * `rejected_stage` guarda en qué etapa se rechazó; el estado no se desdobla
  * para no multiplicar los casos que la UI debe conocer.
  *

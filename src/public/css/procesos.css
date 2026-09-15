@@ -2,132 +2,6 @@
    Antes esta zona llevaba <style> embebido con hex fijos (#003a70, #f8fafc),
    por eso la tabla de archivos no tenía modo oscuro. */
 
-/* ── Buscador global ─────────────────────────────────────────────────────── */
-
-.buscador-global {
-  position: relative;
-  max-width: 700px;
-  margin-bottom: 34px;
-  /* Por encima de las tarjetas para que el desplegable no quede detrás. */
-  z-index: 20;
-}
-
-.buscador-global__icono {
-  position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--color-text-subtle);
-  display: inline-flex;
-  font-size: 1.15rem;
-  pointer-events: none;
-}
-
-.buscador-global__input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 15px 50px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 12px;
-  font-size: 1rem;
-  font-family: inherit;
-  background: var(--color-surface);
-  color: var(--color-text);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.buscador-global__input::placeholder {
-  color: var(--color-text-subtle);
-}
-
-.buscador-global__input:focus {
-  border-color: var(--brand);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--brand-soft);
-}
-
-.buscador-global__spinner {
-  position: absolute;
-  right: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--color-border);
-  border-top-color: var(--brand);
-  border-radius: 50%;
-  animation: procesosSpin 0.9s linear infinite;
-  display: none;
-}
-
-@keyframes procesosSpin {
-  to {
-    transform: translateY(-50%) rotate(360deg);
-  }
-}
-
-.buscador-global__resultados {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  background: var(--color-surface-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-lg);
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-.buscador-global__item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--color-border);
-  text-decoration: none;
-  color: inherit;
-  transition: background 0.15s;
-}
-
-.buscador-global__item:last-child {
-  border-bottom: none;
-}
-
-.buscador-global__item:hover,
-.buscador-global__item:focus-visible {
-  background: var(--color-surface-muted);
-}
-
-.buscador-global__item-icono {
-  display: inline-flex;
-  font-size: 1.25rem;
-  color: var(--brand);
-  flex-shrink: 0;
-}
-
-.buscador-global__item-titulo {
-  font-weight: 700;
-  color: var(--color-heading);
-  font-size: 0.98rem;
-}
-
-.buscador-global__item-tipo {
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-top: 2px;
-}
-
-.buscador-global__vacio {
-  padding: 20px;
-  text-align: center;
-  color: var(--color-text-muted);
-  font-size: 0.92rem;
-}
-
 /* ── Tarjetas de sección ─────────────────────────────────────────────────── */
 
 .procesos-grid {
@@ -180,6 +54,18 @@ a.procesos-card:focus-visible {
 .procesos-card__tile--green {
   background: var(--green-soft);
   color: var(--green-deep);
+}
+
+/* Logos de portales externos: lienzo blanco para que no se pierdan en oscuro. */
+.procesos-card__tile--logo {
+  background: #fff;
+  border: 1px solid var(--color-border);
+}
+
+.procesos-card__tile img {
+  max-width: 72%;
+  max-height: 72%;
+  object-fit: contain;
 }
 
 .procesos-card__cuerpo {

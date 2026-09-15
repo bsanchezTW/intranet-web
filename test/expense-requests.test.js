@@ -23,13 +23,31 @@ const {
   normalizePeriod,
   normalizeAttachments,
   normalizeDraftItems,
+  bindItemAttachments,
   ownUploadPath,
   parseUploadPath,
+  slugExpenseDetail,
   finalAttachmentName,
   finalAttachmentNumber,
   acceptsAttachment,
   isoDate,
 } = require("../src/services/expenses/expenseRequestService");
+const {
+  EXPENSE_CATEGORY_LABELS,
+  EXPENSE_CATEGORY_GROUPS,
+  isSelectableCategory,
+  categoryRequiresFuel,
+  computeFuelLiters,
+  computeFuelAmount,
+  expenseCategoryLabel,
+  formatFuelDetails,
+} = require("../src/constants/expenseCategories");
+const {
+  addBusinessDays,
+  reportDueOn,
+  isReportOverdue,
+  clockOrigin,
+} = require("../src/services/expenses/expenseReportDeadline");
 const {
   MAX_OPEN_FUNDS,
   fundState,
@@ -353,6 +371,19 @@ describe("expenseRequestService — período de gastos", () => {
     assert.equal(normalizePeriod("2026-09-10", "2026-09-01", []).ok, false);
   });
 
+  it("en una solicitud de fondos el viaje es obligatorio y no se deduce del desglose", () => {
+    const items = [{ itemDate: "2026-09-01" }, { itemDate: "2026-09-05" }];
+    const sin = normalizePeriod("", "", items, { required: true, deriveFromItems: false });
+    assert.equal(sin.ok, false);
+    assert.match(sin.error, /período del viaje/);
+
+    const ok = normalizePeriod("2026-09-10", "2026-09-14", items, {
+      required: true,
+      deriveFromItems: false,
+    });
+    assert.deepEqual(ok, { ok: true, start: "2026-09-10", end: "2026-09-14" });
+  });
+
 });
 
 describe("borradores", () => {
@@ -371,7 +402,15 @@ describe("borradores", () => {
     ]);
     assert.equal(r.items.length, 3);
     // Sin monto queda NULL, no 0: al retomarlo el campo debe verse vacío.
-    assert.deepEqual(r.items[0], { detail: "Disco SSD", amount: null, category: null, days: null, itemDate: null });
+    assert.deepEqual(r.items[0], {
+      detail: "Disco SSD",
+      amount: null,
+      category: null,
+      days: null,
+      details: null,
+      itemDate: null,
+      clientKey: null,
+    });
     assert.equal(r.items[1].amount, 12000);
     assert.equal(r.items[1].category, null);
     assert.equal(r.items[2].itemDate, "2026-09-10");
@@ -430,23 +469,44 @@ describe("borradores", () => {
 });
 
 describe("comprobantes — nombre definitivo", () => {
-  it("nombra con el id de la solicitud y conserva la extensión", () => {
+  it("el slug del detalle es sólo ascii letras y números, sin tildes ni símbolos", () => {
+    assert.equal(slugExpenseDetail("Hotel Antofagastá!!!"), "hotelantofagasta");
+    assert.equal(slugExpenseDetail("Peaje Ruta 5 — km 12"), "peajeruta5km12");
+    assert.equal(slugExpenseDetail("  "), "");
+    assert.equal(slugExpenseDetail("***"), "");
+    assert.equal(slugExpenseDetail("A".repeat(50)).length, 40);
+  });
+
+  it("nombra fondos con el id y n; rendición agrega el slug", () => {
     assert.equal(finalAttachmentName(76587612, 1, "boleta-1789398610958-ab12cd34.PDF"), "76587612_1.pdf");
     assert.equal(finalAttachmentName(76587612, 3, "sin-extension"), "76587612_3");
+    assert.equal(
+      finalAttachmentName(76587612, 1, "foto.JPG", "Hotel Antofagastá!!!"),
+      "76587612_1_hotelantofagasta.jpg",
+    );
+    assert.equal(finalAttachmentName(76587612, 1, "foto.jpg", "   ***   "), "76587612_1.jpg");
+    assert.equal(
+      finalAttachmentName(76587612, 2, "a.jpeg", "A".repeat(50)).length,
+      "76587612_2_".length + 40 + ".jpeg".length,
+    );
   });
 
   it("reconoce el nombre definitivo sólo para su propia solicitud", () => {
     assert.equal(finalAttachmentNumber(76587612, "76587612_2.pdf"), 2);
+    assert.equal(finalAttachmentNumber(76587612, "76587612_1_hotelantofagasta.jpg"), 1);
     assert.equal(finalAttachmentNumber(76587612, "11111111_2.pdf"), null);
     assert.equal(finalAttachmentNumber(76587612, "boleta-1789398610958-ab12cd34.pdf"), null);
+    assert.equal(finalAttachmentNumber(76587612, "76587612_1_hotel-antofagasta.jpg"), null);
   });
 
   it("no acepta el comprobante ya renombrado de otra solicitud", () => {
     const temporal = { url: "/content/gastos/2026/5/boleta-1789398610958-ab12cd34.pdf", publicId: "gastos/2026/5/boleta-1789398610958-ab12cd34.pdf" };
     const propio = { url: "", publicId: "gastos/2026/5/76587612_1.pdf" };
+    const propioSlug = { url: "", publicId: "gastos/2026/5/76587612_1_hotelantofagasta.jpg" };
     const deOtra = { url: "", publicId: "gastos/2026/5/11111111_1.pdf" };
     assert.equal(acceptsAttachment(5, null, temporal), true);
     assert.equal(acceptsAttachment(5, 76587612, propio), true);
+    assert.equal(acceptsAttachment(5, 76587612, propioSlug), true);
     assert.equal(acceptsAttachment(5, null, propio), false);
     assert.equal(acceptsAttachment(5, 76587612, deOtra), false);
     assert.equal(acceptsAttachment(6, null, temporal), false);
@@ -521,6 +581,8 @@ describe("fondos asignados", () => {
     assert.equal(r.asignadoPorRendir, 50000);
     assert.deepEqual(r.porRendir.map((f) => f.id), [11111111]);
     assert.deepEqual(r.abiertos.map((f) => f.state), ["por_rendir", "en_revision", "en_aprobacion"]);
+    assert.equal(r.vencidos, 0);
+    assert.equal(r.abiertos[0].overdue, false);
     assert.equal(r.porLiquidar[0].balance.sentido, "devolver");
     assert.equal(r.porLiquidar[0].balance.monto, 20000);
   });
@@ -536,7 +598,186 @@ describe("expenseCategories — compras fuera de viaje", () => {
       const r = normalizeItems([{ detail: "Compra", category, amount: "15990" }]);
       assert.equal(r.ok, true, category);
       assert.equal(r.items[0].days, null, category);
+      assert.equal(r.items[0].details, null, category);
     }
+  });
+
+  it("renombra las categorías existentes y agrega las nuevas al selector", () => {
+    assert.equal(expenseCategoryLabel("comidas"), "Alimentación");
+    assert.equal(expenseCategoryLabel("combustible"), "Combustible");
+    assert.equal(expenseCategoryLabel("transfer"), "Traslado");
+    assert.equal(expenseCategoryLabel("arriendo_auto"), "Arriendo de vehículo");
+    assert.equal(expenseCategoryLabel("telefono"), "Telefonía");
+    assert.equal(expenseCategoryLabel("pasajes"), "Pasajes");
+    assert.equal(isSelectableCategory("pasajes"), false);
+    assert.equal(isSelectableCategory("pasajes_aereos"), true);
+    assert.equal(isSelectableCategory("estacionamiento"), true);
+    assert.equal(isSelectableCategory("taxi_apps"), true);
+    assert.equal(isSelectableCategory("materiales"), true);
+    assert.equal(isSelectableCategory("envios"), true);
+    const codes = EXPENSE_CATEGORY_GROUPS.flatMap((g) => g.codes);
+    assert.equal(codes.includes("pasajes"), false);
+    assert.equal(new Set(codes).size, codes.length);
+    assert.ok(Object.keys(EXPENSE_CATEGORY_LABELS).includes("pasajes"));
+  });
+
+  it("acepta las categorías nuevas en el desglose", () => {
+    for (const category of [
+      "pasajes_aereos",
+      "pasajes_terrestres",
+      "estacionamiento",
+      "taxi_apps",
+      "materiales",
+      "envios",
+    ]) {
+      const r = normalizeItems([{ detail: "Gasto", category, amount: "1000" }]);
+      assert.equal(r.ok, true, category);
+      assert.equal(r.items[0].details, null, category);
+    }
+    const legacy = normalizeItems([{ detail: "Bus", category: "pasajes", amount: "5000" }]);
+    assert.equal(legacy.ok, true);
+  });
+});
+
+describe("expenseCategories — combustible", () => {
+  const combustible = {
+    detail: "Copec Ruta 5",
+    category: "combustible",
+    yield_km_l: "12,5",
+    distance_km: "530",
+    price_per_liter: "1.349",
+    amount: "57.198",
+  };
+
+  it("calcula litros y monto sugerido", () => {
+    assert.equal(computeFuelLiters(12.5, 530), 42.4);
+    assert.equal(computeFuelAmount(42.4, 1349), 57197.6);
+    assert.equal(categoryRequiresFuel("combustible"), true);
+    assert.equal(categoryRequiresFuel("peajes"), false);
+  });
+
+  it("al usuario sólo le muestra rendimiento, distancia y precio", () => {
+    const texto = formatFuelDetails(
+      {
+        yield_km_l: 12.5,
+        distance_km: 530,
+        price_per_liter: 1349,
+        liters: 42.4,
+      },
+      (n) => String(n),
+    );
+    assert.equal(texto, "12,5 km/L · 530 km · 1349/L");
+    assert.equal(texto.includes("42"), false);
+  });
+
+  it("exige rendimiento, distancia y precio por litro al enviar", () => {
+    assert.equal(normalizeItems([{ ...combustible, yield_km_l: "" }]).ok, false);
+    assert.equal(normalizeItems([{ detail: "Copec", category: "combustible", amount: "10000" }]).ok, false);
+    const r = normalizeItems([combustible]);
+    assert.equal(r.ok, true);
+    assert.equal(r.items[0].details.yield_km_l, 12.5);
+    assert.equal(r.items[0].details.distance_km, 530);
+    assert.equal(r.items[0].details.price_per_liter, 1349);
+    assert.equal(r.items[0].details.liters, 42.4);
+    assert.equal(r.items[0].amount, 57198);
+    const sinMonto = { ...combustible };
+    delete sinMonto.amount;
+    assert.equal(normalizeItems([sinMonto]).items[0].amount, 57198);
+  });
+
+  it("acepta el extra anidado en details e ignora el monto que mande el cliente", () => {
+    const r = normalizeItems([
+      {
+        detail: "Copec",
+        category: "combustible",
+        amount: "58000",
+        details: { yield_km_l: 10, distance_km: 100, price_per_liter: 1200 },
+      },
+    ]);
+    assert.equal(r.ok, true);
+    assert.equal(r.items[0].details.liters, 10);
+    assert.equal(r.items[0].amount, 12000);
+  });
+
+  it("descarta el extra de combustible en cualquier otra categoría", () => {
+    const r = normalizeItems([
+      {
+        detail: "Almuerzo",
+        category: "comidas",
+        amount: "12000",
+        yield_km_l: "12",
+        distance_km: "100",
+        price_per_liter: "1300",
+      },
+    ]);
+    assert.equal(r.ok, true);
+    assert.equal(r.items[0].details, null);
+  });
+
+  it("en un borrador guarda el combustible a medias y no conserva un monto a mano", () => {
+    const r = normalizeDraftItems([
+      { detail: "Copec", category: "combustible", yield_km_l: "12,5", amount: "50000" },
+    ]);
+    assert.equal(r.items[0].details.yield_km_l, 12.5);
+    assert.equal(r.items[0].details.distance_km, null);
+    assert.equal(r.items[0].amount, null);
+  });
+});
+
+describe("plazo de rendición — 1+5 días hábiles", () => {
+  it("salta fines de semana al contar días hábiles", () => {
+    assert.equal(addBusinessDays("2026-09-11", 1), "2026-09-14");
+    assert.equal(addBusinessDays("2026-09-09", 1), "2026-09-10");
+  });
+
+  it("el plazo parte al día hábil siguiente al fin del viaje y suma 5 hábiles", () => {
+    // Miércoles 9: gracia jueves 10; 5 hábiles → jueves 17.
+    assert.equal(reportDueOn("2026-09-09"), "2026-09-17");
+    // Viernes 11: gracia lunes 14; 5 hábiles → lunes 21.
+    assert.equal(reportDueOn("2026-09-11"), "2026-09-21");
+  });
+
+  it("si Finanzas aprueba después del viaje, el 1+5 parte de esa aprobación", () => {
+    assert.equal(clockOrigin("2026-09-09", "2026-09-12"), "2026-09-12");
+    assert.equal(reportDueOn("2026-09-09", "2026-09-12"), "2026-09-21");
+    assert.equal(clockOrigin("2026-09-09", "2026-09-01"), "2026-09-09");
+  });
+
+  it("está vencido sólo después del último día hábil, y sin período no hay plazo", () => {
+    assert.equal(isReportOverdue("2026-09-09", null, "2026-09-17"), false);
+    assert.equal(isReportOverdue("2026-09-09", null, "2026-09-18"), true);
+    assert.equal(isReportOverdue(null, null, "2026-09-18"), false);
+  });
+
+  it("destaca en el resumen del colaborador sólo los fondos por rendir vencidos", () => {
+    const r = summarizeFunds(
+      [
+        {
+          id: 11111111,
+          title: "Viaje",
+          total_amount: "50000.00",
+          status: "approved_finance",
+          rendicion_status: null,
+          period_end: "2026-09-09",
+          finance_reviewed_at: "2026-09-01",
+        },
+        {
+          id: 22222222,
+          title: "En plazo",
+          total_amount: "10000.00",
+          status: "approved_finance",
+          rendicion_status: null,
+          period_end: "2026-09-25",
+          finance_reviewed_at: "2026-09-01",
+        },
+      ],
+      [],
+      "2026-09-20",
+    );
+    assert.equal(r.vencidos, 1);
+    assert.equal(r.porRendir[0].overdue, true);
+    assert.equal(r.porRendir[0].reportDueOn, "2026-09-17");
+    assert.equal(r.porRendir[1].overdue, false);
   });
 });
 
@@ -559,9 +800,54 @@ describe("expenseRequestService — adjuntos", () => {
     assert.deepEqual(normalizeAttachments("no-es-lista"), []);
   });
 
+  it("conserva la clave que liga el comprobante a su línea", () => {
+    const r = normalizeAttachments([
+      {
+        name: "boleta.pdf",
+        url: "/content/gastos/2026/1/b.pdf",
+        public_id: "gastos/2026/1/b.pdf",
+        item_key: "k1",
+      },
+    ]);
+    assert.equal(r[0].itemKey, "k1");
+  });
+
   it("acota el número de comprobantes", () => {
-    const muchos = Array.from({ length: 25 }, () => ({ url: "/content/a.pdf" }));
-    assert.equal(normalizeAttachments(muchos).length, 10);
+    const muchos = Array.from({ length: 80 }, () => ({ url: "/content/a.pdf" }));
+    assert.equal(normalizeAttachments(muchos).length, 50);
+  });
+});
+
+describe("expenseRequestService — comprobantes por ítem", () => {
+  const items = [
+    { detail: "Hotel", clientKey: "k1" },
+    { detail: "Taxi", clientKey: "k2" },
+  ];
+  const files = [
+    { url: "/content/a", itemKey: "k1" },
+    { url: "/content/b", itemKey: "k2" },
+  ];
+
+  it("en una rendición cada línea necesita su comprobante", () => {
+    assert.equal(bindItemAttachments(items, files, { required: true }).ok, true);
+    const falta = bindItemAttachments(items, [files[0]], { required: true });
+    assert.equal(falta.ok, false);
+    assert.match(falta.error, /Taxi/);
+  });
+
+  it("descarta comprobantes de una línea que ya no está en el desglose", () => {
+    const r = bindItemAttachments([items[0]], files);
+    assert.equal(r.ok, true);
+    assert.equal(r.attachments.length, 1);
+    assert.equal(r.attachments[0].itemKey, "k1");
+  });
+
+  it("conserva la clave del ítem al normalizar el desglose", () => {
+    const r = normalizeItems([
+      { key: "k9", detail: "Hotel", category: "hospedaje", days: "2", amount: "40000" },
+    ]);
+    assert.equal(r.ok, true);
+    assert.equal(r.items[0].clientKey, "k9");
   });
 });
 

@@ -29,20 +29,6 @@
     </div>
   <% } %>
 
-  <div class="buscador-global">
-    <span class="buscador-global__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
-    <label class="sr-only" for="buscadorGlobal">Buscar documentos</label>
-    <input
-      type="search"
-      id="buscadorGlobal"
-      class="buscador-global__input"
-      placeholder="Buscar en procedimientos, protocolos y documentos…"
-      autocomplete="off"
-    >
-    <div id="buscadorSpinner" class="buscador-global__spinner"></div>
-    <div id="buscadorResultados" class="buscador-global__resultados" hidden></div>
-  </div>
-
   <% if (hayGastos) { %>
   <!-- ═══════════ Finanzas ═══════════ -->
   <section class="seccion" aria-labelledby="seccion-finanzas">
@@ -81,6 +67,13 @@
           <div class="procesos-card__cuerpo">
             <h4 class="procesos-card__titulo">Rendir gastos</h4>
             <p class="procesos-card__desc">Declara gastos que ya pagaste de tu bolsillo y adjunta los comprobantes.</p>
+            <% if (typeof fondosVencidos !== 'undefined' && fondosVencidos > 0) { %>
+              <div class="procesos-card__meta">
+                <span class="procesos-card__badge procesos-card__badge--alerta">
+                  <%= fondosVencidos %> <%= plural(fondosVencidos, 'fondo sin rendir', 'fondos sin rendir') %>
+                </span>
+              </div>
+            <% } %>
           </div>
         </a>
 
@@ -114,6 +107,13 @@
         <div class="procesos-card__cuerpo">
           <h4 class="procesos-card__titulo">Mis solicitudes</h4>
           <p class="procesos-card__desc">Revisa el estado y el historial de todo lo que has enviado.</p>
+          <% if (typeof fondosVencidos !== 'undefined' && fondosVencidos > 0) { %>
+            <div class="procesos-card__meta">
+              <span class="procesos-card__badge procesos-card__badge--alerta">
+                <%= fondosVencidos %> <%= plural(fondosVencidos, 'fondo sin rendir', 'fondos sin rendir') %>
+              </span>
+            </div>
+          <% } %>
         </div>
       </a>
 
@@ -130,6 +130,11 @@
                 </span>
               <% } else { %>
                 <span class="procesos-card__badge">Sin pendientes</span>
+              <% } %>
+              <% if (typeof sinRendir !== 'undefined' && sinRendir > 0) { %>
+                <span class="procesos-card__badge procesos-card__badge--alerta">
+                  <%= sinRendir %> <%= plural(sinRendir, 'sin rendir', 'sin rendir') %>
+                </span>
               <% } %>
             </div>
           </div>

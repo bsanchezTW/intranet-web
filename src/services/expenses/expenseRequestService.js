@@ -12,14 +12,18 @@ const areaManager = require("./areaManager");
 const financeTeam = require("./financeTeam");
 const costCenters = require("../costCenters/costCenterService");
 const { formatNationalId } = require("../../utils/nationalId");
-const { getDocumentConfig } = require("../../config/country");
+const { getCurrency, getDocumentConfig } = require("../../config/country");
 const {
   MAX_LODGING_DAYS,
   isExpenseCategory,
   categoryRequiresDays,
+  categoryRequiresFuel,
+  computeFuelAmount,
+  normalizeFuelDetails,
 } = require("../../constants/expenseCategories");
 const bankAccounts = require("./bankAccountService");
 const funds = require("./expenseFundService");
+const { reportDueOn, isReportOverdue } = require("./expenseReportDeadline");
 
 /**
  * Reglas del centro de gastos.
@@ -36,7 +40,7 @@ const funds = require("./expenseFundService");
  */
 
 const MAX_ITEMS = 50;
-const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENTS = 50;
 
 // ---------------------------------------------------------------------------
 // Normalización de entrada
@@ -79,6 +83,21 @@ function roundMoney(value) {
   return Math.round(value * 100) / 100;
 }
 
+function roundToCurrency(value) {
+  const decimals = getCurrency().decimals;
+  const factor = 10 ** decimals;
+  return Math.round(Number(value) * factor) / factor;
+}
+
+/* El monto de combustible lo fijan km/L, distancia y precio/L. El que mande
+   el cliente no cuenta: se recalcula aquí, igual que el total del desglose. */
+function amountFromFuel(details) {
+  if (!details) return null;
+  const raw = computeFuelAmount(details.liters, details.price_per_liter);
+  if (raw == null) return null;
+  return roundToCurrency(raw);
+}
+
 /**
  * Valida el desglose. El total NUNCA se toma del cliente: se recalcula aquí,
  * porque el formulario lo muestra sólo como conveniencia y un POST a mano
@@ -95,15 +114,13 @@ function normalizeItems(rawItems) {
     // Una fila totalmente vacía es la última del formulario, no un error.
     if (!detail && amount === null && !category) continue;
     if (!detail) return { ok: false, error: "Cada ítem necesita un detalle." };
-    if (amount === null) {
-      return { ok: false, error: `El monto de «${detail}» no es válido.` };
-    }
     if (!isExpenseCategory(category)) {
       return { ok: false, error: `Elige la categoría de «${detail}».` };
     }
 
-    // Los días sólo tienen sentido en hospedaje; en cualquier otra categoría se
-    // descartan aunque el cliente los mande.
+    // Los días sólo tienen sentido en hospedaje; el extra de combustible, sólo
+    // en esa categoría. En cualquier otra se descartan aunque el cliente los
+    // mande.
     let days = null;
     if (categoryRequiresDays(category)) {
       days = parseDays(raw && raw.days);
@@ -115,12 +132,31 @@ function normalizeItems(rawItems) {
       }
     }
 
+    let details = null;
+    let itemAmount = amount;
+    if (categoryRequiresFuel(category)) {
+      const fuel = normalizeFuelDetails(raw, { required: true });
+      if (!fuel.ok) {
+        return {
+          ok: false,
+          error: `Completa rendimiento, distancia y precio por litro de «${detail}».`,
+        };
+      }
+      details = fuel.details;
+      itemAmount = amountFromFuel(details);
+    }
+    if (itemAmount === null) {
+      return { ok: false, error: `El monto de «${detail}» no es válido.` };
+    }
+
     items.push({
       detail,
-      amount,
+      amount: itemAmount,
       category,
       days,
+      details,
       itemDate: parseDate(raw && raw.item_date),
+      clientKey: parseItemKey(raw && (raw.key || raw.client_key)),
     });
   }
 
@@ -148,18 +184,27 @@ function normalizeDraftItems(rawItems) {
 
   for (const raw of rawItems.slice(0, MAX_ITEMS)) {
     const detail = parseText(raw && raw.detail, 300);
-    const amount = parseAmount(raw && raw.amount);
+    let amount = parseAmount(raw && raw.amount);
     const rawCategory = String((raw && raw.category) || "").trim();
     const category = isExpenseCategory(rawCategory) ? rawCategory : null;
     const itemDate = parseDate(raw && raw.item_date);
     if (!detail && amount === null && !category && !itemDate) continue;
+
+    const details = categoryRequiresFuel(category)
+      ? normalizeFuelDetails(raw, { required: false }).details
+      : null;
+    if (categoryRequiresFuel(category)) {
+      amount = amountFromFuel(details);
+    }
 
     items.push({
       detail: detail || "",
       amount,
       category,
       days: categoryRequiresDays(category) ? parseDays(raw && raw.days) : null,
+      details,
       itemDate,
+      clientKey: parseItemKey(raw && (raw.key || raw.client_key)),
     });
   }
 
@@ -168,28 +213,50 @@ function normalizeDraftItems(rawItems) {
 }
 
 /**
- * Período de gastos, opcional. Si el formulario no lo trae (o trae sólo un
- * extremo), se completa con las fechas del desglose, igual que en el cliente.
- * Sin fechas en ningún lado queda vacío: una suscripción no tiene período.
+ * Período de la solicitud.
+ *
+ * En una rendición (reembolso) es opcional y, si falta, se completa con las
+ * fechas del desglose. En una solicitud de fondos es el viaje: no se deduce
+ * del desglose y al enviar es obligatorio.
  */
-function normalizePeriod(rawStart, rawEnd, items) {
+function normalizePeriod(rawStart, rawEnd, items, options = {}) {
+  const deriveFromItems = options.deriveFromItems !== false;
+  const required = !!options.required;
   let start = parseDate(rawStart);
   let end = parseDate(rawEnd);
 
-  const dates = (items || [])
-    .map((item) => item.itemDate)
-    .filter(Boolean)
-    .sort();
-  if (!start && dates.length) start = dates[0];
-  if (!end && dates.length) end = dates[dates.length - 1];
+  if (deriveFromItems) {
+    const dates = (items || [])
+      .map((item) => item.itemDate)
+      .filter(Boolean)
+      .sort();
+    if (!start && dates.length) start = dates[0];
+    if (!end && dates.length) end = dates[dates.length - 1];
+  }
   if (start && !end) end = start;
   if (end && !start) start = end;
 
-  if (!start) return { ok: true, start: null, end: null };
+  if (!start) {
+    if (required) {
+      return { ok: false, error: "Indica el período del viaje (desde y hasta)." };
+    }
+    return { ok: true, start: null, end: null };
+  }
   if (start > end) {
-    return { ok: false, error: "El período de gastos termina antes de empezar." };
+    return {
+      ok: false,
+      error: required
+        ? "El período del viaje termina antes de empezar."
+        : "El período de gastos termina antes de empezar.",
+    };
   }
   return { ok: true, start, end };
+}
+
+/** Token que el formulario usa para ligar un comprobante a una línea aún sin id. */
+function parseItemKey(value) {
+  const raw = String(value ?? "").trim();
+  return /^[A-Za-z0-9_-]{1,40}$/.test(raw) ? raw : null;
 }
 
 function normalizeAttachments(rawAttachments) {
@@ -200,8 +267,30 @@ function normalizeAttachments(rawAttachments) {
       name: parseText(raw && raw.name, 200) || "Comprobante",
       url: String((raw && raw.url) || "").trim(),
       publicId: String((raw && raw.public_id) || "").trim() || null,
+      itemKey: parseItemKey(raw && (raw.item_key || raw.itemKey)),
     }))
     .filter((a) => a.url.startsWith("/content/"));
+}
+
+/**
+ * Deja en cada comprobante la clave de su línea. En una rendición cada ítem
+ * tiene que traer al menos uno: el cliente no puede mandar un lote suelto.
+ */
+function bindItemAttachments(items, attachments, { required } = {}) {
+  const keys = new Set(items.map((item) => item.clientKey).filter(Boolean));
+  const bound = attachments.filter((a) => !a.itemKey || keys.has(a.itemKey));
+  if (!required) return { ok: true, attachments: bound };
+
+  const missing = items.find(
+    (item) => !bound.some((a) => a.itemKey && a.itemKey === item.clientKey),
+  );
+  if (missing) {
+    return {
+      ok: false,
+      error: `Adjunta el comprobante de «${missing.detail}».`,
+    };
+  }
+  return { ok: true, attachments: bound };
 }
 
 // ---------------------------------------------------------------------------
@@ -244,9 +333,22 @@ function parseUploadPath(ref) {
   return match ? { path, userId: Number(match[1]), fileName: match[2] } : null;
 }
 
-// Nombre definitivo: <id de 8 dígitos>_<n><ext>. Un nombre temporal nunca lo
-// cumple: generateFileName le agrega marca de tiempo y sufijo aleatorio.
-const FINAL_NAME = /^(\d{8})_(\d+)(\.[a-z0-9]{1,8})?$/;
+// Nombre definitivo: <id de 8 dígitos>_<n>[_<slug>][.<ext>].
+// El slug es sólo [a-z0-9] (sin tildes ni símbolos): charset de Supabase
+// Storage más estricto que el oficial, que no admite acentos.
+// Un temporal de generateFileName nunca lo cumple (lleva timestamp y random).
+const SLUG_MAX = 40;
+const FINAL_NAME = /^(\d{8})_(\d+)(_[a-z0-9]{1,40})?(\.[a-z0-9]{1,8})?$/;
+
+/** El detalle de la línea, listo para ir en el nombre del archivo. */
+function slugExpenseDetail(detail) {
+  return String(detail || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, SLUG_MAX);
+}
 
 /** El n de "76587612_2.pdf" si el archivo ya es de esta solicitud; si no, null. */
 function finalAttachmentNumber(requestId, fileName) {
@@ -255,9 +357,10 @@ function finalAttachmentNumber(requestId, fileName) {
   return Number(match[2]);
 }
 
-function finalAttachmentName(requestId, n, fileName) {
+function finalAttachmentName(requestId, n, fileName, slug) {
   const ext = /(\.[a-z0-9]{1,8})$/i.exec(String(fileName || ""));
-  return `${requestId}_${n}${ext ? ext[1].toLowerCase() : ""}`;
+  const clean = slugExpenseDetail(slug);
+  return `${requestId}_${n}${clean ? `_${clean}` : ""}${ext ? ext[1].toLowerCase() : ""}`;
 }
 
 /**
@@ -334,17 +437,25 @@ async function discardUploads({ user, refs }) {
 }
 
 /**
- * Renombra los comprobantes a su nombre definitivo <id>_<n><ext>.
+ * Renombra los comprobantes a su nombre definitivo.
+ * Fondos: <id>_<n>.<ext>. Rendición: <id>_<n>_<slug>.<ext>.
  *
- * La numeración es estable: los que ya lo tienen conservan su número y los
- * nuevos toman el siguiente. Renumerar en cada guardado obligaría a mover
- * archivos sobre nombres ocupados, y el bucket no sobrescribe al mover.
- * Cada movimiento se anota en `moves` al hacerse, para poder deshacerlo si
- * el guardado falla a medio camino.
+ * La numeración es estable: los que ya son de esta solicitud conservan su
+ * número (aunque cambie el slug) y los nuevos toman el siguiente. Renumerar
+ * en cada guardado obligaría a mover archivos sobre nombres ocupados, y el
+ * bucket no sobrescribe al mover. Cada movimiento se anota en `moves` para
+ * deshacerlo si el guardado falla a medio camino.
  */
-async function renameAttachments(userId, requestId, attachments, moves) {
+async function renameAttachments(userId, requestId, attachments, moves, options = {}) {
   const fileStorage = require("../fileStorage");
   const files = attachments.map((a) => parseUploadPath(attachmentPath(userId, a)));
+  const withSlug = options.kind === EXPENSE_KIND.RENDICION;
+  const slugByKey = new Map();
+  if (withSlug && Array.isArray(options.items)) {
+    for (const item of options.items) {
+      if (item.clientKey) slugByKey.set(item.clientKey, slugExpenseDetail(item.detail));
+    }
+  }
   let next =
     files.reduce(
       (max, file) => Math.max(max, finalAttachmentNumber(requestId, file && file.fileName) || 0),
@@ -354,16 +465,29 @@ async function renameAttachments(userId, requestId, attachments, moves) {
   const renamed = [];
   for (let i = 0; i < attachments.length; i += 1) {
     const file = files[i];
-    if (!file || finalAttachmentNumber(requestId, file.fileName)) {
-      renamed.push(attachments[i]);
+    const attachment = attachments[i];
+    if (!file) {
+      renamed.push(attachment);
+      continue;
+    }
+    const existingN = finalAttachmentNumber(requestId, file.fileName);
+    const n = existingN || next++;
+    const slug = withSlug ? slugByKey.get(attachment.itemKey) || "" : "";
+    const targetName = finalAttachmentName(requestId, n, file.fileName, slug);
+    if (file.fileName === targetName) {
+      renamed.push({ ...attachment, name: targetName });
       continue;
     }
     const folder = file.path.slice(0, file.path.lastIndexOf("/"));
-    const target = `${folder}/${finalAttachmentName(requestId, next, file.fileName)}`;
-    next += 1;
+    const target = `${folder}/${targetName}`;
     const moved = await fileStorage.moveFile(file.path, target);
     moves.push({ from: file.path, to: target });
-    renamed.push({ ...attachments[i], url: moved.secure_url, publicId: moved.public_id });
+    renamed.push({
+      ...attachment,
+      name: targetName,
+      url: moved.secure_url,
+      publicId: moved.public_id,
+    });
   }
   return renamed;
 }
@@ -628,7 +752,11 @@ async function prepareSubmission({
   const normalized = normalizeItems(rawItems);
   if (!normalized.ok) return normalized;
 
-  const period = normalizePeriod(periodStart, periodEnd, normalized.items);
+  const esFondos = kind === EXPENSE_KIND.FONDOS;
+  const period = normalizePeriod(periodStart, periodEnd, normalized.items, {
+    required: esFondos,
+    deriveFromItems: !esFondos,
+  });
   if (!period.ok) return period;
 
   // El fondo se valida y se reserva dentro de la transacción (saveRequest):
@@ -638,15 +766,14 @@ async function prepareSubmission({
     return { ok: false, error: "El fondo elegido no es válido." };
   }
 
-  const attachments = normalizeAttachments(rawAttachments).filter((a) =>
-    acceptsAttachment(user.id, draftIdNumber, a),
+  const attachments = bindItemAttachments(
+    normalized.items,
+    normalizeAttachments(rawAttachments).filter((a) =>
+      acceptsAttachment(user.id, draftIdNumber, a),
+    ),
+    { required: kind === EXPENSE_KIND.RENDICION },
   );
-  if (kind === EXPENSE_KIND.RENDICION && !attachments.length) {
-    return {
-      ok: false,
-      error: "Una rendición necesita al menos un comprobante adjunto.",
-    };
-  }
+  if (!attachments.ok) return attachments;
 
   // Cuenta de destino. Una instancia sin catálogo de bancos (Perú, por ahora)
   // no la exige: no habría con qué validarla.
@@ -681,7 +808,7 @@ async function prepareSubmission({
       periodEnd: period.end,
     }),
     items: normalized.items,
-    attachments,
+    attachments: attachments.attachments,
     account,
     saveAccount: saveBankAccount === true || saveBankAccount === "true",
     fundChoice,
@@ -721,14 +848,20 @@ async function prepareDraft({
   const parsedTitle = parseText(title, 200);
   const parsedDescription = parseText(description, 4000);
   const draft = normalizeDraftItems(rawItems);
-  const attachments = normalizeAttachments(rawAttachments).filter((a) =>
-    acceptsAttachment(user.id, draftIdNumber, a),
-  );
+  const attachments = bindItemAttachments(
+    draft.items,
+    normalizeAttachments(rawAttachments).filter((a) =>
+      acceptsAttachment(user.id, draftIdNumber, a),
+    ),
+  ).attachments;
   if (!parsedTitle && !parsedDescription && !draft.items.length && !attachments.length) {
     return { ok: false, error: "Todavía no hay nada que guardar." };
   }
 
-  const period = normalizePeriod(periodStart, periodEnd, draft.items);
+  const period = normalizePeriod(periodStart, periodEnd, draft.items, {
+    required: false,
+    deriveFromItems: kind !== EXPENSE_KIND.FONDOS,
+  });
   // En un borrador una elección inválida simplemente no se guarda.
   const parsedChoice = funds.parseFundChoice(kind === EXPENSE_KIND.RENDICION ? fundRequestId : "");
   const fundChoice = parsedChoice.type === "invalid" ? { type: "none" } : parsedChoice;
@@ -823,6 +956,14 @@ async function saveRequest(input) {
       }
       prepared.row.fund_request_id = fund.fundRequestId;
       prepared.row.assigned_amount = fund.assignedAmount;
+      if (fund.fundRequestId) {
+        const trip = await funds.tripFromFund(client, fund.fundRequestId);
+        if (trip) {
+          if (trip.destination) prepared.row.destination = trip.destination;
+          if (trip.period_start) prepared.row.period_start = trip.period_start;
+          if (trip.period_end) prepared.row.period_end = trip.period_end;
+        }
+      }
     } else if (!input.asDraft) {
       const cupo = await funds.checkFundLimit(client, { userId: input.user.id });
       if (!cupo.ok) {
@@ -860,15 +1001,22 @@ async function saveRequest(input) {
       saved = await updateRequest(client, draftId, prepared.row, {
         resetCreatedAt: !input.asDraft,
       });
-      await client.query("DELETE FROM expense_request_items WHERE request_id = $1", [draftId]);
+      // Primero los adjuntos: referencian las líneas. Después las líneas.
       await client.query("DELETE FROM expense_request_attachments WHERE request_id = $1", [draftId]);
+      await client.query("DELETE FROM expense_request_items WHERE request_id = $1", [draftId]);
     } else {
       saved = await insertRequestWithRetry(client, prepared.row);
     }
 
     // Con el id ya asignado, los comprobantes toman su nombre definitivo antes
     // del COMMIT; si algo falla después, el catch deshace los movimientos.
-    const renamed = await renameAttachments(input.user.id, saved.id, prepared.attachments, moves);
+    const renamed = await renameAttachments(
+      input.user.id,
+      saved.id,
+      prepared.attachments,
+      moves,
+      { items: prepared.items, kind: input.kind },
+    );
     await insertChildren(client, saved.id, prepared.items, renamed);
 
     if (prepared.account) {
@@ -890,7 +1038,12 @@ async function saveRequest(input) {
       manager: prepared.approver ? prepared.approver.manager : null,
       area: prepared.area,
       // Con sus nombres nuevos: el cliente debe seguir el borrador con estos.
-      attachments: renamed.map((a) => ({ name: a.name, url: a.url, public_id: a.publicId })),
+      attachments: renamed.map((a) => ({
+        name: a.name,
+        url: a.url,
+        public_id: a.publicId,
+        item_key: a.itemKey || null,
+      })),
     };
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
@@ -905,13 +1058,16 @@ async function saveRequest(input) {
 }
 
 async function insertChildren(client, requestId, items, attachments) {
+  const keyToId = new Map();
   if (items.length) {
-    await client.query(
+    const { rows } = await client.query(
       `INSERT INTO expense_request_items
-         (request_id, item_date, category, days, detail, amount, sort_order)
-       SELECT $1, d, cat, dys, det, amt, ord
-         FROM UNNEST($2::date[], $3::text[], $4::smallint[], $5::text[], $6::numeric[], $7::int[])
-           AS t(d, cat, dys, det, amt, ord)`,
+         (request_id, item_date, category, days, detail, amount, sort_order, details)
+       SELECT $1, d, cat, dys, det, amt, ord, extra::jsonb
+         FROM UNNEST(
+           $2::date[], $3::text[], $4::smallint[], $5::text[], $6::numeric[], $7::int[], $8::text[]
+         ) AS t(d, cat, dys, det, amt, ord, extra)
+       RETURNING id, sort_order`,
       [
         requestId,
         items.map((i) => i.itemDate),
@@ -920,17 +1076,26 @@ async function insertChildren(client, requestId, items, attachments) {
         items.map((i) => i.detail),
         items.map((i) => i.amount),
         items.map((_, index) => index),
+        items.map((i) => (i.details ? JSON.stringify(i.details) : null)),
       ],
     );
+    rows
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .forEach((row, index) => {
+        const key = items[index] && items[index].clientKey;
+        if (key) keyToId.set(key, row.id);
+      });
   }
 
   if (attachments.length) {
     await client.query(
-      `INSERT INTO expense_request_attachments (request_id, name, url, public_id)
-       SELECT $1, n, u, p
-         FROM UNNEST($2::text[], $3::text[], $4::text[]) AS t(n, u, p)`,
+      `INSERT INTO expense_request_attachments (request_id, item_id, name, url, public_id)
+       SELECT $1, i, n, u, p
+         FROM UNNEST($2::bigint[], $3::text[], $4::text[], $5::text[]) AS t(i, n, u, p)`,
       [
         requestId,
+        attachments.map((a) => keyToId.get(a.itemKey) || null),
         attachments.map((a) => a.name),
         attachments.map((a) => a.url),
         attachments.map((a) => a.publicId),
@@ -987,7 +1152,8 @@ async function updateRequest(client, id, row, { resetCreatedAt }) {
 
 /**
  * Descarta un borrador propio con todo lo suyo: líneas y adjuntos (por
- * CASCADE) y sus archivos del bucket. Lo ya enviado nunca se borra, se anula.
+ * CASCADE) y sus archivos del bucket. Lo ya enviado no se borra: se anula
+ * y queda en el historial.
  */
 async function deleteDraft({ requestId, user }) {
   const id = Number(requestId);
@@ -1064,6 +1230,13 @@ async function getDraftForEdit(requestId, user) {
       days: item.days || "",
       detail: item.detail || "",
       amount: item.amount,
+      details: item.details || null,
+      key: item.id != null ? "i" + item.id : "",
+      attachments: (item.attachments || []).map((a) => ({
+        name: a.name,
+        url: a.url,
+        public_id: a.public_id,
+      })),
     })),
     attachments: request.attachments.map((a) => ({
       name: a.name,
@@ -1192,7 +1365,7 @@ function rejectRequest({ requestId, reviewer, notes }) {
   return transition(requestId, reviewer, { approve: false, notes });
 }
 
-/** Anular: sólo el dueño y sólo mientras nadie la ha resuelto. */
+/** Anular: sólo el dueño y sólo mientras nadie la ha resuelto. Queda en el historial. */
 async function cancelRequest({ requestId, user }) {
   const id = Number(requestId);
   if (!Number.isInteger(id)) {
@@ -1383,14 +1556,14 @@ async function getRequestDetail(requestId) {
       [id],
     ),
     db.query(
-      `SELECT id, item_date, category, days, detail, amount
+      `SELECT id, item_date, category, days, detail, amount, details
          FROM expense_request_items
         WHERE request_id = $1
         ORDER BY sort_order ASC, id ASC`,
       [id],
     ),
     db.query(
-      `SELECT id, name, url, public_id
+      `SELECT id, item_id, name, url, public_id
          FROM expense_request_attachments
         WHERE request_id = $1
         ORDER BY id ASC`,
@@ -1403,15 +1576,28 @@ async function getRequestDetail(requestId) {
 
   // Fondo que rinde (rendición) o rendiciones que tiene (solicitud de fondos).
   const links = await funds.fundLinksFor(request);
+  const due =
+    request.kind === EXPENSE_KIND.FONDOS && links.fundState === "por_rendir"
+      ? reportDueOn(request.period_end, request.finance_reviewed_at)
+      : null;
+
+  const attachments = attachmentsResult.rows;
+  const items = itemsResult.rows.map((item) => ({
+    ...item,
+    attachments: attachments.filter((a) => Number(a.item_id) === Number(item.id)),
+  }));
 
   return {
     ...request,
     ...links,
+    reportDueOn: due,
+    overdue: !!(due && isReportOverdue(request.period_end, request.finance_reviewed_at)),
     // El documento se guarda normalizado ("12345678-5"); los puntos son
     // decoración de pantalla y se agregan aquí.
     requester_document_display: formatNationalId(request.requester_document),
-    items: itemsResult.rows,
-    attachments: attachmentsResult.rows,
+    items,
+    // Comprobantes sin línea: fondos, y rendiciones anteriores al desglose.
+    attachments: attachments.filter((a) => a.item_id == null),
   };
 }
 
@@ -1463,8 +1649,10 @@ module.exports = {
   normalizeDraftItems,
   normalizePeriod,
   normalizeAttachments,
+  bindItemAttachments,
   ownUploadPath,
   parseUploadPath,
+  slugExpenseDetail,
   finalAttachmentName,
   finalAttachmentNumber,
   acceptsAttachment,

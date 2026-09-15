@@ -27,7 +27,6 @@
   var totalEl = byId("totalCalculado");
   var adjuntoInput = byId("adjuntoInput");
   var dropzone = byId("dropzone");
-  var dropzoneTexto = byId("dropzoneTexto");
   var listaAdjuntos = byId("listaAdjuntos");
   var errorEl = byId("formError");
   var btnEnviar = byId("btnEnviar");
@@ -47,8 +46,9 @@
   var MAX_BYTES = Number(form.dataset.maxMb || 20) * 1024 * 1024;
   var DECIMALES = Number(form.dataset.decimales || 0);
   var MAX_FILAS = 50;
-  var MAX_ADJUNTOS = 10;
+  var MAX_ADJUNTOS = 50;
   var CATEGORIA_CON_DIAS = "hospedaje";
+  var CATEGORIA_COMBUSTIBLE = "combustible";
   var TITULOS = { rendicion: "Rendición de gastos", fondos: "Solicitud de fondos" };
 
   var estado = {
@@ -61,12 +61,18 @@
     ocupado: false,
   };
 
-  // Comprobantes ya subidos al bucket, pendientes de asociarse a la solicitud.
+  // Comprobantes de esta sesión. En fondos van sueltos; en rendición, cada
+  // línea tiene los suyos (por clave). Los nuevos se quedan en el navegador
+  // (File + blob) hasta guardar o enviar; los del borrador ya tienen url
+  // /content y public_id.
   var adjuntos = [];
+  var adjuntosPorClave = {};
+  var itemKeySeq = 0;
+  var destinoAdjunto = "";
 
-  /* Referencias de los subidos desde el último guardado. Si el usuario los
-     quita o cierra sin guardar, se borran del bucket en vez de quedar
-     huérfanos. Los ya guardados en el borrador los administra el servidor. */
+  /* Subidos al bucket en este guardado, todavía no persistidos. Si el POST
+     falla o el usuario cierra, se borran. Los del borrador los administra
+     el servidor. */
   var subidosSinGuardar = [];
 
   var JSON_HEADERS = {
@@ -200,10 +206,32 @@
       fijarCampo(fila, "item_date", datos.item_date);
       fijarCampo(fila, "category", datos.category);
       fijarCampo(fila, "detail", datos.detail);
-      fijarCampo(fila, "amount", montoParaCampo(datos.amount));
     }
-    sincronizarDias(fila);
+    sincronizarCategoria(fila);
     if (datos && datos.days) fijarCampo(fila, "days", datos.days);
+    if (datos && datos.details) {
+      fijarCampo(fila, "yield_km_l", decimalParaCampo(datos.details.yield_km_l));
+      fijarCampo(fila, "distance_km", decimalParaCampo(datos.details.distance_km));
+      fijarCampo(fila, "price_per_liter", montoParaCampo(datos.details.price_per_liter));
+    }
+    pintarCombustible(fila);
+    if (datos) {
+      var tieneMonto = datos.amount !== null && datos.amount !== undefined && datos.amount !== "";
+      var categoria = valorDe(fila, "category");
+      if (tieneMonto && categoria !== CATEGORIA_COMBUSTIBLE) {
+        fijarCampo(fila, "amount", montoParaCampo(datos.amount));
+      }
+    }
+
+    if (datos && datos.key) fila.dataset.key = String(datos.key);
+    claveFila(fila);
+    aplicarSoloFila(fila);
+    if (datos && Array.isArray(datos.attachments)) {
+      adjuntosPorClave[claveFila(fila)] = datos.attachments.map(function (a) {
+        return { name: a.name, url: a.url, public_id: a.public_id };
+      });
+    }
+    pintarAdjuntosFila(fila);
 
     actualizarBotonesQuitar();
     if (foco) {
@@ -223,23 +251,107 @@
     });
   }
 
-  /* Los días sólo aplican al hospedaje. Al cambiar a otra categoría se borran
-     para que no viaje un valor que la fila ya no muestra. */
-  function sincronizarDias(fila) {
-    var categoria = fila.querySelector('[data-campo="category"]');
-    var dias = fila.querySelector('[data-campo="days"]');
-    var guion = fila.querySelector("[data-dias-na]");
-    var conDias = !!categoria && categoria.value === CATEGORIA_CON_DIAS;
+  function decimalParaCampo(valor) {
+    if (valor === null || valor === undefined || valor === "") return "";
+    var n = Number(valor);
+    if (!Number.isFinite(n)) return "";
+    return String(n).replace(".", ",");
+  }
 
-    fila.classList.toggle("gasto-item-fila--hospedaje", conDias);
-    if (!dias) return;
-    dias.hidden = !conDias;
-    if (guion) guion.hidden = conDias;
-    if (!conDias) dias.value = "";
+  function parseDecimalCampo(valor) {
+    if (!String(valor || "").trim()) return null;
+    var n = parseMonto(valor);
+    return n > 0 ? n : null;
+  }
+
+  function litrosDe(rendimiento, distancia) {
+    if (!rendimiento || !distancia) return null;
+    return Math.round((distancia / rendimiento) * 100) / 100;
+  }
+
+  function redondearMoneda(valor) {
+    var factor = Math.pow(10, DECIMALES);
+    return Math.round(valor * factor) / factor;
+  }
+
+  function montoSugeridoCombustible(fila) {
+    var litros = litrosDe(
+      parseDecimalCampo(valorDe(fila, "yield_km_l")),
+      parseDecimalCampo(valorDe(fila, "distance_km")),
+    );
+    var precio = parseDecimalCampo(valorDe(fila, "price_per_liter"));
+    if (litros == null || !precio) return null;
+    return redondearMoneda(litros * precio);
+  }
+
+  function fijarMontoCombustible(fila, bloquear) {
+    var monto = fila.querySelector('[data-campo="amount"]');
+    if (!monto) return;
+    monto.readOnly = !!bloquear;
+    monto.tabIndex = bloquear ? -1 : 0;
+    if (bloquear) monto.setAttribute("aria-readonly", "true");
+    else monto.removeAttribute("aria-readonly");
+  }
+
+  function pintarCombustible(fila) {
+    if (!fila) return;
+    var monto = fila.querySelector('[data-campo="amount"]');
+    if (!monto || !monto.readOnly) return;
+    var sugerido = montoSugeridoCombustible(fila);
+    monto.value = sugerido != null ? montoParaCampo(sugerido) : "";
+  }
+
+  /* Hospedaje y combustible despliegan un panel extra bajo la línea; el resto
+     no pide nada más que fecha, categoría, detalle y monto. En combustible el
+     monto lo calculan los tres campos extra: no se escribe a mano. */
+  function sincronizarCategoria(fila) {
+    var categoria = fila.querySelector('[data-campo="category"]');
+    var valor = categoria ? categoria.value : "";
+    var conDias = valor === CATEGORIA_CON_DIAS;
+    var conCombustible = valor === CATEGORIA_COMBUSTIBLE;
+
+    fila.classList.toggle("gasto-item-fila--extra", conDias || conCombustible);
+
+    var extra = fila.querySelector("[data-extra]");
+    var extraCombustible = fila.querySelector("[data-extra-combustible]");
+    var extraHospedaje = fila.querySelector("[data-extra-hospedaje]");
+    if (extra) extra.hidden = !(conDias || conCombustible);
+    if (extraCombustible) extraCombustible.hidden = !conCombustible;
+    if (extraHospedaje) extraHospedaje.hidden = !conDias;
+
+    var dias = fila.querySelector('[data-campo="days"]');
+    if (dias && !conDias) dias.value = "";
+
+    fijarMontoCombustible(fila, conCombustible);
+    if (!conCombustible) {
+      ["yield_km_l", "distance_km", "price_per_liter"].forEach(function (campo) {
+        var input = fila.querySelector('[data-campo="' + campo + '"]');
+        if (input) input.value = "";
+      });
+    } else {
+      pintarCombustible(fila);
+    }
+
+    var detalle = fila.querySelector('[data-campo="detail"]');
+    if (detalle) {
+      detalle.placeholder = conCombustible
+        ? "Ej: Copec Ruta 5 · patente ABCD12"
+        : conDias
+          ? "Ej: Hotel Antofagasta"
+          : "Ej: Disco SSD 1 TB";
+    }
   }
 
   contenedor.addEventListener("input", function (e) {
-    if (e.target.dataset.campo === "amount") recalcular();
+    var campo = e.target.dataset.campo;
+    if (campo === "amount") {
+      if (e.target.readOnly) return;
+      recalcular();
+    }
+    if (campo === "yield_km_l" || campo === "distance_km" || campo === "price_per_liter") {
+      pintarCombustible(e.target.closest(".gasto-item-fila"));
+      recalcular();
+    }
   });
 
   contenedor.addEventListener("focusout", function (e) {
@@ -251,17 +363,32 @@
     if (campo === "item_date") derivarPeriodo();
     if (campo !== "category") return;
     var fila = e.target.closest(".gasto-item-fila");
-    sincronizarDias(fila);
+    sincronizarCategoria(fila);
     if (e.target.value === CATEGORIA_CON_DIAS) {
       var dias = fila.querySelector('[data-campo="days"]');
       if (dias) dias.focus();
     }
+    if (e.target.value === CATEGORIA_COMBUSTIBLE) {
+      var rendimiento = fila.querySelector('[data-campo="yield_km_l"]');
+      if (rendimiento) rendimiento.focus();
+    }
+    recalcular();
   });
 
   contenedor.addEventListener("click", function (e) {
+    var adjuntar = e.target.closest("[data-adjuntar]");
+    if (adjuntar) {
+      e.preventDefault();
+      if (estado.ocupado) return;
+      destinoAdjunto = claveFila(adjuntar.closest(".gasto-item-fila"));
+      adjuntoInput.click();
+      return;
+    }
     var btn = e.target.closest("[data-quitar-fila]");
     if (!btn || btn.disabled) return;
-    btn.closest(".gasto-item-fila").remove();
+    var fila = btn.closest(".gasto-item-fila");
+    soltarAdjuntosFila(fila);
+    fila.remove();
     actualizarBotonesQuitar();
     recalcular();
     derivarPeriodo();
@@ -304,6 +431,7 @@
     // El centro del fondo es el más probable; el usuario puede cambiarlo.
     if (e.target.dataset.centro) cargarCentro(e.target.dataset.centro);
     if (avisoFondo) avisoFondo.hidden = true;
+    aplicarViajeDelFondo();
     recalcular();
   });
 
@@ -311,21 +439,80 @@
     return (fila.querySelector('[data-campo="' + campo + '"]') || {}).value || "";
   }
 
+  function claveFila(fila) {
+    if (!fila.dataset.key) {
+      itemKeySeq += 1;
+      fila.dataset.key = "k" + itemKeySeq;
+    }
+    return fila.dataset.key;
+  }
+
+  function adjuntosDe(fila) {
+    var key = claveFila(fila);
+    if (!adjuntosPorClave[key]) adjuntosPorClave[key] = [];
+    return adjuntosPorClave[key];
+  }
+
+  function aplicarSoloFila(fila) {
+    todos("[data-solo]", fila).forEach(function (el) {
+      el.hidden = el.dataset.solo !== estado.kind;
+    });
+  }
+
+  function contarAdjuntos() {
+    if (estado.kind !== "rendicion") return adjuntos.length;
+    var n = 0;
+    Object.keys(adjuntosPorClave).forEach(function (key) {
+      n += (adjuntosPorClave[key] || []).length;
+    });
+    return n;
+  }
+
+  function leerAdjuntosPorItem() {
+    var lista = [];
+    todos(".gasto-item-fila", contenedor).forEach(function (fila) {
+      var key = claveFila(fila);
+      (adjuntosPorClave[key] || []).forEach(function (adj) {
+        lista.push({
+          name: adj.name,
+          url: adj.url,
+          public_id: adj.public_id,
+          item_key: key,
+        });
+      });
+    });
+    return lista;
+  }
+
   function leerItems() {
     return todos(".gasto-item-fila", contenedor)
       .map(function (fila, index) {
         var categoria = valorDe(fila, "category");
         return {
+          key: claveFila(fila),
           item_date: valorDe(fila, "item_date"),
           category: categoria,
           days: categoria === CATEGORIA_CON_DIAS ? valorDe(fila, "days") : "",
           detail: valorDe(fila, "detail"),
           amount: valorDe(fila, "amount"),
+          details: categoria === CATEGORIA_COMBUSTIBLE
+            ? {
+                yield_km_l: valorDe(fila, "yield_km_l"),
+                distance_km: valorDe(fila, "distance_km"),
+                price_per_liter: valorDe(fila, "price_per_liter"),
+              }
+            : null,
           sort_order: index,
         };
       })
       .filter(function (item) {
-        return item.detail.trim() || item.amount.trim() || item.category || item.item_date;
+        return (
+          item.detail.trim() ||
+          item.amount.trim() ||
+          item.category ||
+          item.item_date ||
+          (adjuntosPorClave[item.key] || []).length
+        );
       });
   }
 
@@ -339,7 +526,8 @@
       var detalle = valorDe(fila, "detail").trim();
       var monto = valorDe(fila, "amount").trim();
       var categoria = valorDe(fila, "category");
-      if (!detalle && !monto && !categoria) continue;
+      var conAdjunto = adjuntosDe(fila).length > 0;
+      if (!detalle && !monto && !categoria && !conAdjunto) continue;
       alguna = true;
       var nombre = detalle ? "«" + detalle + "»" : "la línea " + (i + 1);
       var campo = function (nombreCampo) {
@@ -353,8 +541,27 @@
           return { msg: "Indica los días de hospedaje de " + nombre + ".", campo: campo("days") };
         }
       }
+      if (categoria === CATEGORIA_COMBUSTIBLE) {
+        if (!parseDecimalCampo(valorDe(fila, "yield_km_l"))) {
+          return { msg: "Indica el rendimiento (km/L) de " + nombre + ".", campo: campo("yield_km_l") };
+        }
+        if (!parseDecimalCampo(valorDe(fila, "distance_km"))) {
+          return { msg: "Indica la distancia recorrida de " + nombre + ".", campo: campo("distance_km") };
+        }
+        if (!parseDecimalCampo(valorDe(fila, "price_per_liter"))) {
+          return { msg: "Indica el precio por litro de " + nombre + ".", campo: campo("price_per_liter") };
+        }
+      }
       if (!detalle) return { msg: "Agrega el detalle de la línea " + (i + 1) + ".", campo: campo("detail") };
-      if (!monto) return { msg: "Indica el monto de " + nombre + ".", campo: campo("amount") };
+      if (categoria !== CATEGORIA_COMBUSTIBLE && !monto) {
+        return { msg: "Indica el monto de " + nombre + ".", campo: campo("amount") };
+      }
+      if (estado.kind === "rendicion" && !conAdjunto) {
+        return {
+          msg: "Adjunta el comprobante de " + nombre + ".",
+          campo: fila.querySelector("[data-adjuntar]"),
+        };
+      }
     }
     if (!alguna) {
       return { msg: "Agrega al menos una línea al desglose.", campo: contenedor.querySelector("select, input") };
@@ -371,12 +578,39 @@
       .sort();
   }
 
-  /* Mientras el usuario no lo toque, el período va de la primera a la última
-     fecha del desglose. Si borra un extremo, ese extremo vuelve a ser automático. */
+  /* Mientras el usuario no lo toque, en un reembolso el período va de la
+     primera a la última fecha del desglose. En fondos es el viaje: no se
+     deduce. Si rinde un fondo, se copia de ese viaje y no se edita. */
+  function viajeDelFondoActivo() {
+    if (estado.kind !== "rendicion") return null;
+    var radio = fondoElegido();
+    if (!radio || radio.value === "reembolso") return null;
+    return radio;
+  }
+
   function derivarPeriodo() {
+    if (estado.kind === "fondos" || viajeDelFondoActivo()) return;
     var fechas = fechasDesglose();
     if (!periodoDesde.dataset.manual) periodoDesde.value = fechas[0] || "";
     if (!periodoHasta.dataset.manual) periodoHasta.value = fechas[fechas.length - 1] || "";
+  }
+
+  function aplicarViajeDelFondo() {
+    var destino = byId("destino");
+    var radio = viajeDelFondoActivo();
+    var tieneViaje = !!(radio && (radio.dataset.desde || radio.dataset.hasta));
+    if (radio) {
+      if (radio.dataset.destino) destino.value = radio.dataset.destino;
+      if (tieneViaje) {
+        periodoDesde.value = radio.dataset.desde || "";
+        periodoHasta.value = radio.dataset.hasta || "";
+        periodoDesde.dataset.manual = "1";
+        periodoHasta.dataset.manual = "1";
+      }
+    }
+    destino.readOnly = !!(radio && radio.dataset.destino);
+    periodoDesde.readOnly = tieneViaje;
+    periodoHasta.readOnly = tieneViaje;
   }
 
   /* Al retomar un borrador, un extremo que coincide con las fechas del desglose
@@ -605,45 +839,134 @@
 
   // ── Comprobantes ─────────────────────────────────────────────────────────
 
-  function pintarAdjuntos() {
-    while (listaAdjuntos.firstChild) listaAdjuntos.removeChild(listaAdjuntos.firstChild);
+  function esAdjuntoLocal(adj) {
+    return !!(adj && adj.file);
+  }
 
-    adjuntos.forEach(function (adj, index) {
-      var li = document.createElement("li");
-      li.className = "gasto-adjunto";
+  function adjuntoDesdeArchivo(file) {
+    return {
+      name: file.name,
+      url: URL.createObjectURL(file),
+      public_id: null,
+      file: file,
+    };
+  }
 
-      var nombre = document.createElement("a");
-      nombre.className = "gasto-adjunto__nombre";
-      nombre.href = adj.url;
-      nombre.target = "_blank";
-      nombre.rel = "noopener";
-      nombre.textContent = adj.name;
+  function liberarBlob(adj) {
+    if (!adj || !adj.url || adj.url.indexOf("blob:") !== 0) return;
+    try {
+      URL.revokeObjectURL(adj.url);
+    } catch (err) {}
+  }
 
-      var quitar = document.createElement("button");
-      quitar.type = "button";
-      quitar.className = "gasto-adjunto__quitar";
-      quitar.setAttribute("aria-label", "Quitar " + adj.name);
-      quitar.textContent = "×";
-      quitar.addEventListener("click", function () {
-        adjuntos.splice(index, 1);
-        // Recién subido y nunca guardado: nadie más lo usa, se borra ya.
-        var ref = adj.public_id || adj.url;
-        var pendiente = subidosSinGuardar.indexOf(ref);
-        if (pendiente !== -1) {
-          subidosSinGuardar.splice(pendiente, 1);
-          descartarArchivos([ref]);
-        }
-        pintarAdjuntos();
-        marcarSucio();
+  function cadaAdjunto(fn) {
+    if (estado.kind === "rendicion") {
+      Object.keys(adjuntosPorClave).forEach(function (key) {
+        (adjuntosPorClave[key] || []).forEach(fn);
       });
+    } else {
+      adjuntos.forEach(fn);
+    }
+  }
 
-      li.appendChild(nombre);
-      li.appendChild(quitar);
-      listaAdjuntos.appendChild(li);
+  function hayAdjuntosLocales() {
+    var hay = false;
+    cadaAdjunto(function (adj) {
+      if (esAdjuntoLocal(adj)) hay = true;
+    });
+    return hay;
+  }
+
+  function liberarBlobsLocales() {
+    cadaAdjunto(function (adj) {
+      if (esAdjuntoLocal(adj)) liberarBlob(adj);
     });
   }
 
-  function subirArchivo(file) {
+  function refrescarListasAdjuntos() {
+    if (estado.kind === "rendicion") {
+      todos(".gasto-item-fila", contenedor).forEach(pintarAdjuntosFila);
+    } else {
+      pintarAdjuntos();
+    }
+  }
+
+  function chipAdjunto(adj, alQuitar) {
+    var li = document.createElement("li");
+    li.className = "gasto-adjunto";
+
+    var nombre = document.createElement("a");
+    nombre.className = "gasto-adjunto__nombre";
+    nombre.href = adj.url;
+    nombre.target = "_blank";
+    nombre.rel = "noopener";
+    nombre.textContent = adj.name;
+
+    var quitar = document.createElement("button");
+    quitar.type = "button";
+    quitar.className = "gasto-adjunto__quitar";
+    quitar.setAttribute("aria-label", "Quitar " + adj.name);
+    quitar.textContent = "×";
+    quitar.addEventListener("click", alQuitar);
+
+    li.appendChild(nombre);
+    li.appendChild(quitar);
+    return li;
+  }
+
+  function descartarSiPendiente(adj) {
+    if (esAdjuntoLocal(adj)) {
+      liberarBlob(adj);
+      return;
+    }
+    var ref = adj.public_id || adj.url;
+    var pendiente = subidosSinGuardar.indexOf(ref);
+    if (pendiente !== -1) {
+      subidosSinGuardar.splice(pendiente, 1);
+      descartarArchivos([ref]);
+    }
+  }
+
+  function pintarAdjuntos() {
+    if (!listaAdjuntos) return;
+    while (listaAdjuntos.firstChild) listaAdjuntos.removeChild(listaAdjuntos.firstChild);
+    adjuntos.forEach(function (adj, index) {
+      listaAdjuntos.appendChild(chipAdjunto(adj, function () {
+        adjuntos.splice(index, 1);
+        descartarSiPendiente(adj);
+        pintarAdjuntos();
+        marcarSucio();
+      }));
+    });
+  }
+
+  function pintarAdjuntosFila(fila) {
+    var lista = fila.querySelector("[data-adjuntos-lista]");
+    var texto = fila.querySelector("[data-adjuntar-texto]");
+    if (!lista) return;
+    while (lista.firstChild) lista.removeChild(lista.firstChild);
+    var archivos = adjuntosDe(fila);
+    archivos.forEach(function (adj, index) {
+      var li = chipAdjunto(adj, function () {
+        archivos.splice(index, 1);
+        descartarSiPendiente(adj);
+        pintarAdjuntosFila(fila);
+        marcarSucio();
+      });
+      li.classList.add("gasto-adjunto--linea");
+      lista.appendChild(li);
+    });
+    if (texto) texto.textContent = archivos.length ? "Adjuntar otro" : "Adjuntar comprobante";
+  }
+
+  function soltarAdjuntosFila(fila) {
+    var key = fila && fila.dataset.key;
+    if (!key || !adjuntosPorClave[key]) return;
+    adjuntosPorClave[key].forEach(descartarSiPendiente);
+    delete adjuntosPorClave[key];
+  }
+
+  function subirArchivoAlServidor(file) {
     var datos = new FormData();
     datos.append("archivo", file);
     return fetch("/gastos/adjuntos/upload", {
@@ -651,38 +974,60 @@
       headers: { Accept: "application/json", "X-Requested-With": "fetch" },
       body: datos,
       credentials: "same-origin",
-    })
-      .then(function (res) {
-        // Un 413 del proxy o una página de error no traen JSON: el usuario
-        // debe ver un mensaje, no el error de parseo.
-        return leerRespuestaJson(res).then(function (data) {
-          if (!res.ok || !data.secure_url) {
-            throw new Error(data.error || 'No se pudo subir "' + file.name + '".');
-          }
-          return data;
-        });
-      })
-      .then(function (data) {
-        adjuntos.push({
-          name: file.name,
-          url: data.secure_url,
-          public_id: data.public_id,
-        });
-        subidosSinGuardar.push(data.public_id || data.secure_url);
+    }).then(function (res) {
+      return leerRespuestaJson(res).then(function (data) {
+        if (!res.ok || !data.secure_url) {
+          throw new Error(data.error || 'No se pudo subir "' + file.name + '".');
+        }
+        return data;
       });
+    });
   }
 
-  var textoZona = dropzoneTexto.innerHTML;
+  /* Los File se quedan en memoria hasta este paso: guardar borrador o enviar. */
+  async function persistirAdjuntosLocales() {
+    var pendientes = [];
+    function recoger(lista) {
+      (lista || []).forEach(function (adj, i) {
+        if (esAdjuntoLocal(adj)) pendientes.push({ lista: lista, index: i, adj: adj });
+      });
+    }
+    if (estado.kind === "rendicion") {
+      Object.keys(adjuntosPorClave).forEach(function (key) {
+        recoger(adjuntosPorClave[key]);
+      });
+    } else {
+      recoger(adjuntos);
+    }
 
-  async function subirArchivos(archivos) {
+    for (var i = 0; i < pendientes.length; i += 1) {
+      var item = pendientes[i];
+      var data = await subirArchivoAlServidor(item.adj.file);
+      liberarBlob(item.adj);
+      item.lista[item.index] = {
+        name: item.adj.name,
+        url: data.secure_url,
+        public_id: data.public_id,
+      };
+      subidosSinGuardar.push(data.public_id || data.secure_url);
+    }
+  }
+
+  function adjuntarArchivos(archivos, itemKey) {
     if (estado.ocupado || !archivos.length) return;
     limpiarError();
-    ocupar(true, btnEnviar, "Subiendo…");
-    dropzone.classList.add("is-subiendo");
+
+    var lista = itemKey
+      ? (adjuntosPorClave[itemKey] || (adjuntosPorClave[itemKey] = []))
+      : adjuntos;
+    var fila = itemKey
+      ? contenedor.querySelector('.gasto-item-fila[data-key="' + itemKey + '"]')
+      : null;
+    var agregados = 0;
 
     for (var i = 0; i < archivos.length; i += 1) {
       var file = archivos[i];
-      if (adjuntos.length >= MAX_ADJUNTOS) {
+      if (contarAdjuntos() >= MAX_ADJUNTOS) {
         mostrarError("Máximo " + MAX_ADJUNTOS + " comprobantes por solicitud.");
         break;
       }
@@ -690,36 +1035,37 @@
         mostrarError('"' + file.name + '" supera los ' + form.dataset.maxMb + " MB.");
         continue;
       }
-      dropzoneTexto.textContent =
-        "Subiendo " + (archivos.length > 1 ? i + 1 + " de " + archivos.length : file.name) + "…";
-      try {
-        await subirArchivo(file);
-        pintarAdjuntos();
-        marcarSucio();
-      } catch (err) {
-        mostrarError(mensajeDeRed(err, 'No se pudo subir "' + file.name + '".'));
-      }
+      lista.push(adjuntoDesdeArchivo(file));
+      agregados += 1;
     }
 
-    dropzoneTexto.innerHTML = textoZona;
-    dropzone.classList.remove("is-subiendo");
-    ocupar(false);
+    if (agregados) {
+      if (fila) pintarAdjuntosFila(fila);
+      else pintarAdjuntos();
+      marcarSucio();
+    }
   }
 
   function traeArchivos(e) {
     return !!e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, "Files") !== -1;
   }
 
-  // Toda la zona abre el selector; el botón interno está para el teclado y su
-  // click llega aquí por burbujeo.
+  function zonaAdjuntoItem(el) {
+    return el && el.closest ? el.closest("[data-col='attachments']") : null;
+  }
+
   dropzone.addEventListener("click", function () {
-    if (!estado.ocupado) adjuntoInput.click();
+    if (estado.ocupado) return;
+    destinoAdjunto = "";
+    adjuntoInput.click();
   });
 
   adjuntoInput.addEventListener("change", function () {
     var archivos = Array.prototype.slice.call(adjuntoInput.files);
     adjuntoInput.value = "";
-    subirArchivos(archivos);
+    var clave = destinoAdjunto;
+    destinoAdjunto = "";
+    adjuntarArchivos(archivos, clave || undefined);
   });
 
   ["dragenter", "dragover"].forEach(function (tipoEvento) {
@@ -739,14 +1085,41 @@
     if (!traeArchivos(e)) return;
     e.preventDefault();
     dropzone.classList.remove("is-over");
-    subirArchivos(Array.prototype.slice.call(e.dataTransfer.files));
+    destinoAdjunto = "";
+    adjuntarArchivos(Array.prototype.slice.call(e.dataTransfer.files));
+  });
+
+  ["dragenter", "dragover"].forEach(function (tipoEvento) {
+    contenedor.addEventListener(tipoEvento, function (e) {
+      var zona = zonaAdjuntoItem(e.target);
+      if (!zona || !traeArchivos(e) || estado.kind !== "rendicion") return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      zona.classList.add("is-over");
+    });
+  });
+
+  contenedor.addEventListener("dragleave", function (e) {
+    var zona = zonaAdjuntoItem(e.target);
+    if (zona && !zona.contains(e.relatedTarget)) zona.classList.remove("is-over");
+  });
+
+  contenedor.addEventListener("drop", function (e) {
+    var zona = zonaAdjuntoItem(e.target);
+    if (!zona || !traeArchivos(e) || estado.kind !== "rendicion") return;
+    e.preventDefault();
+    zona.classList.remove("is-over");
+    var fila = zona.closest(".gasto-item-fila");
+    adjuntarArchivos(Array.prototype.slice.call(e.dataTransfer.files), claveFila(fila));
   });
 
   /* Un archivo soltado fuera de la zona no debe abrirse en la pestaña y hacer
      perder todo lo escrito. */
   ["dragover", "drop"].forEach(function (tipoEvento) {
     window.addEventListener(tipoEvento, function (e) {
-      if (traeArchivos(e) && !dropzone.contains(e.target)) e.preventDefault();
+      if (!traeArchivos(e)) return;
+      if (dropzone.contains(e.target) || zonaAdjuntoItem(e.target)) return;
+      e.preventDefault();
     });
   });
 
@@ -824,17 +1197,24 @@
   }
 
   function reiniciar() {
+    liberarBlobsLocales();
     descartarPendientes();
     form.reset();
     todos(".gasto-item-fila", contenedor).forEach(function (fila) {
       fila.remove();
     });
     adjuntos = [];
+    adjuntosPorClave = {};
+    itemKeySeq = 0;
+    destinoAdjunto = "";
     pintarAdjuntos();
     delete periodoDesde.dataset.manual;
     delete periodoHasta.dataset.manual;
     if (avisoFondo) avisoFondo.hidden = true;
     estado.borradorId = null;
+    byId("destino").readOnly = false;
+    periodoDesde.readOnly = false;
+    periodoHasta.readOnly = false;
     limpiarError();
     if (banco) banco.reiniciar();
   }
@@ -844,7 +1224,6 @@
     campoTitulo.value = borrador.title || "";
     byId("descripcion").value = borrador.description || "";
     byId("destino").value = borrador.destination || "";
-    byId("neededBy").value = borrador.needed_by || "";
 
     // Primero el fondo (propone su centro) y después el centro guardado, que manda.
     if (borrador.fund_request_id && !elegirFondo(borrador.fund_request_id) && avisoFondo) {
@@ -857,14 +1236,30 @@
     });
     if (!todos(".gasto-item-fila", contenedor).length) agregarFila(false);
 
-    var fechas = fechasDesglose();
-    fijarPeriodo(periodoDesde, borrador.period_start, fechas[0]);
-    fijarPeriodo(periodoHasta, borrador.period_end, fechas[fechas.length - 1]);
+    aplicarViajeDelFondo();
+    if (estado.kind === "fondos") {
+      fijarPeriodo(periodoDesde, borrador.period_start, "");
+      fijarPeriodo(periodoHasta, borrador.period_end, "");
+    } else if (!viajeDelFondoActivo()) {
+      var fechas = fechasDesglose();
+      fijarPeriodo(periodoDesde, borrador.period_start, fechas[0]);
+      fijarPeriodo(periodoHasta, borrador.period_end, fechas[fechas.length - 1]);
+    }
 
-    adjuntos = (borrador.attachments || []).map(function (a) {
+    var sueltos = (borrador.attachments || []).map(function (a) {
       return { name: a.name, url: a.url, public_id: a.public_id };
     });
-    pintarAdjuntos();
+    if (estado.kind === "fondos") {
+      adjuntos = sueltos;
+      pintarAdjuntos();
+    } else if (sueltos.length) {
+      // Borradores viejos: los comprobantes eran de la solicitud, no de la línea.
+      var primera = todos(".gasto-item-fila", contenedor)[0];
+      if (primera) {
+        adjuntosDe(primera).push.apply(adjuntosDe(primera), sueltos);
+        pintarAdjuntosFila(primera);
+      }
+    }
 
     if (banco) banco.cargar(borrador.bank_account);
   }
@@ -876,10 +1271,11 @@
       rellenar(borrador);
     } else {
       agregarFila(false);
-      derivarPeriodo();
+      if (estado.kind !== "fondos") derivarPeriodo();
     }
     // Desde el botón "Rendir" de un fondo, ese fondo llega elegido.
     if (opciones && opciones.fondoId) elegirFondo(opciones.fondoId);
+    aplicarViajeDelFondo();
     recalcular();
     btnEliminarBorrador.hidden = !estado.borradorId;
     mostrarEstado(borrador ? textoBorrador(borrador.id, borrador.updated_at) : "");
@@ -899,7 +1295,8 @@
       return;
     }
     estado.sucio = false;
-    // Lo subido y no guardado se pierde al cerrar: se borra del bucket.
+    // Los File locales se sueltan; lo subido en un guardado fallido se borra.
+    liberarBlobsLocales();
     descartarPendientes();
     window.IntranetModal.close(overlay);
     if (estado.listaDesactualizada) {
@@ -945,8 +1342,8 @@
       period_end: periodoHasta.value || periodoDesde.value,
       description: byId("descripcion").value,
       items: leerItems(),
-      attachments: adjuntos,
-      needed_by: estado.kind === "fondos" ? byId("neededBy").value : "",
+      attachments: estado.kind === "rendicion" ? leerAdjuntosPorItem() : adjuntos,
+      needed_by: "",
       cost_center_id: centroElegido(),
     };
     if (banco) Object.assign(cuerpo, banco.leer());
@@ -984,14 +1381,21 @@
     var problemaItems = validarItems();
     if (problemaItems) return problemaItems;
 
-    // El período es opcional; sólo se rechaza al revés.
-    derivarPeriodo();
-    if (periodoDesde.value && periodoHasta.value && periodoDesde.value > periodoHasta.value) {
-      return { msg: "El período de gastos termina antes de empezar.", campo: periodoHasta };
-    }
-
-    if (estado.kind === "rendicion" && !adjuntos.length) {
-      return { msg: "Adjunta al menos un comprobante.", campo: dropzone.querySelector("button") };
+    if (estado.kind === "fondos") {
+      if (!periodoDesde.value || !periodoHasta.value) {
+        return {
+          msg: "Indica el período del viaje (desde y hasta).",
+          campo: periodoDesde.value ? periodoHasta : periodoDesde,
+        };
+      }
+      if (periodoDesde.value > periodoHasta.value) {
+        return { msg: "El período del viaje termina antes de empezar.", campo: periodoHasta };
+      }
+    } else {
+      if (!viajeDelFondoActivo()) derivarPeriodo();
+      if (periodoDesde.value && periodoHasta.value && periodoDesde.value > periodoHasta.value) {
+        return { msg: "El período de gastos termina antes de empezar.", campo: periodoHasta };
+      }
     }
 
     return banco ? banco.validar() : null;
@@ -1000,20 +1404,33 @@
   btnBorrador.addEventListener("click", async function () {
     if (estado.ocupado) return;
     limpiarError();
-    var cuerpo = leerCuerpo();
-    cuerpo.draft = true;
     try {
+      ocupar(true, btnBorrador, hayAdjuntosLocales() ? "Subiendo comprobantes…" : "Guardando…");
+      await persistirAdjuntosLocales();
       ocupar(true, btnBorrador, "Guardando…");
+      var cuerpo = leerCuerpo();
+      cuerpo.draft = true;
       var data = await enviar(cuerpo);
       // Ya viven en el borrador: dejan de ser descartables desde el cliente.
       subidosSinGuardar = [];
-      // Al guardar se renombran (<id>_<n>): el próximo guardado debe mandar
-      // las rutas nuevas, porque las temporales ya no existen.
+      // Al guardar se renombran (<id>_<n>[_slug]): el próximo guardado debe
+      // mandar las rutas nuevas, porque las temporales ya no existen.
       if (Array.isArray(data.attachments)) {
-        adjuntos = data.attachments.map(function (a) {
-          return { name: a.name, url: a.url, public_id: a.public_id };
-        });
-        pintarAdjuntos();
+        if (estado.kind === "rendicion") {
+          var porClave = {};
+          data.attachments.forEach(function (a) {
+            if (!a.item_key) return;
+            if (!porClave[a.item_key]) porClave[a.item_key] = [];
+            porClave[a.item_key].push({ name: a.name, url: a.url, public_id: a.public_id });
+          });
+          adjuntosPorClave = porClave;
+          todos(".gasto-item-fila", contenedor).forEach(pintarAdjuntosFila);
+        } else {
+          adjuntos = data.attachments.map(function (a) {
+            return { name: a.name, url: a.url, public_id: a.public_id };
+          });
+          pintarAdjuntos();
+        }
       }
       estado.borradorId = data.id;
       estado.sucio = false;
@@ -1021,6 +1438,7 @@
       btnEliminarBorrador.hidden = false;
       mostrarEstado(textoBorrador(data.id, data.updatedAt));
     } catch (err) {
+      refrescarListasAdjuntos();
       mostrarError(mensajeDeRed(err, "No se pudo guardar el borrador."));
     } finally {
       ocupar(false);
@@ -1035,15 +1453,18 @@
     var problema = validar();
     if (problema) return fallar(problema);
 
-    var cuerpo = leerCuerpo();
-    cuerpo.draft = false;
     try {
+      ocupar(true, btnEnviar, hayAdjuntosLocales() ? "Subiendo comprobantes…" : "Enviando…");
+      await persistirAdjuntosLocales();
       ocupar(true, btnEnviar, "Enviando…");
+      var cuerpo = leerCuerpo();
+      cuerpo.draft = false;
       await enviar(cuerpo);
       subidosSinGuardar = [];
       estado.sucio = false;
       window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Solicitud enviada.");
     } catch (err) {
+      refrescarListasAdjuntos();
       mostrarError(mensajeDeRed(err, "No se pudo enviar la solicitud."));
       ocupar(false);
     }

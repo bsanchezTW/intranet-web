@@ -269,8 +269,8 @@
   max-width: 900px;
 }
 
-/* Desglose: en escritorio es una grilla de 4 columnas; en móvil cada fila se
-   convierte en una tarjeta apilada (ver el @media del final). */
+/* Desglose: fecha, categoría, detalle, monto y quitar. Hospedaje y combustible
+   despliegan un panel extra debajo; en móvil cada fila se apila. */
 .gasto-items {
   border: 1px solid var(--color-border);
   border-radius: 14px;
@@ -281,7 +281,7 @@
 .gasto-items__head,
 .gasto-item-fila {
   display: grid;
-  grid-template-columns: 132px 160px 68px minmax(0, 1fr) 124px 40px;
+  grid-template-columns: 168px 160px minmax(0, 1fr) 124px 40px;
   gap: 10px;
   align-items: center;
   padding: 10px 14px;
@@ -467,6 +467,34 @@
   font-size: 0.92rem;
   font-family: inherit;
   cursor: pointer;
+}
+
+.gasto-confirm {
+  max-width: 28rem;
+}
+
+.gasto-confirm .gasto-modal__body {
+  padding: 4px 20px 8px;
+}
+
+.gasto-confirm .gasto-modal__body p {
+  margin: 0 0 10px;
+  color: var(--color-text);
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.gasto-confirm__aviso {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.gasto-confirm__acciones {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 20px 16px;
 }
 
 /* ── Adjuntos ────────────────────────────────────────────────────────────── */
@@ -786,13 +814,13 @@
     padding-right: 18px;
   }
 
-  /* La grilla de 4 columnas no cabe: cada ítem pasa a ser una tarjeta. */
+  /* La grilla de escritorio no cabe: cada ítem pasa a ser una tarjeta. */
   .gasto-items__head {
     display: none;
   }
 
-  /* Fecha y categoría arriba, detalle a lo ancho, días (si es hospedaje) y
-     monto abajo. `order` reordena sin tocar el DOM de la plantilla. */
+  /* Fecha y categoría arriba, detalle a lo ancho, monto abajo. `order`
+     reordena sin tocar el DOM de la plantilla. */
   .gasto-item-fila {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -804,23 +832,29 @@
     order: 1;
   }
 
-  .gasto-item-fila > [data-col="days"],
   .gasto-item-fila > [data-col="amount"] {
     order: 2;
+    grid-column: 1 / -1;
   }
 
-  .gasto-item-fila:not(.gasto-item-fila--hospedaje) > [data-col="days"] {
-    display: none;
+  .gasto-item-extra {
+    order: 3;
+    grid-column: 1 / -1;
   }
 
-  .gasto-item-fila:not(.gasto-item-fila--hospedaje) > [data-col="amount"] {
+  .gasto-item-adjuntos {
+    order: 4;
     grid-column: 1 / -1;
   }
 
   .gasto-item-fila__quitar {
-    order: 3;
+    order: 5;
     grid-column: 1 / -1;
     justify-self: end;
+  }
+
+  .gasto-item-extra__linea {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   /* Fila del historial: título y chevron arriba, monto y estado abajo. Con
@@ -939,24 +973,61 @@
   color: var(--color-heading);
 }
 
-/* ── Desglose: celda de días ─────────────────────────────────────────────── */
+.gasto-item-fila--extra {
+  align-items: start;
+}
+
+.gasto-item-extra {
+  grid-column: 1 / -1;
+  padding-top: 8px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.gasto-item-extra__linea {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 120px));
+  gap: 8px 10px;
+  align-items: end;
+}
+
+.gasto-item-extra__linea--dias {
+  grid-template-columns: 110px;
+}
+
+.gasto-item-extra .campo-form {
+  margin-bottom: 0;
+  gap: 4px;
+}
+
+.gasto-item-extra .campo-form > label,
+.gasto-item-extra .gasto-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+}
+
+.gasto-item-extra .campo-form input {
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+}
 
 .gasto-item-fila input[data-campo="days"] {
   text-align: center;
   font-variant-numeric: tabular-nums;
-  padding-left: 6px;
-  padding-right: 6px;
 }
 
-.gasto-item-fila__na {
+.gasto-tabla__extra {
   display: block;
-  text-align: center;
-  color: var(--color-text-subtle);
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
 }
 
 /* El `display` de estas clases le ganaría al atributo hidden que usa
-   gastos-form.js para mostrar u ocultar el guion y la casilla de guardar. */
-.gasto-item-fila__na[hidden],
+   gastos-form.js para mostrar u ocultar el extra y la casilla de guardar. */
+.gasto-item-extra[hidden],
+.gasto-item-extra__linea[hidden],
 .gasto-banco__guardar[hidden] {
   display: none;
 }
@@ -1037,6 +1108,12 @@
   max-width: 960px;
   height: min(92vh, 920px);
   max-height: min(92vh, 920px);
+}
+
+.gasto-modal .gasto-modal__panel.gasto-confirm {
+  max-width: 28rem;
+  height: auto;
+  max-height: min(92vh, 32rem);
 }
 
 .gasto-modal__head {
@@ -1293,6 +1370,131 @@
   padding-left: 30px;
 }
 
+.gasto-item-fila .gasto-monto input[readonly] {
+  background: var(--color-surface-muted);
+  color: var(--color-heading);
+  cursor: default;
+}
+
+.modal-overlay .gasto-item-fila .gasto-monto input[readonly] {
+  background: var(--modal-border);
+  color: var(--modal-heading);
+}
+
+.gasto-item-adjuntos {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--color-border);
+}
+
+.gasto-item-adjuntos.is-over {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 8px;
+}
+
+.gasto-item-adjuntos__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.gasto-item-adjuntos__lista:empty {
+  display: none;
+}
+
+.gasto-adjunto--linea {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  max-width: 100%;
+}
+
+.gasto-item-adjuntos__boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.gasto-item-adjuntos__boton:hover,
+.gasto-item-adjuntos__boton:focus-visible {
+  border-color: var(--brand);
+  color: var(--color-heading);
+  outline: none;
+}
+
+.gasto-item-adjuntos__icono {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+}
+
+.gasto-tabla__adjunto {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+.gasto-tabla__adjunto:hover {
+  text-decoration: underline;
+}
+
+.gasto-tabla__adjunto--foto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 6px;
+  text-decoration: none;
+}
+
+.gasto-tabla__adjunto--foto:hover {
+  text-decoration: none;
+}
+
+.gasto-tabla__thumb {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+  background: var(--color-surface-2, #f4f4f4);
+}
+
+.gasto-tabla__adjunto-nombre {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  word-break: break-all;
+}
+
+.gasto-adjunto--foto {
+  align-items: flex-start;
+}
+
+.gasto-adjunto__foto {
+  display: block;
+  line-height: 0;
+}
+
 /* ── Transferencia ───────────────────────────────────────────────────────── */
 
 .gasto-titular {
@@ -1510,6 +1712,7 @@
 
 .fondos-fila {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
@@ -1627,6 +1830,30 @@
   color: #065f46;
 }
 
+.fondo-estado--vencido {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.fondos-fila--vencida {
+  background: #fef2f2;
+}
+
+.fondos-fila__plazo {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.fondos-fila--vencida .fondos-fila__plazo {
+  color: #991b1b;
+}
+
+.gasto-item--vencido .gasto-item__link {
+  background: #fef2f2;
+}
+
 /* Selector "¿Qué vas a rendir?" del modal: mismas tarjetas que las cuentas. */
 .gasto-fondo .gasto-cuenta__texto strong {
   font-variant-numeric: tabular-nums;
@@ -1667,6 +1894,10 @@
   }
 
   .fondos-fila__rendir {
+    grid-column: 1 / -1;
+  }
+
+  .fondos-fila__plazo {
     grid-column: 1 / -1;
   }
 

@@ -1,4 +1,5 @@
 <link rel="stylesheet" href="/css/vacaciones.css?v=20260910n">
+<link rel="stylesheet" href="/css/procesos.css?v=20260915a">
 <link rel="stylesheet" href="/css/rrhh.css?v=20260729a">
 
 <div class="contenedor">
@@ -21,41 +22,23 @@
     <div class="vac-alert vac-alert-error"><%= error %></div>
   <% } %>
 
-  <div class="grid-opciones-exec">
-    <a href="/RRHH/vacaciones/mis-vacaciones" class="card-opcion-exec">
-      <div class="card-icon-wrapper"><%- include('../../partials/icon', { name: 'umbrella' }) %></div>
-      <div class="card-content">
-        <h3 class="card-title">Mis vacaciones</h3>
-        <p class="card-desc">Consulta tu saldo, solicita días y revisa tu historial.</p>
+  <div class="procesos-grid">
+    <a href="/RRHH/vacaciones/mis-vacaciones" class="procesos-card">
+      <span class="procesos-card__tile" aria-hidden="true"><%- include('../../partials/icon', { name: 'umbrella' }) %></span>
+      <div class="procesos-card__cuerpo">
+        <h4 class="procesos-card__titulo">Mis vacaciones</h4>
+        <p class="procesos-card__desc">Consulta tu saldo, solicita días y revisa tu historial.</p>
       </div>
     </a>
 
-    <a href="/RRHH/vacaciones/calendario" class="card-opcion-exec">
-      <div class="card-icon-wrapper"><%- include('../../partials/icon', { name: 'calendar' }) %></div>
-      <div class="card-content">
-        <h3 class="card-title">Calendario</h3>
-        <p class="card-desc">
+    <a href="/RRHH/vacaciones/calendario" class="procesos-card">
+      <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../../partials/icon', { name: 'calendar' }) %></span>
+      <div class="procesos-card__cuerpo">
+        <h4 class="procesos-card__titulo">Calendario</h4>
+        <p class="procesos-card__desc">
           <% if (locals.isAdministrador) { %>Vacaciones del equipo.<% } else { %>Tus vacaciones programadas.<% } %>
         </p>
       </div>
     </a>
-
-    <% if (locals.isAdministrador) { %>
-      <a href="/RRHH/vacaciones/gestion" class="card-opcion-exec">
-        <div class="card-icon-wrapper"><%- include('../../partials/icon', { name: 'archive' }) %></div>
-        <div class="card-content">
-          <h3 class="card-title">Gestión RRHH</h3>
-          <p class="card-desc">Aprueba o rechaza solicitudes y ajusta saldos.</p>
-        </div>
-      </a>
-
-      <a href="/RRHH/vacaciones/feriados" class="card-opcion-exec">
-        <div class="card-icon-wrapper"><%- include('../../partials/icon', { name: 'flag' }) %></div>
-        <div class="card-content">
-          <h3 class="card-title">Feriados</h3>
-          <p class="card-desc">Administra los feriados de <%= countryConfig.name %>.</p>
-        </div>
-      </a>
-    <% } %>
   </div>
 </div>
