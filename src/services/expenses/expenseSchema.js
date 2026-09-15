@@ -2,7 +2,7 @@ const db = require("../../db");
 const logger = require("../../utils/logger");
 const { getCountryConfig, getCurrentCountry } = require("../../config/country");
 const { areaSlug } = require("../../constants/workAreas");
-const { banksForCountry } = require("../../constants/banks");
+const { banksForCountry, RETIRED_BANK_CODES } = require("../../constants/banks");
 
 /**
  * Schema del centro de gastos, aplicado de forma idempotente al arrancar
@@ -397,6 +397,17 @@ async function seedBanks(client) {
   );
 }
 
+/**
+ * Bases sembradas antes de que el catálogo se achicara: desactiva lo que salió
+ * de constants/banks.js. No borra, porque las solicitudes emitidas lo citan.
+ */
+async function retireBanks(client) {
+  await client.query(
+    "UPDATE banks SET active = FALSE WHERE code = ANY($1::text[]) AND active",
+    [RETIRED_BANK_CODES],
+  );
+}
+
 async function ensureExpenseSchema() {
   const client = await db.getClient();
   try {
@@ -412,6 +423,7 @@ async function ensureExpenseSchema() {
          ON expense_requests (updated_at) WHERE status = 'draft'`,
     );
     await seedBanks(client);
+    await retireBanks(client);
     const migrated = await backfillDocumentAreas(client);
     await backfillDocKind(client);
     if (migrated > 0) {

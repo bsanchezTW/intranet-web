@@ -40,6 +40,14 @@ const BANKS_BY_COUNTRY = Object.freeze({
   PE: Object.freeze([]),
 });
 
+/**
+ * Instituciones que salieron del catálogo: sucursales extranjeras (JP Morgan,
+ * China Construction Bank, Bank of China) y Tenpo Payments. No se borran de la
+ * tabla — las solicitudes ya emitidas las citan por FK —, se desactivan al
+ * arrancar para que el formulario deje de ofrecerlas.
+ */
+const RETIRED_BANK_CODES = Object.freeze(["041", "060", "061", "730"]);
+
 /** Banco Estado: el único donde existe la CuentaRUT. */
 const BANCO_ESTADO_CODE = "012";
 
@@ -78,6 +86,7 @@ function banksForCountry(countryCode) {
 module.exports = {
   BANK_ENTITY_TYPE,
   BANKS_BY_COUNTRY,
+  RETIRED_BANK_CODES,
   BANCO_ESTADO_CODE,
   BANK_ACCOUNT_TYPE,
   BANK_ACCOUNT_TYPE_LABELS,

@@ -1,5 +1,6 @@
 const db = require("../../db");
 const {
+  ALL_BANK_ACCOUNT_TYPES,
   BANCO_ESTADO_CODE,
   BANK_ACCOUNT_TYPE,
   isBankAccountType,
@@ -127,15 +128,20 @@ async function listBanks() {
   return rows;
 }
 
-/** Cuentas guardadas del colaborador, la última usada primero. */
+/**
+ * Cuentas guardadas del colaborador, la última usada primero. Se omiten las de
+ * un banco desactivado o un tipo retirado (p. ej. "ahorro"): elegirlas fallaría
+ * la validación al enviar.
+ */
 async function listUserAccounts(userId) {
   const { rows } = await db.query(
     `SELECT a.bank_code, b.name AS bank_name, a.account_type, a.account_number
        FROM user_bank_accounts a
        JOIN banks b ON b.code = a.bank_code
       WHERE a.user_id = $1 AND b.active = TRUE
+        AND a.account_type = ANY($2::text[])
       ORDER BY a.last_used_at DESC NULLS LAST, a.created_at DESC`,
-    [userId],
+    [userId, ALL_BANK_ACCOUNT_TYPES],
   );
   return rows;
 }

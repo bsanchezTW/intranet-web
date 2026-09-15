@@ -64,6 +64,8 @@ const {
 } = require("../src/services/expenses/bankAccountService");
 const {
   BANKS_BY_COUNTRY,
+  BANK_ENTITY_TYPE,
+  RETIRED_BANK_CODES,
   BANCO_ESTADO_CODE,
   banksForCountry,
   isAccountTypeAllowedForBank,
@@ -275,8 +277,13 @@ describe("bankAccountService — cuenta de destino", () => {
     for (const code of codes) assert.match(code, /^\d{3}$/);
     assert.equal(banks.find((b) => b.code === BANCO_ESTADO_CODE).name, "Banco Estado");
     assert.equal(banks.find((b) => b.code === "028").name, "Banco BICE");
-    assert.equal(banks.find((b) => b.code === "041").entityType, "Sucursal Extranjera");
+    assert.equal(banks.find((b) => b.code === "875").entityType, BANK_ENTITY_TYPE.EMISOR_NO_BANCARIO);
     assert.equal(banks.find((b) => b.code === "875").name, "Mercado Pago");
+    const entityTypes = Object.values(BANK_ENTITY_TYPE);
+    for (const bank of banks) assert.ok(entityTypes.includes(bank.entityType), bank.code);
+    for (const code of RETIRED_BANK_CODES) {
+      assert.equal(codes.includes(code), false, `${code} salió del catálogo`);
+    }
     assert.deepEqual(banksForCountry("PE"), []);
   });
 

@@ -270,23 +270,24 @@ INSERT INTO chile.banks (code, name, entity_type, active) VALUES
   ('031', 'HSBC Bank Chile', 'Banco Tradicional', TRUE),
   ('037', 'Banco Santander-Chile', 'Banco Tradicional', TRUE),
   ('039', 'Itaú Chile', 'Banco Tradicional', TRUE),
-  ('041', 'JP Morgan Chase Bank', 'Sucursal Extranjera', TRUE),
   ('051', 'Banco Falabella', 'Banco Tradicional', TRUE),
   ('053', 'Banco Ripley', 'Banco Tradicional', TRUE),
   ('055', 'Banco Consorcio', 'Banco Tradicional', TRUE),
   ('059', 'Banco BTG Pactual Chile', 'Banco Tradicional', TRUE),
-  ('060', 'China Construction Bank', 'Sucursal Extranjera', TRUE),
-  ('061', 'Bank of China', 'Sucursal Extranjera', TRUE),
   ('062', 'Tanner Banco', 'Banco Tradicional', TRUE),
   ('063', 'Tenpo Banco', 'Banco Tradicional', TRUE),
   ('729', 'Los Héroes Prepago', 'Emisor No Bancario', TRUE),
-  ('730', 'Tenpo Payments (Prepago)', 'Emisor No Bancario', TRUE),
   ('732', 'Caja Los Andes Prepago', 'Emisor No Bancario', TRUE),
   ('875', 'Mercado Pago', 'Emisor No Bancario', TRUE)
 ON CONFLICT (code) DO NOTHING;
 
+-- Retirados del catálogo (sucursales extranjeras y Tenpo Payments). Se
+-- desactivan en vez de borrarse: las solicitudes emitidas los citan por FK.
+UPDATE chile.banks SET active = FALSE
+ WHERE code IN ('041', '060', '061', '730') AND active;
+
 -- Cuentas propias guardadas. Sin id: la clave es la cuenta misma.
--- account_type: 'corriente' | 'vista' | 'ahorro' | 'rut' (sólo Banco Estado).
+-- account_type: 'corriente' | 'vista' | 'rut' (sólo Banco Estado).
 CREATE TABLE IF NOT EXISTS chile.user_bank_accounts (
   user_id integer NOT NULL REFERENCES chile.users(id) ON DELETE CASCADE,
   bank_code character varying(3) NOT NULL REFERENCES chile.banks(code) ON UPDATE CASCADE,
