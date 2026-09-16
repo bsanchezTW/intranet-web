@@ -13,6 +13,7 @@ const {
   createToolExecutor,
   sanitizePage,
   buildContextPrompt,
+  buildCatalogPrompt,
 } = require("../src/services/assistant/assistantTools");
 const {
   searchTerms,
@@ -122,6 +123,20 @@ describe("assistantTools — ejecución en el servidor", () => {
     const result = await executor.execute("open_page", { page_id: "feriados" });
     assert.equal(result.isError, true);
     assert.equal(executor.getNavigation(), null);
+  });
+
+  it("get_page_help entrega pasos y notas sólo de páginas visibles", async () => {
+    const executor = createToolExecutor({ entries, currentPath: "/" });
+    const help = JSON.parse((await executor.execute("get_page_help", { page_id: "perfil" })).content);
+    assert.equal(help.ruta, "/perfil");
+    assert.ok(help.pasos.length > 0);
+    assert.equal((await executor.execute("get_page_help", { page_id: "feriados" })).isError, true);
+  });
+
+  it("el catálogo del prompt es un índice sin pasos", () => {
+    const text = buildCatalogPrompt(entries);
+    assert.match(text, /`perfil` Mi perfil — \/perfil/);
+    assert.doesNotMatch(text, /Cómo se usa/);
   });
 
   it("las búsquedas usan el servicio inyectado y devuelven un enlace al directorio", async () => {
@@ -250,16 +265,24 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
     });
 
     assert.equal(result.text, "Te llevo.\n\nListo.");
-    assert.deepEqual(result.usage, { input_tokens: 30, output_tokens: 8 });
+    assert.deepEqual(result.usage, {
+      input_tokens: 30,
+      output_tokens: 8,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    });
     assert.deepEqual(calls, [["open_page", { page_id: "vacaciones" }]]);
     assert.ok(events.some((ev) => ev.type === "tool" && ev.name === "open_page"));
     const toolResult = requests[1].messages.at(-1);
     assert.equal(toolResult.role, "user");
-    assert.deepEqual(toolResult.content, [{ type: "tool_result", tool_use_id: "tu_1", content: "ok" }]);
+    assert.deepEqual(toolResult.content, [
+      { type: "tool_result", tool_use_id: "tu_1", content: "ok", cache_control: { type: "ephemeral" } },
+    ]);
+    assert.equal(result.rounds, 2);
     assert.equal(requests[1].tool_choice, undefined);
-    // Un solo modelo, esfuerzo bajo y sin razonamiento extendido.
-    assert.equal(requests[0].model, "claude-sonnet-5");
-    assert.deepEqual(requests[0].output_config, { effort: "low" });
+    // Un solo modelo: Haiku, sin effort ni razonamiento extendido.
+    assert.equal(requests[0].model, "claude-haiku-4-5");
+    assert.equal(requests[0].output_config, undefined);
     assert.equal(requests[0].thinking, undefined);
   });
 
@@ -275,6 +298,15 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
     });
     assert.deepEqual(requests[1].tool_choice, { type: "none" });
     assert.equal(requests.length, 2);
+  });
+
+  it("cachea instrucciones y catálogo, pero no la página actual", () => {
+    const blocks = claudeService.buildSystemPrompt({ catalog: "CATÁLOGO", context: "PÁGINA" });
+    assert.equal(blocks.length, 3);
+    assert.equal(blocks[1].text, "CATÁLOGO");
+    assert.deepEqual(blocks[1].cache_control, { type: "ephemeral" });
+    assert.equal(blocks[0].cache_control, undefined);
+    assert.equal(blocks[2].cache_control, undefined);
   });
 });
 

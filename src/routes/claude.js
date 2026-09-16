@@ -1,4 +1,5 @@
 const express = require("express");
+const logger = require("../utils/logger");
 const claudeService = require("../services/claudeService");
 const { isAdministrador } = require("../constants/roles");
 const { getFeatures } = require("../config/features");
@@ -9,6 +10,7 @@ const {
   createToolExecutor,
   sanitizePage,
   buildContextPrompt,
+  buildCatalogPrompt,
 } = require("../services/assistant/assistantTools");
 const { searchPeople, searchDocuments } = require("../services/assistant/directorySearch");
 const {
@@ -103,6 +105,7 @@ router.post("/api/chat", async (req, res) => {
     const history = getHistory(req.session).map(({ role, content }) => ({ role, content }));
     const result = await claudeService.runAssistantTurn([...history, { role: "user", content: message }], {
       system: claudeService.buildSystemPrompt({
+        catalog: buildCatalogPrompt(guide),
         context: buildContextPrompt({
           entries: guide,
           page,
@@ -122,6 +125,15 @@ router.post("/api/chat", async (req, res) => {
         sse(ev);
       },
     });
+
+    // Consumo por turno, para comparar costos antes y después de cada ajuste.
+    const { usage } = result;
+    logger.info(
+      "asistente",
+      `usuario=${sessionUser.id} rondas=${result.rounds} entrada=${usage.input_tokens} ` +
+        `salida=${usage.output_tokens} cache_leida=${usage.cache_read_input_tokens} ` +
+        `cache_escrita=${usage.cache_creation_input_tokens}`,
+    );
 
     // Antes de res.end(): express-session guarda la sesión al cerrar la respuesta.
     if (result.text.trim()) {

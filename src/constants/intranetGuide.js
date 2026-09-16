@@ -374,25 +374,22 @@ function isSamePage(href, pathname) {
   return normalizePathname(href) === normalizePathname(pathname);
 }
 
-/** El catálogo en Markdown compacto, para el system prompt. */
+/**
+ * Índice del catálogo para el system prompt: id, título, ruta y una línea.
+ * Los pasos y notas no van aquí (se piden con get_page_help) para que cada
+ * ronda del ciclo de tools cargue lo mínimo.
+ */
 function formatGuideForPrompt(entries) {
   const internal = entries.filter((entry) => !entry.external);
   const external = entries.filter((entry) => entry.external);
-  const lines = ["### Páginas internas (open_page acepta estos id)"];
-
+  const lines = ["### Páginas internas (id para open_page y get_page_help)"];
   for (const entry of internal) {
-    lines.push(`- \`${entry.id}\` — **${entry.title}** — ${entry.href}`);
-    lines.push(`  ${entry.summary}`);
-    if (entry.steps.length) {
-      lines.push(`  Cómo se usa: ${entry.steps.map((step, i) => `${i + 1}) ${step}`).join(" ")}`);
-    }
-    for (const note of entry.notes) lines.push(`  Nota: ${note}`);
+    lines.push(`- \`${entry.id}\` ${entry.title} — ${entry.href}: ${entry.summary}`);
   }
-
   if (external.length) {
     lines.push("", "### Portales externos (sólo enlace, nunca open_page)");
     for (const entry of external) {
-      lines.push(`- **${entry.title}** — ${entry.url} — ${entry.summary}`);
+      lines.push(`- ${entry.title} — ${entry.url}: ${entry.summary}`);
     }
   }
   return lines.join("\n");

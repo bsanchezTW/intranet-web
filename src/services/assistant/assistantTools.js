@@ -17,11 +17,24 @@ const STATUS_LABELS = Object.freeze({
   search_people: "Buscando personas…",
   search_documents: "Buscando documentos…",
   open_page: "Preparando el enlace…",
+  get_page_help: "Revisando la guía…",
 });
 
 function buildToolDefinitions(entries) {
   const pageIds = entries.filter((entry) => !entry.external && entry.href).map((entry) => entry.id);
   return [
+    {
+      name: "get_page_help",
+      description:
+        "Devuelve los pasos y notas de una página del catálogo. Úsalo antes de explicar cómo se usa algo.",
+      input_schema: {
+        type: "object",
+        properties: {
+          page_id: { type: "string", enum: pageIds, description: "id de la página en el catálogo." },
+        },
+        required: ["page_id"],
+      },
+    },
     {
       name: "search_people",
       description:
@@ -91,6 +104,19 @@ function createToolExecutor({ entries, currentPath, searchPeople, searchDocument
         });
       case "search_documents":
         return runSearch(searchDocuments, input.query);
+      case "get_page_help": {
+        const entry = resolvePage(input.page_id, entries);
+        if (!entry) return { content: "Esa página no está en el catálogo del usuario.", isError: true };
+        return {
+          content: JSON.stringify({
+            titulo: entry.title,
+            ruta: entry.href,
+            descripcion: entry.summary,
+            pasos: entry.steps,
+            notas: entry.notes,
+          }),
+        };
+      }
       case "open_page": {
         const entry = resolvePage(input.page_id, entries);
         if (!entry) {
@@ -125,7 +151,7 @@ function sanitizePage(raw) {
 
 const yesNo = (value) => (value ? "sí" : "no");
 
-/** Bloque de sistema del turno: página actual, usuario y catálogo filtrado. */
+/** Bloque de sistema del turno: página actual y usuario. Cambia en cada turno, va fuera del caché. */
 function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReviewer, features = {} }) {
   const current = findEntryForPath(page.path, entries);
   const pageLine = current
@@ -137,9 +163,12 @@ function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReview
 - Página actual: ${page.title || "sin título"} — ruta ${page.path} — ${pageLine}
 - Usuario: ${name}; área: ${user.area || "sin área asignada"}
 - Administrador: ${yesNo(isAdmin)}; revisor de gastos: ${yesNo(isExpenseReviewer)}
-- En esta intranet: Soporte TI ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}
+- En esta intranet: Soporte TI ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}; vacaciones en la intranet ${yesNo(features.vacations)} (si no, se solicitan en Rex+)`;
+}
 
-## CATÁLOGO DE LA INTRANET (sólo lo que este usuario puede ver)
+/** Catálogo filtrado para este usuario: estable entre turnos, por eso va en el bloque cacheado. */
+function buildCatalogPrompt(entries) {
+  return `## CATÁLOGO DE LA INTRANET (sólo lo que este usuario puede ver)
 ${formatGuideForPrompt(entries)}`;
 }
 
@@ -149,4 +178,5 @@ module.exports = {
   createToolExecutor,
   sanitizePage,
   buildContextPrompt,
+  buildCatalogPrompt,
 };

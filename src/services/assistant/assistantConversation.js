@@ -6,7 +6,7 @@
  */
 
 const SESSION_KEY = "assistantConversation";
-const MAX_HISTORY_MESSAGES = 20;
+const MAX_HISTORY_MESSAGES = 10;
 const MAX_MESSAGE_CHARS = 2000;
 
 function getHistory(session) {

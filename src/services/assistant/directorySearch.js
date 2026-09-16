@@ -9,7 +9,7 @@ const { formatPhoneForDisplay } = require("../../utils/phone");
  * campos públicos del directorio — nunca RUT, fecha de nacimiento ni rol.
  */
 
-const MAX_PEOPLE = 8;
+const MAX_PEOPLE = 5;
 const MAX_DOCUMENTS = 8;
 const MAX_OTHER_DOCUMENTS = 4;
 const MAX_TERMS = 4;

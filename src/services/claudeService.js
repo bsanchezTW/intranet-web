@@ -3,12 +3,14 @@ const Anthropic = require("@anthropic-ai/sdk");
 /**
  * Cliente del asistente de ayuda de la intranet.
  *
- * Un solo modelo y con esfuerzo bajo: el asistente orienta (dónde está algo,
- * cómo se usa, a quién buscar), no razona tareas largas.
+ * Un solo modelo, Haiku 4.5: las tareas son cortas (orientar, buscar, armar un
+ * ticket o un correo) y cada ronda del ciclo de tools reenvía todo el contexto,
+ * así que el costo por token pesa más que la capacidad extra de un modelo
+ * mayor. Haiku no admite razonamiento extendido ni `effort`.
  */
-const MODEL = "claude-sonnet-5";
-const EFFORT = "low";
-const MAX_TOKENS = 4096;
+const MODEL = "claude-haiku-4-5";
+const MAX_TOKENS = 2048;
+const CACHE = Object.freeze({ type: "ephemeral" });
 
 const SYSTEM_PROMPT = `
 ## IDENTIDAD
@@ -20,25 +22,42 @@ Tu trabajo es guiar a los colaboradores por la intranet: dónde está cada funci
 - Siempre en español, con tono amigable y profesional. Frases cortas y directas.
 - Te muestras en una ventana de chat pequeña: responde breve (idealmente menos de 120 palabras). Si hay que explicar un proceso, usa pocos pasos numerados.
 - Markdown liviano: listas y negritas. Sin tablas ni encabezados.
-- Enlaza las páginas internas con Markdown usando la ruta del catálogo, por ejemplo [Rendir gastos](/gastos/nueva/rendicion).
+- Enlaza las páginas internas con Markdown usando la ruta del catálogo, por ejemplo [Noticias](/noticias).
 - Usa el contexto de la página actual: si preguntan "qué puedo hacer aquí", responde sobre esa página.
 
 ## FUENTES DE VERDAD
 - Sólo existen las páginas del CATÁLOGO DE LA INTRANET que viene más abajo. No inventes menús, botones, rutas ni procesos.
+- El catálogo es un índice. Antes de explicar cómo se usa una página, pide sus pasos y notas con get_page_help.
 - Personas: sólo lo que devuelva search_people. Documentos: sólo lo que devuelva search_documents, que busca por nombre y no lee el contenido.
-- Si algo no está en el catálogo ni en el resultado de una búsqueda, dilo con claridad y sugiere abrir un ticket en Soporte TI (si está en el catálogo) o escribir a Bastián Abarca de TI.
+- Si algo no está en el catálogo ni en el resultado de una búsqueda, dilo con claridad y sugiere abrir un ticket en Soporte (si está en el catálogo) o escribir a Bastián Abarca de TI.
 - No ves la pantalla del usuario ni puedes completar formularios, crear, enviar o aprobar nada por él. Tú orientas; la acción la hace el usuario.
 - No afirmes que el usuario tiene razón sólo para complacerlo; sé objetivo y honesto.
 
 ## NAVEGACIÓN CON open_page
-- Llama a open_page cuando el usuario pregunte dónde está algo o pida ir a una página ("dónde rindo gastos", "llévame a vacaciones").
-- No la llames en preguntas sólo explicativas ("qué necesito para rendir") ni si el usuario ya está en esa página.
+- Llama a open_page cuando el usuario pregunte dónde está algo o pida ir a una página ("llévame a la galería").
+- No la llames en preguntas sólo explicativas ni si el usuario ya está en esa página.
 - Como máximo una navegación por respuesta. Escribe primero una respuesta breve: el cambio de página ocurre cuando terminas.
 - Los portales externos sólo se enlazan; nunca uses open_page para ellos.
 
 ## PRIVACIDAD
 - De una persona sólo compartes nombre, correo, teléfono y área.
 `.trim();
+
+/**
+ * Copia de la conversación con una marca de caché en su último bloque. Las
+ * rondas siguientes del mismo turno (tras cada tool) reutilizan todo lo
+ * anterior en vez de pagarlo de nuevo como entrada.
+ */
+function withConversationCache(messages) {
+  if (!messages.length) return messages;
+  const last = messages[messages.length - 1];
+  const content =
+    typeof last.content === "string"
+      ? [{ type: "text", text: last.content }]
+      : last.content.map((block) => ({ ...block }));
+  content[content.length - 1] = { ...content[content.length - 1], cache_control: CACHE };
+  return [...messages.slice(0, -1), { ...last, content }];
+}
 
 class ClaudeService {
   constructor() {
@@ -50,9 +69,18 @@ class ClaudeService {
     this.model = MODEL;
   }
 
-  /** Instrucciones fijas + contexto del turno (página, usuario y catálogo). */
-  buildSystemPrompt({ context } = {}) {
-    return context ? `${SYSTEM_PROMPT}\n\n${context}` : SYSTEM_PROMPT;
+  /**
+   * System en bloques, de lo más estable a lo que cambia en cada turno. La
+   * marca de caché va al final del catálogo: tools (que preceden al system),
+   * instrucciones y catálogo del usuario se reutilizan entre rondas y turnos.
+   * La página actual queda fuera, en el último bloque.
+   */
+  buildSystemPrompt({ catalog, context } = {}) {
+    const blocks = [{ type: "text", text: SYSTEM_PROMPT }];
+    if (catalog) blocks.push({ type: "text", text: catalog });
+    blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: CACHE };
+    if (context) blocks.push({ type: "text", text: context });
+    return blocks;
   }
 
   /**
@@ -63,9 +91,8 @@ class ClaudeService {
     const stream = this.client.messages.stream({
       model: this.model,
       max_tokens: MAX_TOKENS,
-      system: system?.trim() || SYSTEM_PROMPT,
-      messages,
-      output_config: { effort: EFFORT },
+      system: system || this.buildSystemPrompt(),
+      messages: withConversationCache(messages),
       ...(tools?.length ? { tools } : {}),
       ...(toolChoice ? { tool_choice: toolChoice } : {}),
     });
@@ -86,11 +113,16 @@ class ClaudeService {
    * con texto (el historial ya trae bloques tool_use, así que tools no se omite).
    *
    * onEvent recibe además { type: "tool", name } antes de ejecutar cada tool.
-   * Devuelve { text, usage, stopReason } con el texto de todas las rondas.
+   * Devuelve { text, usage, rounds, stopReason } sumando todas las rondas.
    */
   async runAssistantTurn(messages, { system, tools, executeTool, onEvent, maxToolRounds = 3 } = {}) {
     const conversation = [...messages];
-    const usage = { input_tokens: 0, output_tokens: 0 };
+    const usage = {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    };
     const canUseTools = Boolean(tools?.length && executeTool);
     let text = "";
 
@@ -114,17 +146,16 @@ class ClaudeService {
           onEvent?.(ev);
         },
       });
-      usage.input_tokens += final.usage?.input_tokens || 0;
-      usage.output_tokens += final.usage?.output_tokens || 0;
+      for (const key of Object.keys(usage)) usage[key] += final.usage?.[key] || 0;
 
       if (!canUseTools || lastRound || final.stop_reason !== "tool_use") {
-        return { text, usage, stopReason: final.stop_reason };
+        return { text, usage, rounds: round + 1, stopReason: final.stop_reason };
       }
 
       conversation.push({ role: "assistant", content: final.content });
       const results = [];
       for (const block of final.content.filter((b) => b.type === "tool_use")) {
-        onEvent?.({ type: "tool", name: block.name });
+        onEvent?.({ type: "tool", name: block.name, input: block.input });
         const result = await executeTool(block.name, block.input);
         results.push({
           type: "tool_result",
@@ -139,3 +170,4 @@ class ClaudeService {
 }
 
 module.exports = new ClaudeService();
+module.exports.withConversationCache = withConversationCache;
