@@ -25,6 +25,17 @@ function appendExchange(session, userText, assistantText) {
   session[SESSION_KEY] = messages.slice(-MAX_HISTORY_MESSAGES);
 }
 
+/**
+ * Agrega una nota a la última respuesta (p. ej. «Ticket #12 creado») sin
+ * romper la alternancia usuario/asistente que exige el modelo.
+ */
+function appendToLastAssistantMessage(session, note) {
+  const messages = getHistory(session);
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== "assistant") return;
+  session[SESSION_KEY] = [...messages.slice(0, -1), { ...last, content: `${last.content}\n\n${note}` }];
+}
+
 function clearConversation(session) {
   if (session) delete session[SESSION_KEY];
 }
@@ -34,5 +45,6 @@ module.exports = {
   MAX_MESSAGE_CHARS,
   getHistory,
   appendExchange,
+  appendToLastAssistantMessage,
   clearConversation,
 };

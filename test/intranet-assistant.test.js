@@ -139,6 +139,39 @@ describe("assistantTools — ejecución en el servidor", () => {
     assert.doesNotMatch(text, /Cómo se usa/);
   });
 
+  it("los tools de tickets sólo existen donde hay Soporte", () => {
+    const names = (options) => buildToolDefinitions(entries, options).map((tool) => tool.name);
+    assert.equal(names().includes("draft_support_ticket"), false);
+    assert.ok(names({ supportTickets: true }).includes("draft_support_ticket"));
+    const draft = buildToolDefinitions(entries, { supportTickets: true }).find((tool) => tool.name === "draft_support_ticket");
+    assert.ok(draft.input_schema.properties.category.enum.includes("impresoras"));
+  });
+
+  it("offer y draft dejan tarjetas para el cliente; sin Soporte fallan", async () => {
+    const executor = createToolExecutor({
+      entries,
+      currentPath: "/",
+      tickets: {
+        saveDraft: (input) =>
+          input.title
+            ? { ok: true, draft: { id: "d1", title: input.title, attachments: [] } }
+            : { ok: false, error: "Falta el resumen" },
+        listMine: async () => [{ id: 7 }],
+      },
+    });
+    await executor.execute("offer_support_ticket", { summary: "No imprime", category: "Impresoras" });
+    assert.deepEqual(executor.getActions().ticketOffer, { summary: "No imprime", category: "impresoras" });
+    assert.equal((await executor.execute("draft_support_ticket", { description: "x" })).isError, true);
+    const ok = await executor.execute("draft_support_ticket", { title: "No imprime", description: "x", category: "impresoras", priority: "medium" });
+    assert.match(ok.content, /AÚN NO está creado/);
+    assert.equal(executor.getActions().ticketDraft.id, "d1");
+    assert.equal(executor.getActions().ticketOffer, null);
+    assert.equal(JSON.parse((await executor.execute("my_tickets", {})).content).total, 1);
+
+    const sinSoporte = createToolExecutor({ entries, currentPath: "/" });
+    assert.equal((await sinSoporte.execute("draft_support_ticket", { title: "x" })).isError, true);
+  });
+
   it("las búsquedas usan el servicio inyectado y devuelven un enlace al directorio", async () => {
     const executor = createToolExecutor({
       entries,

@@ -1,8 +1,11 @@
 const express = require("express");
+const multer = require("multer");
 const logger = require("../utils/logger");
 const claudeService = require("../services/claudeService");
+const requireFeature = require("../middlewares/requireFeature");
 const { isAdministrador } = require("../constants/roles");
 const { getFeatures } = require("../config/features");
+const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { guideForUser } = require("../constants/intranetGuide");
 const {
   STATUS_LABELS,
@@ -17,13 +20,26 @@ const {
   MAX_MESSAGE_CHARS,
   getHistory,
   appendExchange,
+  appendToLastAssistantMessage,
   clearConversation,
 } = require("../services/assistant/assistantConversation");
+const assistantTickets = require("../services/assistant/assistantTickets");
+const {
+  createSupportTicket,
+  saveTicketAttachment,
+  listOpenTicketsForUser,
+} = require("../services/tickets/ticketService");
 const { isAreaManager } = require("../services/expenses/areaManager");
 const { isFinanceApprover } = require("../services/expenses/financeTeam");
 const { canManageRrhh } = require("../services/access/staffAccess");
 
 const router = express.Router();
+
+const MAX_ATTACHMENT_MB = Math.round(UPLOAD_LIMITS_BYTES.TICKET_ATTACHMENT / (1024 * 1024));
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: UPLOAD_LIMITS_BYTES.TICKET_ATTACHMENT, files: 1 },
+});
 
 router.use((req, res, next) => {
   if (!req.session || !req.session.user) {
@@ -44,20 +60,97 @@ async function resolveExpenseReviewer(user, { isAdmin, features }) {
   }
 }
 
+function pendingAttachmentsOf(session) {
+  return assistantTickets.getPendingAttachments(session).map(assistantTickets.publicAttachment);
+}
+
 // GET /claude - Abre el asistente sobre el inicio
 router.get("/", (req, res) => {
   res.redirect("/?openClaude=1");
 });
 
-// GET /claude/api/conversation - La conversación de esta sesión
+// GET /claude/api/conversation - La conversación y los adjuntos de esta sesión
 router.get("/api/conversation", (req, res) => {
-  res.json({ messages: getHistory(req.session) });
+  res.json({
+    messages: getHistory(req.session),
+    attachments: pendingAttachmentsOf(req.session),
+  });
 });
 
 // DELETE /claude/api/conversation - Empezar de nuevo
 router.delete("/api/conversation", (req, res) => {
   clearConversation(req.session);
+  assistantTickets.clearTicketState(req.session);
   res.json({ success: true });
+});
+
+// POST /claude/api/attachments - Adjuntar un archivo para el próximo ticket
+router.post("/api/attachments", requireFeature("supportTickets"), (req, res) => {
+  upload.single("file")(req, res, async (uploadError) => {
+    if (uploadError) {
+      const error =
+        uploadError.code === "LIMIT_FILE_SIZE"
+          ? `El archivo supera el máximo de ${MAX_ATTACHMENT_MB} MB.`
+          : "No se pudo recibir el archivo.";
+      return res.status(400).json({ error });
+    }
+    if (assistantTickets.getPendingAttachments(req.session).length >= assistantTickets.MAX_PENDING_ATTACHMENTS) {
+      return res.status(400).json({
+        error: `Puedes adjuntar hasta ${assistantTickets.MAX_PENDING_ATTACHMENTS} archivos por ticket.`,
+      });
+    }
+
+    try {
+      const saved = await saveTicketAttachment(req.file);
+      if (!saved.ok) return res.status(400).json({ error: saved.error });
+
+      const added = assistantTickets.addPendingAttachment(req.session, saved.attachment);
+      if (!added.ok) return res.status(400).json({ error: added.error });
+      res.json({ attachment: assistantTickets.publicAttachment(added.attachment) });
+    } catch (error) {
+      console.error("[Asistente] Error subiendo adjunto:", error);
+      res.status(500).json({ error: "No se pudo subir el archivo. Intenta de nuevo." });
+    }
+  });
+});
+
+// DELETE /claude/api/attachments/:id - Quitar un adjunto pendiente
+router.delete("/api/attachments/:id", requireFeature("supportTickets"), (req, res) => {
+  assistantTickets.removePendingAttachment(req.session, req.params.id);
+  res.json({ attachments: pendingAttachmentsOf(req.session) });
+});
+
+// POST /claude/api/ticket-draft/:id/confirm - El usuario crea el ticket del borrador
+router.post("/api/ticket-draft/:id/confirm", requireFeature("supportTickets"), async (req, res) => {
+  const draft = assistantTickets.getTicketDraft(req.session, req.params.id);
+  if (!draft) {
+    return res.status(404).json({
+      error: "Este borrador ya no está disponible. Pídele al asistente que lo arme de nuevo.",
+    });
+  }
+
+  try {
+    const result = await createSupportTicket({ user: req.session.user, ...draft });
+    if (!result.ok) return res.status(400).json({ error: result.error });
+
+    assistantTickets.clearTicketDraft(req.session);
+    appendToLastAssistantMessage(
+      req.session,
+      `Ticket #${result.id} creado: [ver ticket](/sistemas/tickets/${result.id}).`,
+    );
+    // El contador de tickets de la barra se recalcula en la próxima consulta.
+    delete req.session.ticketNotifications;
+    res.json({ id: result.id, url: `/sistemas/tickets/${result.id}` });
+  } catch (error) {
+    console.error("[Asistente] Error creando ticket:", error);
+    res.status(500).json({ error: "No se pudo crear el ticket. Intenta de nuevo." });
+  }
+});
+
+// DELETE /claude/api/ticket-draft/:id - Descartar el borrador
+router.delete("/api/ticket-draft/:id", requireFeature("supportTickets"), (req, res) => {
+  assistantTickets.discardTicketDraft(req.session, req.params.id);
+  res.json({ attachments: pendingAttachmentsOf(req.session) });
 });
 
 // POST /claude/api/chat - Un turno del asistente (respuesta en streaming SSE)
@@ -85,6 +178,7 @@ router.post("/api/chat", async (req, res) => {
     // el system prompt, no en el mensaje guardado.
     const sessionUser = req.session.user;
     const features = res.locals.features || getFeatures();
+    const supportTickets = Boolean(features.supportTickets);
     const isAdmin = isAdministrador(sessionUser.role);
     const isExpenseReviewer = await resolveExpenseReviewer(sessionUser, { isAdmin, features });
     const guide = guideForUser({
@@ -100,6 +194,15 @@ router.post("/api/chat", async (req, res) => {
       currentPath: page.path,
       searchPeople,
       searchDocuments,
+      tickets: supportTickets
+        ? {
+            saveDraft: (input) => {
+              const saved = assistantTickets.saveTicketDraft(req.session, input);
+              return saved.ok ? { ok: true, draft: assistantTickets.publicDraft(saved.draft) } : saved;
+            },
+            listMine: () => listOpenTicketsForUser(sessionUser),
+          }
+        : null,
     });
 
     const history = getHistory(req.session).map(({ role, content }) => ({ role, content }));
@@ -113,9 +216,10 @@ router.post("/api/chat", async (req, res) => {
           isAdmin,
           isExpenseReviewer,
           features,
+          attachments: supportTickets ? assistantTickets.getPendingAttachments(req.session) : null,
         }),
       }),
-      tools: buildToolDefinitions(guide),
+      tools: buildToolDefinitions(guide, { supportTickets }),
       executeTool: toolExecutor.execute,
       onEvent: (ev) => {
         if (ev.type === "tool") {
@@ -139,7 +243,7 @@ router.post("/api/chat", async (req, res) => {
     if (result.text.trim()) {
       appendExchange(req.session, message, result.text);
     }
-    sse({ type: "done", navigate: toolExecutor.getNavigation() });
+    sse({ type: "done", navigate: toolExecutor.getNavigation(), ...toolExecutor.getActions() });
   } catch (error) {
     console.error("[Asistente] Error:", error);
     sse({ type: "error", error: "No pude responder en este momento. Intenta de nuevo." });

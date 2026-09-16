@@ -4,6 +4,12 @@ const {
   isSamePage,
   formatGuideForPrompt,
 } = require("../../constants/intranetGuide");
+const { TICKET_CATEGORIES, normalizeTicketCategory } = require("../../constants/ticketCategories");
+const {
+  TICKET_PRIORITIES,
+  MAX_TITLE_CHARS,
+  MAX_DESCRIPTION_CHARS,
+} = require("../tickets/ticketRules");
 
 /**
  * Tools del asistente de ayuda y el contexto que acompaña cada turno.
@@ -18,9 +24,70 @@ const STATUS_LABELS = Object.freeze({
   search_documents: "Buscando documentos…",
   open_page: "Preparando el enlace…",
   get_page_help: "Revisando la guía…",
+  offer_support_ticket: "Preparando opciones de ticket…",
+  draft_support_ticket: "Armando el borrador del ticket…",
+  my_tickets: "Revisando tus tickets…",
 });
 
-function buildToolDefinitions(entries) {
+/** Respuesta de los tools de tickets donde no existe la ticketera. */
+const TICKETS_UNAVAILABLE = Object.freeze({ content: "Soporte no está disponible en esta intranet.", isError: true });
+
+/** Tools de Soporte: sólo donde existe la ticketera. */
+function ticketToolDefinitions() {
+  const categoryKeys = TICKET_CATEGORIES.map((category) => category.key);
+  const categoryGuide = TICKET_CATEGORIES.map(
+    (category) => `${category.key}: ${category.label} (${category.hint})`,
+  ).join("; ");
+  return [
+    {
+      name: "offer_support_ticket",
+      description:
+        "Muestra al usuario dos botones: abrir el formulario de ticket prellenado o pedirte que lo crees. " +
+        "Úsalo cuando cuente un problema técnico y todavía no haya pedido que crees el ticket.",
+      input_schema: {
+        type: "object",
+        properties: {
+          summary: { type: "string", description: "Resumen del problema en una línea (máx. 120 caracteres)." },
+          category: { type: "string", enum: categoryKeys, description: `Categoría probable. ${categoryGuide}.` },
+        },
+        required: ["summary"],
+      },
+    },
+    {
+      name: "draft_support_ticket",
+      description:
+        "Arma un borrador de ticket de Soporte que el usuario revisa y confirma con el botón «Crear ticket». " +
+        "No crea el ticket. Los archivos que el usuario adjuntó en el chat se suman solos.",
+      input_schema: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: `Resumen claro del problema (máx. ${MAX_TITLE_CHARS} caracteres, idealmente menos de 80).`,
+          },
+          description: {
+            type: "string",
+            description: `Qué pasa, desde cuándo, qué intentó y a quién afecta, con las palabras del usuario (máx. ${MAX_DESCRIPTION_CHARS} caracteres).`,
+          },
+          category: { type: "string", enum: categoryKeys, description: categoryGuide },
+          priority: {
+            type: "string",
+            enum: [...TICKET_PRIORITIES],
+            description: "high: no puede trabajar u operación detenida; medium: le dificulta el trabajo; low: no le impide trabajar.",
+          },
+        },
+        required: ["title", "description", "category", "priority"],
+      },
+    },
+    {
+      name: "my_tickets",
+      description: "Lista los tickets de Soporte abiertos del usuario con su estado y enlace.",
+      input_schema: { type: "object", properties: {} },
+    },
+  ];
+}
+
+function buildToolDefinitions(entries, { supportTickets = false } = {}) {
   const pageIds = entries.filter((entry) => !entry.external && entry.href).map((entry) => entry.id);
   return [
     {
@@ -74,6 +141,7 @@ function buildToolDefinitions(entries) {
         required: ["page_id"],
       },
     },
+    ...(supportTickets ? ticketToolDefinitions() : []),
   ];
 }
 
@@ -81,8 +149,11 @@ function buildToolDefinitions(entries) {
  * Ejecutor de tools para un turno. Las búsquedas se inyectan para poder
  * probarlo sin base de datos.
  */
-function createToolExecutor({ entries, currentPath, searchPeople, searchDocuments }) {
+function createToolExecutor({ entries, currentPath, searchPeople, searchDocuments, tickets = null }) {
   let navigation = null;
+  // Tarjetas para el cliente al terminar el turno.
+  let ticketOffer = null;
+  let ticketDraft = null;
 
   async function runSearch(search, query, extra = {}) {
     const text = String(query || "").trim();
@@ -131,12 +202,49 @@ function createToolExecutor({ entries, currentPath, searchPeople, searchDocument
         navigation = { href: entry.href, label: entry.title };
         return { content: `Al terminar tu respuesta se llevará al usuario a «${entry.title}» (${entry.href}).` };
       }
+      case "offer_support_ticket": {
+        if (!tickets) return TICKETS_UNAVAILABLE;
+        const summary = String(input.summary || "").trim().slice(0, 200);
+        if (!summary) return { content: "Falta el resumen del problema.", isError: true };
+        ticketOffer = { summary, category: normalizeTicketCategory(input.category) };
+        return {
+          content: "Al terminar tu respuesta el usuario verá los botones «Abrir formulario» y «Créalo por mí». No los repitas en el texto.",
+        };
+      }
+      case "draft_support_ticket": {
+        if (!tickets) return TICKETS_UNAVAILABLE;
+        const saved = tickets.saveDraft(input);
+        if (!saved.ok) return { content: saved.error, isError: true };
+        ticketDraft = saved.draft;
+        ticketOffer = null;
+        return {
+          content: JSON.stringify({
+            estado: "borrador listo, el ticket AÚN NO está creado",
+            adjuntos: saved.draft.attachments.length,
+            siguiente_paso: "Pide al usuario revisar la tarjeta y pulsar «Crear ticket».",
+          }),
+        };
+      }
+      case "my_tickets": {
+        if (!tickets) return TICKETS_UNAVAILABLE;
+        try {
+          const list = await tickets.listMine();
+          return { content: JSON.stringify({ total: list.length, tickets: list }) };
+        } catch (err) {
+          console.error("[Asistente] Error listando tickets:", err.message);
+          return { content: "No pude consultar tus tickets en este momento.", isError: true };
+        }
+      }
       default:
         return { content: `Tool desconocida: ${name}`, isError: true };
     }
   }
 
-  return { execute, getNavigation: () => navigation };
+  return {
+    execute,
+    getNavigation: () => navigation,
+    getActions: () => ({ ticketOffer, ticketDraft }),
+  };
 }
 
 /** Página que reporta el cliente, acotada: sólo rutas internas y un título corto. */
@@ -152,18 +260,24 @@ function sanitizePage(raw) {
 const yesNo = (value) => (value ? "sí" : "no");
 
 /** Bloque de sistema del turno: página actual y usuario. Cambia en cada turno, va fuera del caché. */
-function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReviewer, features = {} }) {
+function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReviewer, features = {}, attachments = null }) {
   const current = findEntryForPath(page.path, entries);
   const pageLine = current
     ? `${current.title} (\`${current.id}\`)`
     : "no corresponde a ninguna página del catálogo";
   const name = user.nombre || [user.first_name, user.last_name].filter(Boolean).join(" ") || "sin nombre";
 
+  const attachmentsLine = Array.isArray(attachments)
+    ? `\n- Adjuntos del usuario en el chat (se suman al borrador del ticket): ${
+        attachments.length ? attachments.map((item) => item.nombre).join(", ") : "ninguno"
+      }`
+    : "";
+
   return `## CONTEXTO DE ESTE TURNO
 - Página actual: ${page.title || "sin título"} — ruta ${page.path} — ${pageLine}
 - Usuario: ${name}; área: ${user.area || "sin área asignada"}
 - Administrador: ${yesNo(isAdmin)}; revisor de gastos: ${yesNo(isExpenseReviewer)}
-- En esta intranet: Soporte TI ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}; vacaciones en la intranet ${yesNo(features.vacations)} (si no, se solicitan en Rex+)`;
+- En esta intranet: Soporte TI ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}; vacaciones en la intranet ${yesNo(features.vacations)} (si no, se solicitan en Rex+)${attachmentsLine}`;
 }
 
 /** Catálogo filtrado para este usuario: estable entre turnos, por eso va en el bloque cacheado. */

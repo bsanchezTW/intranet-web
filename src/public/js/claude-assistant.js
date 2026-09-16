@@ -4,12 +4,17 @@
  * Hay una sola conversación y vive en la sesión del servidor. Al cambiar de
  * página (la intranet recarga el documento) el panel se reabre si estaba
  * abierto y vuelve a pedir la conversación.
+ *
+ * Tickets: los archivos adjuntos quedan pendientes en la sesión y se suman al
+ * borrador que arma el asistente. El ticket sólo se crea cuando el usuario
+ * pulsa «Crear ticket» en la tarjeta.
  */
 (function () {
   "use strict";
 
   const OPEN_KEY = "claude-assistant-open";
   const NAVIGATE_DELAY_MS = 900;
+  const MAX_ATTACHMENTS = 5;
 
   const fab = document.getElementById("claudeFab");
   const panel = document.getElementById("claudePanel");
@@ -21,10 +26,15 @@
   const form = document.getElementById("claudeForm");
   const input = document.getElementById("claudeInput");
   const sendBtn = document.getElementById("claudeSend");
+  const attachBtn = document.getElementById("claudeAttach");
+  const fileInput = document.getElementById("claudeFileInput");
+  const attachmentsEl = document.getElementById("claudeAttachments");
 
   let historyLoaded = false;
   let streaming = false;
   let closeTimer = null;
+  let pendingAttachments = [];
+  let uploading = 0;
 
   if (window.marked) marked.setOptions({ breaks: true, gfm: true });
 
@@ -94,6 +104,13 @@
     });
   }
 
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
   function scrollToBottom() {
     scroll.scrollTop = scroll.scrollHeight;
   }
@@ -103,26 +120,22 @@
   }
 
   function addUserMessage(text) {
-    const el = document.createElement("div");
-    el.className = "claude-msg claude-msg--user";
-    el.textContent = text;
-    thread.appendChild(el);
+    thread.appendChild(el("div", "claude-msg claude-msg--user", text));
     syncWelcome();
     scrollToBottom();
   }
 
   function addAssistantMessage(text) {
-    const el = document.createElement("div");
-    el.className = "claude-msg claude-msg--assistant";
-    el.innerHTML =
+    const node = el("div", "claude-msg claude-msg--assistant");
+    node.innerHTML =
       '<div class="claude-msg__text"></div>' +
       '<p class="claude-msg__status" role="status" hidden></p>';
-    const textEl = el.querySelector(".claude-msg__text");
+    const textEl = node.querySelector(".claude-msg__text");
     if (text) renderMarkdown(textEl, text);
-    thread.appendChild(el);
+    thread.appendChild(node);
     syncWelcome();
     scrollToBottom();
-    return { el, textEl, statusEl: el.querySelector(".claude-msg__status") };
+    return { el: node, textEl, statusEl: node.querySelector(".claude-msg__status") };
   }
 
   function updateSendState() {
@@ -131,7 +144,185 @@
     const needed = input.scrollHeight + 2;
     input.style.height = Math.min(needed, 120) + "px";
     input.style.overflowY = needed > 120 ? "auto" : "hidden";
-    sendBtn.disabled = streaming || !input.value.trim();
+    sendBtn.disabled = streaming || uploading > 0 || !input.value.trim();
+  }
+
+  async function requestJson(url, options = {}) {
+    const res = await fetch(url, { headers: { Accept: "application/json" }, ...options });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "No se pudo completar la acción.");
+    return data;
+  }
+
+  // ── Adjuntos ────────────────────────────────────────────────────────────
+  function renderAttachments(message) {
+    if (!attachmentsEl) return;
+    attachmentsEl.innerHTML = "";
+
+    pendingAttachments.forEach((attachment) => {
+      const chip = el("span", "claude-file");
+      chip.appendChild(el("span", "claude-file__name", attachment.nombre));
+      const remove = el("button", "claude-file__remove", "×");
+      remove.type = "button";
+      remove.setAttribute("aria-label", `Quitar ${attachment.nombre}`);
+      remove.addEventListener("click", () => removeAttachment(attachment.id));
+      chip.appendChild(remove);
+      attachmentsEl.appendChild(chip);
+    });
+    if (uploading > 0) {
+      attachmentsEl.appendChild(el("span", "claude-file claude-file--loading", `Subiendo ${uploading}…`));
+    }
+    if (message) attachmentsEl.appendChild(el("p", "claude-attachments__error", message));
+
+    attachmentsEl.hidden = !pendingAttachments.length && uploading === 0 && !message;
+  }
+
+  async function uploadFiles(files) {
+    for (const file of files) {
+      if (pendingAttachments.length + uploading >= MAX_ATTACHMENTS) {
+        renderAttachments(`Puedes adjuntar hasta ${MAX_ATTACHMENTS} archivos por ticket.`);
+        break;
+      }
+      uploading += 1;
+      renderAttachments();
+      updateSendState();
+      try {
+        const body = new FormData();
+        body.append("file", file);
+        const data = await requestJson("/claude/api/attachments", { method: "POST", body });
+        pendingAttachments.push(data.attachment);
+        uploading -= 1;
+        renderAttachments();
+      } catch (err) {
+        uploading -= 1;
+        renderAttachments(`${file.name}: ${err.message}`);
+      }
+      updateSendState();
+    }
+  }
+
+  async function removeAttachment(id) {
+    try {
+      const data = await requestJson(`/claude/api/attachments/${encodeURIComponent(id)}`, { method: "DELETE" });
+      pendingAttachments = data.attachments || [];
+      renderAttachments();
+    } catch (err) {
+      renderAttachments(err.message);
+    }
+  }
+
+  // ── Tickets ─────────────────────────────────────────────────────────────
+  function openTicketForm(prefill) {
+    if (window.TicketCreateModal && window.TicketCreateModal.open(prefill)) {
+      closePanel();
+      return;
+    }
+    window.location.assign("/sistemas/tickets?nuevo=1");
+  }
+
+  function renderTicketOffer(message, offer) {
+    const actions = el("div", "claude-actions");
+    const openForm = el("button", "claude-action", "Abrir formulario");
+    openForm.type = "button";
+    openForm.addEventListener("click", () =>
+      openTicketForm({ title: offer.summary, category: offer.category || undefined }),
+    );
+    const createForMe = el("button", "claude-action claude-action--primary", "Créalo por mí");
+    createForMe.type = "button";
+    createForMe.addEventListener("click", () => {
+      actions.remove();
+      send("Créalo por mí");
+    });
+    actions.append(openForm, createForMe);
+    message.el.appendChild(actions);
+    scrollToBottom();
+  }
+
+  function renderTicketDraft(message, draft) {
+    const card = el("div", "claude-ticket");
+    card.appendChild(el("p", "claude-ticket__eyebrow", "Borrador de ticket"));
+    card.appendChild(el("p", "claude-ticket__title", draft.title));
+
+    const meta = el("p", "claude-ticket__meta");
+    meta.append(el("span", "", draft.categoryLabel), el("span", "", `Prioridad ${draft.priorityLabel.toLowerCase()}`));
+    card.appendChild(meta);
+    card.appendChild(el("p", "claude-ticket__desc", draft.description));
+
+    if (draft.attachments.length) {
+      const files = el("ul", "claude-ticket__files");
+      draft.attachments.forEach((attachment) => files.appendChild(el("li", "", attachment.nombre)));
+      card.appendChild(files);
+    }
+
+    const actions = el("div", "claude-actions");
+    const create = el("button", "claude-action claude-action--primary", "Crear ticket");
+    const edit = el("button", "claude-action", "Editar en formulario");
+    const discard = el("button", "claude-action claude-action--ghost", "Descartar");
+    [create, edit, discard].forEach((button) => { button.type = "button"; });
+    actions.append(create, edit, discard);
+    card.appendChild(actions);
+
+    const status = el("p", "claude-ticket__status");
+    status.setAttribute("role", "status");
+    status.hidden = true;
+    card.appendChild(status);
+
+    const setStatus = (text, isError) => {
+      status.textContent = text;
+      status.classList.toggle("claude-msg__error", Boolean(isError));
+      status.hidden = !text;
+    };
+    const setBusy = (busy) => [create, edit, discard].forEach((button) => { button.disabled = busy; });
+
+    create.addEventListener("click", async () => {
+      setBusy(true);
+      setStatus("Creando ticket…");
+      try {
+        const data = await requestJson(`/claude/api/ticket-draft/${encodeURIComponent(draft.id)}/confirm`, {
+          method: "POST",
+        });
+        actions.remove();
+        status.textContent = `Ticket #${data.id} creado. `;
+        status.classList.remove("claude-msg__error");
+        status.hidden = false;
+        const link = el("a", "", "Ver ticket");
+        link.href = data.url;
+        status.appendChild(link);
+        card.classList.add("is-done");
+      } catch (err) {
+        setBusy(false);
+        setStatus(err.message, true);
+      }
+    });
+
+    edit.addEventListener("click", () =>
+      openTicketForm({
+        title: draft.title,
+        category: draft.category,
+        priority: draft.priority,
+        description: draft.description,
+      }),
+    );
+
+    discard.addEventListener("click", async () => {
+      setBusy(true);
+      try {
+        const data = await requestJson(`/claude/api/ticket-draft/${encodeURIComponent(draft.id)}`, {
+          method: "DELETE",
+        });
+        pendingAttachments = data.attachments || [];
+        renderAttachments();
+        actions.remove();
+        setStatus("Borrador descartado.");
+        card.classList.add("is-done");
+      } catch (err) {
+        setBusy(false);
+        setStatus(err.message, true);
+      }
+    });
+
+    message.el.appendChild(card);
+    scrollToBottom();
   }
 
   // ── Conversación ────────────────────────────────────────────────────────
@@ -139,9 +330,9 @@
     if (historyLoaded) return;
     historyLoaded = true;
     try {
-      const res = await fetch("/claude/api/conversation", { headers: { Accept: "application/json" } });
-      if (!res.ok) throw new Error("No se pudo cargar la conversación");
-      const data = await res.json();
+      const data = await requestJson("/claude/api/conversation");
+      pendingAttachments = data.attachments || [];
+      renderAttachments();
       if (streaming || thread.children.length) return;
       (data.messages || []).forEach((m) => {
         if (m.role === "user") addUserMessage(m.content);
@@ -161,6 +352,8 @@
       console.error("[Asistente]", err);
     }
     thread.innerHTML = "";
+    pendingAttachments = [];
+    renderAttachments();
     syncWelcome();
     input.focus();
   }
@@ -169,10 +362,7 @@
     const url = new URL(navigation.href, window.location.origin);
     if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
 
-    const note = document.createElement("p");
-    note.className = "claude-msg__note";
-    note.textContent = `Te llevo a ${navigation.label || url.pathname}…`;
-    message.el.appendChild(note);
+    message.el.appendChild(el("p", "claude-msg__note", `Te llevo a ${navigation.label || url.pathname}…`));
     scrollToBottom();
 
     rememberOpen(true);
@@ -182,7 +372,7 @@
 
   async function send(text) {
     const question = String(text || "").trim();
-    if (!question || streaming) return;
+    if (!question || streaming || uploading > 0) return;
 
     streaming = true;
     input.value = "";
@@ -193,7 +383,7 @@
     message.textEl.innerHTML = '<span class="claude-typing" aria-label="Escribiendo"><span></span><span></span><span></span></span>';
 
     let answer = "";
-    let navigation = null;
+    let done = null;
     try {
       const res = await fetch("/claude/api/chat", {
         method: "POST",
@@ -212,8 +402,8 @@
       const decoder = new TextDecoder();
       let buffer = "";
       while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+        const { value, done: finished } = await reader.read();
+        if (finished) break;
         buffer += decoder.decode(value, { stream: true });
         const blocks = buffer.split("\n\n");
         buffer = blocks.pop();
@@ -236,13 +426,22 @@
           } else if (payload.type === "error") {
             throw new Error(payload.error);
           } else if (payload.type === "done") {
-            navigation = payload.navigate || null;
+            done = payload;
           }
         }
       }
       message.statusEl.hidden = true;
       if (!answer) message.textEl.innerHTML = "";
-      if (navigation) navigateAfterTurn(navigation, message);
+
+      if (done && done.ticketDraft) {
+        // Los adjuntos pendientes pasaron al borrador.
+        pendingAttachments = [];
+        renderAttachments();
+        renderTicketDraft(message, done.ticketDraft);
+      } else if (done && done.ticketOffer) {
+        renderTicketOffer(message, done.ticketOffer);
+      }
+      if (done && done.navigate) navigateAfterTurn(done.navigate, message);
     } catch (err) {
       message.statusEl.hidden = true;
       message.textEl.innerHTML = `<span class="claude-msg__error">${escapeHtml(err.message)}</span>`;
@@ -278,6 +477,15 @@
       input.focus();
     }
   });
+
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      const files = Array.from(fileInput.files || []);
+      fileInput.value = "";
+      if (files.length) uploadFiles(files);
+    });
+  }
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
