@@ -49,7 +49,7 @@ function ticketToolDefinitions() {
         type: "object",
         properties: {
           summary: { type: "string", description: "Resumen del problema en una línea (máx. 120 caracteres)." },
-          category: { type: "string", enum: categoryKeys, description: `Categoría probable. ${categoryGuide}.` },
+          category: { type: "string", enum: categoryKeys, description: "Categoría probable (las mismas de draft_support_ticket)." },
         },
         required: ["summary"],
       },
