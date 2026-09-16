@@ -56,7 +56,7 @@
     <div class="ticket-head__meta">
       <span><strong><%= ticket.requester_name %></strong> · <%= ticket.requester_email %></span>
       <span class="ticket-head__sep" aria-hidden="true">·</span>
-      <span><%= ticket.category || 'Sin clasificar' %></span>
+      <span><%= ticketCategoryLabel(ticket.category) %></span>
       <span class="ticket-head__sep" aria-hidden="true">·</span>
       <span>Creado <%= fmt(ticket.created_at) %></span>
       <% if (ticket.fecha_cierre) { %>
@@ -193,8 +193,8 @@
           <label class="ticket-campo">
             <span class="ticket-campo__label">Categoría</span>
             <select name="category">
-              <% ['SAP','Salesforce','Intranet','Hardware','Otro'].forEach((c) => { %>
-                <option value="<%= c %>" <%= ticket.category === c ? 'selected' : '' %>><%= c %></option>
+              <% ticketCategories.forEach((categoria) => { %>
+                <option value="<%= categoria.key %>" <%= ticketCategoryLabel(ticket.category) === categoria.label ? 'selected' : '' %>><%= categoria.label %></option>
               <% }) %>
             </select>
           </label>

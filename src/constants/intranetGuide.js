@@ -249,19 +249,11 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "soporte",
-    title: "Soporte TI",
+    title: "Soporte",
     href: "/sistemas/tickets",
     feature: "supportTickets",
     paths: [/^\/sistemas\/?$/, /^\/sistemas\/tickets\/?$/, /^\/sistemas\/tickets\/\d+(\/|$)/],
-    summary: "Herramientas de autoayuda para problemas comunes y tus tickets con el equipo de TI (abiertos, en curso y cerrados).",
-  },
-  {
-    id: "nuevo-ticket",
-    title: "Abrir un ticket de soporte",
-    href: "/sistemas/tickets/nuevo",
-    feature: "supportTickets",
-    paths: [/^\/sistemas\/tickets\/nuevo(\/|$)/],
-    summary: "Crear un caso para el equipo de TI. También se abre con el botón «Abrir Ticket» de la barra superior.",
+    summary: "Autoayuda para problemas comunes y tus tickets con el equipo de TI (abiertos, en curso y cerrados). Un ticket nuevo se abre con «Abrir Ticket» en la barra superior o pidiéndoselo al asistente.",
   },
   {
     id: "perfil",

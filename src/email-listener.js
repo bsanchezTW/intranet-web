@@ -6,6 +6,7 @@
 require("./config/env");
 const { isFeatureEnabled } = require("./config/features");
 const { getCurrentCountry } = require("./config/country");
+const { DEFAULT_TICKET_CATEGORY } = require("./constants/ticketCategories");
 
 if (!isFeatureEnabled("supportTickets")) {
   console.log(
@@ -51,7 +52,7 @@ async function main() {
       const description =
         parsed.text || parsed.html || '(sin contenido en el correo)';
 
-      const category = 'Otro';
+      const category = DEFAULT_TICKET_CATEGORY;
       const priority = 'medium';
       const status = 'open';
 

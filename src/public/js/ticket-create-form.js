@@ -138,24 +138,59 @@
     });
   }
 
+  const MODAL_ID = 'modalNuevoTicketNavbar';
+
+  /**
+   * Abre el modal de nuevo ticket, opcionalmente prellenado. Lo usan el botón
+   * «Abrir Ticket», el enlace ?nuevo=1 y el asistente de la intranet.
+   * @returns {boolean} false si el modal no existe en esta página.
+   */
+  function openCreateModal(prefill = {}) {
+    const modal = document.getElementById(MODAL_ID);
+    const form = modal?.querySelector('[data-ticket-create-form]');
+    if (!window.IntranetModal || !modal || !form) return false;
+
+    resetForm(form);
+    const setValue = (selector, value) => {
+      const field = form.querySelector(selector);
+      if (!field || value == null || value === '') return;
+      if (field.tagName === 'SELECT' && !Array.from(field.options).some((o) => o.value === value)) return;
+      field.value = value;
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    setValue('[name="title"]', prefill.title);
+    setValue('[name="category"]', prefill.category);
+    setValue('[name="priority"]', prefill.priority);
+    setValue('[name="description"]', prefill.description);
+
+    window.IntranetModal.open(MODAL_ID);
+    return true;
+  }
+
   function bindModalOpeners() {
-    const modalId = 'modalNuevoTicketNavbar';
-    const modal = document.getElementById(modalId);
+    const modal = document.getElementById(MODAL_ID);
     const form = modal?.querySelector('[data-ticket-create-form]');
 
     document.querySelectorAll('.js-open-ticket-modal').forEach((link) => {
       link.addEventListener('click', (e) => {
-        if (!window.IntranetModal || !modal || !form) return;
-        e.preventDefault();
-        resetForm(form);
-        window.IntranetModal.open(modalId);
+        if (openCreateModal()) e.preventDefault();
       });
     });
 
     modal?.addEventListener('transitionend', () => {
       if (form && !modal.classList.contains('is-open')) resetForm(form);
     });
+
+    // El alta es sólo en modal: /sistemas/tickets/nuevo redirige con ?nuevo=1.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('nuevo') === '1' && openCreateModal()) {
+      params.delete('nuevo');
+      const qs = params.toString();
+      window.history.replaceState({}, document.title, window.location.pathname + (qs ? `?${qs}` : ''));
+    }
   }
+
+  window.TicketCreateModal = { open: openCreateModal };
 
   function init() {
     document.querySelectorAll('[data-ticket-create-form]').forEach((form) => {

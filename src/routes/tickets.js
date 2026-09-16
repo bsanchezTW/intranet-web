@@ -6,10 +6,8 @@ const { isAdministrador } = require("../constants/roles");
 const multer = require('multer');
 const {
   ticketStatusFromDb,
-  ticketPriorityToDb,
   mapTicketReplyForView,
 } = require("../utils/schemaMappers");
-const fileStorage = require('../services/fileStorage');
 const holidayService = require("../services/vacations/holidayService");
 const {
   countBusinessMinutes,
@@ -22,6 +20,17 @@ const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { APP_CATALOGS } = require("../constants/appCatalogs");
 const { listAppsByCatalog } = require("../services/appCatalogService");
 const requireSupportAgent = require("../middlewares/requireSupportAgent");
+const {
+  createSupportTicket,
+  saveTicketAttachment,
+  ticketMailHtml: generarHtmlCorreo,
+  ticketMailText: generarTextoCorreo,
+} = require("../services/tickets/ticketService");
+const { normalizeTicketPriority } = require("../services/tickets/ticketRules");
+const {
+  DEFAULT_TICKET_CATEGORY,
+  normalizeTicketCategory,
+} = require("../constants/ticketCategories");
 const { safeTicketRedirect } = require("../utils/ticketRedirect");
 const {
   listSupportAgents,
@@ -81,78 +90,6 @@ function invalidateNotificationCount(req) {
   if (req.session) delete req.session.ticketNotifications;
 }
 
-// ==========================================
-// HELPER: HTML DE CORREO
-// ==========================================
-function generarHtmlCorreo(mensaje, adjuntosJSON) {
-  const previewText = mensaje.replace(/\n/g, " ").substring(0, 130) + "...";
-
-  let html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; background-color: #ffffff;">
-  
-  <div style="display: none; max-height: 0px; overflow: hidden; opacity: 0; font-size: 0px; line-height: 0px; color: #ffffff;">
-    ${previewText}
-  </div>
-
-  <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5; max-width: 650px; margin: 0 auto; padding: 15px;">
-    <p>${mensaje.replace(/\n/g, "<br>")}</p>`;
-
-  let archivos = [];
-  try {
-    if (adjuntosJSON) archivos = JSON.parse(adjuntosJSON);
-  } catch (e) {}
-
-  if (archivos.length > 0) {
-    html += `<div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 5px;">`;
-    html += `<p style="font-weight: bold; margin-top: 0; margin-bottom: 10px;">Archivos Adjuntos:</p>`;
-    html += `<ul style="list-style-type: none; padding: 0; margin: 0;">`;
-
-    archivos.forEach((a) => {
-      let label = "Archivo";
-      if (a.tipo === "image") {
-        label = "Imagen";
-      }
-      if (a.tipo === "video") {
-        label = "Video";
-      }
-
-      html += `<li style="margin-bottom: 8px;">
-        <strong>[${label}]:</strong> 
-        <a href="${a.url}" target="_blank" style="color: #0056b3; text-decoration: underline; font-weight: bold;">
-          ${a.nombre || "Ver archivo"}
-        </a>
-      </li>`;
-    });
-
-    html += `</ul></div>`;
-  }
-
-  html += `
-  </div>
-</body>
-</html>`;
-  return html;
-}
-
-function generarTextoCorreo(mensaje, adjuntosJSON) {
-  let texto = mensaje;
-  let archivos = [];
-  try {
-    if (adjuntosJSON) archivos = JSON.parse(adjuntosJSON);
-  } catch (e) {}
-  if (archivos.length > 0) {
-    texto += `\n\n--- Adjuntos ---`;
-    archivos.forEach((a) => {
-      texto += `\n[${a.tipo}]: ${a.nombre} -> ${a.url}`;
-    });
-  }
-  return texto;
-}
 
 // ==========================================
 // HELPERS: ASIGNACIÓN Y REDIRECCIÓN
@@ -334,60 +271,34 @@ router.get("/tickets", async (req, res) => {
   }
 });
 
+// El alta de tickets es sólo en modal: el enlace antiguo lo abre sobre la lista.
 router.get("/tickets/nuevo", (req, res) => {
-  res.render("sistemas/ticket_nuevo", {
-    titulo: "Abrir Nuevo Ticket",
-    user: req.session.user,
-    extraCss: ["/css/tickets.css"],
-  });
+  res.redirect("/sistemas/tickets?nuevo=1");
 });
 
 router.post("/tickets/crear", async (req, res) => {
-  const title = req.body.title ?? req.body.titulo;
-  const description = req.body.description ?? req.body.descripcion;
-  const category = req.body.category ?? req.body.categoria;
-  const priority = ticketPriorityToDb(req.body.priority ?? req.body.prioridad);
-  const { adjuntos_data } = req.body;
   if (!req.session.user) return res.redirect("/login");
 
+  let adjuntos = [];
   try {
-    const { rows: userRows } = await db.query(
-      "SELECT first_name, last_name, email FROM users WHERE id = $1",
-      [req.session.user.id],
-    );
-    const u = userRows[0];
-    const requesterName =
-      u.first_name + (u.last_name ? " " + u.last_name : "");
-    const requesterEmail = u.email;
+    adjuntos = JSON.parse(req.body.adjuntos_data || "[]");
+  } catch {
+    adjuntos = [];
+  }
 
-    const sql = `
-      INSERT INTO support_tickets (title, description, category, priority, status, requester_name, requester_email, attachments, read_by_admin, read_by_user) 
-      VALUES ($1, $2, $3, $4, 'open', $5, $6, $7, FALSE, TRUE) 
-      RETURNING id
-    `;
+  try {
+    const result = await createSupportTicket({
+      user: req.session.user,
+      title: req.body.title ?? req.body.titulo,
+      description: req.body.description ?? req.body.descripcion,
+      category: req.body.category ?? req.body.categoria,
+      priority: req.body.priority ?? req.body.prioridad,
+      attachments: adjuntos,
+    });
+    if (!result.ok) return res.status(400).send(result.error);
 
-    const { rows } = await db.queryRetryIdCollision(sql, [
-      title,
-      description,
-      category,
-      priority,
-      requesterName,
-      requesterEmail,
-      adjuntos_data || "[]",
-    ]);
-    const nuevoId = rows[0].id;
-
-    if (process.env.ADMIN_NOTIFY_EMAIL) {
-      let mensajeBase = `Ticket generado por ${requesterName}\n\nTitulo: ${title}\n\nDescripción: ${description}`;
-      sendMail({
-        to: process.env.ADMIN_NOTIFY_EMAIL,
-        subject: `Nuevo Ticket #${nuevoId}: ${title}`,
-        text: generarTextoCorreo(mensajeBase, adjuntos_data),
-        html: generarHtmlCorreo(mensajeBase, adjuntos_data),
-        bcc: EMAIL_SUPPORT,
-      }).catch(console.error);
-    }
-    res.redirect(`/sistemas/tickets/${nuevoId}`);
+    invalidateNotificationCount(req);
+    res.redirect(`/sistemas/tickets/${result.id}`);
   } catch (err) {
     console.error(err);
     res.status(500).send("Error al procesar el ticket.");
@@ -413,10 +324,12 @@ router.post('/tickets/upload', upload.single('file'), async (req, res) => {
     if (!req.session || !req.session.user) return res.status(403).json({ error: 'No autorizado' });
     if (!req.file) return res.status(400).json({ error: 'No se subió archivo' });
 
-    const result = await fileStorage.saveFile(req.file.buffer, 'tickets_adjuntos', req.file.originalname);
-    const tipo = req.file.mimetype.startsWith('video/') ? 'video' : req.file.mimetype.startsWith('image/') ? 'image' : 'raw';
+    // Las respuestas de Soporte adjuntan también planillas y texto: sin filtro de tipo.
+    const saved = await saveTicketAttachment(req.file, { anyType: true });
+    if (!saved.ok) return res.status(400).json({ error: saved.error });
 
-    return res.json({ secure_url: result.secure_url, public_id: result.public_id, resource_type: tipo });
+    const tipo = req.file.mimetype.startsWith('video/') ? 'video' : req.file.mimetype.startsWith('image/') ? 'image' : 'raw';
+    return res.json({ secure_url: saved.attachment.url, public_id: saved.publicId, resource_type: tipo });
   } catch (err) {
     console.error('Error subiendo archivo ticket:', err);
     return res.status(500).json({ error: 'Error subiendo archivo' });
@@ -439,8 +352,9 @@ router.post(
   requireSupportAgent(),
   async (req, res) => {
     const { id } = req.params;
-    const category = req.body.category ?? req.body.categoria;
-    const priority = ticketPriorityToDb(req.body.priority ?? req.body.prioridad);
+    const category =
+      normalizeTicketCategory(req.body.category ?? req.body.categoria) || DEFAULT_TICKET_CATEGORY;
+    const priority = normalizeTicketPriority(req.body.priority ?? req.body.prioridad);
     const { mensaje_respuesta, adjuntos_data } = req.body;
     const cerrar = String(req.body.accion || "") === "cerrar";
     const status = cerrar ? "closed" : "in_progress";

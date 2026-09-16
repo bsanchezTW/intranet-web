@@ -1,7 +1,7 @@
 <%
   /**
-   * Formulario de alta de ticket, compartido por el modal de la barra y la
-   * página /sistemas/tickets/nuevo. Usa la misma estructura que el detalle
+   * Formulario de alta de ticket del modal de la barra (el alta es sólo en
+   * modal; /sistemas/tickets/nuevo lo abre). Usa la misma estructura que el detalle
    * —cuerpo con scroll y pie de acciones— para que ambos modales se lean igual.
    */
   const createShowCancel = (typeof showCancel !== 'undefined') && showCancel;
@@ -28,11 +28,9 @@
       <div class="ticket-campo">
         <label class="ticket-campo__label" for="<%= fieldPrefix %>Categoria">Categoría</label>
         <select id="<%= fieldPrefix %>Categoria" name="category">
-          <option value="SAP">Soporte técnico</option>
-          <option value="Salesforce">Software / ERP</option>
-          <option value="Intranet">Infraestructura / Red</option>
-          <option value="Hardware">Hardware (impresoras, PC, etc.)</option>
-          <option value="Otro" selected>Otro</option>
+          <% ticketCategories.forEach((categoria) => { %>
+            <option value="<%= categoria.key %>" <%= categoria.key === 'otro' ? 'selected' : '' %>><%= categoria.label %></option>
+          <% }) %>
         </select>
       </div>
       <div class="ticket-campo">

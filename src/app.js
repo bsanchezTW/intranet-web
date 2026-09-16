@@ -38,6 +38,8 @@ const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
+const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
+const { migrateTicketCategories } = require("./services/tickets/ticketSchema");
 const ticketsRoutes = isFeatureEnabled("supportTickets")
   ? require("./routes/tickets")
   : null;
@@ -100,6 +102,9 @@ app.locals.formatPageTitle = formatPageTitle;
 // Formato de celular del país, para inyectarlo al script de cliente.
 app.locals.phoneClientConfig = phoneClientConfig;
 app.locals.getMonogram = getMonogram;
+// Categorías de tickets para el formulario, la lista y el detalle.
+app.locals.ticketCategories = TICKET_CATEGORIES;
+app.locals.ticketCategoryLabel = ticketCategoryLabel;
 
 // ================================
 // Middlewares Básicos
@@ -757,6 +762,15 @@ async function asegurarSchemaAreas() {
   }
 }
 
+async function asegurarCategoriasTickets() {
+  try {
+    const migradas = await migrateTicketCategories();
+    if (migradas > 0) logger.info("tickets", `${migradas} ticket(s) con la categoría actualizada`);
+  } catch (err) {
+    logger.error("tickets", err);
+  }
+}
+
 function startBackgroundJobs() {
   if (isFeatureEnabled("supportTickets")) {
     iniciarTareaCierreTickets();
@@ -775,6 +789,7 @@ function startBackgroundJobs() {
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
     asegurarSchemaAreas(),
+    isFeatureEnabled("supportTickets") ? asegurarCategoriasTickets() : null,
     asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),
   ]).finally(() => {
     if (isFeatureEnabled("vacations")) iniciarTransicionesVacaciones();
