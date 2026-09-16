@@ -51,15 +51,9 @@
     <div class="claude-thread" id="claudeThread" aria-live="polite"></div>
   </div>
 
-  <% if (features.supportTickets) { %>
-  <div class="claude-attachments" id="claudeAttachments" aria-live="polite" hidden></div>
-  <% } %>
-
   <form class="claude-composer" id="claudeForm">
     <% if (features.supportTickets) { %>
-    <button type="button" class="claude-composer__attach" id="claudeAttach" title="Adjuntar archivo para el ticket" aria-label="Adjuntar archivo para el ticket (imágenes, videos, PDF o Word)">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-    </button>
+    <%# Sin botón en el chat: se adjunta sólo desde la casilla del borrador de ticket. %>
     <input type="file" id="claudeFileInput" accept="image/*,video/*,.pdf,.doc,.docx" multiple hidden>
     <% } %>
     <textarea id="claudeInput" rows="1" maxlength="2000" placeholder="Escribe tu pregunta…" aria-label="Mensaje para el asistente"></textarea>

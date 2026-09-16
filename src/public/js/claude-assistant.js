@@ -5,7 +5,8 @@
  * página (la intranet recarga el documento) el panel se reabre si estaba
  * abierto y vuelve a pedir la conversación.
  *
- * Tickets: los archivos adjuntos se guardan en el navegador (IndexedDB) y se
+ * Tickets: sólo se adjunta en la casilla de la tarjeta del borrador. Los
+ * archivos se guardan en el navegador (IndexedDB) y se
  * suben recién cuando el usuario pulsa «Crear ticket» en la tarjeta del
  * borrador. Al modelo sólo le llegan sus nombres.
  */
@@ -26,9 +27,7 @@
   const form = document.getElementById("claudeForm");
   const input = document.getElementById("claudeInput");
   const sendBtn = document.getElementById("claudeSend");
-  const attachBtn = document.getElementById("claudeAttach");
   const fileInput = document.getElementById("claudeFileInput");
-  const attachmentsEl = document.getElementById("claudeAttachments");
   const maxAttachmentMb = Number(panel.dataset.maxAttachmentMb) || 40;
 
   let historyLoaded = false;
@@ -248,25 +247,9 @@
     return file.type.startsWith("image/") || file.type.startsWith("video/") || /\.(pdf|docx?)$/i.test(file.name);
   }
 
+  /** Refresca las casillas de las tarjetas de borrador, con un aviso si lo hay. */
   function renderAttachments(message) {
-    if (!attachmentsEl) return;
-    attachmentsEl.innerHTML = "";
-
-    pendingAttachments.forEach((attachment) => {
-      const chip = el("span", "claude-file");
-      chip.appendChild(el("span", "claude-file__name", attachment.nombre));
-      const remove = el("button", "claude-file__remove", "×");
-      remove.type = "button";
-      remove.setAttribute("aria-label", `Quitar ${attachment.nombre}`);
-      remove.addEventListener("click", () => removeAttachment(attachment.id));
-      chip.appendChild(remove);
-      attachmentsEl.appendChild(chip);
-    });
-    if (message) attachmentsEl.appendChild(el("p", "claude-attachments__error", message));
-
-    // Con una tarjeta de borrador abierta, los archivos se muestran en su casilla.
-    attachmentsEl.hidden = message ? false : !pendingAttachments.length || draftFileLists.size > 0;
-    draftFileLists.forEach((refresh) => refresh());
+    draftFileLists.forEach((refresh) => refresh(message));
   }
 
   /** Listas de archivos de las tarjetas de borrador abiertas. */
@@ -308,7 +291,7 @@
 
   /** Recupera los adjuntos de esta sesión y descarta los de sesiones anteriores. */
   async function restoreAttachments() {
-    if (!attachmentsEl) return;
+    if (!fileInput) return;
     // Lo adjuntado antes de conocer la sesión queda asociado a ella.
     pendingAttachments.forEach((attachment) => {
       if (!attachment.sessionKey) {
@@ -356,7 +339,7 @@
     drop.appendChild(el("p", "claude-dropzone__hint", "Arrastra y suelta los archivos aquí o haz clic para elegirlos."));
 
     const list = el("ul", "claude-ticket__files");
-    const refresh = () => {
+    const refresh = (message) => {
       list.innerHTML = "";
       pendingAttachments.forEach((attachment) => {
         const item = el("li", "");
@@ -368,7 +351,8 @@
         item.appendChild(remove);
         list.appendChild(item);
       });
-      list.hidden = !pendingAttachments.length;
+      if (message) list.appendChild(el("li", "claude-attachments__error", message));
+      list.hidden = !pendingAttachments.length && !message;
     };
 
     const choose = () => fileInput && fileInput.click();
@@ -665,8 +649,7 @@
     }
   });
 
-  if (attachBtn && fileInput) {
-    attachBtn.addEventListener("click", () => fileInput.click());
+  if (fileInput) {
     fileInput.addEventListener("change", () => {
       const files = Array.from(fileInput.files || []);
       fileInput.value = "";
