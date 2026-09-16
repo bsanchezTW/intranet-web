@@ -42,24 +42,41 @@ function isAllowedAttachment(mimeType = "", filename = "") {
   return DOCUMENT_EXTENSIONS.includes(path.extname(String(filename)).toLowerCase());
 }
 
-/** Lista de adjuntos { url, nombre, tipo } saneada. Lo que no tiene URL se descarta. */
-function normalizeAttachments(list) {
-  if (!Array.isArray(list)) return [];
-  return list
-    .filter((item) => item && typeof item.url === "string" && item.url.trim())
-    .slice(0, MAX_ATTACHMENTS)
-    .map((item) => ({
-      url: item.url.trim(),
-      nombre: String(item.nombre || "archivo").slice(0, 200),
-      tipo: ATTACHMENT_KINDS.includes(item.tipo) ? item.tipo : "doc",
-    }));
+/**
+ * Nombre del adjunto en el bucket: <N° de ticket>_<n>.<ext>. El nombre
+ * original se conserva aparte, para mostrarlo.
+ */
+function attachmentFileName(ticketId, index, originalName = "") {
+  const ext = path.extname(String(originalName)).toLowerCase();
+  return `${ticketId}_${index}${/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ""}`;
+}
+
+/**
+ * Valida los archivos recibidos (multer) antes de crear el ticket: si uno no
+ * sirve, no se crea nada.
+ * @returns {{ ok: true } | { ok: false, error: string }}
+ */
+function validateAttachmentFiles(files, { maxBytes, maxFiles = MAX_ATTACHMENTS } = {}) {
+  if (!Array.isArray(files) || !files.length) return { ok: true };
+  if (files.length > maxFiles) {
+    return { ok: false, error: `Puedes adjuntar hasta ${maxFiles} archivos.` };
+  }
+  for (const file of files) {
+    if (!isAllowedAttachment(file.mimetype, file.originalname)) {
+      return { ok: false, error: `«${file.originalname}» no es un tipo permitido. Usa imágenes, videos, PDF o Word.` };
+    }
+    if (maxBytes && file.size > maxBytes) {
+      return { ok: false, error: `«${file.originalname}» supera el tamaño máximo permitido.` };
+    }
+  }
+  return { ok: true };
 }
 
 /**
  * Valida y normaliza los datos de un ticket nuevo.
  * @returns {{ ok: true, ticket } | { ok: false, error: string }}
  */
-function validateTicketInput({ title, description, category, priority, attachments } = {}) {
+function validateTicketInput({ title, description, category, priority } = {}) {
   const cleanTitle = String(title ?? "").trim();
   const cleanDescription = String(description ?? "").trim();
 
@@ -79,7 +96,6 @@ function validateTicketInput({ title, description, category, priority, attachmen
       description: cleanDescription,
       category: normalizeTicketCategory(category) || DEFAULT_TICKET_CATEGORY,
       priority: normalizeTicketPriority(priority),
-      attachments: normalizeAttachments(attachments),
     },
   };
 }
@@ -90,10 +106,12 @@ module.exports = {
   MAX_TITLE_CHARS,
   MAX_DESCRIPTION_CHARS,
   MAX_ATTACHMENTS,
+  ATTACHMENT_KINDS,
   normalizeTicketPriority,
   ticketPriorityLabel,
   attachmentKind,
   isAllowedAttachment,
-  normalizeAttachments,
+  attachmentFileName,
+  validateAttachmentFiles,
   validateTicketInput,
 };

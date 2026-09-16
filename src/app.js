@@ -40,6 +40,7 @@ const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
 const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
 const { migrateTicketCategories } = require("./services/tickets/ticketSchema");
+const { UPLOAD_LIMITS_MB } = require("./config/uploadLimits");
 const ticketsRoutes = isFeatureEnabled("supportTickets")
   ? require("./routes/tickets")
   : null;
@@ -105,6 +106,7 @@ app.locals.getMonogram = getMonogram;
 // Categorías de tickets para el formulario, la lista y el detalle.
 app.locals.ticketCategories = TICKET_CATEGORIES;
 app.locals.ticketCategoryLabel = ticketCategoryLabel;
+app.locals.maxTicketAttachmentMb = UPLOAD_LIMITS_MB.TICKET_ATTACHMENT;
 
 // ================================
 // Middlewares Básicos

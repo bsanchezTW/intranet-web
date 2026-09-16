@@ -5,9 +5,9 @@
  * página (la intranet recarga el documento) el panel se reabre si estaba
  * abierto y vuelve a pedir la conversación.
  *
- * Tickets: los archivos adjuntos quedan pendientes en la sesión y se suman al
- * borrador que arma el asistente. El ticket sólo se crea cuando el usuario
- * pulsa «Crear ticket» en la tarjeta.
+ * Tickets: los archivos adjuntos se guardan en el navegador (IndexedDB) y se
+ * suben recién cuando el usuario pulsa «Crear ticket» en la tarjeta del
+ * borrador. Al modelo sólo le llegan sus nombres.
  */
 (function () {
   "use strict";
@@ -29,12 +29,13 @@
   const attachBtn = document.getElementById("claudeAttach");
   const fileInput = document.getElementById("claudeFileInput");
   const attachmentsEl = document.getElementById("claudeAttachments");
+  const maxAttachmentMb = Number(panel.dataset.maxAttachmentMb) || 40;
 
   let historyLoaded = false;
   let streaming = false;
   let closeTimer = null;
+  let sessionKey = null;
   let pendingAttachments = [];
-  let uploading = 0;
 
   if (window.marked) marked.setOptions({ breaks: true, gfm: true });
 
@@ -111,9 +112,22 @@
     return node;
   }
 
+  // El chat sigue el final mientras crece (texto que llega, tarjetas, botones),
+  // salvo que el usuario haya subido para leer algo anterior.
+  let stickToBottom = true;
+
   function scrollToBottom() {
+    stickToBottom = true;
     scroll.scrollTop = scroll.scrollHeight;
   }
+
+  scroll.addEventListener("scroll", () => {
+    stickToBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 48;
+  });
+
+  new MutationObserver(() => {
+    if (stickToBottom) requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
+  }).observe(thread, { childList: true, subtree: true, characterData: true });
 
   function syncWelcome() {
     welcome.hidden = thread.children.length > 0;
@@ -163,7 +177,7 @@
     const needed = input.scrollHeight + 2;
     input.style.height = Math.min(needed, 120) + "px";
     input.style.overflowY = needed > 120 ? "auto" : "hidden";
-    sendBtn.disabled = streaming || uploading > 0 || !input.value.trim();
+    sendBtn.disabled = streaming || !input.value.trim();
   }
 
   async function requestJson(url, options = {}) {
@@ -173,7 +187,67 @@
     return data;
   }
 
-  // ── Adjuntos ────────────────────────────────────────────────────────────
+  // ── Adjuntos guardados en el navegador ─────────────────────────────────
+  // Viven en IndexedDB para sobrevivir al cambio de página y se suben recién
+  // al crear el ticket. Cada registro guarda la sesión del servidor en que se
+  // adjuntó: los de una sesión anterior se descartan.
+  const fileStore = (() => {
+    const DB_NAME = "intranet-asistente";
+    const STORE = "adjuntos";
+    let dbPromise = null;
+
+    function open() {
+      if (!("indexedDB" in window)) return Promise.reject(new Error("IndexedDB no disponible"));
+      if (!dbPromise) {
+        dbPromise = new Promise((resolve, reject) => {
+          const request = indexedDB.open(DB_NAME, 1);
+          request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: "id" });
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      }
+      return dbPromise;
+    }
+
+    async function run(mode, action) {
+      const db = await open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, mode);
+        const request = action(tx.objectStore(STORE));
+        tx.oncomplete = () => resolve(request.result);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    return {
+      all: () => run("readonly", (store) => store.getAll()),
+      put: (record) => run("readwrite", (store) => store.put(record)),
+      remove: (id) => run("readwrite", (store) => store.delete(id)),
+      clear: () => run("readwrite", (store) => store.clear()),
+    };
+  })();
+
+  const ignore = () => {
+    /* sin IndexedDB los adjuntos viven sólo mientras la página siga abierta */
+  };
+
+  function newId() {
+    return window.crypto && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function attachmentKind(file) {
+    if (file.type.startsWith("video/")) return "video";
+    if (file.type.startsWith("image/")) return "image";
+    if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return "pdf";
+    return "doc";
+  }
+
+  function isAllowedFile(file) {
+    return file.type.startsWith("image/") || file.type.startsWith("video/") || /\.(pdf|docx?)$/i.test(file.name);
+  }
+
   function renderAttachments(message) {
     if (!attachmentsEl) return;
     attachmentsEl.innerHTML = "";
@@ -188,55 +262,143 @@
       chip.appendChild(remove);
       attachmentsEl.appendChild(chip);
     });
-    if (uploading > 0) {
-      attachmentsEl.appendChild(el("span", "claude-file claude-file--loading", `Subiendo ${uploading}…`));
-    }
     if (message) attachmentsEl.appendChild(el("p", "claude-attachments__error", message));
 
-    attachmentsEl.hidden = !pendingAttachments.length && uploading === 0 && !message;
+    attachmentsEl.hidden = !pendingAttachments.length && !message;
+    draftFileLists.forEach((refresh) => refresh());
   }
 
-  async function uploadFiles(files) {
+  /** Listas de archivos de las tarjetas de borrador abiertas. */
+  const draftFileLists = new Set();
+
+  function addFiles(files) {
+    let problem = "";
     for (const file of files) {
-      if (pendingAttachments.length + uploading >= MAX_ATTACHMENTS) {
-        renderAttachments(`Puedes adjuntar hasta ${MAX_ATTACHMENTS} archivos por ticket.`);
+      if (pendingAttachments.length >= MAX_ATTACHMENTS) {
+        problem = `Puedes adjuntar hasta ${MAX_ATTACHMENTS} archivos por ticket.`;
         break;
       }
-      uploading += 1;
-      renderAttachments();
-      updateSendState();
-      try {
-        const body = new FormData();
-        body.append("file", file);
-        const data = await requestJson("/claude/api/attachments", { method: "POST", body });
-        pendingAttachments.push(data.attachment);
-        uploading -= 1;
-        renderAttachments();
-      } catch (err) {
-        uploading -= 1;
-        renderAttachments(`${file.name}: ${err.message}`);
+      if (!isAllowedFile(file)) {
+        problem = `«${file.name}» no es un tipo permitido. Usa imágenes, videos, PDF o Word.`;
+        continue;
       }
-      updateSendState();
+      if (file.size > maxAttachmentMb * 1024 * 1024) {
+        problem = `«${file.name}» supera los ${maxAttachmentMb} MB.`;
+        continue;
+      }
+      const record = { id: newId(), sessionKey, nombre: file.name, tipo: attachmentKind(file), file };
+      pendingAttachments.push(record);
+      fileStore.put(record).catch(ignore);
     }
+    renderAttachments(problem);
   }
 
-  async function removeAttachment(id) {
+  function removeAttachment(id) {
+    pendingAttachments = pendingAttachments.filter((attachment) => attachment.id !== id);
+    fileStore.remove(id).catch(ignore);
+    renderAttachments();
+  }
+
+  function clearAttachments() {
+    pendingAttachments = [];
+    fileStore.clear().catch(ignore);
+    renderAttachments();
+  }
+
+  /** Recupera los adjuntos de esta sesión y descarta los de sesiones anteriores. */
+  async function restoreAttachments() {
+    if (!attachmentsEl) return;
+    // Lo adjuntado antes de conocer la sesión queda asociado a ella.
+    pendingAttachments.forEach((attachment) => {
+      if (!attachment.sessionKey) {
+        attachment.sessionKey = sessionKey;
+        fileStore.put(attachment).catch(ignore);
+      }
+    });
     try {
-      const data = await requestJson(`/claude/api/attachments/${encodeURIComponent(id)}`, { method: "DELETE" });
-      pendingAttachments = data.attachments || [];
-      renderAttachments();
-    } catch (err) {
-      renderAttachments(err.message);
+      const stored = await fileStore.all();
+      const inMemory = new Set(pendingAttachments.map((attachment) => attachment.id));
+      stored.forEach((record) => {
+        if (record.sessionKey !== sessionKey) {
+          fileStore.remove(record.id).catch(ignore);
+        } else if (!inMemory.has(record.id) && pendingAttachments.length < MAX_ATTACHMENTS) {
+          pendingAttachments.push(record);
+        }
+      });
+    } catch (_) {
+      ignore();
     }
+    renderAttachments();
+  }
+
+  function asFile(attachment) {
+    return attachment.file instanceof File
+      ? attachment.file
+      : new File([attachment.file], attachment.nombre, { type: attachment.file.type || "" });
   }
 
   // ── Tickets ─────────────────────────────────────────────────────────────
+  /** El alta de tickets es sólo en modal: se abre sobre la página actual. */
   function openTicketForm(prefill) {
-    if (window.TicketCreateModal && window.TicketCreateModal.open(prefill)) {
-      closePanel();
-      return;
-    }
-    window.location.assign("/sistemas/tickets?nuevo=1");
+    if (window.TicketCreateModal && window.TicketCreateModal.open(prefill)) closePanel();
+  }
+
+  /**
+   * Casilla para agregar fotos del problema a un borrador: clic o arrastrar y
+   * soltar. Los archivos quedan en el navegador hasta crear el ticket.
+   */
+  function renderDropzone(card) {
+    const drop = el("div", "claude-dropzone");
+    drop.tabIndex = 0;
+    drop.setAttribute("role", "button");
+    drop.appendChild(el("p", "claude-dropzone__title", "¿Quieres agregar fotos de tu problema?"));
+    drop.appendChild(el("p", "claude-dropzone__hint", "Arrastra y suelta los archivos aquí o haz clic para elegirlos."));
+
+    const list = el("ul", "claude-ticket__files");
+    const refresh = () => {
+      list.innerHTML = "";
+      pendingAttachments.forEach((attachment) => {
+        const item = el("li", "");
+        item.appendChild(el("span", "claude-file__name", attachment.nombre));
+        const remove = el("button", "claude-file__remove", "×");
+        remove.type = "button";
+        remove.setAttribute("aria-label", `Quitar ${attachment.nombre}`);
+        remove.addEventListener("click", () => removeAttachment(attachment.id));
+        item.appendChild(remove);
+        list.appendChild(item);
+      });
+      list.hidden = !pendingAttachments.length;
+    };
+
+    const choose = () => fileInput && fileInput.click();
+    drop.addEventListener("click", choose);
+    drop.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        choose();
+      }
+    });
+    drop.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      drop.classList.add("is-dragging");
+    });
+    drop.addEventListener("dragleave", () => drop.classList.remove("is-dragging"));
+    drop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      drop.classList.remove("is-dragging");
+      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      if (files.length) addFiles(files);
+    });
+
+    card.append(drop, list);
+    draftFileLists.add(refresh);
+    refresh();
+
+    return () => {
+      draftFileLists.delete(refresh);
+      drop.remove();
+      list.remove();
+    };
   }
 
   function renderTicketOffer(message, offer) {
@@ -244,7 +406,11 @@
     const openForm = el("button", "claude-action", "Abrir formulario");
     openForm.type = "button";
     openForm.addEventListener("click", () =>
-      openTicketForm({ title: offer.summary, category: offer.category || undefined }),
+      openTicketForm({
+        title: offer.summary,
+        category: offer.category || undefined,
+        files: pendingAttachments.map(asFile),
+      }),
     );
     const createForMe = el("button", "claude-action claude-action--primary", "Créalo por mí");
     createForMe.type = "button";
@@ -266,12 +432,7 @@
     meta.append(el("span", "", draft.categoryLabel), el("span", "", `Prioridad ${draft.priorityLabel.toLowerCase()}`));
     card.appendChild(meta);
     card.appendChild(el("p", "claude-ticket__desc", draft.description));
-
-    if (draft.attachments.length) {
-      const files = el("ul", "claude-ticket__files");
-      draft.attachments.forEach((attachment) => files.appendChild(el("li", "", attachment.nombre)));
-      card.appendChild(files);
-    }
+    const closeDropzone = renderDropzone(card);
 
     const actions = el("div", "claude-actions");
     const create = el("button", "claude-action claude-action--primary", "Crear ticket");
@@ -294,19 +455,28 @@
     const setBusy = (busy) => [create, edit, discard].forEach((button) => { button.disabled = busy; });
 
     create.addEventListener("click", async () => {
+      const files = pendingAttachments.slice();
       setBusy(true);
-      setStatus("Creando ticket…");
+      setStatus(files.length ? `Creando ticket y subiendo ${files.length} archivo(s)…` : "Creando ticket…");
       try {
+        const body = new FormData();
+        files.forEach((attachment) => body.append("adjuntos", asFile(attachment), attachment.nombre));
         const data = await requestJson(`/claude/api/ticket-draft/${encodeURIComponent(draft.id)}/confirm`, {
           method: "POST",
+          body,
         });
+        closeDropzone();
+        clearAttachments();
         actions.remove();
-        status.textContent = `Ticket #${data.id} creado. `;
-        status.classList.remove("claude-msg__error");
-        status.hidden = false;
+        setStatus(`Ticket #${data.id} creado. `);
         const link = el("a", "", "Ver ticket");
         link.href = data.url;
         status.appendChild(link);
+        if (data.failedAttachments && data.failedAttachments.length) {
+          status.appendChild(
+            el("span", "claude-msg__error", ` No se pudieron subir: ${data.failedAttachments.join(", ")}.`),
+          );
+        }
         card.classList.add("is-done");
       } catch (err) {
         setBusy(false);
@@ -320,17 +490,15 @@
         category: draft.category,
         priority: draft.priority,
         description: draft.description,
+        files: pendingAttachments.map(asFile),
       }),
     );
 
     discard.addEventListener("click", async () => {
       setBusy(true);
       try {
-        const data = await requestJson(`/claude/api/ticket-draft/${encodeURIComponent(draft.id)}`, {
-          method: "DELETE",
-        });
-        pendingAttachments = data.attachments || [];
-        renderAttachments();
+        await requestJson(`/claude/api/ticket-draft/${encodeURIComponent(draft.id)}`, { method: "DELETE" });
+        closeDropzone();
         actions.remove();
         setStatus("Borrador descartado.");
         card.classList.add("is-done");
@@ -350,8 +518,8 @@
     historyLoaded = true;
     try {
       const data = await requestJson("/claude/api/conversation");
-      pendingAttachments = data.attachments || [];
-      renderAttachments();
+      sessionKey = data.sessionKey || null;
+      await restoreAttachments();
       if (streaming || thread.children.length) return;
       (data.messages || []).forEach((m) => {
         if (m.role === "user") addUserMessage(m.content);
@@ -371,8 +539,7 @@
       console.error("[Asistente]", err);
     }
     thread.innerHTML = "";
-    pendingAttachments = [];
-    renderAttachments();
+    clearAttachments();
     syncWelcome();
     input.focus();
   }
@@ -391,7 +558,7 @@
 
   async function send(text) {
     const question = String(text || "").trim();
-    if (!question || streaming || uploading > 0) return;
+    if (!question || streaming) return;
 
     streaming = true;
     input.value = "";
@@ -410,6 +577,7 @@
         body: JSON.stringify({
           message: question,
           page: { path: window.location.pathname, title: document.title },
+          attachments: pendingAttachments.map(({ nombre, tipo }) => ({ nombre, tipo })),
         }),
       });
       if (!res.ok || !res.body) {
@@ -454,9 +622,6 @@
       else addCopyButton(message);
 
       if (done && done.ticketDraft) {
-        // Los adjuntos pendientes pasaron al borrador.
-        pendingAttachments = [];
-        renderAttachments();
         renderTicketDraft(message, done.ticketDraft);
       } else if (done && done.ticketOffer) {
         renderTicketOffer(message, done.ticketOffer);
@@ -503,7 +668,7 @@
     fileInput.addEventListener("change", () => {
       const files = Array.from(fileInput.files || []);
       fileInput.value = "";
-      if (files.length) uploadFiles(files);
+      if (files.length) addFiles(files);
     });
   }
 

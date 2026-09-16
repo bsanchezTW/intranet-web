@@ -20,6 +20,7 @@ const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { APP_CATALOGS } = require("../constants/appCatalogs");
 const { listAppsByCatalog } = require("../services/appCatalogService");
 const requireSupportAgent = require("../middlewares/requireSupportAgent");
+const receiveTicketAttachments = require("../middlewares/receiveTicketAttachments");
 const {
   createSupportTicket,
   saveTicketAttachment,
@@ -271,29 +272,25 @@ router.get("/tickets", async (req, res) => {
   }
 });
 
-// El alta de tickets es sólo en modal: el enlace antiguo lo abre sobre la lista.
+// El alta de tickets es sólo en modal: no hay página propia. La ruta existe
+// para que /tickets/nuevo no caiga en el detalle (/tickets/:id).
 router.get("/tickets/nuevo", (req, res) => {
-  res.redirect("/sistemas/tickets?nuevo=1");
+  res.status(404).render("404", { titulo: "Página no encontrada" });
 });
 
-router.post("/tickets/crear", async (req, res) => {
+router.post("/tickets/crear", receiveTicketAttachments(), async (req, res) => {
   if (!req.session.user) return res.redirect("/login");
 
-  let adjuntos = [];
   try {
-    adjuntos = JSON.parse(req.body.adjuntos_data || "[]");
-  } catch {
-    adjuntos = [];
-  }
-
-  try {
+    // Los archivos llegan con el formulario y se suben recién cuando el ticket
+    // existe, con el nombre <N° de ticket>_1, _2…
     const result = await createSupportTicket({
       user: req.session.user,
       title: req.body.title ?? req.body.titulo,
       description: req.body.description ?? req.body.descripcion,
       category: req.body.category ?? req.body.categoria,
       priority: req.body.priority ?? req.body.prioridad,
-      attachments: adjuntos,
+      files: req.files || [],
     });
     if (!result.ok) return res.status(400).send(result.error);
 

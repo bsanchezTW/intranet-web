@@ -71,6 +71,20 @@ async function saveFile(buffer, folder, originalFileName = "file", options = {})
   return mapUploadedFile(uploaded, relativePath, fileName, buffer.length, options);
 }
 
+/**
+ * Guarda un buffer con un nombre exacto, sin sufijo aleatorio (p. ej. los
+ * adjuntos de tickets, <N° de ticket>_1.png). Quien llama garantiza que el
+ * nombre es único.
+ */
+async function saveFileAs(buffer, folder, fileName, options = {}) {
+  const cleanName = sanitizeBaseName(fileName);
+  const folderClean = storage.normalizeRelativePath(folder);
+  const relativePath = folderClean ? `${folderClean}/${cleanName}` : cleanName;
+
+  const uploaded = await storage.uploadFile(buffer, relativePath, options);
+  return mapUploadedFile(uploaded, relativePath, cleanName, buffer.length, options);
+}
+
 async function saveFileFromPath(
   localFilePath,
   folder,
@@ -190,6 +204,7 @@ function validateFileSize(buffer, maxSizeMB = 100) {
 
 module.exports = {
   saveFile,
+  saveFileAs,
   saveFileFromPath,
   deleteFile,
   deleteFiles,

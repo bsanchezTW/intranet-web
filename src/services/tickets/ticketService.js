@@ -7,7 +7,9 @@ const { ticketCategoryLabel } = require("../../constants/ticketCategories");
 const { ticketStatusFromDb } = require("../../utils/schemaMappers");
 const {
   attachmentKind,
+  attachmentFileName,
   isAllowedAttachment,
+  validateAttachmentFiles,
   validateTicketInput,
 } = require("./ticketRules");
 
@@ -16,6 +18,8 @@ const {
  *
  * Una sola implementación para el modal de la intranet y para el asistente:
  * ambos validan igual, guardan igual y avisan a Soporte con el mismo correo.
+ * Los archivos llegan con el formulario y se suben recién cuando el ticket
+ * existe, con el nombre <N° de ticket>_1, _2…
  */
 
 const ATTACHMENT_FOLDER = "tickets_adjuntos";
@@ -126,33 +130,66 @@ function notifyNewTicket({ id, ticket, requester, adjuntosJSON }) {
 }
 
 /**
- * Crea un ticket a nombre del usuario de sesión y avisa a Soporte.
- * @returns {Promise<{ ok: true, id, ticket } | { ok: false, error }>}
+ * Sube los archivos de un ticket recién creado. Un archivo que falla no anula
+ * el ticket: se informa para que el usuario lo agregue después.
  */
-async function createSupportTicket({ user, ...input }) {
-  const validation = validateTicketInput(input);
-  if (!validation.ok) return validation;
-
-  const { ticket } = validation;
-  const requester = await requesterFor(user);
-  const adjuntosJSON = JSON.stringify(ticket.attachments);
-
-  const { rows } = await db.queryRetryIdCollision(
-    `INSERT INTO support_tickets (title, description, category, priority, status, requester_name, requester_email, attachments, read_by_admin, read_by_user)
-     VALUES ($1, $2, $3, $4, 'open', $5, $6, $7, FALSE, TRUE)
-     RETURNING id`,
-    [ticket.title, ticket.description, ticket.category, ticket.priority, requester.name, requester.email, adjuntosJSON],
-  );
-
-  const id = rows[0].id;
-  notifyNewTicket({ id, ticket, requester, adjuntosJSON });
-  return { ok: true, id, ticket };
+async function uploadTicketFiles(ticketId, files) {
+  const attachments = [];
+  const failed = [];
+  for (const [index, file] of files.entries()) {
+    const fileName = attachmentFileName(ticketId, index + 1, file.originalname);
+    try {
+      const saved = await fileStorage.saveFileAs(file.buffer, ATTACHMENT_FOLDER, fileName, {
+        contentType: file.mimetype,
+      });
+      attachments.push({
+        url: saved.secure_url,
+        nombre: file.originalname,
+        tipo: attachmentKind(file.mimetype, file.originalname),
+      });
+    } catch (err) {
+      console.error(`[Tickets] No se pudo subir ${fileName}:`, err.message);
+      failed.push(file.originalname);
+    }
+  }
+  return { attachments, failed };
 }
 
 /**
- * Sube un archivo a la carpeta de adjuntos de tickets.
- * `anyType` conserva el comportamiento de las respuestas de Soporte, que no
- * restringían el tipo.
+ * Crea un ticket a nombre del usuario de sesión, sube sus archivos y avisa a
+ * Soporte. `files` son los archivos que entrega multer (en memoria).
+ * @returns {Promise<{ ok: true, id, ticket, attachments, failedAttachments } | { ok: false, error }>}
+ */
+async function createSupportTicket({ user, files = [], ...input }) {
+  const validation = validateTicketInput(input);
+  if (!validation.ok) return validation;
+  const filesCheck = validateAttachmentFiles(files, { maxBytes: UPLOAD_LIMITS_BYTES.TICKET_ATTACHMENT });
+  if (!filesCheck.ok) return filesCheck;
+
+  const { ticket } = validation;
+  const requester = await requesterFor(user);
+  const { rows } = await db.queryRetryIdCollision(
+    `INSERT INTO support_tickets (title, description, category, priority, status, requester_name, requester_email, attachments, read_by_admin, read_by_user)
+     VALUES ($1, $2, $3, $4, 'open', $5, $6, '[]', FALSE, TRUE)
+     RETURNING id`,
+    [ticket.title, ticket.description, ticket.category, ticket.priority, requester.name, requester.email],
+  );
+  const id = rows[0].id;
+
+  const { attachments, failed } = await uploadTicketFiles(id, files);
+  const adjuntosJSON = JSON.stringify(attachments);
+  if (attachments.length) {
+    await db.query("UPDATE support_tickets SET attachments = $1 WHERE id = $2", [adjuntosJSON, id]);
+  }
+
+  notifyNewTicket({ id, ticket, requester, adjuntosJSON });
+  return { ok: true, id, ticket, attachments, failedAttachments: failed };
+}
+
+/**
+ * Sube un archivo suelto a la carpeta de adjuntos de tickets (respuestas de
+ * Soporte sobre un ticket existente). `anyType` conserva el comportamiento de
+ * esas respuestas, que no restringían el tipo.
  * @returns {Promise<{ ok: true, attachment, publicId } | { ok: false, error }>}
  */
 async function saveTicketAttachment(file, { anyType = false } = {}) {

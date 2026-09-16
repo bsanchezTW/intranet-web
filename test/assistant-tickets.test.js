@@ -8,7 +8,6 @@ const {
   getHistory,
 } = require("../src/services/assistant/assistantConversation");
 
-const file = (nombre) => ({ url: `https://bucket.test/${nombre}`, nombre, tipo: "image" });
 const ticketInput = {
   title: "No imprime",
   description: "La impresora del segundo piso no responde desde la mañana.",
@@ -16,43 +15,29 @@ const ticketInput = {
   priority: "high",
 };
 
-describe("assistantTickets — adjuntos y borrador en la sesión", () => {
-  it("el borrador se lleva los adjuntos pendientes", () => {
+describe("assistantTickets — borrador en la sesión", () => {
+  it("guarda un borrador válido", () => {
     const session = {};
-    tickets.addPendingAttachment(session, file("captura.png"));
     const saved = tickets.saveTicketDraft(session, ticketInput);
 
     assert.equal(saved.ok, true);
-    assert.equal(saved.draft.attachments.length, 1);
     assert.equal(saved.draft.priority, "high");
-    assert.deepEqual(tickets.getPendingAttachments(session), []);
+    assert.equal(tickets.getTicketDraft(session, saved.draft.id), saved.draft);
   });
 
-  it(`no acepta más de ${tickets.MAX_PENDING_ATTACHMENTS} adjuntos pendientes`, () => {
+  it("un borrador inválido no se guarda", () => {
     const session = {};
-    for (let i = 0; i < tickets.MAX_PENDING_ATTACHMENTS; i += 1) {
-      assert.equal(tickets.addPendingAttachment(session, file(`f${i}.png`)).ok, true);
-    }
-    assert.equal(tickets.addPendingAttachment(session, file("extra.png")).ok, false);
+    assert.equal(tickets.saveTicketDraft(session, { ...ticketInput, title: "" }).ok, false);
+    assert.equal(session.assistantTicketDraft, undefined);
   });
 
-  it("un borrador inválido no se guarda ni toca los adjuntos", () => {
+  it("rehacer el borrador reemplaza al anterior", () => {
     const session = {};
-    tickets.addPendingAttachment(session, file("captura.png"));
-    const saved = tickets.saveTicketDraft(session, { ...ticketInput, title: "" });
+    const first = tickets.saveTicketDraft(session, ticketInput).draft;
+    const second = tickets.saveTicketDraft(session, { ...ticketInput, priority: "low" }).draft;
 
-    assert.equal(saved.ok, false);
-    assert.equal(tickets.getPendingAttachments(session).length, 1);
-  });
-
-  it("rehacer el borrador conserva los adjuntos del anterior", () => {
-    const session = {};
-    tickets.addPendingAttachment(session, file("uno.png"));
-    tickets.saveTicketDraft(session, ticketInput);
-    tickets.addPendingAttachment(session, file("dos.png"));
-    const again = tickets.saveTicketDraft(session, { ...ticketInput, priority: "low" });
-
-    assert.deepEqual(again.draft.attachments.map((a) => a.nombre), ["uno.png", "dos.png"]);
+    assert.equal(tickets.getTicketDraft(session, first.id), null);
+    assert.equal(tickets.getTicketDraft(session, second.id).priority, "low");
   });
 
   it("el borrador sólo se encuentra con su id y en la sesión que lo armó", () => {
@@ -60,42 +45,39 @@ describe("assistantTickets — adjuntos y borrador en la sesión", () => {
     const other = {};
     const { draft } = tickets.saveTicketDraft(mine, ticketInput);
 
-    assert.equal(tickets.getTicketDraft(mine, draft.id), draft);
     assert.equal(tickets.getTicketDraft(mine, "otro-id"), null);
     assert.equal(tickets.getTicketDraft(other, draft.id), null);
+    tickets.clearTicketDraft(mine);
+    assert.equal(tickets.getTicketDraft(mine, draft.id), null);
   });
 
-  it("descartar devuelve los adjuntos a pendientes", () => {
-    const session = {};
-    tickets.addPendingAttachment(session, file("captura.png"));
-    const { draft } = tickets.saveTicketDraft(session, ticketInput);
-
-    assert.equal(tickets.discardTicketDraft(session, draft.id), true);
-    assert.equal(tickets.getTicketDraft(session, draft.id), null);
-    assert.equal(tickets.getPendingAttachments(session)[0].nombre, "captura.png");
-  });
-
-  it("lo que ve el cliente no incluye la URL del bucket", () => {
-    const session = {};
-    const { attachment } = tickets.addPendingAttachment(session, file("captura.png"));
-    const { draft } = tickets.saveTicketDraft(session, ticketInput);
-
-    assert.equal("url" in tickets.publicAttachment(attachment), false);
+  it("la tarjeta trae etiquetas legibles", () => {
+    const { draft } = tickets.saveTicketDraft({}, ticketInput);
     const card = tickets.publicDraft(draft);
     assert.equal(card.categoryLabel, "Impresoras");
     assert.equal(card.priorityLabel, "Alta");
-    assert.deepEqual(card.attachments, [{ nombre: "captura.png", tipo: "image" }]);
+  });
+});
+
+describe("assistantTickets — adjuntos declarados y sesión del navegador", () => {
+  it("de los adjuntos sólo pasan nombre y tipo, acotados", () => {
+    const list = tickets.sanitizeChatAttachments([
+      { nombre: " captura.png ", tipo: "image", url: "no debería pasar" },
+      { nombre: "", tipo: "pdf" },
+      { nombre: "log.txt", tipo: "exe" },
+      ...Array.from({ length: 10 }, (_, i) => ({ nombre: `f${i}.png`, tipo: "image" })),
+    ]);
+    assert.equal(list.length, tickets.MAX_CHAT_ATTACHMENTS);
+    assert.deepEqual(list[0], { nombre: "captura.png", tipo: "image" });
+    assert.equal(list[1].tipo, "doc");
+    assert.deepEqual(tickets.sanitizeChatAttachments("nada"), []);
   });
 
-  it("empezar de nuevo limpia borrador y adjuntos", () => {
+  it("la sesión del navegador es estable dentro de una sesión y distinta entre sesiones", () => {
     const session = {};
-    tickets.addPendingAttachment(session, file("captura.png"));
-    const { draft } = tickets.saveTicketDraft(session, ticketInput);
-    tickets.addPendingAttachment(session, file("otra.png"));
-    tickets.clearTicketState(session);
-
-    assert.equal(tickets.getTicketDraft(session, draft.id), null);
-    assert.deepEqual(tickets.getPendingAttachments(session), []);
+    const key = tickets.assistantSessionId(session);
+    assert.equal(tickets.assistantSessionId(session), key);
+    assert.notEqual(tickets.assistantSessionId({}), key);
   });
 });
 

@@ -1,7 +1,7 @@
 <%
   /**
    * Formulario de alta de ticket del modal de la barra (el alta es sólo en
-   * modal; /sistemas/tickets/nuevo lo abre). Usa la misma estructura que el detalle
+   * modal, no hay página propia). Usa la misma estructura que el detalle
    * —cuerpo con scroll y pie de acciones— para que ambos modales se lean igual.
    */
   const createShowCancel = (typeof showCancel !== 'undefined') && showCancel;
@@ -13,6 +13,8 @@
   id="<%= formId %>"
   action="/sistemas/tickets/crear"
   method="POST"
+  enctype="multipart/form-data"
+  data-max-mb="<%= maxTicketAttachmentMb %>"
   class="ticket-form <%= typeof formClass !== 'undefined' ? formClass : '' %>"
   data-ticket-create-form
   <%= typeof modalId !== 'undefined' && modalId ? `data-ticket-modal-id="${modalId}"` : '' %>
@@ -59,8 +61,7 @@
   </div>
 
   <div class="ticket-foot">
-    <input type="hidden" name="adjuntos_data" value="[]" data-ticket-attachments>
-    <input type="file" id="<%= fieldPrefix %>FileInput" data-ticket-file-input multiple
+    <input type="file" id="<%= fieldPrefix %>FileInput" name="adjuntos" data-ticket-file-input multiple
            accept="image/*,video/*,.pdf,.doc,.docx" hidden>
 
     <div class="ticket-gestion__barra">
@@ -69,7 +70,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
           Adjuntar
         </button>
-        <span class="ticket-upload-status" data-ticket-upload-status>Sin archivos seleccionados</span>
+        <span class="ticket-upload-status" data-ticket-upload-status>Arrastra y suelta archivos aquí</span>
       </div>
 
       <div class="ticket-gestion__acciones">

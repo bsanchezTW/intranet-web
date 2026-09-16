@@ -877,3 +877,9 @@ html[data-theme="dark"] .ticket-prio--high {
     align-self: flex-end;
   }
 }
+
+/* Arrastrar y soltar archivos sobre el formulario de nuevo ticket */
+.ticket-form.is-dragging {
+  outline: 2px dashed var(--primary-green, #a6d84a);
+  outline-offset: -6px;
+}

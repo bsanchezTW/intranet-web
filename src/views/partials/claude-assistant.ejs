@@ -7,16 +7,19 @@
   const assistantFirstName = (typeof displayName === 'string' && displayName !== 'Usuario')
     ? displayName.split(' ')[0]
     : '';
+  // Ícono de soporte (auricular), el mismo en el botón y en el encabezado.
+  const assistantIcon = '<svg class="claude-assistant-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/></svg>';
 %>
 <button type="button" class="claude-fab" id="claudeFab" aria-controls="claudePanel" aria-expanded="false" aria-label="Abrir asistente de ayuda de la intranet">
-  <%- include('claude-logo', { logoClass: 'claude-fab-logo' }) %>
+  <%- assistantIcon %>
   <svg class="claude-fab-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
   <span class="claude-fab-tooltip" role="tooltip">¿Te ayudo a encontrar algo?</span>
 </button>
 
-<section class="claude-panel" id="claudePanel" role="dialog" aria-labelledby="claudePanelTitle" hidden>
+<section class="claude-panel" id="claudePanel" role="dialog" aria-labelledby="claudePanelTitle"
+         data-max-attachment-mb="<%= maxTicketAttachmentMb %>" hidden>
   <header class="claude-panel__header">
-    <span class="claude-panel__avatar"><%- include('claude-logo') %></span>
+    <span class="claude-panel__avatar"><%- assistantIcon %></span>
     <div class="claude-panel__heading">
       <h2 id="claudePanelTitle">Asistente Transworld</h2>
       <p>Te ayudo a moverte por la intranet</p>

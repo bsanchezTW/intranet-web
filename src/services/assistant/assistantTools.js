@@ -58,7 +58,7 @@ function ticketToolDefinitions() {
       name: "draft_support_ticket",
       description:
         "Arma un borrador de ticket de Soporte que el usuario revisa y confirma con el botón «Crear ticket». " +
-        "No crea el ticket. Los archivos que el usuario adjuntó en el chat se suman solos.",
+        "No crea el ticket. Los archivos que el usuario adjuntó en el chat se suben solos al crearlo.",
       input_schema: {
         type: "object",
         properties: {
@@ -236,7 +236,7 @@ function createToolExecutor({ entries, currentPath, searchPeople, searchDocument
         return {
           content: JSON.stringify({
             estado: "borrador listo, el ticket AÚN NO está creado",
-            adjuntos: saved.draft.attachments.length,
+            adjuntos: tickets.attachmentCount || 0,
             siguiente_paso: "Pide al usuario revisar la tarjeta y pulsar «Crear ticket».",
           }),
         };
@@ -284,7 +284,7 @@ function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReview
   const name = user.nombre || [user.first_name, user.last_name].filter(Boolean).join(" ") || "sin nombre";
 
   const attachmentsLine = Array.isArray(attachments)
-    ? `\n- Adjuntos del usuario en el chat (se suman al borrador del ticket): ${
+    ? `\n- Adjuntos del usuario en el chat (se suben al crear el ticket): ${
         attachments.length ? attachments.map((item) => item.nombre).join(", ") : "ninguno"
       }`
     : "";
