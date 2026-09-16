@@ -232,7 +232,7 @@ async function listOpenTicketsForUser(user, { limit = 5 } = {}) {
     titulo: row.title,
     categoria: ticketCategoryLabel(row.category),
     estado: ticketStatusFromDb(row.status),
-    enlace: `/sistemas/tickets/${row.id}`,
+    enlace: `/sistemas/tickets?ticket=${row.id}`,
   }));
 }
 

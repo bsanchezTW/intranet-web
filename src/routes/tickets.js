@@ -32,7 +32,7 @@ const {
   DEFAULT_TICKET_CATEGORY,
   normalizeTicketCategory,
 } = require("../constants/ticketCategories");
-const { safeTicketRedirect } = require("../utils/ticketRedirect");
+const { safeTicketRedirect, ticketModalUrl } = require("../utils/ticketRedirect");
 const {
   listSupportAgents,
   isSupportAgent,
@@ -295,7 +295,7 @@ router.post("/tickets/crear", receiveTicketAttachments(), async (req, res) => {
     if (!result.ok) return res.status(400).send(result.error);
 
     invalidateNotificationCount(req);
-    res.redirect(`/sistemas/tickets/${result.id}`);
+    res.redirect(ticketModalUrl(result.id));
   } catch (err) {
     console.error(err);
     res.status(500).send("Error al procesar el ticket.");
@@ -438,7 +438,7 @@ router.post("/tickets/:id/confirmar", async (req, res) => {
       `UPDATE support_tickets SET status = 'closed', closed_at = NOW(), auto_closed = FALSE WHERE id = $1`,
       [id],
     );
-    res.redirect(`/sistemas/tickets/${id}`);
+    res.redirect(ticketModalUrl(id));
   } catch (err) {
     console.error(err);
     res.status(500).send("Error");
@@ -482,7 +482,7 @@ router.post("/tickets/:id/rechazar", async (req, res) => {
         bcc: EMAIL_SUPPORT,
       }).catch(console.error);
     }
-    res.redirect(`/sistemas/tickets/${id}`);
+    res.redirect(ticketModalUrl(id));
   } catch (err) {
     console.error(err);
     res.status(500).send("Error");
@@ -560,6 +560,13 @@ router.post("/tickets/:id/responder", async (req, res) => {
 router.get("/tickets/:id", async (req, res) => {
   const { id } = req.params;
   const user = req.session.user;
+
+  // Un ticket se ve sólo en el modal de la lista: abierto directamente, lleva ahí.
+  if (req.query.modal !== "true") {
+    return /^\d+$/.test(id)
+      ? res.redirect(ticketModalUrl(id))
+      : res.status(404).render("404", { titulo: "No encontrado" });
+  }
 
   const sqlTicket = `
     SELECT id, title, description, category, priority, status,

@@ -40,39 +40,31 @@ describe("área de soporte", () => {
 });
 
 describe("redirección tras gestionar un ticket", () => {
-  it("respeta rutas internas de la mesa de ayuda", () => {
-    assert.equal(safeTicketRedirect("/sistemas/tickets", 8188), "/sistemas/tickets");
-    assert.equal(
-      safeTicketRedirect("/sistemas/tickets?ok=1", 8188),
-      "/sistemas/tickets?ok=1",
-    );
-    assert.equal(
-      safeTicketRedirect("/sistemas/tickets/8188", 8188),
-      "/sistemas/tickets/8188",
-    );
+  const { ticketModalUrl } = require("../src/utils/ticketRedirect");
+  const MODAL = "/sistemas/tickets?ticket=8188";
+
+  it("la dirección de un ticket abre el modal de la lista", () => {
+    assert.equal(ticketModalUrl(8188), MODAL);
   });
 
-  it("cae al detalle cuando el destino no es de la mesa de ayuda", () => {
-    assert.equal(safeTicketRedirect("/RRHH", 8188), "/sistemas/tickets/8188");
-    assert.equal(safeTicketRedirect("", 8188), "/sistemas/tickets/8188");
-    assert.equal(safeTicketRedirect(undefined, 8188), "/sistemas/tickets/8188");
+  it("respeta rutas internas de la mesa de ayuda", () => {
+    assert.equal(safeTicketRedirect("/sistemas/tickets", 8188), "/sistemas/tickets");
+    assert.equal(safeTicketRedirect("/sistemas/tickets?ok=1", 8188), "/sistemas/tickets?ok=1");
+    assert.equal(safeTicketRedirect(MODAL, 8188), MODAL);
+  });
+
+  it("cae al ticket en el modal cuando el destino no es de la mesa de ayuda", () => {
+    assert.equal(safeTicketRedirect("/RRHH", 8188), MODAL);
+    assert.equal(safeTicketRedirect("", 8188), MODAL);
+    assert.equal(safeTicketRedirect(undefined, 8188), MODAL);
     // Prefijo parecido pero otra ruta: /sistemas/ticketsfalsos no vale.
-    assert.equal(
-      safeTicketRedirect("/sistemas/ticketsfalsos", 8188),
-      "/sistemas/tickets/8188",
-    );
+    assert.equal(safeTicketRedirect("/sistemas/ticketsfalsos", 8188), MODAL);
   });
 
   it("no permite salir del sitio (open redirect)", () => {
-    assert.equal(safeTicketRedirect("//evil.com", 8188), "/sistemas/tickets/8188");
-    assert.equal(safeTicketRedirect("/\\evil.com", 8188), "/sistemas/tickets/8188");
-    assert.equal(
-      safeTicketRedirect("https://evil.com/sistemas/tickets", 8188),
-      "/sistemas/tickets/8188",
-    );
-    assert.equal(
-      safeTicketRedirect("/sistemas/tickets\r\nSet-Cookie: x=1", 8188),
-      "/sistemas/tickets/8188",
-    );
+    assert.equal(safeTicketRedirect("//evil.com", 8188), MODAL);
+    assert.equal(safeTicketRedirect("/\\evil.com", 8188), MODAL);
+    assert.equal(safeTicketRedirect("https://evil.com/sistemas/tickets", 8188), MODAL);
+    assert.equal(safeTicketRedirect("/sistemas/tickets\r\nSet-Cookie: x=1", 8188), MODAL);
   });
 });

@@ -55,8 +55,7 @@
     items.forEach((item) => lista.appendChild(item));
   }
 
-  async function abrirDetalle(item, modalBody, modalId) {
-    const href = item.getAttribute('data-href');
+  async function abrirDetalle(href, modalBody, modalId) {
     if (!href || !modalBody) return;
 
     modalBody.innerHTML = '<div class="ticket-modal-state">Cargando detalles del ticket...</div>';
@@ -83,7 +82,26 @@
     }
   }
 
+  /**
+   * /sistemas/tickets?ticket=ID es la dirección de un ticket (crear, confirmar
+   * o el asistente llevan aquí): se abre en el modal y se limpia la URL.
+   */
+  function abrirDesdeUrl(modalBody, modalId) {
+    const params = new URLSearchParams(window.location.search);
+    const ticketId = params.get('ticket');
+    if (!ticketId || !/^\d+$/.test(ticketId)) return;
+
+    params.delete('ticket');
+    const qs = params.toString();
+    window.history.replaceState({}, document.title, window.location.pathname + (qs ? `?${qs}` : ''));
+    abrirDetalle(`/sistemas/tickets/${ticketId}`, modalBody, modalId);
+  }
+
   function init() {
+    const modalId = 'modalVerTicketDetalle';
+    const modalBody = document.getElementById('modalVerTicketDetalleBody');
+    abrirDesdeUrl(modalBody, modalId);
+
     const lista = document.getElementById('ticketsLista');
     if (!lista) return;
 
@@ -91,14 +109,12 @@
     const buscador = document.getElementById('ticketsBuscar');
     const selectOrden = document.getElementById('ticketsOrden');
     const chips = document.querySelectorAll('[data-filtro-estado]');
-    const modalId = 'modalVerTicketDetalle';
-    const modalBody = document.getElementById('modalVerTicketDetalleBody');
 
     lista.addEventListener('click', (e) => {
       const item = e.target.closest('.ticket-item');
       if (!item) return;
       e.preventDefault();
-      abrirDetalle(item, modalBody, modalId);
+      abrirDetalle(item.getAttribute('data-href'), modalBody, modalId);
     });
 
     chips.forEach((chip) => {

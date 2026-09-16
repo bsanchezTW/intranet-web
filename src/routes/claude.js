@@ -97,13 +97,13 @@ router.post(
       assistantTickets.clearTicketDraft(req.session);
       appendToLastAssistantMessage(
         req.session,
-        `Ticket #${result.id} creado: [ver ticket](/sistemas/tickets/${result.id}).`,
+        `Ticket #${result.id} creado: [ver ticket](/sistemas/tickets?ticket=${result.id}).`,
       );
       // El contador de tickets de la barra se recalcula en la próxima consulta.
       delete req.session.ticketNotifications;
       res.json({
         id: result.id,
-        url: `/sistemas/tickets/${result.id}`,
+        url: `/sistemas/tickets?ticket=${result.id}`,
         failedAttachments: result.failedAttachments,
       });
     } catch (error) {
