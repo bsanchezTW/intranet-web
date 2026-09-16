@@ -264,7 +264,8 @@
     });
     if (message) attachmentsEl.appendChild(el("p", "claude-attachments__error", message));
 
-    attachmentsEl.hidden = !pendingAttachments.length && !message;
+    // Con una tarjeta de borrador abierta, los archivos se muestran en su casilla.
+    attachmentsEl.hidden = message ? false : !pendingAttachments.length || draftFileLists.size > 0;
     draftFileLists.forEach((refresh) => refresh());
   }
 
@@ -392,12 +393,13 @@
 
     card.append(drop, list);
     draftFileLists.add(refresh);
-    refresh();
+    renderAttachments();
 
     return () => {
       draftFileLists.delete(refresh);
       drop.remove();
       list.remove();
+      renderAttachments();
     };
   }
 
