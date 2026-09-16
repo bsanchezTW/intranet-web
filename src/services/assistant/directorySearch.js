@@ -12,6 +12,7 @@ const { formatPhoneForDisplay } = require("../../utils/phone");
 const MAX_PEOPLE = 5;
 const MAX_DOCUMENTS = 8;
 const MAX_OTHER_DOCUMENTS = 4;
+const MAX_EVENTS = 5;
 const MAX_TERMS = 4;
 
 /** Palabras de la consulta (2+ caracteres). Cada una debe coincidir. */
@@ -109,6 +110,31 @@ async function searchDocuments(query) {
   }));
 }
 
+/** Evento de la galería con enlace a sus fotos. */
+function toPublicEvent(row) {
+  return {
+    nombre: row.name,
+    fecha: row.fecha || null,
+    enlace: `/marketing/eventos/${encodeURIComponent(row.slug)}`,
+  };
+}
+
+/** Eventos de la galería cuyo nombre contiene todas las palabras. */
+async function searchEvents(query) {
+  const terms = searchTerms(query);
+  if (!terms.length) return [];
+
+  const { rows } = await db.query(
+    `SELECT name, slug, fecha
+       FROM events
+      WHERE ${terms.map((_, i) => `name ILIKE $${i + 1}`).join(" AND ")}
+      ORDER BY created_at DESC
+      LIMIT ${MAX_EVENTS}`,
+    terms.map(likePattern),
+  );
+  return rows.map(toPublicEvent);
+}
+
 module.exports = {
   searchTerms,
   likePattern,
@@ -116,4 +142,6 @@ module.exports = {
   documentLabel,
   searchPeople,
   searchDocuments,
+  toPublicEvent,
+  searchEvents,
 };

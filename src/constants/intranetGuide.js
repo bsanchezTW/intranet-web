@@ -245,7 +245,7 @@ const GUIDE_ENTRIES = Object.freeze([
     title: "Galería de eventos",
     href: "/marketing/eventos",
     paths: [/^\/marketing(\/|$)/],
-    summary: "Eventos de la empresa y sus galerías de fotos.",
+    summary: "Eventos de la empresa y sus galerías de fotos. Un evento en particular se busca con search_events.",
   },
   {
     id: "soporte",

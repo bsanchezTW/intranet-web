@@ -20,6 +20,7 @@ const {
   likePattern,
   toPublicPerson,
   documentLabel,
+  toPublicEvent,
 } = require("../src/services/assistant/directorySearch");
 
 const CL_FEATURES = { supportTickets: true, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: true, lunchMenu: true };
@@ -139,6 +140,17 @@ describe("assistantTools — ejecución en el servidor", () => {
     assert.doesNotMatch(text, /Cómo se usa/);
   });
 
+  it("search_events usa el servicio inyectado", async () => {
+    const executor = createToolExecutor({
+      entries,
+      currentPath: "/",
+      searchEvents: async (query) => [{ nombre: query, enlace: "/marketing/eventos/x" }],
+    });
+    const result = JSON.parse((await executor.execute("search_events", { query: "aniversario" })).content);
+    assert.equal(result.resultados[0].nombre, "aniversario");
+    assert.ok(buildToolDefinitions(entries).some((tool) => tool.name === "search_events"));
+  });
+
   it("los tools de tickets sólo existen donde hay Soporte", () => {
     const names = (options) => buildToolDefinitions(entries, options).map((tool) => tool.name);
     assert.equal(names().includes("draft_support_ticket"), false);
@@ -225,6 +237,14 @@ describe("directorySearch — lo que viaja al modelo", () => {
     });
     assert.deepEqual(Object.keys(person).sort(), ["area", "email", "nombre", "telefono"]);
     assert.equal(person.nombre, "Ana Pérez");
+  });
+
+  it("un evento se entrega con su enlace a la galería", () => {
+    assert.deepEqual(toPublicEvent({ name: "Fiestas Patrias", slug: "fiestas patrias", fecha: "2026-09-18", image: "x" }), {
+      nombre: "Fiestas Patrias",
+      fecha: "2026-09-18",
+      enlace: "/marketing/eventos/fiestas%20patrias",
+    });
   });
 
   it("los términos ignoran palabras de una letra y escapan comodines", () => {

@@ -383,6 +383,24 @@ html[data-theme="dark"] .claude-panel {
   background: var(--ca-bg);
 }
 
+.claude-msg__copy {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ca-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.claude-msg__copy:hover,
+.claude-msg__copy:focus-visible {
+  color: var(--ca-accent);
+  text-decoration: underline;
+  outline: none;
+}
+
 /* ---- Adjuntos pendientes ---- */
 .claude-attachments {
   display: flex;

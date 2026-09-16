@@ -15,7 +15,7 @@ const {
   buildContextPrompt,
   buildCatalogPrompt,
 } = require("../services/assistant/assistantTools");
-const { searchPeople, searchDocuments } = require("../services/assistant/directorySearch");
+const { searchPeople, searchDocuments, searchEvents } = require("../services/assistant/directorySearch");
 const {
   MAX_MESSAGE_CHARS,
   getHistory,
@@ -194,6 +194,7 @@ router.post("/api/chat", async (req, res) => {
       currentPath: page.path,
       searchPeople,
       searchDocuments,
+      searchEvents,
       tickets: supportTickets
         ? {
             saveDraft: (input) => {

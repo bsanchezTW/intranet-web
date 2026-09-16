@@ -22,6 +22,7 @@ const {
 const STATUS_LABELS = Object.freeze({
   search_people: "Buscando personas…",
   search_documents: "Buscando documentos…",
+  search_events: "Buscando eventos…",
   open_page: "Preparando el enlace…",
   get_page_help: "Revisando la guía…",
   offer_support_ticket: "Preparando opciones de ticket…",
@@ -129,6 +130,19 @@ function buildToolDefinitions(entries, { supportTickets = false } = {}) {
       },
     },
     {
+      name: "search_events",
+      description:
+        "Busca eventos de la galería por su nombre y devuelve el enlace a sus fotos. " +
+        "Úsalo cuando pregunten por un evento o una celebración en particular.",
+      input_schema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Palabras del nombre del evento." },
+        },
+        required: ["query"],
+      },
+    },
+    {
       name: "open_page",
       description:
         "Lleva al usuario a una página interna del catálogo cuando termine tu respuesta. " +
@@ -149,7 +163,7 @@ function buildToolDefinitions(entries, { supportTickets = false } = {}) {
  * Ejecutor de tools para un turno. Las búsquedas se inyectan para poder
  * probarlo sin base de datos.
  */
-function createToolExecutor({ entries, currentPath, searchPeople, searchDocuments, tickets = null }) {
+function createToolExecutor({ entries, currentPath, searchPeople, searchDocuments, searchEvents, tickets = null }) {
   let navigation = null;
   // Tarjetas para el cliente al terminar el turno.
   let ticketOffer = null;
@@ -175,6 +189,8 @@ function createToolExecutor({ entries, currentPath, searchPeople, searchDocument
         });
       case "search_documents":
         return runSearch(searchDocuments, input.query);
+      case "search_events":
+        return runSearch(searchEvents, input.query);
       case "get_page_help": {
         const entry = resolvePage(input.page_id, entries);
         if (!entry) return { content: "Esa página no está en el catálogo del usuario.", isError: true };
@@ -277,7 +293,7 @@ function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReview
 - Página actual: ${page.title || "sin título"} — ruta ${page.path} — ${pageLine}
 - Usuario: ${name}; área: ${user.area || "sin área asignada"}
 - Administrador: ${yesNo(isAdmin)}; revisor de gastos: ${yesNo(isExpenseReviewer)}
-- En esta intranet: Soporte TI ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}; vacaciones en la intranet ${yesNo(features.vacations)} (si no, se solicitan en Rex+)${attachmentsLine}`;
+- En esta intranet: Soporte ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}; vacaciones en la intranet ${yesNo(features.vacations)} (si no, se solicitan en Rex+)${attachmentsLine}`;
 }
 
 /** Catálogo filtrado para este usuario: estable entre turnos, por eso va en el bloque cacheado. */

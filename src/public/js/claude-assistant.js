@@ -135,7 +135,26 @@
     thread.appendChild(node);
     syncWelcome();
     scrollToBottom();
-    return { el: node, textEl, statusEl: node.querySelector(".claude-msg__status") };
+    const message = { el: node, textEl, statusEl: node.querySelector(".claude-msg__status") };
+    if (text) addCopyButton(message);
+    return message;
+  }
+
+  /** Botón «Copiar» bajo una respuesta: útil para correos y textos redactados. */
+  function addCopyButton(message) {
+    if (!navigator.clipboard || message.el.querySelector(".claude-msg__copy")) return;
+    const button = el("button", "claude-msg__copy", "Copiar");
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(message.textEl.innerText.trim());
+        button.textContent = "Copiado";
+      } catch (_) {
+        button.textContent = "No se pudo copiar";
+      }
+      setTimeout(() => { button.textContent = "Copiar"; }, 1600);
+    });
+    message.textEl.after(button);
   }
 
   function updateSendState() {
@@ -432,6 +451,7 @@
       }
       message.statusEl.hidden = true;
       if (!answer) message.textEl.innerHTML = "";
+      else addCopyButton(message);
 
       if (done && done.ticketDraft) {
         // Los adjuntos pendientes pasaron al borrador.
