@@ -1,24 +1,28 @@
 <%
   /* Mismas secciones que /RRHH: Plataformas internas, Administración y Portales externos. */
-  const adminNav = typeof isAdministrador !== 'undefined' && isAdministrador;
+  const gestionRrhh = typeof canManageRrhh !== 'undefined' && canManageRrhh;
 %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Plataformas internas</span>
   <a href="/RRHH/organigrama">Organigrama</a>
   <a href="/RRHH/personal">Personal</a>
+  <% if (features.vacations) { %>
   <a href="/RRHH/vacaciones">Vacaciones</a>
+  <% } %>
 </div>
+<% if (gestionRrhh) { %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Administración</span>
   <a href="/RRHH/areas">Áreas</a>
   <% if (features.expenseCenter) { %>
   <a href="/RRHH/centros-costo">Centros de costo</a>
   <% } %>
-  <% if (adminNav) { %>
+  <% if (features.vacations) { %>
   <a href="/RRHH/vacaciones/gestion">Gestión de vacaciones</a>
-  <a href="/RRHH/vacaciones/feriados">Feriados</a>
   <% } %>
+  <a href="/RRHH/feriados">Feriados</a>
 </div>
+<% } %>
 <% if (features.chileHrPortals) { %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Portales externos</span>

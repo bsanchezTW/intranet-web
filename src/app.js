@@ -37,6 +37,7 @@ const { phoneClientConfig } = require("./utils/phone");
 const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
+const { canManageRrhh } = require("./services/access/staffAccess");
 const ticketsRoutes = isFeatureEnabled("supportTickets")
   ? require("./routes/tickets")
   : null;
@@ -351,25 +352,29 @@ app.use(async (req, res, next) => {
     const role = normalizeRole(user.role);
     res.locals.userRole = role;
     res.locals.isAdministrador = isAdministrador(role);
+    // Administración de RRHH y colaboradores: admins de RRHH o de Informática.
+    const gestionaRrhh = await canManageRrhh(user);
+    res.locals.canManageRrhh = gestionaRrhh;
 
     res.locals.can = {
       procedimientos_write: isAdministrador(role),
       protocolos_write: isAdministrador(role),
       reglamento_write: isAdministrador(role),
       noticias_write: isAdministrador(role),
-      personas_write: isAdministrador(role),
+      personas_write: gestionaRrhh,
       organigrama_write: isAdministrador(role),
       achs_write: isAdministrador(role),
       eventos_write: isAdministrador(role),
       tickets_reply: isAdministrador(role),
       apps_write: isAdministrador(role),
       cursos_write: isAdministrador(role),
-      vacaciones_write: isAdministrador(role),
+      vacaciones_write: gestionaRrhh,
       vacaciones_request:
         role === ROLES.USUARIO || isAdministrador(role),
     };
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
+    res.locals.canManageRrhh = false;
     res.locals.can = {};
     res.locals.unreadTickets = 0;
   }
@@ -772,7 +777,7 @@ function startBackgroundJobs() {
     asegurarSchemaAreas(),
     asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),
   ]).finally(() => {
-    iniciarTransicionesVacaciones();
+    if (isFeatureEnabled("vacations")) iniciarTransicionesVacaciones();
     // Después del schema: la purga usa el estado 'draft' y su índice.
     iniciarPurgaBorradoresGastos();
   });

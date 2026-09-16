@@ -19,6 +19,7 @@ const {
 } = require("../services/assistant/assistantConversation");
 const { isAreaManager } = require("../services/expenses/areaManager");
 const { isFinanceApprover } = require("../services/expenses/financeTeam");
+const { canManageRrhh } = require("../services/access/staffAccess");
 
 const router = express.Router();
 
@@ -88,6 +89,7 @@ router.post("/api/chat", async (req, res) => {
       features,
       isAdmin,
       isExpenseReviewer,
+      canManageRrhh: await canManageRrhh(sessionUser),
       workAreaId: sessionUser.work_area_id,
     });
     const page = sanitizePage(req.body.page);

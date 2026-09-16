@@ -28,6 +28,8 @@ function parseRoleFromForm(role) {
   return ALL_ROLES.includes(value) ? value : ROLES.USUARIO;
 }
 const requireRole = require("../middlewares/requireRole");
+const requireRrhhManager = require("../middlewares/requireRrhhManager");
+const requireFeature = require("../middlewares/requireFeature");
 const { sendMail } = require("../services/mailer");
 const { toTitleCase } = require("../utils/formatName");
 const { getMonogram, applyIdentityToSession } = require("../utils/monogram");
@@ -46,6 +48,7 @@ const { mapPersonaForView } = require("../utils/schemaMappers");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
 const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
+const { invalidateStaffAccess } = require("../services/access/staffAccess");
 
 function parsePriorYearsCredited(value) {
   const n = Number(value);
@@ -244,6 +247,7 @@ async function limpiarJefaturaHuerfana(userId) {
 function invalidarCachesDeArea() {
   invalidateFinanceTeam();
   invalidateSupportTeam();
+  invalidateStaffAccess();
 }
 
 /**
@@ -435,13 +439,13 @@ router.get("/personal", async (req, res) => {
 
 // --- CRUD Personas ---
 
-router.get("/crear", requireRole.administrador(), (req, res) => {
+router.get("/crear", requireRrhhManager(), (req, res) => {
   res.redirect("/RRHH/personal?abrirCrear=1");
 });
 
 // FIX: Se añaden los campos faltantes telefono al INSERT
 // FIX: Validación clara con mensajes específicos
-router.post("/crear", requireRole.administrador(), async (req, res) => {
+router.post("/crear", requireRrhhManager(), async (req, res) => {
   const {
     first_name,
     last_name,
@@ -593,8 +597,9 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
       userId = inserted[0].id;
     }
 
-    // Genera los períodos de vacaciones si se registró fecha de ingreso.
-    if (hireVal) {
+    // Genera los períodos de vacaciones si se registró fecha de ingreso y el
+    // módulo existe en esta instancia.
+    if (hireVal && isFeatureEnabled("vacations")) {
       balanceService
         .recalculatePeriods(userId)
         .catch((e) => console.error("[Vacaciones] recalc al crear:", e.message));
@@ -632,7 +637,7 @@ router.post("/crear", requireRole.administrador(), async (req, res) => {
   }
 });
 
-router.get("/editar/:id", requireRole.administrador(), async (req, res) => {
+router.get("/editar/:id", requireRrhhManager(), async (req, res) => {
   const { id } = req.params;
   try {
     const [userResult, areas, centrosCosto, centrosDelUsuario] =
@@ -682,7 +687,7 @@ router.get("/editar/:id", requireRole.administrador(), async (req, res) => {
 
 router.post(
   "/editar/:id",
-  requireRole.administrador(),
+  requireRrhhManager(),
   uploadProfilePhoto.single("foto"),
   async (req, res) => {
     const { id } = req.params;
@@ -902,8 +907,8 @@ router.post(
         await enviarClaveTemporal(emailClean, firstName, passwordTemporalNueva);
       }
 
-      // Recalcula períodos de vacaciones si hay fecha de ingreso.
-      if (hireVal) {
+      // Recalcula períodos de vacaciones si hay fecha de ingreso y el módulo existe.
+      if (hireVal && isFeatureEnabled("vacations")) {
         balanceService
           .recalculatePeriods(id)
           .catch((e) => console.error("[Vacaciones] recalc al editar:", e.message));
@@ -924,7 +929,7 @@ router.post(
   },
 );
 
-router.post("/eliminar/:id", requireRole.administrador(), async (req, res) => {
+router.post("/eliminar/:id", requireRrhhManager(), async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await db.query(
@@ -1015,7 +1020,7 @@ router.post(
 // ÁREAS DE TRABAJO
 // ==========================================
 
-router.get("/areas", async (req, res) => {
+router.get("/areas", requireRrhhManager(), async (req, res) => {
   try {
     const [areasResult, peopleResult] = await Promise.all([
       db.query(
@@ -1088,7 +1093,7 @@ router.get("/areas", async (req, res) => {
   }
 });
 
-router.post("/areas", requireRole.administrador(), async (req, res) => {
+router.post("/areas", requireRrhhManager(), async (req, res) => {
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
   if (!areaName) {
@@ -1116,7 +1121,7 @@ router.post("/areas", requireRole.administrador(), async (req, res) => {
   }
 });
 
-router.post("/areas/:id", requireRole.administrador(), async (req, res) => {
+router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
   const areaId = parsePositiveInt(req.params.id);
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
@@ -1156,7 +1161,7 @@ router.post("/areas/:id", requireRole.administrador(), async (req, res) => {
 
 router.post(
   "/areas/:id/eliminar",
-  requireRole.administrador(),
+  requireRrhhManager(),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     if (!areaId) {
@@ -1223,7 +1228,7 @@ router.post(
 
 router.post(
   "/areas/:id/miembros",
-  requireRole.administrador(),
+  requireRrhhManager(),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     // El modal manda una casilla por persona, así que user_id llega como lista;
@@ -1272,7 +1277,7 @@ router.post(
 
 router.post(
   "/areas/:id/miembros/:userId/quitar",
-  requireRole.administrador(),
+  requireRrhhManager(),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     const userId = parsePositiveInt(req.params.userId);
@@ -1327,7 +1332,7 @@ router.post(
 
 router.post(
   "/areas/:id/miembros/:userId/mover",
-  requireRole.administrador(),
+  requireRrhhManager(),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     const userId = parsePositiveInt(req.params.userId);
@@ -1404,10 +1409,17 @@ router.post(
 );
 
 // Sub-módulos montados bajo /RRHH
+
+// Feriados: fuera de Vacaciones porque Soporte los usa para el horario hábil.
+const holidaysRouter = require("./holidays");
+router.use("/feriados", holidaysRouter);
+router.get("/vacaciones/feriados", (req, res) => res.redirect(301, "/RRHH/feriados"));
+
+// Vacaciones sólo donde el módulo existe (en Chile se solicitan en Rex+).
 const vacationsRouter = require("./vacations");
-router.use("/vacaciones", vacationsRouter);
+router.use("/vacaciones", requireFeature("vacations"), vacationsRouter);
 
 const costCentersRouter = require("./costCenters");
-router.use("/centros-costo", costCentersRouter);
+router.use("/centros-costo", requireRrhhManager(), costCentersRouter);
 
 module.exports = router;

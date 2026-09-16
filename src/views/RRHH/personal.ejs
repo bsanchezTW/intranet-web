@@ -1,5 +1,5 @@
 <%
-  const puedeEditar = typeof isAdministrador !== 'undefined' && isAdministrador;
+  const puedeEditar = typeof canManageRrhh !== 'undefined' && canManageRrhh;
   const mostrarRol = typeof mostrarColumnaRol !== 'undefined' ? mostrarColumnaRol : puedeEditar;
   const listado = personas || [];
 

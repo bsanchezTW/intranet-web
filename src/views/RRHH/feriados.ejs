@@ -17,11 +17,11 @@
         <% if (country === 'CL') { %>
           Feriados legales de <%= countryConfig.name %>. Afectan el cálculo de días hábiles.
         <% } else { %>
-          Feriados legales de <%= countryConfig.name %>. El cómputo de vacaciones es en días calendario.
+          Feriados legales de <%= countryConfig.name %>. Se usan para el horario hábil de Soporte<% if (features.vacations) { %> y el cómputo de vacaciones, que es en días calendario<% } %>.
         <% } %>
       </p>
     </div>
-    <a href="/RRHH/vacaciones" class="link-volver">← Volver</a>
+    <a href="/RRHH" class="link-volver">← Volver</a>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>
@@ -34,7 +34,7 @@
   <!-- Agregar feriado -->
   <div class="vac-panel">
     <div class="vac-panel-head">Agregar feriado</div>
-    <form class="vac-form" action="/RRHH/vacaciones/feriados" method="POST">
+    <form class="vac-form" action="/RRHH/feriados" method="POST">
       <%# El país no se elige: esta instancia solo administra sus propios
           feriados. El servidor rechaza cualquier otro. %>
       <input type="hidden" name="country_code" value="<%= country %>">
@@ -64,7 +64,7 @@
               <td><%= fmt(h.holiday_date) %></td>
               <td><%= h.name %></td>
               <td>
-                <form class="vac-inline-form" action="/RRHH/vacaciones/feriados/<%= h.id %>/eliminar" method="POST"
+                <form class="vac-inline-form" action="/RRHH/feriados/<%= h.id %>/eliminar" method="POST"
                       onsubmit="return confirm('¿Eliminar feriado?');">
                   <button type="submit" class="vac-btn vac-btn-cancel vac-btn-sm">Eliminar</button>
                 </form>

@@ -2,14 +2,13 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const requireRole = require("../middlewares/requireRole");
+const requireRrhhManager = require("../middlewares/requireRrhhManager");
 const {
   getStrategy,
   resolveCountryForUser,
 } = require("../services/vacations/VacationEngine");
-const { getCurrentCountry } = require("../config/country");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const requestService = require("../services/vacations/vacationRequestService");
-const holidayService = require("../services/vacations/holidayService");
 const notificationService = require("../services/vacations/vacationNotificationService");
 const {
   mapVacationRequestForView,
@@ -168,7 +167,7 @@ router.post("/mis-vacaciones/cancelar/:id", requireRole.intranetActivo(), async 
 // ==========================================================
 // GESTIÓN (ADMIN)
 // ==========================================================
-router.get("/gestion", requireRole.administrador(), async (req, res) => {
+router.get("/gestion", requireRrhhManager(), async (req, res) => {
   try {
     const { area, status } = req.query;
     const [requests, areas] = await Promise.all([
@@ -193,7 +192,7 @@ router.get("/gestion", requireRole.administrador(), async (req, res) => {
   }
 });
 
-router.get("/gestion/:userId", requireRole.administrador(), async (req, res) => {
+router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
   const { userId } = req.params;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
@@ -225,7 +224,7 @@ router.get("/gestion/:userId", requireRole.administrador(), async (req, res) => 
   }
 });
 
-router.post("/gestion/:userId/ajustar", requireRole.administrador(), async (req, res) => {
+router.post("/gestion/:userId/ajustar", requireRrhhManager(), async (req, res) => {
   const { userId } = req.params;
   const { period_id, days_delta, reason } = req.body;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
@@ -257,7 +256,7 @@ router.post("/gestion/:userId/ajustar", requireRole.administrador(), async (req,
   }
 });
 
-router.post("/gestion/:userId/periodo/:periodId/record", requireRole.administrador(), async (req, res) => {
+router.post("/gestion/:userId/periodo/:periodId/record", requireRrhhManager(), async (req, res) => {
   const { userId, periodId } = req.params;
   const { record_met, record_notes } = req.body;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
@@ -284,7 +283,7 @@ router.post("/gestion/:userId/periodo/:periodId/record", requireRole.administrad
   }
 });
 
-router.post("/gestion/solicitud/:id/aprobar", requireRole.administrador(), async (req, res) => {
+router.post("/gestion/solicitud/:id/aprobar", requireRrhhManager(), async (req, res) => {
   const backTo = "/RRHH/vacaciones/gestion";
   try {
     const result = await requestService.approveRequest({
@@ -305,7 +304,7 @@ router.post("/gestion/solicitud/:id/aprobar", requireRole.administrador(), async
   }
 });
 
-router.post("/gestion/solicitud/:id/rechazar", requireRole.administrador(), async (req, res) => {
+router.post("/gestion/solicitud/:id/rechazar", requireRrhhManager(), async (req, res) => {
   const backTo = "/RRHH/vacaciones/gestion";
   try {
     const result = await requestService.rejectRequest({
@@ -353,74 +352,6 @@ router.get("/calendario", requireRole.intranetActivo(), async (req, res) => {
   } catch (err) {
     console.error("Error en calendario:", err);
     res.status(500).send(VACATION_MESSAGES.loadCalendarFailed);
-  }
-});
-
-// ==========================================================
-// FERIADOS (ADMIN)
-// ==========================================================
-router.get("/feriados", requireRole.administrador(), async (req, res) => {
-  try {
-    // Solo los feriados de esta instancia: el calendario del otro país se
-    // administra desde su propio deployment.
-    const holidays = await holidayService.listHolidays(getCurrentCountry());
-    res.render("RRHH/vacaciones/feriados", {
-      titulo: "Feriados",
-      user: req.session.user,
-      holidays,
-      ...readFlash(req),
-    });
-  } catch (err) {
-    console.error("Error cargando feriados:", err);
-    res.status(500).send(VACATION_MESSAGES.loadHolidaysFailed);
-  }
-});
-
-router.post("/feriados", requireRole.administrador(), async (req, res) => {
-  const { country_code, holiday_date, name, is_recurring } = req.body;
-  const instanceCountry = getCurrentCountry();
-  try {
-    // El país llega en un hidden, así que un POST manipulado es el único modo
-    // de que no coincida. No se corrige en silencio: se rechaza.
-    if (country_code && country_code !== instanceCountry) {
-      return redirectErr(
-        res,
-        "/RRHH/vacaciones/feriados",
-        VACATION_MESSAGES.holidayCountry(instanceCountry),
-      );
-    }
-    await holidayService.createHoliday({
-      countryCode: instanceCountry,
-      holidayDate: holiday_date,
-      name,
-      isRecurring: is_recurring === "on" || is_recurring === "1",
-    });
-    await logChange(req, "agregó un feriado", "/RRHH/vacaciones/feriados");
-    return redirectOk(res, "/RRHH/vacaciones/feriados", VACATION_MESSAGES.holidayAdded);
-  } catch (err) {
-    console.error("Error creando feriado:", err);
-    return redirectErr(res, "/RRHH/vacaciones/feriados", err.message || VACATION_MESSAGES.holidayAddFailed);
-  }
-});
-
-router.post("/feriados/:id/eliminar", requireRole.administrador(), async (req, res) => {
-  try {
-    const deleted = await holidayService.deleteHoliday(
-      req.params.id,
-      getCurrentCountry(),
-    );
-    if (!deleted) {
-      return redirectErr(
-        res,
-        "/RRHH/vacaciones/feriados",
-        VACATION_MESSAGES.holidayNotFound,
-      );
-    }
-    await logChange(req, "eliminó un feriado", "/RRHH/vacaciones/feriados");
-    return redirectOk(res, "/RRHH/vacaciones/feriados", VACATION_MESSAGES.holidayDeleted);
-  } catch (err) {
-    console.error("Error eliminando feriado:", err);
-    return redirectErr(res, "/RRHH/vacaciones/feriados", VACATION_MESSAGES.holidayDeleteFailed);
   }
 });
 

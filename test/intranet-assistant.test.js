@@ -21,8 +21,8 @@ const {
   documentLabel,
 } = require("../src/services/assistant/directorySearch");
 
-const CL_FEATURES = { supportTickets: true, expenseCenter: true, expenseRequests: true, chileHrPortals: true, lunchMenu: true };
-const PE_FEATURES = { supportTickets: false, expenseCenter: true, expenseRequests: true, chileHrPortals: false, lunchMenu: false };
+const CL_FEATURES = { supportTickets: true, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: true, lunchMenu: true };
+const PE_FEATURES = { supportTickets: false, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: false, lunchMenu: false };
 const ids = (entries) => entries.map((entry) => entry.id);
 
 describe("intranetGuide — catálogo filtrado", () => {
@@ -36,14 +36,25 @@ describe("intranetGuide — catálogo filtrado", () => {
   });
 
   it("sin rendiciones no ofrece gastos, pero sí los centros de costo", () => {
-    const entries = ids(guideForUser({ features: { ...CL_FEATURES, expenseRequests: false }, isAdmin: true }));
+    const entries = ids(guideForUser({ features: { ...CL_FEATURES, expenseRequests: false }, isAdmin: true, canManageRrhh: true }));
     assert.equal(entries.some((id) => id.startsWith("gastos-")), false);
     assert.ok(entries.includes("centros-costo"));
   });
 
+  it("sin Vacaciones ofrece Rex+ y los feriados siguen para quien gestiona RRHH", () => {
+    const chile = { ...CL_FEATURES, vacations: false };
+    const rrhh = ids(guideForUser({ features: chile, isAdmin: true, canManageRrhh: true }));
+    assert.equal(rrhh.some((id) => id.includes("vacaciones")), false);
+    assert.ok(rrhh.includes("feriados"));
+    assert.ok(rrhh.includes("rex"));
+    const otroAdmin = ids(guideForUser({ features: chile, isAdmin: true }));
+    assert.equal(otroAdmin.includes("feriados"), false);
+    assert.equal(otroAdmin.includes("areas"), false);
+  });
+
   it("la gestión de gastos es para revisores y administradores", () => {
     assert.ok(ids(guideForUser({ features: CL_FEATURES, isExpenseReviewer: true })).includes("gastos-gestion"));
-    assert.ok(ids(guideForUser({ features: CL_FEATURES, isAdmin: true })).includes("vacaciones-gestion"));
+    assert.ok(ids(guideForUser({ features: CL_FEATURES, isAdmin: true, canManageRrhh: true })).includes("vacaciones-gestion"));
   });
 
   it("procedimientos apunta a la carpeta del área para un usuario normal", () => {
@@ -54,7 +65,7 @@ describe("intranetGuide — catálogo filtrado", () => {
   });
 
   it("reconoce la página actual por la ruta más específica", () => {
-    const admin = guideForUser({ features: CL_FEATURES, isAdmin: true });
+    const admin = guideForUser({ features: CL_FEATURES, isAdmin: true, canManageRrhh: true });
     assert.equal(findEntryForPath("/RRHH/vacaciones/gestion/12", admin).id, "vacaciones-gestion");
     assert.equal(findEntryForPath("/RRHH/vacaciones", admin).id, "vacaciones");
     assert.equal(findEntryForPath("/gastos/nueva/rendicion", admin).id, "gastos-rendicion");

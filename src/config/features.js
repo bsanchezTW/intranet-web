@@ -27,6 +27,7 @@ const FEATURE_KEYS = [
   "chileHrPortals",
   "expenseCenter",
   "expenseRequests",
+  "vacations",
 ];
 
 const FEATURE_MATRIX = {
@@ -39,7 +40,7 @@ const FEATURE_MATRIX = {
     lunchMenu: true,
     // Asistente Claude (FAB + /claude).
     claudeAssistant: true,
-    // Ticketera / área de Soporte TI (/sistemas).
+    // Ticketera de Soporte (/sistemas).
     supportTickets: true,
     // Barra de accesos rápidos del home (sitio, Academy, Rex+, ACHS, Caja).
     homeQuickAccess: true,
@@ -50,6 +51,8 @@ const FEATURE_MATRIX = {
     // Rendiciones y solicitudes de fondos (/gastos y sección Finanzas de
     // Procesos). Apagado en producción mientras se termina en su rama.
     expenseRequests: false,
+    // Vacaciones de la intranet: en Chile se solicitan en Rex+.
+    vacations: false,
   },
   PE: {
     // Sin tabla linkedin_posts ni tokens; no se sincroniza el feed.
@@ -70,6 +73,8 @@ const FEATURE_MATRIX = {
     expenseCenter: true,
     // Igual que Chile: apagado en producción mientras se termina en su rama.
     expenseRequests: false,
+    // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú.
+    vacations: true,
   },
 };
 

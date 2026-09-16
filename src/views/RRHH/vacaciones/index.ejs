@@ -36,7 +36,7 @@
       <div class="procesos-card__cuerpo">
         <h4 class="procesos-card__titulo">Calendario</h4>
         <p class="procesos-card__desc">
-          <% if (locals.isAdministrador) { %>Vacaciones del equipo.<% } else { %>Tus vacaciones programadas.<% } %>
+          <% if (locals.canManageRrhh) { %>Vacaciones del equipo.<% } else { %>Tus vacaciones programadas.<% } %>
         </p>
       </div>
     </a>

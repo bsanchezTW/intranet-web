@@ -1,5 +1,6 @@
 <%
-const admin = typeof isAdministrador !== 'undefined' && isAdministrador;
+const admin = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+const hayVacaciones = Boolean(features && features.vacations);
 const hayCentros = Boolean(features && features.expenseCenter);
 const hayPortales = Boolean(features && features.chileHrPortals);
 const pais = (typeof countryConfig !== 'undefined' && countryConfig && countryConfig.name)
@@ -9,8 +10,10 @@ const pais = (typeof countryConfig !== 'undefined' && countryConfig && countryCo
 const INTERNOS = [
   { href: '/RRHH/organigrama', icono: 'building', titulo: 'Organigrama', desc: 'Estructura general y departamentos.' },
   { href: '/RRHH/personal', icono: 'users', titulo: 'Personal', desc: 'Directorio de gestión y registro de colaboradores.', verde: true },
-  { href: '/RRHH/vacaciones', icono: 'umbrella', titulo: 'Vacaciones', desc: 'Consulta tu saldo, solicita días y revisa el calendario.' },
 ];
+if (hayVacaciones) {
+  INTERNOS.push({ href: '/RRHH/vacaciones', icono: 'umbrella', titulo: 'Vacaciones', desc: 'Consulta tu saldo, solicita días y revisa el calendario.' });
+}
 
 const ADMINISTRACION = [
   { href: '/RRHH/areas', icono: 'layers', titulo: 'Áreas', desc: 'Gestionar áreas de trabajo y colaboradores asignados.' },
@@ -24,23 +27,22 @@ if (hayCentros) {
     verde: true,
   });
 }
-if (admin) {
-  ADMINISTRACION.push(
-    {
-      href: '/RRHH/vacaciones/gestion',
-      icono: 'inbox',
-      titulo: 'Gestión de vacaciones',
-      desc: 'Aprueba o rechaza solicitudes y ajusta los saldos del equipo.',
-    },
-    {
-      href: '/RRHH/vacaciones/feriados',
-      icono: 'flag',
-      titulo: 'Feriados',
-      desc: 'Administra los feriados de ' + pais + '.',
-      verde: true,
-    },
-  );
+if (hayVacaciones) {
+  ADMINISTRACION.push({
+    href: '/RRHH/vacaciones/gestion',
+    icono: 'inbox',
+    titulo: 'Gestión de vacaciones',
+    desc: 'Aprueba o rechaza solicitudes y ajusta los saldos del equipo.',
+  });
 }
+// Soporte usa los feriados para el horario hábil: existen aunque no haya Vacaciones.
+ADMINISTRACION.push({
+  href: '/RRHH/feriados',
+  icono: 'flag',
+  titulo: 'Feriados',
+  desc: 'Administra los feriados de ' + pais + '.',
+  verde: true,
+});
 
 const EXTERNOS = hayPortales
   ? [
@@ -69,7 +71,7 @@ const EXTERNOS = hayPortales
           <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'users' }) %></span>
           Plataformas internas
         </h3>
-        <p class="seccion__desc">Organigrama, directorio de colaboradores y vacaciones.</p>
+        <p class="seccion__desc">Organigrama<% if (hayVacaciones) { %>, directorio de colaboradores y vacaciones<% } else { %> y directorio de colaboradores<% } %>.</p>
       </div>
     </div>
 
@@ -86,6 +88,7 @@ const EXTERNOS = hayPortales
     </div>
   </section>
 
+  <% if (admin) { %>
   <!-- ═══════════ Administración ═══════════ -->
   <section class="seccion" aria-labelledby="seccion-admin">
     <div class="seccion__head">
@@ -95,7 +98,7 @@ const EXTERNOS = hayPortales
           Administración
         </h3>
         <p class="seccion__desc">
-          Áreas<% if (hayCentros) { %>, centros de costo<% } %><% if (admin) { %> y la gestión de vacaciones<% } %>.
+          Áreas<% if (hayCentros) { %>, centros de costo<% } %>, feriados<% if (hayVacaciones) { %> y la gestión de vacaciones<% } %>.
         </p>
       </div>
     </div>
@@ -112,6 +115,7 @@ const EXTERNOS = hayPortales
       <% }) %>
     </div>
   </section>
+  <% } %>
 
   <% if (EXTERNOS.length) { %>
   <!-- ═══════════ Portales externos ═══════════ -->

@@ -1,5 +1,5 @@
 <%
-  const puedeEditar = typeof isAdministrador !== 'undefined' && isAdministrador;
+  const puedeEditar = typeof canManageRrhh !== 'undefined' && canManageRrhh;
   const listado = centros || [];
   const plantillaGente = people || [];
   const activos = listado.filter(c => c.active);

@@ -1,5 +1,5 @@
 <%
-  const puedeEditar = typeof isAdministrador !== 'undefined' && isAdministrador;
+  const puedeEditar = typeof canManageRrhh !== 'undefined' && canManageRrhh;
   const listado = areas || [];
   const palette = colorPalette || [];
   const successMsg = (typeof success !== 'undefined' && success) ? success : null;

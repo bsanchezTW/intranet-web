@@ -16,6 +16,8 @@ const ACCESS = Object.freeze({
   ADMIN: "admin",
   // Jefes de área, aprobadores de Finanzas y administradores (requireExpenseReviewer).
   EXPENSE_REVIEWER: "expenseReviewer",
+  // Administradores de RRHH o de Informática (services/access/staffAccess).
+  RRHH_MANAGER: "rrhhManager",
 });
 
 function areaFolderHref(section) {
@@ -157,6 +159,7 @@ const GUIDE_ENTRIES = Object.freeze([
     id: "areas",
     title: "Áreas de trabajo",
     href: "/RRHH/areas",
+    access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/areas(\/|$)/],
     summary: "Áreas de trabajo de la empresa y quiénes pertenecen a cada una.",
   },
@@ -165,6 +168,7 @@ const GUIDE_ENTRIES = Object.freeze([
     title: "Centros de costo",
     href: "/RRHH/centros-costo",
     feature: "expenseCenter",
+    access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/centros-costo(\/|$)/],
     summary: "Centros de costo de la empresa.",
   },
@@ -172,6 +176,7 @@ const GUIDE_ENTRIES = Object.freeze([
     id: "vacaciones",
     title: "Vacaciones",
     href: "/RRHH/vacaciones",
+    feature: "vacations",
     paths: [/^\/RRHH\/vacaciones\/?$/],
     summary: "Portada de vacaciones: consultar tu saldo, solicitar días y revisar tu historial.",
   },
@@ -179,6 +184,7 @@ const GUIDE_ENTRIES = Object.freeze([
     id: "mis-vacaciones",
     title: "Mis vacaciones",
     href: "/RRHH/vacaciones/mis-vacaciones",
+    feature: "vacations",
     paths: [/^\/RRHH\/vacaciones\/mis-vacaciones(\/|$)/],
     summary: "Tu saldo de vacaciones, el formulario para pedir días y el historial de tus solicitudes.",
     steps: [
@@ -192,6 +198,7 @@ const GUIDE_ENTRIES = Object.freeze([
     id: "vacaciones-calendario",
     title: "Calendario de vacaciones",
     href: "/RRHH/vacaciones/calendario",
+    feature: "vacations",
     paths: [/^\/RRHH\/vacaciones\/calendario(\/|$)/],
     summary: "Calendario con las vacaciones del equipo.",
   },
@@ -199,17 +206,18 @@ const GUIDE_ENTRIES = Object.freeze([
     id: "vacaciones-gestion",
     title: "Gestión de vacaciones",
     href: "/RRHH/vacaciones/gestion",
-    access: ACCESS.ADMIN,
+    feature: "vacations",
+    access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/vacaciones\/gestion(\/|$)/],
     summary: "Aprobar o rechazar solicitudes de vacaciones y revisar los saldos del equipo.",
   },
   {
     id: "feriados",
     title: "Feriados",
-    href: "/RRHH/vacaciones/feriados",
-    access: ACCESS.ADMIN,
-    paths: [/^\/RRHH\/vacaciones\/feriados(\/|$)/],
-    summary: "Administración de los feriados que descuentan los días de vacaciones.",
+    href: "/RRHH/feriados",
+    access: ACCESS.RRHH_MANAGER,
+    paths: [/^\/RRHH\/feriados(\/|$)/],
+    summary: "Administración de los feriados del país: se usan para el horario hábil de Soporte y para las vacaciones.",
   },
   {
     id: "academy",
@@ -268,7 +276,7 @@ const GUIDE_ENTRIES = Object.freeze([
     title: "Rex+",
     url: "https://transworld.mirexmas.com/",
     feature: "chileHrPortals",
-    summary: "Portal externo de RRHH.",
+    summary: "Portal externo de RRHH: liquidaciones y, en Chile, la solicitud de vacaciones.",
   },
   {
     id: "achs",
@@ -302,6 +310,7 @@ const GUIDE_ENTRIES = Object.freeze([
 function isEntryVisible(entry, ctx) {
   if (entry.feature && !(ctx.features && ctx.features[entry.feature])) return false;
   if (entry.access === ACCESS.ADMIN) return Boolean(ctx.isAdmin);
+  if (entry.access === ACCESS.RRHH_MANAGER) return Boolean(ctx.canManageRrhh);
   if (entry.access === ACCESS.EXPENSE_REVIEWER) {
     return Boolean(ctx.isAdmin || ctx.isExpenseReviewer);
   }
@@ -310,7 +319,7 @@ function isEntryVisible(entry, ctx) {
 
 /**
  * Catálogo que corresponde a este usuario, con el href ya resuelto.
- * @param ctx { features, isAdmin, isExpenseReviewer, workAreaId }
+ * @param ctx { features, isAdmin, isExpenseReviewer, canManageRrhh, workAreaId }
  */
 function guideForUser(ctx = {}) {
   return GUIDE_ENTRIES.filter((entry) => isEntryVisible(entry, ctx)).map((entry) => {

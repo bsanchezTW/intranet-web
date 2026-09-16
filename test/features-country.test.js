@@ -63,4 +63,15 @@ describe("config/features — capacidades por país", () => {
       assert.equal(isFeatureEnabled("chileHrPortals"), false);
     });
   });
+
+  it("Vacaciones existe sólo en Perú y las rendiciones siguen ocultas en ambos", () => {
+    withCountry("CL", () => {
+      assert.equal(isFeatureEnabled("vacations"), false);
+      assert.equal(isFeatureEnabled("expenseRequests"), false);
+    });
+    withCountry("PE", () => {
+      assert.equal(isFeatureEnabled("vacations"), true);
+      assert.equal(isFeatureEnabled("expenseRequests"), false);
+    });
+  });
 });

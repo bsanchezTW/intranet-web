@@ -2,6 +2,7 @@ const db = require("../../db");
 const logger = require("../../utils/logger");
 const { isAdministrador, normalizeRole } = require("../../constants/roles");
 const { isFinanceAreaName } = require("../../constants/financeArea");
+const { isInformaticaAdmin } = require("../access/staffAccess");
 
 /**
  * Quién aprueba en la etapa de Finanzas.
@@ -67,6 +68,8 @@ async function listFinanceApprovers({ force = false } = {}) {
 /** ¿Este usuario de sesión aprueba en Finanzas? */
 async function isFinanceApprover(user) {
   if (!user || user.id == null) return false;
+  // Informática tiene acceso total a la intranet, también a esta etapa.
+  if (await isInformaticaAdmin(user)) return true;
   const approvers = await listFinanceApprovers();
   return approvers.some((approver) => approver.id === user.id);
 }
