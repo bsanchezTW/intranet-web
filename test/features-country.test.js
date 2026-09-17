@@ -64,14 +64,14 @@ describe("config/features — capacidades por país", () => {
     });
   });
 
-  it("Vacaciones existe sólo en Perú y las rendiciones siguen ocultas en ambos", () => {
+  it("Vacaciones existe sólo en Perú y las rendiciones están activas en ambos", () => {
     withCountry("CL", () => {
       assert.equal(isFeatureEnabled("vacations"), false);
-      assert.equal(isFeatureEnabled("expenseRequests"), false);
+      assert.equal(isFeatureEnabled("expenseRequests"), true);
     });
     withCountry("PE", () => {
       assert.equal(isFeatureEnabled("vacations"), true);
-      assert.equal(isFeatureEnabled("expenseRequests"), false);
+      assert.equal(isFeatureEnabled("expenseRequests"), true);
     });
   });
 });

@@ -49,8 +49,8 @@ const FEATURE_MATRIX = {
     // Centro de gastos: centros de costo en RRHH y base del módulo de gastos.
     expenseCenter: true,
     // Rendiciones y solicitudes de fondos (/gastos y sección Finanzas de
-    // Procesos). Apagado en producción mientras se termina en su rama.
-    expenseRequests: false,
+    // Procesos).
+    expenseRequests: true,
     // Vacaciones de la intranet: en Chile se solicitan en Rex+.
     vacations: false,
   },
@@ -71,8 +71,8 @@ const FEATURE_MATRIX = {
     chileHrPortals: false,
     // El proceso de rendiciones es corporativo, no chileno.
     expenseCenter: true,
-    // Igual que Chile: apagado en producción mientras se termina en su rama.
-    expenseRequests: false,
+    // Igual que Chile.
+    expenseRequests: true,
     // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú.
     vacations: true,
   },
