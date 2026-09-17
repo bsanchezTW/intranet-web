@@ -16,8 +16,13 @@
 
 <div class="contenedor">
 
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'wallet' }) %></span>
     <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <span>Finanzas</span>
+      </nav>
       <h2 class="page-title">Mis solicitudes</h2>
       <p class="page-description">
         <%= enviadas %> <%= enviadas === 1 ? 'solicitud' : 'solicitudes' %> ·
@@ -31,18 +36,14 @@
     </div>
 
     <div class="page-header-actions">
-      <a href="/procesos" class="link-volver">← Volver a Procesos</a>
       <% if (revisor) { %>
-        <a href="/gastos/gestion" class="page-header-btn">Gestión de solicitudes</a>
+        <a href="/gastos/gestion" class="page-header-btn page-header-btn--secundario"><%- include('../partials/icon', { name: 'check-circle' }) %> Gestión de solicitudes</a>
       <% } %>
     </div>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>
-    <div class="flash-msg flash-msg--ok" role="status">
-      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
-      <span><%= success %></span>
-    </div>
+    <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (typeof error !== 'undefined' && error) { %>
     <div class="flash-msg flash-msg--error" role="alert">

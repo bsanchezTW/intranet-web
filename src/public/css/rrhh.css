@@ -1,7 +1,7 @@
 /* ==========================================================================
    Módulo RRHH — hoja compartida por el menú, el organigrama y vacaciones.
    Antes cada vista repetía el mismo <style> con colores fijos; aquí vive una
-   sola versión sobre los tokens de theme.css (y por tanto con modo oscuro).
+   sola versión sobre los tokens de theme.css.
    ========================================================================== */
 
 /* ==========================================================================
@@ -71,8 +71,6 @@
   font-size: 1.5rem;
 }
 
-/* Los logos externos se sirven en PNG con fondo claro: se les da un lienzo
-   blanco propio para que no desaparezcan en modo oscuro. */
 .card-icon-wrapper img {
   max-width: 78%;
   max-height: 78%;
@@ -247,33 +245,6 @@
 
 .btn-confirmar:hover { transform: translateY(-1px); opacity: 0.9; }
 .btn-confirmar:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
-
-/* ==========================================================================
-   3. Botón "volver" del módulo
-   ========================================================================== */
-
-.boton-volver {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--border2);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-
-.boton-volver:hover {
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-  border-color: var(--brand);
-}
-
-.boton-volver:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 @media (max-width: 640px) {
   .grid-opciones-exec { grid-template-columns: 1fr; gap: 14px; }

@@ -15,17 +15,21 @@
   const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260911c">
-<link rel="stylesheet" href="/css/areas.css?v=20260911d">
+<link rel="stylesheet" href="/css/personal.css?v=20260916m">
+<link rel="stylesheet" href="/css/areas.css?v=20260916m">
 
-<div id="popup" class="popup-notification <%= successMsg ? 'success show' : errorMsg ? 'error show' : '' %>" role="status">
-  <span><%= successMsg || errorMsg || '' %></span>
-  <button type="button" class="popup-close" data-popup-close aria-label="Cerrar aviso">&times;</button>
-</div>
+<% if (successMsg || errorMsg) { %>
+<div hidden data-toast="<%= successMsg || errorMsg %>" data-toast-tone="<%= successMsg ? 'ok' : 'error' %>"></div>
+<% } %>
 
 <div class="contenedor contenedor-areas">
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'layers' }) %></span>
     <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <span>Áreas</span>
+      </nav>
       <h2 class="page-title">Áreas de trabajo</h2>
       <p class="page-description">
         <span id="contadorAreas"><%= listado.length %></span> áreas ·
@@ -36,10 +40,9 @@
       </p>
     </div>
     <div class="page-header-actions">
-      <a href="/RRHH" class="link-volver">← Volver al menú</a>
       <% if (puedeEditar) { %>
       <button type="button" class="page-header-btn" data-abrir-crear>
-        <span aria-hidden="true"><%- include('../partials/icon', { name: 'plus' }) %></span> Agregar área
+        <%- include('../partials/icon', { name: 'plus' }) %> Agregar área
       </button>
       <% } %>
     </div>
@@ -232,64 +235,72 @@
 
 <% if (puedeEditar) { %>
 <div id="modalMoverMiembro" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalMoverTitle" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--sm">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h2 id="modalMoverTitle" class="modal-title">Cambiar de área</h2>
-    <p class="area-mover-subtitle" id="modalMoverSubtitle"></p>
     <form id="formMoverMiembro" method="POST" action="#">
-      <input type="hidden" name="user_id" id="mover_user_id" value="">
-      <div class="campo">
-        <label for="target_area_id">Área destino <span class="required-mark">*</span></label>
-        <select id="target_area_id" name="target_area_id" required>
-          <option value="">Selecciona un área…</option>
-        </select>
+      <header class="modal-head">
+        <h2 id="modalMoverTitle" class="modal-title">Cambiar de área</h2>
+        <p class="modal-subtitle" id="modalMoverSubtitle"></p>
+      </header>
+      <div class="modal-body">
+        <input type="hidden" name="user_id" id="mover_user_id" value="">
+        <div class="campo-form">
+          <label for="target_area_id">Área destino <span class="required-mark">*</span></label>
+          <select id="target_area_id" name="target_area_id" required>
+            <option value="">Selecciona un área…</option>
+          </select>
+        </div>
       </div>
-      <div class="modal-form-actions">
+      <footer class="modal-foot">
         <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
         <button type="submit" class="btn-primario" id="modalMoverSubmit">Mover</button>
-      </div>
+      </footer>
     </form>
   </div>
 </div>
 
 <div id="modalArea" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalAreaTitle" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--md">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h2 id="modalAreaTitle" class="modal-title">Agregar área</h2>
     <form id="formArea" method="POST" action="/RRHH/areas">
-      <div class="campo">
-        <label for="area_name">Nombre <span class="required-mark">*</span></label>
-        <input type="text" id="area_name" name="area_name" required maxlength="150" placeholder="Ej: Operaciones">
-      </div>
-      <div class="campo" id="campoJefe">
-        <label for="area_manager">Jefe de área</label>
-        <select id="area_manager" name="manager_user_id">
-          <option value="">Sin jefe asignado</option>
-        </select>
-        <p class="area-jefe-ayuda" id="jefeAyuda">
-          Debe ser alguien del área. Su aprobación es el primer paso de toda
-          rendición de gastos o solicitud de fondos.
-        </p>
-      </div>
+      <header class="modal-head">
+        <h2 id="modalAreaTitle" class="modal-title">Agregar área</h2>
+      </header>
+      <div class="modal-body">
+        <div class="campo-form">
+          <label for="area_name">Nombre <span class="required-mark">*</span></label>
+          <input type="text" id="area_name" name="area_name" required maxlength="150" placeholder="Ej: Operaciones">
+        </div>
+        <div class="campo-form" id="campoJefe">
+          <label for="area_manager">Jefe de área</label>
+          <select id="area_manager" name="manager_user_id">
+            <option value="">Sin jefe asignado</option>
+          </select>
+          <p class="campo-form__ayuda area-jefe-ayuda" id="jefeAyuda">
+            Debe ser alguien del área. Su aprobación es el primer paso de toda
+            rendición de gastos o solicitud de fondos.
+          </p>
+        </div>
 
-      <div class="campo">
-        <label for="area_color">Color</label>
-        <div class="area-palette" role="listbox" aria-label="Paleta de colores">
-          <% palette.forEach(c => { %>
-            <button type="button" class="area-palette__swatch" data-color="<%= c.hex %>"
-                    title="<%= c.label %>" aria-label="<%= c.label %>"
-                    style="background: <%= c.hex %>"></button>
-          <% }) %>
-        </div>
-        <div class="area-color-row">
-          <input type="color" id="area_color_picker" value="<%= defaultColor %>" aria-label="Elegir color personalizado">
-          <input type="text" id="area_color" name="color" value="<%= defaultColor %>" maxlength="7" pattern="#[0-9A-Fa-f]{6}" spellcheck="false">
+        <div class="campo-form">
+          <label for="area_color">Color</label>
+          <div class="area-palette" role="listbox" aria-label="Paleta de colores">
+            <% palette.forEach(c => { %>
+              <button type="button" class="area-palette__swatch" data-color="<%= c.hex %>"
+                      title="<%= c.label %>" aria-label="<%= c.label %>"
+                      style="background: <%= c.hex %>"></button>
+            <% }) %>
+          </div>
+          <div class="area-color-row">
+            <input type="color" id="area_color_picker" value="<%= defaultColor %>" aria-label="Elegir color personalizado">
+            <input type="text" id="area_color" name="color" value="<%= defaultColor %>" maxlength="7" pattern="#[0-9A-Fa-f]{6}" spellcheck="false">
+          </div>
         </div>
       </div>
-      <div class="modal-form-actions">
+      <footer class="modal-foot">
         <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
         <button type="submit" class="btn-primario" id="modalAreaSubmit">Crear área</button>
-      </div>
+      </footer>
     </form>
   </div>
 </div>
@@ -313,8 +324,8 @@
     mover: 'Cambiar de área',
     destacado: 'Jefe de área',
     destacadoCorto: 'Jefe',
-    confirmarMoverUno: 'El colaborador que marcaste está en otra área y pasará a «{grupo}»: sus gastos los aprobará el jefe de esta área. ¿Continuar?',
-    confirmarMover: '{n} de los colaboradores que marcaste están en otras áreas y pasarán a «{grupo}»: sus gastos los aprobará el jefe de esta área. ¿Continuar?',
+    confirmarMoverUno: 'El colaborador que marcaste está en otra área y pasará a «{grupo}»: sus gastos los aprobará el jefe de esta área.',
+    confirmarMover: '{n} de los colaboradores que marcaste están en otras áreas y pasarán a «{grupo}»: sus gastos los aprobará el jefe de esta área.',
   },
   personas: (people || []).map((p) => ({
     id: p.id,
@@ -357,5 +368,5 @@
     members: a.members.map((m) => ({ id: m.id, nombre: m.nombreLista })),
   })),
 }).replace(/</g, '\\u003c') %></script>
-<script src="/js/ac-cards.js?v=20260911d" defer></script>
-<script src="/js/areas.js?v=20260911a" defer></script>
+<script src="/js/ac-cards.js?v=20260916m" defer></script>
+<script src="/js/areas.js?v=20260917a" defer></script>

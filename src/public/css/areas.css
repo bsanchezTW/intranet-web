@@ -14,11 +14,6 @@
   animation: fadeUp 0.5s ease both;
 }
 
-.contenedor-areas .page-header {
-  margin-bottom: 22px;
-}
-
-
 /* ── Barra de herramientas ────────────────────────────────────────────────────
    Misma pieza que la ticketera de Soporte: buscador a la izquierda, chips de
    filtro a la derecha. */
@@ -132,7 +127,6 @@
   font-size: 0.92rem;
 }
 
-
 /* ── Estado vacío ─────────────────────────────────────────────────────────── */
 
 .ac-vacio {
@@ -168,7 +162,6 @@
   font-size: 0.92rem;
   color: var(--color-text-muted);
 }
-
 
 /* ── Grilla de tarjetas ───────────────────────────────────────────────────── */
 
@@ -329,7 +322,6 @@
   margin: 0;
 }
 
-
 /* ── Jefatura del área ────────────────────────────────────────────────────────
    Requisito para aprobar rendiciones: cuando falta, la tarjeta lo dice en vez
    de dejar que el colaborador lo descubra al intentar rendir. */
@@ -347,18 +339,12 @@
   line-height: 1.4;
 }
 
-/* Ámbar propio y no un token de superficie: es una advertencia, y en modo
-   oscuro el ámbar claro sobre fondo oscuro no se lee. */
+/* Ámbar propio: es una advertencia, no un token de superficie. */
 .area-card__jefe--vacio {
   background: rgba(224, 163, 60, 0.14);
   border-color: rgba(224, 163, 60, 0.3);
   color: #8a5d09;
 }
-
-html[data-theme="dark"] .area-card__jefe--vacio {
-  color: #e8b860;
-}
-
 .area-card__jefe strong {
   color: var(--color-heading);
 }
@@ -383,12 +369,8 @@ html[data-theme="dark"] .area-card__jefe--vacio {
 }
 
 .area-jefe-ayuda {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
-  color: var(--color-text-subtle);
-  line-height: 1.45;
+  margin: 0;
 }
-
 
 /* ── Resumen de miembros (lo que fija la altura de la tarjeta) ────────────── */
 
@@ -490,49 +472,31 @@ html[data-theme="dark"] .area-card__jefe--vacio {
   font-size: 0.8rem;
 }
 
-
 /* ── Listas dentro de los modales ─────────────────────────────────────────────
    Ver y agregar colaboradores ocurre en un modal (ac_modales.ejs) y no en un
    panel dentro de la tarjeta: una lista desplegable estiraba la fila de la
    grilla y dejaba aire bajo las tarjetas vecinas. Estas clases las usan las dos
    pantallas, así que el marcado lo arma ac-cards.js y no cada vista. */
 
+/* El panel tiene alto fijo para que la lista, y sólo ella, scrollee: el
+   buscador y los botones quedan a la vista aunque haya cien personas. */
 .ac-modal {
+  height: min(84vh, 720px);
+}
+
+.ac-modal .modal-subtitle:empty {
+  display: none;
+}
+
+.ac-modal__body {
   display: flex;
   flex-direction: column;
-  max-height: min(84vh, 720px);
-  /* Sólo scrollea la lista de dentro: si el panel también pudiera scrollear,
-     acabarían compitiendo dos barras para el mismo gesto. */
+  gap: 10px;
   overflow: hidden;
-}
-
-/* En el modal de agregar, la lista va dentro del <form>. Sin esto el form es
-   un bloque de altura libre, la lista se estira a su contenido completo y deja
-   de scrollear: la rueda del ratón encima de ella no hacía nada, porque un
-   contenedor de scroll que no desborda igual retiene el gesto
-   (overscroll-behavior: contain) en vez de pasárselo al panel. */
-.ac-modal__form {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-/* Los botones no se encogen: son lo último que debe ceder espacio. */
-.ac-modal .modal-form-actions {
-  flex: none;
-}
-
-.ac-modal__sub {
-  margin: -6px 0 14px;
-  font-size: 0.9rem;
-  line-height: 1.45;
-  color: var(--modal-muted, var(--color-text-muted));
 }
 
 .ac-modal__buscador {
   position: relative;
-  margin-bottom: 12px;
   flex: none;
 }
 
@@ -550,9 +514,9 @@ html[data-theme="dark"] .area-card__jefe--vacio {
   width: 100%;
   box-sizing: border-box;
   padding: 9px 12px 9px 36px;
-  border: 1px solid var(--modal-border, var(--color-border-strong));
+  border: 1px solid var(--color-border-strong);
   border-radius: 10px;
-  background: var(--modal-input-bg, var(--color-input-bg));
+  background: var(--color-input-bg);
   color: var(--color-input-text);
   font-family: inherit;
   font-size: 0.9rem;
@@ -565,7 +529,8 @@ html[data-theme="dark"] .area-card__jefe--vacio {
 }
 
 .ac-modal__seleccion {
-  margin: 0 0 10px;
+  flex: none;
+  margin: 0;
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--brand);
@@ -581,7 +546,7 @@ html[data-theme="dark"] .area-card__jefe--vacio {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid var(--modal-border, var(--color-border));
+  border: 1px solid var(--color-border);
   border-radius: 12px;
 }
 
@@ -594,7 +559,7 @@ html[data-theme="dark"] .area-card__jefe--vacio {
 }
 
 .ac-lista__item + .ac-lista__item {
-  border-top: 1px solid var(--modal-border, var(--color-border));
+  border-top: 1px solid var(--color-border);
 }
 
 .ac-lista__item.is-oculta {
@@ -734,22 +699,14 @@ html[data-theme="dark"] .area-card__jefe--vacio {
 }
 
 .ac-lista__vacia {
-  margin: 14px 0 0;
+  margin: 0;
   padding: 18px 12px;
   text-align: center;
   font-size: 0.88rem;
   color: var(--color-text-muted);
-  border: 1px dashed var(--modal-border, var(--color-border-strong));
+  border: 1px dashed var(--color-border-strong);
   border-radius: 12px;
 }
-
-.area-mover-subtitle {
-  margin: 0 0 16px;
-  color: var(--modal-muted, var(--color-text-muted));
-  font-size: 0.94rem;
-  line-height: 1.45;
-}
-
 
 /* ── Paleta de color (modal) ──────────────────────────────────────────────── */
 
@@ -779,8 +736,8 @@ html[data-theme="dark"] .area-card__jefe--vacio {
 }
 
 .area-palette__swatch.is-selected {
-  border-color: var(--modal-primary, var(--brand));
-  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--modal-primary, var(--brand));
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--brand);
 }
 
 .area-color-row {
@@ -793,9 +750,9 @@ html[data-theme="dark"] .area-card__jefe--vacio {
   width: 42px;
   height: 36px;
   padding: 2px;
-  border: 1px solid var(--modal-border, var(--color-border));
+  border: 1px solid var(--color-border-strong);
   border-radius: 8px;
-  background: var(--modal-input-bg, var(--color-surface));
+  background: var(--color-surface);
   cursor: pointer;
 }
 
@@ -805,7 +762,6 @@ html[data-theme="dark"] .area-card__jefe--vacio {
   letter-spacing: 0.04em;
   text-transform: lowercase;
 }
-
 
 @media (max-width: 768px) {
   .ac-toolbar {

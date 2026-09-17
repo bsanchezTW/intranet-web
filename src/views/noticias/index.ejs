@@ -27,18 +27,16 @@ const filtrosVisibles = FILTROS.filter(f => tiposPresentes.has(f.tipo));
 
 <div class="contenedor noticias">
 
-  <%# Misma cabecera que el resto de secciones de la intranet.
-      Ojo: no usar <header>, intranet.css estiliza esa etiqueta como la barra
-      de navegación (fondo azul + position:sticky). %>
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'news' }) %></span>
     <div class="page-header__text">
-      <h2 class="page-title">Noticias y Comunicados</h2>
+      <h2 class="page-title">Noticias y comunicados</h2>
       <p class="page-description">Entérate de las últimas novedades de Transworld.</p>
     </div>
     <% if (puedeEscribir) { %>
     <div class="page-header-actions">
-      <button type="button" class="noticias-add-btn" onclick="abrirModalCrearNoticia()">
-        <span aria-hidden="true">+</span> Publicar noticia
+      <button type="button" class="page-header-btn" onclick="abrirModalCrearNoticia()">
+        <%- include('../partials/icon', { name: 'plus' }) %> Publicar noticia
       </button>
     </div>
     <% } %>

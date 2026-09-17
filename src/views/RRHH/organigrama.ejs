@@ -5,16 +5,18 @@
 const puedeSubir = typeof isAdministrador !== 'undefined' && isAdministrador;
 %>
 
-<link rel="stylesheet" href="/css/rrhh.css?v=20260729a">
+<link rel="stylesheet" href="/css/rrhh.css?v=20260916g">
 
 <div class="contenedor">
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'chart' }) %></span>
     <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <span>Organigrama</span>
+      </nav>
       <h2 class="page-title">Organigrama</h2>
       <p class="page-description">Estructura general y departamentos de Transworld.</p>
-    </div>
-    <div class="page-header-actions">
-      <a href="/RRHH" class="boton-volver">← Volver a RRHH</a>
     </div>
   </div>
 

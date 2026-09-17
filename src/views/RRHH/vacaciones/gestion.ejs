@@ -1,19 +1,24 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260910n">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260916g">
 
 <div class="vac-wrap">
-  <div class="vac-header">
-    <div>
-      <h2 class="vac-title">Gestión de vacaciones</h2>
-      <p class="vac-subtitle">Aprueba o rechaza solicitudes y revisa los saldos del equipo.</p>
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'check-circle' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <a href="/RRHH/vacaciones">Vacaciones</a> <span aria-hidden="true">/</span>
+        <span>Gestión</span>
+      </nav>
+      <h2 class="page-title">Gestión de vacaciones</h2>
+      <p class="page-description">Aprueba o rechaza solicitudes y revisa los saldos del equipo.</p>
     </div>
-    <a href="/RRHH/vacaciones" class="link-volver">← Volver</a>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>
-    <div class="vac-alert vac-alert-success"><%= success %></div>
+    <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (typeof error !== 'undefined' && error) { %>
-    <div class="vac-alert vac-alert-error"><%= error %></div>
+    <div class="flash-msg flash-msg--error" role="alert"><%= error %></div>
   <% } %>
 
   <div class="vac-panel">
@@ -64,7 +69,9 @@
               <td>
                 <% if (r.status === 'pending') { %>
                   <form class="vac-inline-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/aprobar" method="POST"
-                        onsubmit="return confirm('¿Aprobar esta solicitud?');">
+                        data-confirm="Se aprobarán <%= r.days %> <%= r.dayUnit %> (<%= r.startDateFmt %> → <%= r.endDateFmt %>)."
+                        data-confirm-title="¿Aprobar la solicitud?"
+                        data-confirm-accept="Aprobar">
                     <button type="submit" class="vac-btn vac-btn-approve vac-btn-sm">Aprobar</button>
                   </form>
                   <form class="vac-inline-form js-reject-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/rechazar" method="POST">
@@ -85,10 +92,25 @@
 
 <script>
   document.querySelectorAll('.js-reject-form').forEach((form) => {
-    form.addEventListener('submit', (e) => {
-      const reason = window.prompt('Indica el motivo del rechazo:');
-      if (!reason || !reason.trim()) { e.preventDefault(); return; }
-      form.querySelector('input[name="reason"]').value = reason.trim();
+    form.addEventListener('submit', async (e) => {
+      // Segunda pasada, ya con el motivo escrito: se envía.
+      if (form.dataset.motivoListo === '1') {
+        delete form.dataset.motivoListo;
+        return;
+      }
+      e.preventDefault();
+      const reason = await IntranetDialog.prompt({
+        title: '¿Rechazar la solicitud?',
+        message: 'El colaborador verá este motivo.',
+        label: 'Motivo del rechazo',
+        multiline: true,
+        acceptLabel: 'Rechazar',
+        tone: 'peligro',
+      });
+      if (!reason) return;
+      form.querySelector('input[name="reason"]').value = reason;
+      form.dataset.motivoListo = '1';
+      form.requestSubmit();
     });
   });
 </script>

@@ -4,6 +4,9 @@
    IntranetToast.show("No se pudo guardar", { tone: "error", duration: 6000 })
    Tonos: ok (por defecto), error, info. Se apilan abajo al centro y se cierran
    solos; pasar el mouse por encima pausa la cuenta regresiva.
+
+   Desde una vista, sin JS propio (p. ej. el resultado de un POST + redirect):
+   <div hidden data-toast="Área creada" data-toast-tone="ok"></div>
    ========================================================================== */
 (function (global) {
   "use strict";
@@ -42,6 +45,12 @@
 
   function show(mensaje, opciones) {
     if (!mensaje) return null;
+    // Un mismo aviso puede llegar dos veces en la misma carga (?ok= en la URL
+    // y el flash que pinta la vista): se muestra una sola vez.
+    var visibles = contenedor().querySelectorAll(".toast:not(.is-saliendo) .toast__mensaje");
+    for (var i = 0; i < visibles.length; i += 1) {
+      if (visibles[i].textContent === mensaje) return null;
+    }
     var opts = opciones || {};
     var tono = ICONOS[opts.tone] ? opts.tone : "ok";
     var duracion = Number(opts.duration) || (tono === "error" ? 6500 : 4200);
@@ -80,10 +89,23 @@
 
     var destino = contenedor();
     destino.appendChild(toast);
-    var visibles = destino.querySelectorAll(".toast:not(.is-saliendo)");
-    if (visibles.length > MAX_VISIBLES) cerrar(visibles[0]);
+    var activos = destino.querySelectorAll(".toast:not(.is-saliendo)");
+    if (activos.length > MAX_VISIBLES) cerrar(activos[0]);
     programar();
     return toast;
+  }
+
+  function desdeMarcado() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-toast]"), function (nodo) {
+      show(nodo.getAttribute("data-toast"), { tone: nodo.getAttribute("data-toast-tone") || "ok" });
+      nodo.remove();
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", desdeMarcado);
+  } else {
+    desdeMarcado();
   }
 
   global.IntranetToast = { show: show };

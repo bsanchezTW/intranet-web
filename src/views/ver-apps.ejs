@@ -3,15 +3,16 @@
   const listaApps = (typeof apps !== 'undefined' && Array.isArray(apps)) ? apps : [];
   const catalogoApps = (typeof appCatalog !== 'undefined' && appCatalog) ? appCatalog : 'corporate';
 %>
-<link rel="stylesheet" href="/css/apps.css?v=20260910n">
+<link rel="stylesheet" href="/css/apps.css?v=20260916m">
 <% if (typeof isAdministrador !== 'undefined' && isAdministrador) { %>
-<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <% } %>
 
 <div class="contenedor">
 
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('partials/icon', { name: 'grid' }) %></span>
     <div class="page-header__text">
       <h2 class="page-title">Aplicaciones de Transworld</h2>
       <p class="page-description">Descarga las aplicaciones y herramientas corporativas oficiales.</p>
@@ -20,15 +21,15 @@
     <% if (esAdminApps) { %>
     <div class="page-header-actions">
       <% if (listaApps.length > 1) { %><%- include('partials/app-orden-boton') %><% } %>
-      <button type="button" class="apps-add-btn" onclick="toggleFormulario()">
-        <span aria-hidden="true">+</span> Ingresar nueva app
+      <button type="button" class="page-header-btn" onclick="toggleFormulario()">
+        <%- include('partials/icon', { name: 'plus' }) %> Nueva app
       </button>
     </div>
     <% } %>
   </div>
 
   <% if (typeof ok !== 'undefined' && ok) { %>
-    <div class="apps-flash"><%= ok %></div>
+    <div hidden data-toast="<%= ok %>"></div>
   <% } %>
 
   <% if (esAdminApps && listaApps.length > 1) { %><%- include('partials/app-orden-barra') %><% } %>

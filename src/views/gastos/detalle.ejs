@@ -32,10 +32,7 @@
   </nav>
 
   <% if (typeof success !== 'undefined' && success) { %>
-    <div class="flash-msg flash-msg--ok" role="status">
-      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
-      <span><%= success %></span>
-    </div>
+    <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (typeof error !== 'undefined' && error) { %>
     <div class="flash-msg flash-msg--error" role="alert">
@@ -367,7 +364,9 @@
       <% if (liquidar) { %>
         <%# Finanzas confirma que el saldo ya se movió. Irreversible desde la UI. %>
         <form method="POST" action="/gastos/<%= s.id %>/liquidar"
-              onsubmit="return confirm('<%= balance.sentido === 'devolver' ? '¿Confirmas que el colaborador ya devolvió el saldo?' : '¿Confirmas que ya se le pagó el saldo al colaborador?' %>');">
+              data-confirm="<%= balance.sentido === 'devolver' ? 'Confirmas que el colaborador ya devolvió el saldo.' : 'Confirmas que ya se le pagó el saldo al colaborador.' %> No se puede deshacer desde la intranet."
+              data-confirm-title="¿Liquidar el saldo?"
+              data-confirm-accept="Liquidar">
           <input type="hidden" name="volver" value="<%= volverA === '/gastos/gestion' ? 'gestion' : 'detalle' %>">
           <div class="campo-form" style="margin-bottom: 0;">
             <label for="notasLiquidacion">
@@ -396,18 +395,19 @@
 <% if (puedeAnular) { %>
 <div id="modalAnularGasto" class="modal-overlay gasto-modal" role="dialog" aria-modal="true"
      aria-labelledby="modalAnularTitulo" aria-hidden="true">
-  <div class="modal-content modal-panel--flush gasto-modal__panel gasto-confirm">
-    <div class="gasto-modal__head">
-      <h2 class="modal-title gasto-modal__titulo" id="modalAnularTitulo">Anular solicitud</h2>
-      <button type="button" class="gasto-modal__cerrar" data-modal-close aria-label="Cerrar">&times;</button>
+  <div class="modal-content modal-content--sm">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <div class="modal-head">
+      <div class="modal-head__eyebrow">Solicitud #<%= s.id %></div>
+      <h2 class="modal-title" id="modalAnularTitulo">Anular solicitud</h2>
     </div>
-    <div class="gasto-modal__body">
-      <p>La solicitud <strong>#<%= s.id %></strong> quedará anulada y se conservará en tu historial, con su desglose y comprobantes.</p>
-      <p class="gasto-confirm__aviso">Esta acción no se puede deshacer. Dejará de estar en curso y no se enviará a aprobación.</p>
+    <div class="modal-body">
+      <p class="modal-text">La solicitud quedará anulada y se conservará en tu historial, con su desglose y comprobantes.</p>
+      <p class="modal-note modal-note--peligro">Esta acción no se puede deshacer. Dejará de estar en curso y no se enviará a aprobación.</p>
     </div>
-    <div class="gasto-modal__foot gasto-confirm__acciones">
-      <button type="button" class="gasto-btn-secundario" data-modal-close>Volver</button>
-      <button type="submit" class="gasto-btn-peligro" form="formAnularGasto" id="btnConfirmarAnular">Anular solicitud</button>
+    <div class="modal-foot">
+      <button type="button" class="btn-secundario" data-modal-close>Volver</button>
+      <button type="submit" class="btn-peligro" form="formAnularGasto" id="btnConfirmarAnular">Anular solicitud</button>
     </div>
   </div>
 </div>
@@ -448,11 +448,18 @@
       var notas = document.getElementById("notas");
       if (!notas.value.trim()) {
         e.preventDefault();
-        notas.focus();
-        alert("Indica el motivo del rechazo.");
+        window.IntranetDialog.alert({
+          title: "Falta el motivo",
+          message: "Indica el motivo del rechazo antes de rechazar la solicitud.",
+        }).then(function () { notas.focus(); });
         return;
       }
-      if (!confirm("¿Rechazar esta solicitud?")) e.preventDefault();
+      window.IntranetDialog.confirmarEnvio(e, {
+        title: "¿Rechazar la solicitud?",
+        message: "El solicitante verá el motivo que escribiste.",
+        acceptLabel: "Rechazar",
+        tone: "peligro",
+      });
     });
   })();
 </script>

@@ -14,13 +14,14 @@
 %>
 
 <% if (esAdmin) { %>
-<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <% } %>
 
 <div class="contenedor soporte-page" data-ticket-list-admin="<%= esAdmin ? 'true' : 'false' %>">
 
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'headset' }) %></span>
     <div class="page-header__text">
       <h2 class="page-title">Soporte</h2>
       <p class="page-description">Resuélvelo tú mismo con las herramientas de autoayuda, o abre un ticket con el equipo de TI.</p>
@@ -28,13 +29,13 @@
 
     <div class="page-header-actions">
       <a href="#" role="button" class="page-header-btn js-open-ticket-modal">
-        <span aria-hidden="true">+</span> Abrir Nuevo Ticket
+        <%- include('../partials/icon', { name: 'plus' }) %> Abrir ticket
       </a>
     </div>
   </div>
 
   <% if (typeof ok !== 'undefined' && ok) { %>
-    <div class="apps-flash"><%= ok %></div>
+    <div hidden data-toast="<%= ok %>"></div>
   <% } %>
 
   <!-- ═══════════ Autoayuda ═══════════ -->

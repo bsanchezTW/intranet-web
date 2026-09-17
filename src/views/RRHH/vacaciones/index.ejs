@@ -1,25 +1,25 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260910n">
-<link rel="stylesheet" href="/css/procesos.css?v=20260915a">
-<link rel="stylesheet" href="/css/rrhh.css?v=20260729a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260916g">
+<link rel="stylesheet" href="/css/procesos.css?v=20260916m">
+<link rel="stylesheet" href="/css/rrhh.css?v=20260916g">
 
 <div class="contenedor">
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'umbrella' }) %></span>
     <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <span>Vacaciones</span>
+      </nav>
       <h2 class="page-title">Vacaciones</h2>
-      <p class="page-description">
-        Gestiona tus solicitudes y saldos de vacaciones.
-      </p>
-    </div>
-    <div class="page-header-actions">
-      <a href="/RRHH" class="boton-volver">← Volver a RRHH</a>
+      <p class="page-description">Gestiona tus solicitudes y saldos de vacaciones.</p>
     </div>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>
-    <div class="vac-alert vac-alert-success"><%= success %></div>
+    <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (typeof error !== 'undefined' && error) { %>
-    <div class="vac-alert vac-alert-error"><%= error %></div>
+    <div class="flash-msg flash-msg--error" role="alert"><%= error %></div>
   <% } %>
 
   <div class="procesos-grid">

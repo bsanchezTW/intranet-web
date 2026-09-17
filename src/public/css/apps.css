@@ -23,17 +23,6 @@
   opacity: 0.9;
 }
 
-.apps-flash {
-  margin-bottom: 22px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  background: var(--green-soft);
-  color: var(--green-deep);
-  border: 1px solid rgba(166, 216, 74, 0.4);
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
 /* ── Grilla ── */
 .apps-grid {
   display: grid;
@@ -120,18 +109,6 @@
 }
 
 /* ── Icono en modal crear/editar ── */
-.app-icon-upload {
-  margin-bottom: 18px;
-}
-
-.app-icon-upload > label {
-  display: block;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--color-text);
-  margin-bottom: 10px;
-}
-
 .app-icon-preview-wrap {
   display: flex;
   align-items: center;
@@ -183,31 +160,6 @@
   align-items: flex-start;
   gap: 6px;
   min-width: 0;
-}
-
-.app-btn-icon-select {
-  border: none;
-  border-radius: 9px;
-  padding: 9px 14px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  background: var(--brand);
-  color: #fff;
-  transition: transform 0.15s, opacity 0.15s;
-}
-
-.app-btn-icon-select:hover {
-  transform: translateY(-1px);
-  opacity: 0.92;
-}
-
-.app-icon-hint {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--subtle);
-  line-height: 1.35;
 }
 
 .app-card__heading {
@@ -323,12 +275,6 @@
   filter: brightness(1.06);
 }
 
-.app-platform__head .platform-logo {
-  width: 1.1em;
-  height: 1.1em;
-  flex-shrink: 0;
-}
-
 .app-card__no-files {
   color: var(--subtle);
   font-size: 13px;
@@ -405,179 +351,47 @@
   background: rgba(208, 92, 92, 0.1);
 }
 
-/* ── Modal Agregar / Editar ── */
-.app-modal__content {
-  width: min(940px, 100%);
-  max-width: 940px;
-  max-height: min(88vh, 900px);
-  padding: 0;
-  overflow: hidden;
-}
+/* ── Modales de apps: sólo distribución; el cromo vive en modal.css ── */
 
-.app-modal__grid {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  flex: 1;
-  min-height: 0;
-  max-height: min(88vh, 900px);
-  width: 100%;
-}
-
-.app-modal__aside {
-  background: linear-gradient(160deg, var(--brand-soft), transparent);
-  border-right: 1px solid var(--color-border);
-  padding: 28px 26px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.app-modal__main {
-  position: relative;
-  padding: 26px 26px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  min-width: 0;
-  min-height: 0;
-}
-
-.app-modal__footer.modal-actions {
-  margin-top: auto;
-  flex-shrink: 0;
-}
-
-.app-field-hint {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--color-text-muted, #6b7280);
-  line-height: 1.4;
-}
-
-.app-platforms {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  width: 100%;
+.app-modal__content .modal-body--split {
+  --modal-aside-width: 320px;
 }
 
 .app-platform {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
-  padding: 18px;
-  background: var(--surface2);
-  width: 100%;
-  box-sizing: border-box;
+  border-radius: 12px;
+  background: var(--color-surface-muted);
 }
 
 .app-platform__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.app-file-input {
-  width: 100%;
-  font-size: 13px;
-  color: var(--muted);
-  border: 1px dashed var(--border2);
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--color-surface);
-  cursor: pointer;
-  box-sizing: border-box;
-  transition: border-color 0.18s;
-}
-
-.app-file-input:hover {
-  border-color: var(--brand);
-}
-
-.app-file-input::file-selector-button {
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
-  margin-right: 12px;
-  padding: 7px 14px;
-  border: none;
-  border-radius: 8px;
-  background: var(--brand-soft);
-  color: var(--brand);
-  cursor: pointer;
-}
-
-/* ── Modal PDF instructivo ── */
-.pdf-modal__content {
-  width: min(960px, 100%);
-  max-width: 960px;
-  max-height: min(92vh, 900px);
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.pdf-modal__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(160deg, rgba(0, 0, 0, 0.04), transparent);
-  flex-shrink: 0;
-}
-
-.pdf-modal__title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-heading);
 }
 
-.pdf-modal__subtitle {
-  margin: 4px 0 0;
-  font-size: 0.82rem;
-  color: var(--subtle);
-}
-
-.pdf-modal__toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.app-platform__head .platform-logo {
+  width: 1.1em;
+  height: 1.1em;
   flex-shrink: 0;
-}
-
-.pdf-modal__toolbar .modal-close {
-  position: static;
-}
-
-.pdf-modal__open-btn {
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.pdf-modal__body {
-  flex: 1;
-  min-height: 0;
-  background: var(--surface2, #f3f5f8);
-  padding: 0;
 }
 
 .pdf-modal__body iframe {
   display: block;
   width: 100%;
-  height: min(72vh, 720px);
+  height: min(70vh, 720px);
   border: 0;
-  background: #fff;
+  background: #ffffff;
 }
 
 .app-ios-current {
-  margin: 0 0 8px;
+  margin: 0;
 }
 
 .app-ios-current__link {
@@ -596,88 +410,27 @@
   opacity: 0.85;
 }
 
-/* ── Modal QR ── */
-.qr-modal__content {
-  width: min(720px, 100%);
-  max-width: 720px;
-  max-height: min(88vh, 720px);
-  padding: 0;
-  overflow: hidden;
-}
-
-.qr-modal__grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-}
-
-.qr-modal__aside {
-  background: linear-gradient(160deg, var(--brand-soft), transparent);
-  padding: 30px 28px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 16px;
-  min-width: 0;
-}
-
-.qr-modal__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.qr-modal__main {
-  position: relative;
-  padding: 48px 26px 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.qr-modal__main > .modal-close {
-  z-index: 6;
-}
-
 .qr-modal__card {
-  width: 256px;
+  justify-self: center;
+  width: 240px;
   max-width: 100%;
   box-sizing: border-box;
-  flex: 0 1 auto;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
   background: #ffffff;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 8px 24px rgba(0, 20, 40, 0.15);
-  overflow: hidden;
 }
 
 .qr-modal__card img {
   display: block;
   width: 100%;
-  max-width: 100%;
   height: auto;
   aspect-ratio: 1;
   object-fit: contain;
 }
 
-/* ── Modal Notificar ── */
-.app-notify__content {
-  width: 100%;
-  max-width: 520px;
-  padding: 28px 30px;
-}
-
 .app-notify__subject {
-  display: inline-block;
-  background: var(--color-surface-muted, #f5f8fc);
-  padding: 2px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border, #dbe5ef);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text);
 }
 
@@ -689,61 +442,9 @@
 }
 
 @media (max-width: 768px) {
-  .app-modal__grid,
-  .qr-modal__grid {
-    grid-template-columns: 1fr;
-    max-height: none;
-    flex: 1;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .app-modal__aside {
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .app-modal__content,
-  .qr-modal__content,
-  .pdf-modal__content {
-    max-height: none;
-  }
-
-  .pdf-modal__header {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 16px;
-  }
-
-  .pdf-modal__toolbar {
-    justify-content: space-between;
-  }
-
-  .pdf-modal__open-btn {
-    flex: 1;
-    text-align: center;
-  }
-
   .pdf-modal__body iframe {
-    height: min(65vh, 560px);
-  }
-
-  .qr-modal__aside {
-    padding: 24px 18px 16px;
-  }
-
-  .qr-modal__main {
-    padding: 16px 18px 28px;
-  }
-
-  .qr-modal__actions .btn-primario,
-  .qr-modal__actions .btn-secundario,
-  .qr-modal__actions a.btn-secundario {
-    width: 100%;
-  }
-
-  .app-notify__content {
-    padding: 22px 16px;
+    height: 100%;
+    min-height: 60vh;
   }
 
   .apps-add-btn {
@@ -916,7 +617,6 @@
  * se ocultan y muestran por JS y necesitan la regla explícita.
  */
 .app-icon-preview img[hidden],
-.app-field-hint[hidden],
 .app-ios-current[hidden] {
   display: none;
 }

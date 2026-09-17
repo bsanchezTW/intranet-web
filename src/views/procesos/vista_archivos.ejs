@@ -1,5 +1,7 @@
 <%
-  const puedeEscribir = !!(can && can[seccionBase + '_write']);
+  const puedeSubir = !!(can && can[seccionBase + '_write']);
+  const puedeEditar = !!(typeof permisos !== 'undefined' && permisos && permisos.can_edit);
+  const puedeEliminar = !!(typeof permisos !== 'undefined' && permisos && permisos.can_delete);
   const lista = (typeof archivos !== 'undefined' && Array.isArray(archivos)) ? archivos : [];
   const esSeccionDeArea = seccionBase === 'procedimientos' || seccionBase === 'protocolos';
   const heredados = (typeof avisoHuerfanos !== 'undefined' && avisoHuerfanos);
@@ -19,41 +21,38 @@
 
 <div class="contenedor">
 
-  <nav class="procesos-migas" aria-label="Ruta de navegación">
-    <a href="/procesos">Procesos y Documentos</a>
-    <% if (esSeccionDeArea) { %>
-      <span aria-hidden="true">/</span>
-      <a href="/procesos/<%= seccionBase %>"><%= tituloSeccion %></a>
-    <% } %>
-    <span aria-hidden="true">/</span>
-    <span><%= tituloArea || tituloSeccion %></span>
-  </nav>
-
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'file-text' }) %></span>
     <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a>
+        <% if (esSeccionDeArea) { %>
+          <span aria-hidden="true">/</span>
+          <a href="/procesos/<%= seccionBase %>"><%= tituloSeccion %></a>
+        <% } %>
+        <span aria-hidden="true">/</span>
+        <span><%= tituloArea || tituloSeccion %></span>
+      </nav>
       <h2 class="page-title"><%= titulo %></h2>
       <p class="page-description">
         <%= lista.length %> <%= lista.length === 1 ? 'documento' : 'documentos' %>
         <% if (color) { %>
-          · <span class="carpeta-card__conteo" style="background: color-mix(in srgb, <%= color %> 16%, transparent); color: <%= color %>;"><%= tituloArea %></span>
+          · <span class="page-header__area" style="--area-color: <%= color %>;"><%= tituloArea %></span>
         <% } %>
       </p>
     </div>
 
-    <% if (puedeEscribir) { %>
+    <% if (puedeSubir) { %>
     <div class="page-header-actions">
       <button type="button" class="page-header-btn" onclick="IntranetModal.open('modalSubir')">
-        <span aria-hidden="true">+</span> Subir documento
+        <%- include('../partials/icon', { name: 'plus' }) %> Subir documento
       </button>
     </div>
     <% } %>
   </div>
 
   <% if (typeof ok !== 'undefined' && ok) { %>
-    <div class="flash-msg flash-msg--ok" role="status">
-      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'check-circle' }) %></span>
-      <span><%= ok %></span>
-    </div>
+    <div hidden data-toast="<%= ok %>"></div>
   <% } %>
 
   <% if (heredados) { %>
@@ -86,18 +85,22 @@
               <span class="archivo-item__tipo"><%= (a.format || '').toUpperCase() || 'Archivo' %></span>
             </div>
 
-            <% if (puedeEscribir) { %>
+            <% if (puedeEditar || puedeEliminar) { %>
               <div class="archivo-item__acciones">
+                <% if (puedeEditar) { %>
                 <button type="button" class="archivo-item__btn archivo-item__btn--editar"
                         title="Editar nombre" aria-label="Editar el nombre de <%= a.name %>"
                         data-editar-doc data-id="<%= a.id %>" data-nombre="<%= a.name %>">
                   <%- include('../partials/icon', { name: 'edit' }) %>
                 </button>
+                <% } %>
+                <% if (puedeEliminar) { %>
                 <button type="button" class="archivo-item__btn archivo-item__btn--eliminar"
                         title="Eliminar" aria-label="Eliminar <%= a.name %>"
                         data-eliminar-doc data-id="<%= a.id %>" data-public-id="<%= a.public_id %>" data-nombre="<%= a.name %>">
                   <%- include('../partials/icon', { name: 'trash' }) %>
                 </button>
+                <% } %>
               </div>
             <% } %>
           </li>
@@ -108,67 +111,83 @@
 
 </div>
 
-<% if (puedeEscribir) { %>
+<% if (puedeSubir) { %>
 <div id="modalSubir" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalSubirTitle" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--sm">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalSubirTitle" class="modal-title">Subir nuevo documento</h3>
 
-    <form id="formSubir" action="/procesos/<%= seccionBase %>/<%= slugArea %>/subir" method="POST" class="modal-form">
-      <div class="campo-form">
-        <label for="nombreInput">Nombre del documento <span class="required-mark">*</span></label>
-        <input type="text" id="nombreInput" placeholder="Ej: Procedimiento de despacho V2" required maxlength="200">
+    <form id="formSubir" action="/procesos/<%= seccionBase %>/<%= slugArea %>/subir" method="POST">
+      <header class="modal-head">
+        <h2 id="modalSubirTitle" class="modal-title">Subir nuevo documento</h2>
+        <p class="modal-subtitle">Queda disponible para todos los que ven esta carpeta.</p>
+      </header>
+
+      <div class="modal-body">
+        <div class="campo-form">
+          <label for="nombreInput">Nombre del documento <span class="required-mark">*</span></label>
+          <input type="text" id="nombreInput" placeholder="Ej: Procedimiento de despacho V2" required maxlength="200">
+        </div>
+
+        <div class="campo-form">
+          <label for="fileInput">Archivo <span class="required-mark">*</span></label>
+          <input type="file" id="fileInput" required>
+          <span class="campo-form__ayuda">Hasta 20 MB.</span>
+        </div>
       </div>
 
-      <div class="campo-form">
-        <label for="fileInput">Archivo <span class="required-mark">*</span></label>
-        <input type="file" id="fileInput" required>
-        <span class="campo-form__ayuda">Hasta 20 MB.</span>
-      </div>
-
-      <div id="uploadStatus" class="procesos-subida-estado">
-        <span class="procesos-subida-spinner" id="uploadSpinner"></span>
-        <span id="uploadText">Preparando…</span>
-      </div>
-
-      <div class="modal-actions" id="modalActions">
-        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+      <footer class="modal-foot">
+        <span id="uploadStatus" class="modal-foot__start procesos-subida-estado" hidden>
+          <span class="procesos-subida-spinner" id="uploadSpinner"></span>
+          <span id="uploadText">Preparando…</span>
+        </span>
+        <button type="button" class="btn-secundario" id="btnCancelarSubida" data-modal-close>Cancelar</button>
         <button type="submit" class="btn-primario" id="btnSubmit">Subir archivo</button>
-      </div>
+      </footer>
     </form>
   </div>
 </div>
+<% } %>
 
+<% if (puedeEditar) { %>
 <div id="modalEditar" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalEditarTitle" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--sm">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalEditarTitle" class="modal-title">Editar nombre del documento</h3>
 
-    <form action="/procesos/documento/editar" method="POST" class="modal-form">
+    <form action="/procesos/documento/editar" method="POST">
       <input type="hidden" name="id" id="editId">
       <input type="hidden" name="return_to" value="<%= retorno %>">
       <input type="hidden" name="seccion_base" value="<%= seccionBase %>">
 
-      <div class="campo-form">
-        <label for="editNombre">Nuevo nombre <span class="required-mark">*</span></label>
-        <input type="text" name="nuevo_nombre" id="editNombre" required maxlength="200">
+      <header class="modal-head">
+        <h2 id="modalEditarTitle" class="modal-title">Editar nombre del documento</h2>
+      </header>
+
+      <div class="modal-body">
+        <div class="campo-form">
+          <label for="editNombre">Nuevo nombre <span class="required-mark">*</span></label>
+          <input type="text" name="nuevo_nombre" id="editNombre" required maxlength="200">
+        </div>
       </div>
 
-      <div class="modal-actions">
+      <footer class="modal-foot">
         <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
         <button type="submit" class="btn-primario">Guardar cambios</button>
-      </div>
+      </footer>
     </form>
   </div>
 </div>
+<% } %>
 
+<% if (puedeEliminar) { %>
 <form id="formEliminar" action="/procesos/eliminar" method="POST" hidden>
   <input type="hidden" name="db_id" id="deleteDbId">
   <input type="hidden" name="public_id" id="deletePublicId">
   <input type="hidden" name="return_to" value="<%= retorno %>">
   <input type="hidden" name="seccion_base" value="<%= seccionBase %>">
 </form>
+<% } %>
 
+<% if (puedeSubir || puedeEditar || puedeEliminar) { %>
 <script>
   (function () {
     "use strict";
@@ -182,9 +201,15 @@
     });
 
     document.querySelectorAll("[data-eliminar-doc]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", async function () {
         var nombre = btn.dataset.nombre || "este documento";
-        if (!confirm('¿Eliminar permanentemente "' + nombre + '"?')) return;
+        var ok = await IntranetDialog.confirm({
+          title: "¿Eliminar el documento?",
+          message: "«" + nombre + "» se borrará de forma permanente.",
+          acceptLabel: "Eliminar",
+          tone: "peligro",
+        });
+        if (!ok) return;
         document.getElementById("deleteDbId").value = btn.dataset.id;
         document.getElementById("deletePublicId").value = btn.dataset.publicId || "";
         document.getElementById("formEliminar").submit();
@@ -204,17 +229,23 @@
       var statusDiv = document.getElementById("uploadStatus");
       var statusText = document.getElementById("uploadText");
       var spinner = document.getElementById("uploadSpinner");
-      var actions = document.getElementById("modalActions");
+      var btnSubmit = document.getElementById("btnSubmit");
+      var btnCancelar = document.getElementById("btnCancelarSubida");
 
-      if (!fileInput.files.length) return alert("Selecciona un archivo.");
+      if (!fileInput.files.length) {
+        return IntranetDialog.alert({ title: "Falta el archivo", message: "Selecciona un archivo para subir." });
+      }
       var file = fileInput.files[0];
-      if (file.size > MAX_BYTES) return alert("El archivo excede el límite de 20 MB.");
+      if (file.size > MAX_BYTES) {
+        return IntranetDialog.alert({ title: "Archivo demasiado grande", message: "El archivo excede el límite de 20 MB." });
+      }
 
       function setStatus(msg, subiendo) {
         statusText.textContent = msg;
-        statusDiv.style.display = "block";
+        statusDiv.hidden = false;
         spinner.style.display = subiendo ? "inline-block" : "none";
-        actions.style.display = subiendo ? "none" : "flex";
+        btnSubmit.disabled = subiendo;
+        btnCancelar.disabled = subiendo;
       }
 
       try {
@@ -248,8 +279,8 @@
         location.reload();
       } catch (err) {
         console.error(err);
-        alert(err.message);
         setStatus("Error en la subida", false);
+        IntranetDialog.alert({ title: "No se pudo subir el documento", message: err.message });
       }
     });
   })();

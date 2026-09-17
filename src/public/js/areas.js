@@ -4,7 +4,6 @@
 (function () {
   'use strict';
 
-  var POPUP_MS = 4500;
   var HEX = /^#?[0-9a-fA-F]{6}$/;
 
   function leerConfig() {
@@ -28,14 +27,6 @@
     return raw.charAt(0) === '#' ? raw.toLowerCase() : '#' + raw.toLowerCase();
   }
 
-  function initPopup() {
-    var popup = document.getElementById('popup');
-    if (!popup) return;
-    var cerrar = function () { popup.classList.remove('show'); };
-    var boton = popup.querySelector('[data-popup-close]');
-    if (boton) boton.addEventListener('click', cerrar);
-    if (popup.classList.contains('show')) window.setTimeout(cerrar, POPUP_MS);
-  }
 
   function marcarSwatch(hex) {
     todos('.area-palette__swatch').forEach(function (btn) {
@@ -207,9 +198,12 @@
         evento.preventDefault();
         return;
       }
-      if (!window.confirm('¿Eliminar el área «' + (form.dataset.eliminarArea || '') + '»?')) {
-        evento.preventDefault();
-      }
+      window.IntranetDialog.confirmarEnvio(evento, {
+        title: '¿Eliminar el área?',
+        message: 'Se eliminará el área «' + (form.dataset.eliminarArea || '') + '». Esta acción no se puede deshacer.',
+        acceptLabel: 'Eliminar',
+        tone: 'peligro',
+      });
     });
   }
 
@@ -285,17 +279,18 @@
         form.action = '/RRHH/areas/' + encodeURIComponent(option.value) + '/miembros';
       }
       var mensaje = estado.areaName
-        ? '¿Mover a ' + estado.nombre + ' de «' + estado.areaName + '» a «' + destino + '»?'
-        : '¿Asignar a ' + estado.nombre + ' a «' + destino + '»?';
-      if (!window.confirm(mensaje)) {
-        evento.preventDefault();
-      }
+        ? estado.nombre + ' pasará de «' + estado.areaName + '» a «' + destino + '».'
+        : estado.nombre + ' quedará en «' + destino + '».';
+      window.IntranetDialog.confirmarEnvio(evento, {
+        title: estado.areaName ? '¿Cambiar de área?' : '¿Asignar área?',
+        message: mensaje,
+        acceptLabel: estado.areaName ? 'Mover' : 'Asignar',
+      });
     });
   }
 
   function init() {
     var config = leerConfig();
-    initPopup();
     initConfirmaciones();
     if (config.puedeEditar) {
       initModal(config);

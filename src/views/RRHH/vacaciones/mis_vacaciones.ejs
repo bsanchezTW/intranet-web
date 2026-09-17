@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260910n">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260916g">
 <%
   const isPeru = country === 'PE';
   const peBlockPeriod = isPeru && Array.isArray(periods)
@@ -10,27 +10,32 @@
 %>
 
 <div class="vac-wrap">
-  <div class="vac-header">
-    <div>
-      <h2 class="vac-title">Mis vacaciones</h2>
-      <p class="vac-subtitle">Saldo expresado en <%= dayUnitLabel %>.</p>
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'umbrella' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <a href="/RRHH/vacaciones">Vacaciones</a> <span aria-hidden="true">/</span>
+        <span>Mis vacaciones</span>
+      </nav>
+      <h2 class="page-title">Mis vacaciones</h2>
+      <p class="page-description">Saldo expresado en <%= dayUnitLabel %>.</p>
     </div>
-    <a href="/RRHH/vacaciones" class="link-volver">← Volver</a>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>
-    <div class="vac-alert vac-alert-success"><%= success %></div>
+    <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (typeof error !== 'undefined' && error) { %>
-    <div class="vac-alert vac-alert-error"><%= error %></div>
+    <div class="flash-msg flash-msg--error" role="alert"><%= error %></div>
   <% } %>
 
   <% if (summary && summary.accumulationAlert) { %>
-    <div class="vac-alert vac-alert-info"><%= summary.accumulationMessage %></div>
+    <div class="flash-msg flash-msg--info" role="status"><%= summary.accumulationMessage %></div>
   <% } %>
 
   <% if (!hasHireDate) { %>
-    <div class="vac-alert vac-alert-info">
+    <div class="flash-msg flash-msg--info" role="status">
       No tienes una fecha de ingreso registrada. Contacta a RRHH para poder calcular tu saldo de vacaciones.
     </div>
   <% } %>
@@ -162,7 +167,11 @@
               <td>
                 <% if (r.status === 'pending' || r.status === 'approved') { %>
                   <form class="vac-inline-form" action="/RRHH/vacaciones/mis-vacaciones/cancelar/<%= r.id %>" method="POST"
-                        onsubmit="return confirm('¿Cancelar esta solicitud?');">
+                        data-confirm="La solicitud quedará cancelada."
+                        data-confirm-title="¿Cancelar la solicitud?"
+                        data-confirm-accept="Cancelar solicitud"
+                        data-confirm-cancel="Volver"
+                        data-confirm-tone="peligro">
                     <button type="submit" class="vac-btn vac-btn-cancel vac-btn-sm">Cancelar</button>
                   </form>
                 <% } %>

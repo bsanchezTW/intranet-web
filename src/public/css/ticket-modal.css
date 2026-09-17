@@ -1,21 +1,20 @@
-/* Modales de ticket — sólo ancho y capa; la estructura (cabecera fija, cuerpo
-   scrolleable y pie de acciones) vive en tickets.css y la comparten el detalle
-   y el alta de ticket. */
+/* Modales de ticket — sólo ancho y capa. Son la referencia del diseño de
+   modal.css: cabecera fija, cuerpo scrolleable y pie de acciones. */
 
 .modal-overlay.modal-ticket-navbar {
   z-index: 2600;
 }
 
 .modal-ticket-navbar-content {
-  max-width: 680px;
+  --modal-width: 680px;
 }
 
 .modal-ticket-detail-content {
-  max-width: 900px;
+  --modal-width: 900px;
 }
 
 .modal-ticket-create-content {
-  max-width: 720px;
+  --modal-width: 720px;
 }
 
 .ticket-modal-title--sr {
@@ -40,15 +39,6 @@
 
 .ticket-modal-state--error {
   color: #b42318;
-}
-
-@media (max-width: 768px) {
-  /* El alto acotado es lo que mantiene el scroll dentro del cuerpo: si el panel
-     creciera libre, la cabecera —con el botón de cerrar— se perdería al bajar. */
-  .modal-ticket-detail-content,
-  .modal-ticket-create-content {
-    max-height: 92vh;
-  }
 }
 
 /* ══════════ Tarjeta de ticket: cabecera, cuerpo y pie ══════════ */
@@ -104,23 +94,6 @@
   border: 1px solid var(--color-border);
   border-radius: 18px;
   box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-/*
- * Dentro del modal el panel deja de scrollear como bloque único: la cabecera y
- * el pie quedan fijos y sólo el cuerpo se desplaza. Así el botón de cerrar no
- * se va con el scroll ni se monta sobre el título.
- */
-.modal-content2.modal-ticket-detail-content,
-.modal-content2.modal-ticket-create-content {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  /* Panel sin padding y sin scroll propio: el hueco de barra que reserva
-     .modal-content2 dejaría una franja muerta contra el borde. Todo panel
-     "flush" tiene que renunciar a él. */
-  scrollbar-gutter: auto;
   overflow: hidden;
 }
 
@@ -611,14 +584,6 @@
 .ticket-btn--cerrar:hover:not(:disabled) {
   background: var(--cerrar-bg-hover);
 }
-
-/* En oscuro se invierte: verde claro con tinta oscura. */
-html[data-theme="dark"] .ticket-btn--cerrar {
-  --cerrar-bg: var(--corp-green);
-  --cerrar-bg-hover: #bce36e;
-  --cerrar-fg: #0d1f33;
-}
-
 /* ── Paso de asignación ── */
 /* Cubre la tarjeta completa (el ancestro posicionado es .ticket-container),
    no sólo el pie, para que la elección quede por encima de todo el ticket. */
@@ -737,7 +702,6 @@ html[data-theme="dark"] .ticket-btn--cerrar {
 .ticket-status-text--warning { color: #8a5d09; }
 .ticket-status-text--error { color: #d05c5c; }
 
-
 .adjuntos-wrapper {
   margin-top: 15px;
   border-top: 1px solid #eeeeee;
@@ -798,7 +762,7 @@ html[data-theme="dark"] .ticket-btn--cerrar {
 
 .lista-archivos a {
   text-decoration: none;
-  color: #0056b3;
+  color: var(--brand);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -808,19 +772,6 @@ html[data-theme="dark"] .ticket-btn--cerrar {
 .lista-archivos a:hover {
   text-decoration: underline;
 }
-
-/* ── Modo oscuro: sólo lo que no sale de tokens ── */
-html[data-theme="dark"] .ticket-estado--in_progress,
-html[data-theme="dark"] .ticket-estado--pending_close,
-html[data-theme="dark"] .ticket-prio--medium,
-html[data-theme="dark"] .ticket-status-text--warning {
-  color: #e8b860;
-}
-
-html[data-theme="dark"] .ticket-prio--high {
-  color: #e88f8f;
-}
-
 @media (max-width: 768px) {
   /* Detalle: menos aire lateral y acciones a lo ancho. */
   .ticket-head {

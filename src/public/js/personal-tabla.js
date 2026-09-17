@@ -11,7 +11,6 @@
 (function () {
   'use strict';
 
-  var POPUP_MS = 4500;
 
   // ── Configuración enviada por el servidor ────────────────────────────────
   function leerConfig() {
@@ -158,16 +157,6 @@
     });
   }
 
-  // ── Aviso flotante ───────────────────────────────────────────────────────
-  function initPopup() {
-    var popup = document.getElementById('popup');
-    if (!popup) return;
-
-    var cerrar = function () { popup.classList.remove('show'); };
-    var boton = popup.querySelector('[data-popup-close]');
-    if (boton) boton.addEventListener('click', cerrar);
-    if (popup.classList.contains('show')) window.setTimeout(cerrar, POPUP_MS);
-  }
 
   // ── Modal: crear colaborador ─────────────────────────────────────────────
   function initModalCrear(config) {
@@ -194,7 +183,7 @@
     if (config.abrirCrear) abrir(config.crearError);
   }
 
-  /** Validación del formulario de alta (correo, teléfono y fecha obligatoria). */
+  /** Validación del formulario de alta (correos, teléfonos y fecha obligatoria). */
   function initFormularioCrear() {
     var formulario = document.getElementById('formCrearColaborador');
     if (!formulario) return;
@@ -204,72 +193,121 @@
     var email = document.getElementById('crear_email');
     var fecha = document.getElementById('crear_fecha_nacimiento');
     var fechaMarca = document.getElementById('crear_fecha_nacimiento_mark');
-    var telefonoCampo = document.getElementById('crear_phone_field');
-    var telefonoLocal = document.getElementById('crear_telefono_local');
+    // Teléfono de empresa y personal, y correo personal: opcionales, sólo se
+    // marcan cuando lo escrito no es válido.
+    var telefonoCampos = todos('[data-phone-field]', formulario);
+    var correoPersonal = document.getElementById('crear_personal_email');
 
     // Sin correo no hay cuenta de intranet, así que el cumpleaños pasa a ser el
     // único dato con el que RRHH puede identificar la ficha.
     function sincronizarFecha() {
       if (!fecha) return;
-      var obligatoria = window.EmailValidate.isEmpty(email);
+      // La cuenta usa el correo de empresa y, si no hay, el personal.
+      var obligatoria =
+        window.EmailValidate.isEmpty(email) && window.EmailValidate.isEmpty(correoPersonal);
       fecha.required = obligatoria;
       if (fechaMarca) fechaMarca.hidden = !obligatoria;
       if (!obligatoria) window.CampoForm.limpiar(fecha);
     }
 
-    function telefonoInvalido() {
+    function telefonoInvalido(campo) {
       return (
-        !window.PhoneField.isFieldEmpty(telefonoCampo) &&
-        !window.PhoneField.isFieldValid(telefonoCampo)
+        !window.PhoneField.isFieldEmpty(campo) &&
+        !window.PhoneField.isFieldValid(campo)
+      );
+    }
+
+    function marcarCorreo(input) {
+      window.CampoForm.marcar(
+        input,
+        window.EmailValidate.isValid(input) ? '' : window.EmailValidate.ERROR_MSG,
       );
     }
 
     window.EmailValidate.initField(email);
-    window.PhoneField.initField(telefonoCampo);
+    window.EmailValidate.initField(correoPersonal);
 
     if (email) {
       email.addEventListener('input', function () {
-        window.CampoForm.marcar(
-          email,
-          window.EmailValidate.isValid(email) ? '' : window.EmailValidate.ERROR_MSG,
-        );
+        marcarCorreo(email);
         sincronizarFecha();
       });
     }
 
-    if (telefonoLocal) {
-      telefonoLocal.addEventListener('input', function () {
-        window.CampoForm.marcar(
-          telefonoLocal,
-          telefonoInvalido() ? window.PhoneField.ERROR_MSG : '',
-        );
+    if (correoPersonal) {
+      correoPersonal.addEventListener('input', function () {
+        marcarCorreo(correoPersonal);
+        sincronizarFecha();
       });
     }
 
+    telefonoCampos.forEach(function (campo) {
+      window.PhoneField.initField(campo);
+      var local = campo.querySelector('.phone-field__local');
+      if (!local) return;
+      local.addEventListener('input', function () {
+        window.CampoForm.marcar(
+          local,
+          telefonoInvalido(campo) ? window.PhoneField.ERROR_MSG : '',
+        );
+      });
+    });
+
     sincronizarFecha();
+    initVistaPreviaCrear(formulario);
 
     formulario.addEventListener('submit', function (evento) {
       var hayError = false;
 
-      if (!window.EmailValidate.isValid(email)) {
+      [email, correoPersonal].forEach(function (input) {
+        if (!input || window.EmailValidate.isValid(input)) return;
         hayError = true;
-        window.CampoForm.marcar(email, window.EmailValidate.ERROR_MSG);
-      }
+        window.CampoForm.marcar(input, window.EmailValidate.ERROR_MSG);
+      });
 
-      if (telefonoInvalido()) {
+      telefonoCampos.forEach(function (campo) {
+        if (!telefonoInvalido(campo)) return;
         hayError = true;
-        window.CampoForm.marcar(telefonoLocal, window.PhoneField.ERROR_MSG);
-      }
+        window.CampoForm.marcar(campo.querySelector('.phone-field__local'), window.PhoneField.ERROR_MSG);
+      });
 
-      if (window.EmailValidate.isEmpty(email) && !String(fecha && fecha.value || '').trim()) {
+      if (fecha && fecha.required && !String(fecha.value || '').trim()) {
         hayError = true;
         window.CampoForm.marcar(fecha, FECHA_REQUERIDA);
       }
 
-      if (!hayError) return;
-      evento.preventDefault();
-      window.CampoForm.enfocarPrimerError(formulario);
+      if (hayError) {
+        evento.preventDefault();
+        window.CampoForm.enfocarPrimerError(formulario);
+        return;
+      }
+      window.CampoForm.ocuparSubmit(formulario);
     });
+  }
+
+  /** El lateral del alta muestra a quién se está creando, como en la edición. */
+  function initVistaPreviaCrear(formulario) {
+    var nombre = document.getElementById('crear_first_name');
+    var apellido = document.getElementById('crear_last_name');
+    var avatar = formulario.querySelector('[data-crear-iniciales]');
+    var rotulo = formulario.querySelector('[data-crear-nombre]');
+    if (!nombre || !apellido || !avatar || !rotulo) return;
+
+    var iconoInicial = avatar.innerHTML;
+
+    function pintar() {
+      var n = nombre.value.trim();
+      var a = apellido.value.trim();
+      var completo = [n, a].filter(Boolean).join(' ');
+      rotulo.textContent = completo || 'Nuevo colaborador';
+      var iniciales = ((n[0] || '') + (a[0] || '')).toUpperCase();
+      if (iniciales) avatar.textContent = iniciales;
+      else avatar.innerHTML = iconoInicial;
+    }
+
+    nombre.addEventListener('input', pintar);
+    apellido.addEventListener('input', pintar);
+    formulario.addEventListener('reset', function () { window.setTimeout(pintar, 0); });
   }
 
   // ── Modal: editar colaborador ────────────────────────────────────────────
@@ -279,6 +317,18 @@
 
     var cuerpo = document.getElementById('modalEditarColaboradorBody');
     var error = document.getElementById('editarColaboradorError');
+    var panel = cuerpo.parentNode;
+
+    // El aviso de error vive fuera del hueco que se reemplaza y se muda dentro
+    // del formulario una vez cargado; antes de vaciar el hueco vuelve a salir.
+    function sacarError() {
+      if (error && error.parentNode !== panel) panel.insertBefore(error, cuerpo);
+    }
+
+    function meterError() {
+      var destino = cuerpo.querySelector('[data-colaborador-alertas]');
+      if (error && destino) destino.appendChild(error);
+    }
     var CARGANDO = '<p class="modal-loading">Cargando colaborador…</p>';
     var destruirFormulario = null;
 
@@ -289,6 +339,7 @@
 
     async function abrir(id, mensaje) {
       var mia = ++apertura;
+      sacarError();
       mostrarMensaje(error, mensaje);
       cuerpo.innerHTML = CARGANDO;
       window.IntranetModal.open(overlay);
@@ -303,6 +354,7 @@
         if (mia !== apertura) return;
 
         cuerpo.innerHTML = html;
+        meterError();
         if (window.NationalIdField) window.NationalIdField.init(cuerpo);
         if (destruirFormulario) destruirFormulario();
         destruirFormulario =
@@ -321,6 +373,7 @@
         destruirFormulario();
         destruirFormulario = null;
       }
+      sacarError();
       cuerpo.innerHTML = CARGANDO;
       mostrarMensaje(error, '');
       limpiarQuery(['editar', 'editarError']);
@@ -343,7 +396,15 @@
 
     initFiltros();
     initOrden();
-    initPopup();
+
+    // Al volver con atrás la página puede restaurarse con el botón girando.
+    window.addEventListener('pageshow', function (evento) {
+      if (!evento.persisted || !window.CampoForm) return;
+      var crear = document.getElementById('formCrearColaborador');
+      var editar = document.getElementById('formEditarPersona');
+      if (crear) window.CampoForm.restaurarSubmit(crear);
+      if (editar) window.CampoForm.restaurarSubmit(editar);
+    });
 
     if (!config.puedeEditar) return;
     initModalCrear(config);

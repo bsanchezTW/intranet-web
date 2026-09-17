@@ -21,29 +21,32 @@
   const errorMsg   = (typeof error   !== 'undefined' && error)   ? error   : null;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260911c">
+<link rel="stylesheet" href="/css/personal.css?v=20260916m">
 <link rel="stylesheet" href="/css/phone.css?v=20260902">
 <% if (puedeEditar) { %>
-<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <% } %>
 
-<div id="popup" class="popup-notification <%= successMsg ? 'success show' : errorMsg ? 'error show' : '' %>" role="status">
-  <span><%= successMsg || errorMsg || '' %></span>
-  <button type="button" class="popup-close" data-popup-close aria-label="Cerrar aviso">&times;</button>
-</div>
+<% if (successMsg || errorMsg) { %>
+<div hidden data-toast="<%= successMsg || errorMsg %>" data-toast-tone="<%= successMsg ? 'ok' : 'error' %>"></div>
+<% } %>
 
 <div class="contenedor-personal">
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'users' }) %></span>
     <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <span>Personal</span>
+      </nav>
       <h2 class="page-title">Colaboradores de Transworld <%= countryConfig.name %></h2>
       <p class="page-description"><span id="contadorColaboradores"><%= listado.length %></span> colaboradores en el registro</p>
     </div>
     <div class="page-header-actions">
-      <a href="/RRHH" class="link-volver">← Volver al menú</a>
       <% if (puedeEditar) { %>
-      <button type="button" class="btn-agregar-persona" data-abrir-crear>
-        <span aria-hidden="true">+</span> Agregar persona
+      <button type="button" class="page-header-btn" data-abrir-crear>
+        <%- include('../partials/icon', { name: 'user-plus' }) %> Agregar persona
       </button>
       <% } %>
     </div>
@@ -84,10 +87,10 @@
               <button type="button">Área</button>
             </th>
             <th class="col-desktop" data-ordenable aria-sort="none">
-              <button type="button">Correo</button>
+              <button type="button">Correo <span class="th-sub">empresa / personal</span></button>
             </th>
             <th class="col-desktop" data-ordenable aria-sort="none">
-              <button type="button">Teléfono</button>
+              <button type="button">Teléfono <span class="th-sub">empresa / personal</span></button>
             </th>
             <th class="col-desktop" data-ordenable aria-sort="none">
               <button type="button">Cumpleaños</button>
@@ -95,11 +98,6 @@
             <% if (mostrarRol) { %>
               <th class="col-desktop" data-ordenable aria-sort="none">
                 <button type="button">Rol</button>
-              </th>
-            <% } %>
-            <% if (puedeEditar) { %>
-              <th class="col-centro col-desktop" data-ordenable aria-sort="none">
-                <button type="button">Email</button>
               </th>
             <% } %>
           </tr>
@@ -116,14 +114,19 @@
               const nombreCompleto = [firstName, lastName].filter(Boolean).join(' ') || '-';
               const sortApellido = (primerApellido || primerNombre || '').toLowerCase();
               const areaNombre = p.area || '-';
+              // Contacto de empresa completo; el personal llega ya enmascarado
+              // desde la ruta ("ti***@icloud.com", "+56 * **** 1435").
               const correo   = p.email    || '-';
-              const telefono = p.phone || '-';
+              const telefono = p.work_phone || '-';
               const telefonoHref = p.telefonoHref || null;
               const rol = p.role || 'Usuario';
               const cumpleSort = p.ordenCumple !== undefined ? p.ordenCumple : 9999;
               const cumpleFmt  = p.fechaCumpleFmt || '-';
-              const tieneCorreo = Boolean(p.email && String(p.email).trim());
+              // El ticket va junto al correo con que se verificó la cuenta: el de
+              // empresa o, si la persona no tiene, el personal (que sigue oculto).
               const correoVerificado = p.email_confirmed === true || p.email_confirmed === 't' || p.email_confirmed === 1;
+              const verificadoEmpresa = correoVerificado && correo !== '-';
+              const verificadoPersonal = correoVerificado && Boolean(p.cuenta_con_correo_personal);
             %>
             <tr
               data-area="<%= areaNombre %>"
@@ -149,22 +152,44 @@
                 <span class="<%= p.pillClass || getWorkAreaPillClass(areaNombre, p.area_color) %>"<% if (p.pillStyle) { %> style="<%= p.pillStyle %>"<% } %>><%= areaNombre %></span>
               </td>
 
-              <td class="col-correo col-desktop" data-label="Correo">
-                <% if (correo !== '-') { %>
-                  <a href="mailto:<%= correo %>" class="link-discreto"><%= correo %></a>
-                <% } else { %>
-                  <span class="dato-vacio">-</span>
-                <% } %>
+              <td class="col-correo col-desktop" data-label="Correo" data-sort="<%= correo !== '-' ? correo.toLowerCase() : '~' %>">
+                <span class="contacto-doble">
+                  <span class="contacto-linea" title="Correo de empresa">
+                    <% if (correo !== '-') { %>
+                      <a href="mailto:<%= correo %>" class="link-discreto"><%= correo %></a><% if (verificadoEmpresa) { %><span class="correo-verificado" title="Cuenta verificada con este correo"><%- include('../partials/icon', { name: 'check' }) %><span class="sr-only">Verificado</span></span><% } %>
+                    <% } else { %>
+                      <span class="dato-vacio">-</span>
+                    <% } %>
+                  </span>
+                  <span class="contacto-linea" title="Correo personal (parcial)">
+                    <% if (p.correoPersonal) { %>
+                      <span class="dato-oculto"><%= p.correoPersonal %></span><% if (verificadoPersonal) { %><span class="correo-verificado" title="Cuenta verificada con este correo"><%- include('../partials/icon', { name: 'check' }) %><span class="sr-only">Verificado</span></span><% } %>
+                    <% } else { %>
+                      <span class="dato-vacio">-</span>
+                    <% } %>
+                  </span>
+                </span>
               </td>
 
-              <td class="col-telefono col-desktop" data-label="Teléfono">
-                <% if (telefonoHref) { %>
-                  <a href="<%= telefonoHref %>" class="link-discreto"><%= telefono %></a>
-                <% } else if (telefono !== '-') { %>
-                  <%= telefono %>
-                <% } else { %>
-                  <span class="dato-vacio">-</span>
-                <% } %>
+              <td class="col-telefono col-desktop" data-label="Teléfono" data-sort="<%= telefono !== '-' ? telefono : '~' %>">
+                <span class="contacto-doble">
+                  <span class="contacto-linea" title="Teléfono de empresa">
+                    <% if (telefonoHref) { %>
+                      <a href="<%= telefonoHref %>" class="link-discreto"><%= telefono %></a>
+                    <% } else if (telefono !== '-') { %>
+                      <%= telefono %>
+                    <% } else { %>
+                      <span class="dato-vacio">-</span>
+                    <% } %>
+                  </span>
+                  <span class="contacto-linea" title="Teléfono personal (parcial)">
+                    <% if (p.telefonoPersonal) { %>
+                      <span class="dato-oculto"><%= p.telefonoPersonal %></span>
+                    <% } else { %>
+                      <span class="dato-vacio">-</span>
+                    <% } %>
+                  </span>
+                </span>
               </td>
 
               <td class="col-cumple col-desktop" data-sort="<%= cumpleSort %>" data-label="Cumpleaños">
@@ -180,18 +205,6 @@
                   <span class="<%= pillRol(rol) %>"><%= rol %></span>
                 </td>
               <% } %>
-
-              <% if (puedeEditar) { %>
-                <td class="col-centro col-desktop" data-label="Email" data-sort="<%= !tieneCorreo ? 2 : correoVerificado ? 0 : 1 %>">
-                  <% if (!tieneCorreo) { %>
-                    <span class="dato-vacio" title="Sin correo registrado">-</span>
-                  <% } else if (correoVerificado) { %>
-                    <span class="estado-si" title="Correo verificado"><%- include('../partials/icon', { name: 'check' }) %><span class="sr-only">Verificado</span></span>
-                  <% } else { %>
-                    <span class="estado-no" title="Correo pendiente de verificación" aria-label="Pendiente">✕</span>
-                  <% } %>
-                </td>
-              <% } %>
             </tr>
           <% }) %>
         </tbody>
@@ -205,20 +218,20 @@
 </div>
 
 <% if (puedeEditar) { %>
-  <div id="modalCrearColaborador" class="modal-overlay modal-crear-colaborador" role="dialog" aria-modal="true" aria-labelledby="crearColaboradorTitle" aria-hidden="true">
-    <div class="modal-content modal-content--large">
+  <div id="modalCrearColaborador" class="modal-overlay modal-colaborador" role="dialog" aria-modal="true" aria-labelledby="crearColaboradorTitle" aria-hidden="true">
+    <div class="modal-content modal-content--xl colaborador-modal">
       <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-      <h2 id="crearColaboradorTitle" class="modal-title">Agregar colaborador</h2>
-      <div id="crearColaboradorError" class="modal-crear-error" role="alert"></div>
       <%- include('partials/persona_crear_form') %>
     </div>
   </div>
 
-  <div id="modalEditarColaborador" class="modal-overlay modal-editar-colaborador" role="dialog" aria-modal="true" aria-label="Editar colaborador" aria-hidden="true">
-    <div class="modal-content modal-editar-panel">
+  <div id="modalEditarColaborador" class="modal-overlay modal-colaborador" role="dialog" aria-modal="true" aria-labelledby="editarColaboradorTitle" aria-hidden="true">
+    <div class="modal-content modal-content--xl colaborador-modal">
       <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-      <div id="editarColaboradorError" class="modal-crear-error" role="alert" style="margin: 16px 20px 0;"></div>
-      <div id="modalEditarColaboradorBody">
+      <%# El error se muda dentro del formulario al terminar de cargar; mientras
+          tanto espera aquí, fuera del hueco que se reemplaza. %>
+      <div id="editarColaboradorError" class="modal-alert colaborador-modal__error" role="alert"></div>
+      <div id="modalEditarColaboradorBody" class="modal-stack">
         <p class="modal-loading">Cargando colaborador…</p>
       </div>
     </div>
@@ -234,16 +247,16 @@
   editarError: (typeof editarError !== 'undefined' && editarError) ? editarError : '',
 }).replace(/</g, '\\u003c') %></script>
 
-<script src="/js/campo-form.js?v=20260910n"></script>
+<script src="/js/campo-form.js?v=20260917a"></script>
 <script src="/js/email-validate.js?v=20260910n"></script>
 <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
-<script src="/js/phone.js?v=20260910n"></script>
+<script src="/js/phone.js?v=20260916h"></script>
 <script type="application/json" id="national-id-config"><%- JSON.stringify(documentoConfig).replace(/</g, '\\u003c') %></script>
 <script src="/js/national-id.js?v=20260910n"></script>
 <% if (puedeEditar) { %>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/js/profile-photo-cropper.js"></script>
-<script src="/js/persona-editar-form.js?v=20260910n"></script>
+<script src="/js/profile-photo-cropper.js?v=20260916m"></script>
+<script src="/js/persona-editar-form.js?v=20260917a"></script>
 <script src="/js/centros-picker.js?v=20260911a"></script>
 <% } %>
-<script src="/js/personal-tabla.js?v=20260910n" defer></script>
+<script src="/js/personal-tabla.js?v=20260917b" defer></script>

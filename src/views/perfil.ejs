@@ -11,20 +11,21 @@
   const monogram = getMonogram(usuario);
 %>
 <link rel="stylesheet" href="/css/phone.css">
-<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260910a">
-<link rel="stylesheet" href="/css/change-password-modal.css">
-<link rel="stylesheet" href="/css/perfil.css?v=20260911w">
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
+<link rel="stylesheet" href="/css/change-password-modal.css?v=20260916m">
+<link rel="stylesheet" href="/css/perfil.css?v=20260916g">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
 <div class="contenedor perfil-page">
 
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('partials/icon', { name: 'user' }) %></span>
     <div class="page-header__text">
       <h2 class="page-title">Mi perfil</h2>
       <p class="page-description">Tus datos de contacto y de cuenta en la intranet.</p>
     </div>
     <div class="page-header-actions">
-      <a href="/perfil/cursos" class="page-header-btn">
+      <a href="/perfil/cursos" class="page-header-btn page-header-btn--secundario">
         <%- include('partials/icon', { name: 'graduation-cap' }) %>
         Mis cursos
       </a>
@@ -32,10 +33,7 @@
   </div>
 
   <% if (okPerfil) { %>
-    <div class="flash-msg flash-msg--ok" role="status">
-      <span class="flash-msg__icono" aria-hidden="true"><%- include('partials/icon', { name: 'check-circle' }) %></span>
-      <span><%= okPerfil %></span>
-    </div>
+    <div hidden data-toast="<%= okPerfil %>"></div>
   <% } %>
 
   <% if (errorPerfil) { %>
@@ -116,7 +114,7 @@
           </div>
 
           <div class="campo-form">
-            <label for="telefono_local">Teléfono <span class="required-mark">*</span></label>
+            <label for="telefono_local">Teléfono personal <span class="required-mark">*</span></label>
             <div class="phone-field" data-phone-field>
               <span class="phone-field__prefix" aria-hidden="true"><%= countryConfig.phone.callingCode ? "+" + countryConfig.phone.callingCode : "" %></span>
               <input type="tel" id="telefono_local" class="phone-field__local" required placeholder="<%= countryConfig.phone.example %>" maxlength="<%= countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1 %>" inputmode="numeric" autocomplete="tel-national" aria-label="Número celular sin código de país">
@@ -199,13 +197,14 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/js/campo-form.js?v=20260910n"></script>
+<script src="/js/campo-form.js?v=20260917a"></script>
 <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
 <script src="/js/phone.js?v=20260910n"></script>
 <script type="application/json" id="national-id-config"><%- JSON.stringify(documentoConfig).replace(/</g, '\\u003c') %></script>
 <script src="/js/national-id.js?v=20260910n"></script>
-<script src="/js/profile-photo-cropper.js"></script>
-<script src="/js/change-password-modal.js"></script>
+<script src="/js/profile-photo-cropper.js?v=20260916m"></script>
+<script src="/js/password-strength.js?v=20260916q"></script>
+<script src="/js/change-password-modal.js?v=20260916p"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     const btnRemove = document.getElementById('btn-remove-photo');
@@ -290,8 +289,14 @@
       }
     });
 
-    btnRemove.addEventListener('click', function () {
-      if (!confirm('¿Quitar tu foto de perfil?')) return;
+    btnRemove.addEventListener('click', async function () {
+      const quitar = await IntranetDialog.confirm({
+        title: '¿Quitar tu foto de perfil?',
+        message: 'Volverás a mostrarte con tus iniciales.',
+        acceptLabel: 'Quitar foto',
+        tone: 'peligro',
+      });
+      if (!quitar) return;
 
       fetch('/perfil/foto/eliminar', {
         method: 'POST',
@@ -306,7 +311,7 @@
           throw new Error('Error del servidor');
         })
         .catch(function () {
-          alert('No se pudo quitar la foto. Intenta de nuevo.');
+          IntranetDialog.alert({ title: 'No se pudo quitar la foto', message: 'Intenta de nuevo en un momento.' });
         });
     });
   });

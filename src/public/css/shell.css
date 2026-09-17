@@ -262,11 +262,14 @@
 }
 
 .dropdown-menu__panel {
+  position: relative;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(190px, auto);
   padding: 8px;
+  overflow: hidden;
   border: 1px solid var(--color-border);
+  border-top: 3px solid var(--green);
   border-radius: 16px;
   background: var(--color-surface);
   box-shadow: 0 20px 50px rgba(6, 20, 36, 0.22), 0 2px 8px rgba(6, 20, 36, 0.08);
@@ -296,14 +299,15 @@
 
 .dropdown-menu .nav-menu-group__label {
   padding: 6px 10px 6px;
-  color: var(--color-text-subtle);
+  color: var(--green-deep);
 }
 
 .dropdown-menu a {
+  position: relative;
   display: block;
   padding: 8px 10px;
   border-radius: 8px;
-  color: var(--ink);
+  color: var(--brand);
   font-size: 0.86rem;
   font-weight: 600;
   line-height: 1.25;
@@ -314,9 +318,33 @@
 
 .dropdown-menu a:hover,
 .dropdown-menu a:focus-visible {
-  background: var(--brand-soft);
-  color: var(--brand);
+  padding-left: 16px;
+  background: var(--green-soft);
+  color: var(--brand-deep);
   outline: none;
+}
+
+/* Barra verde que asoma a la izquierda del enlace activo por el mouse. */
+.dropdown-menu a::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 3px;
+  background: var(--green);
+  transform: translateY(-50%);
+  transition: height 0.18s ease;
+}
+
+.dropdown-menu a:hover::before,
+.dropdown-menu a:focus-visible::before {
+  height: 55%;
+}
+
+.dropdown-menu a {
+  transition: background 0.15s, color 0.15s, padding-left 0.18s ease;
 }
 
 /* ==========================================================================
@@ -480,6 +508,7 @@
   min-width: 240px;
   padding: 6px;
   border: 1px solid var(--color-border);
+  border-top: 3px solid var(--green);
   border-radius: 14px;
   background: var(--color-surface);
   box-shadow: 0 20px 50px rgba(6, 20, 36, 0.22), 0 2px 8px rgba(6, 20, 36, 0.08);
@@ -509,7 +538,7 @@
 
 .nav-user-dropdown__head strong {
   font-size: 0.9rem;
-  color: var(--ink);
+  color: var(--color-heading);
 }
 
 .nav-user-dropdown__head span {
@@ -526,7 +555,7 @@
   gap: 10px;
   padding: 9px 10px;
   border-radius: 8px;
-  color: var(--ink);
+  color: var(--brand);
   font-size: 0.86rem;
   font-weight: 600;
   text-decoration: none;
@@ -536,19 +565,15 @@
 
 .nav-user-dropdown a .icon-svg {
   font-size: 1rem;
-  color: var(--color-text-subtle);
+  color: var(--green-deep);
   transition: color 0.15s;
 }
 
 .nav-user-dropdown a:hover,
 .nav-user-dropdown a:focus-visible {
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: var(--green-soft);
+  color: var(--brand-deep);
   outline: none;
-}
-
-.nav-user-dropdown a:hover .icon-svg {
-  color: var(--brand);
 }
 
 .nav-user-dropdown a.nav-user-dropdown__salir:hover,

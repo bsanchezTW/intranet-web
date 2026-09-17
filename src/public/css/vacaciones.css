@@ -1,7 +1,6 @@
 /* ==========================================================================
    Módulo de Vacaciones — mismo sistema visual que el resto de RRHH.
-   Todo el color sale de los tokens de theme.css, así el modo oscuro funciona
-   sin hojas paralelas.
+   Todo el color sale de los tokens de theme.css.
    ========================================================================== */
 
 .vac-wrap {
@@ -11,25 +10,6 @@
   font-family: var(--font-sans, 'Instrument Sans', 'Segoe UI', system-ui, sans-serif);
   animation: fadeUp 0.45s ease both;
 }
-
-.vac-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 18px;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.vac-title {
-  color: var(--brand);
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0 0 4px;
-  letter-spacing: -0.02em;
-}
-
-.vac-subtitle { color: var(--muted); font-size: 0.9rem; margin: 0; }
 
 /* Nombre del colaborador en la tabla de gestión: es un enlace de dato, no un
    botón. Antes reusaba .vac-link-volver con un color a mano en el marcado. */
@@ -86,8 +66,6 @@
 
 .vac-stat-value.danger { color: var(--down); }
 .vac-stat-value.warn { color: #b4700a; }
-html[data-theme="dark"] .vac-stat-value.warn { color: #e0a94a; }
-
 .vac-stat-unit { color: var(--subtle); font-size: 0.75rem; font-weight: 600; }
 
 /* ==========================================================================
@@ -161,12 +139,6 @@ html[data-theme="dark"] .vac-stat-value.warn { color: #e0a94a; }
   background: hsl(var(--badge-h) var(--badge-s) 92%);
   color: hsl(var(--badge-h) var(--badge-s) 28%);
 }
-
-html[data-theme="dark"] .vac-badge {
-  background: hsl(var(--badge-h) var(--badge-s) 20%);
-  color: hsl(var(--badge-h) calc(var(--badge-s) + 18%) 78%);
-}
-
 .vac-badge-pending   { --badge-h: 45;  --badge-s: 70%; }
 .vac-badge-approved  { --badge-h: 142; --badge-s: 55%; }
 .vac-badge-rejected  { --badge-h: 0;   --badge-s: 60%; }
@@ -286,36 +258,11 @@ html[data-theme="dark"] .vac-badge {
 }
 
 .vac-btn-sm { padding: 6px 12px; font-size: 0.8rem; }
-
-html[data-theme="dark"] .vac-btn-primary,
-html[data-theme="dark"] .vac-btn-approve { color: var(--color-bg); }
-
 .vac-inline-form { display: inline; }
 
 /* ==========================================================================
    Avisos y filtros
    ========================================================================== */
-
-.vac-alert {
-  margin-bottom: 16px;
-  padding: 12px 15px;
-  border-radius: 10px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border: 1px solid transparent;
-}
-
-.vac-alert-error {
-  background: rgba(208, 92, 92, 0.1);
-  border-color: rgba(208, 92, 92, 0.3);
-  color: var(--down);
-}
-
-.vac-alert-success {
-  background: var(--green-soft);
-  border-color: rgba(92, 143, 29, 0.3);
-  color: var(--corp-green-dark);
-}
 
 .vac-alert-info {
   background: var(--brand-soft);

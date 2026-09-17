@@ -16,10 +16,13 @@
 <div class="contenedor">
 
   <div class="page-header">
-    <h2 class="page-title">Procesos y Documentos</h2>
-    <p class="page-description">
-      Rinde tus gastos, consulta la normativa de la empresa y revisa los documentos de tu área.
-    </p>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'folder' }) %></span>
+    <div class="page-header__text">
+      <h2 class="page-title">Procesos y documentos</h2>
+      <p class="page-description">
+        Rinde tus gastos, consulta la normativa de la empresa y revisa los documentos de tu área.
+      </p>
+    </div>
   </div>
 
   <% if (flashError) { %>

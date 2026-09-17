@@ -6,31 +6,6 @@
   animation: fadeUp 0.5s ease both;
 }
 
-.contenedor-personal .page-header {
-  margin-bottom: 25px;
-}
-
-.btn-agregar-persona {
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 10px 18px;
-  border-radius: 10px;
-  background: var(--ink);
-  color: var(--color-bg);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: transform 0.15s, opacity 0.2s;
-}
-
-.btn-agregar-persona:hover {
-  transform: translateY(-1px);
-  opacity: 0.9;
-}
-
 /* ── Panel contenedor de la tabla ── */
 .contenedor-personal .panel {
   background: var(--color-surface);
@@ -87,8 +62,6 @@
   border-color: var(--brand);
   color: #fff;
 }
-
-html[data-theme="dark"] .personal-chip.is-activo { color: var(--color-bg); }
 
 .personal-search {
   flex: 1 1 260px;
@@ -259,6 +232,43 @@ html[data-theme="dark"] .personal-chip.is-activo { color: var(--color-bg); }
   color: var(--color-text-muted);
 }
 
+/* Correo y teléfono: empresa arriba y personal (oculto) abajo, en la misma
+   fila. Sin etiquetas por línea: el orden y el título de la columna bastan, y
+   así la tabla no se ensancha. */
+.tabla-personal tbody td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.contacto-doble {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  line-height: 1.3;
+}
+
+.tabla-personal .col-correo .contacto-linea:first-child {
+  display: flex;
+  align-items: center;
+  max-width: 250px;
+}
+
+.tabla-personal .col-correo .contacto-linea:first-child a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabla-personal th .th-sub {
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.dato-oculto {
+  color: var(--subtle);
+  font-size: 0.8rem;
+}
+
 /* ── Avatares: tamaño; el color lo pinta .monogram (área de trabajo) ── */
 .avatar {
   width: 38px;
@@ -291,18 +301,11 @@ html[data-theme="dark"] .personal-chip.is-activo { color: var(--color-bg); }
 }
 
 /* Chips por área de trabajo (ver src/constants/workAreas.js).
-   Cada área solo declara su matiz: el fondo y el texto se derivan de él, así el
-   modo oscuro se resuelve con dos reglas en lugar de doce pares de hex. */
+   Cada área solo declara su matiz: el fondo y el texto se derivan de él. */
 .pill.pill-area,
 .pill[class*="pill-area-"] {
   background: hsl(var(--pill-h) var(--pill-s) 92%);
   color: hsl(var(--pill-h) var(--pill-s) 28%);
-}
-
-html[data-theme="dark"] .pill.pill-area,
-html[data-theme="dark"] .pill[class*="pill-area-"] {
-  background: hsl(var(--pill-h) var(--pill-s) 20%);
-  color: hsl(var(--pill-h) calc(var(--pill-s) + 18%) 78%);
 }
 
 .pill-area-informatica { --pill-h: 142; --pill-s: 55%; }
@@ -326,200 +329,100 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
 .pill-rol-deshabilitado { background: var(--surface2); color: var(--subtle); }
 
 .estado-si { color: var(--green-ink); font-size: 1rem; display: inline-flex; }
+
+/* Ticket junto al correo con que se verificó la cuenta. */
+.correo-verificado {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-left: 6px;
+  color: var(--green-ink);
+}
+
+.correo-verificado svg {
+  width: 14px;
+  height: 14px;
+}
 .estado-no { color: var(--down); font-size: 0.95rem; font-weight: 700; }
 
-/* ── Popup de notificación ── */
-.popup-notification {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 9999;
-  min-width: 260px;
-  max-width: calc(100% - 40px);
-  padding: 14px 18px;
-  border-radius: 12px;
+/* ── Modales de colaborador (alta y edición) ─────────────────────────────────
+   El cromo lo pone modal.css; aquí sólo el lateral de identidad. */
+
+.colaborador-modal {
+  height: min(90vh, 880px);
+}
+
+.colaborador-modal__body {
+  --modal-aside-width: 250px;
+}
+
+.colaborador-modal__error:empty,
+[data-colaborador-alertas]:empty {
   display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #fff;
-  font-weight: 700;
-  box-shadow: var(--shadow-lg);
 }
 
-.popup-notification.success { background: #16a34a; }
-.popup-notification.error   { background: var(--down); }
-.popup-notification.show     { display: flex; }
-.popup-notification .popup-close {
-  background: transparent;
-  border: none;
-  color: #fff;
-  font-size: 1.1rem;
-  cursor: pointer;
+.colaborador-modal > .colaborador-modal__error {
+  margin: 58px var(--modal-pad-x) 0;
 }
 
-/* ── Modal Crear colaborador ── */
-.modal-crear-colaborador .modal-content {
-  max-width: 620px;
-}
-
-.modal-crear-error {
-  display: none;
-  margin-bottom: 16px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(208, 92, 92, 0.1);
-  border: 1px solid rgba(208, 92, 92, 0.32);
-  color: var(--down);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.modal-crear-error.show { display: block; }
-
-.modal-crear-colaborador .required-mark { margin-left: 2px; }
-
-/* Debajo del título va directo la primera sección, sin descripción de por
-   medio: los 6px que trae .modal-title lo dejan pegado. */
-.modal-crear-colaborador .modal-title {
-  margin-bottom: 28px;
-}
-
-/* ── Modal Editar colaborador ── */
-.modal-editar-colaborador .modal-content,
-.modal-editar-panel {
-  max-width: var(--layout-content-max-width, 1200px);
-  width: min(1200px, 100%);
-  max-height: min(90vh, 900px);
-  padding: 0;
-  overflow: hidden;
-}
-
-.modal-editar-layout {
-  display: flex;
-  align-items: stretch;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  max-height: min(90vh, 900px);
-}
-
-.modal-editar-aside {
-  box-sizing: border-box;
-  flex: 0 0 240px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 28px 20px;
-  border-right: 1px solid var(--color-border);
-  background: linear-gradient(160deg, var(--brand-soft), transparent);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Quién se está editando, para no perderlo de vista al bajar por el formulario. */
-.modal-editar-identidad {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+.colaborador-aside {
+  justify-items: center;
+  align-content: start;
+  gap: 16px;
+  padding-top: 26px;
   text-align: center;
+}
+
+.colaborador-aside__foto {
+  margin: 0;
+}
+
+.colaborador-aside__foto .profile-photo-preview {
+  width: 116px;
+  height: 116px;
+}
+
+.colaborador-aside__avatar {
+  width: 116px;
+  height: 116px;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  box-shadow: 0 0 0 3px var(--color-border);
+}
+
+.colaborador-aside__avatar .icon-svg {
+  font-size: 2.4rem;
+  opacity: 0.9;
+}
+
+.colaborador-aside__identidad {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
   min-width: 0;
   width: 100%;
 }
 
-.modal-editar-nombre {
+.colaborador-aside__nombre {
   margin: 0;
   font-size: 1rem;
   font-weight: 800;
-  color: var(--color-heading);
   line-height: 1.3;
-}
-
-.modal-editar-correo {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
+  color: var(--color-heading);
   overflow-wrap: anywhere;
 }
 
-.modal-editar-main {
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  scrollbar-gutter: stable both-edges;
-  padding: 24px 28px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  max-height: none;
-}
-
-.modal-editar-colaborador .modal-editar-title {
-  color: var(--color-heading);
-  font-size: 1.25rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  margin: 0 0 28px;
-}
-
-.modal-loading {
-  text-align: center;
-  padding: 48px 24px;
-  color: var(--muted);
-  font-size: 0.95rem;
+.colaborador-aside__dato {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
 }
 
 /* El teléfono es prefijo + input: se estiran juntos dentro del campo. */
-.modal-editar-colaborador .campo-form .phone-field__prefix,
-.modal-crear-colaborador .campo-form .phone-field__prefix {
+.colaborador-modal .campo-form .phone-field__prefix {
   border-right: none;
-}
-
-.modal-editar-colaborador .btn-photo-remove {
-  border: none;
-  background: transparent;
-  color: var(--down);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-.modal-editar-colaborador .zona-peligro {
-  margin-top: 28px;
-  padding-top: 22px;
-  border-top: 1px solid rgba(208, 92, 92, 0.3);
-}
-.modal-editar-colaborador .zona-peligro__title {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 0 8px;
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: var(--down);
-}
-.modal-editar-colaborador .zona-peligro p {
-  margin: 0 0 12px;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-.modal-editar-colaborador .btn-eliminar {
-  width: 100%;
-  padding: 11px 16px;
-  border: 1px solid rgba(208, 92, 92, 0.42);
-  border-radius: 8px;
-  background: rgba(208, 92, 92, 0.1);
-  color: var(--down);
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.modal-editar-colaborador .btn-eliminar:hover {
-  background: rgba(208, 92, 92, 0.18);
-  border-color: var(--down);
+  font-size: 0.9rem;
 }
 
 /* ==========================================================================
@@ -565,27 +468,8 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   }
   .personal-chips::-webkit-scrollbar { display: none; }
 
-  .btn-agregar-persona { flex: 1; justify-content: center; }
-
-  .modal-editar-layout {
-    flex-direction: column;
-    max-height: none;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .modal-editar-aside {
-    flex: none;
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .modal-editar-main {
-    max-height: none;
-    padding: 20px 16px;
-  }
-  .modal-editar-colaborador .modal-content,
-  .modal-editar-panel {
-    max-height: none;
+  .colaborador-modal {
+    height: 100%;
   }
 }
 
@@ -602,10 +486,6 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--color-text-muted);
-}
-
-.modal-overlay .campo-form__label {
-  color: var(--modal-label, var(--color-text-muted));
 }
 
 .centros-picker {
@@ -627,9 +507,9 @@ html[data-theme="dark"] .pill[class*="pill-area-"] {
   gap: 10px;
   min-width: 0;
   padding: 9px 12px;
-  border: 1px solid var(--modal-border, var(--color-border-strong));
+  border: 1px solid var(--color-border-strong);
   border-radius: 10px;
-  background: var(--modal-input-bg, var(--color-input-bg));
+  background: var(--color-input-bg);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }

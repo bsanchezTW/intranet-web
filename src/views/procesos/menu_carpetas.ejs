@@ -6,19 +6,20 @@
 
 <div class="contenedor">
 
-  <nav class="procesos-migas" aria-label="Ruta de navegación">
-    <a href="/procesos">Procesos y Documentos</a>
-    <span aria-hidden="true">/</span>
-    <span><%= titulo %></span>
-  </nav>
-
   <div class="page-header">
-    <h2 class="page-title"><%= titulo %></h2>
-    <p class="page-description">
-      <%= listado.length %> <%= listado.length === 1 ? 'área' : 'áreas' %> ·
-      <%= conDocumentos %> <%= conDocumentos === 1 ? 'documento' : 'documentos' %>.
-      Cada área tiene su propia carpeta; se crea y se elimina junto con el área.
-    </p>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'layers' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <span><%= titulo %></span>
+      </nav>
+      <h2 class="page-title"><%= titulo %></h2>
+      <p class="page-description">
+        <%= listado.length %> <%= listado.length === 1 ? 'área' : 'áreas' %> ·
+        <%= conDocumentos %> <%= conDocumentos === 1 ? 'documento' : 'documentos' %>.
+        Cada área tiene su propia carpeta; se crea y se elimina junto con el área.
+      </p>
+    </div>
   </div>
 
   <% if (!listado.length) { %>

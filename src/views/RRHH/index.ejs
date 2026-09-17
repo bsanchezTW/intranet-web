@@ -53,14 +53,17 @@ const EXTERNOS = hayPortales
   : [];
 %>
 
-<link rel="stylesheet" href="/css/procesos.css?v=20260915a">
+<link rel="stylesheet" href="/css/procesos.css?v=20260916m">
 
 <div class="contenedor">
   <div class="page-header">
-    <h2 class="page-title">Recursos Humanos</h2>
-    <p class="page-description">
-      Accede a las herramientas internas<% if (EXTERNOS.length) { %> y portales externos<% } %> de gestión.
-    </p>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'users' }) %></span>
+    <div class="page-header__text">
+      <h2 class="page-title">Recursos humanos</h2>
+      <p class="page-description">
+        Accede a las herramientas internas<% if (EXTERNOS.length) { %> y portales externos<% } %> de gestión.
+      </p>
+    </div>
   </div>
 
   <!-- ═══════════ Plataformas internas ═══════════ -->

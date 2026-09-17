@@ -1,55 +1,27 @@
-<style>
-  .grid-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; }
-
-  .boton-opcion {
-    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 30px 25px;
-    text-decoration: none; display: flex; flex-direction: column; align-items: flex-start;
-    transition: all 0.3s ease; box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-    color: #003a70; font-size: 1.25rem; font-weight: 800;
-  }
-  
-  .boton-opcion:hover {
-    transform: translateY(-5px); box-shadow: 0 12px 20px rgba(0,0,0,0.08); border-color: #cbd5e0; background: #f8fafc;
-  }
-  
-  .boton-opcion span { color: #718096; font-size: 0.95rem; font-weight: 400; margin-top: 8px; line-height: 1.5; }
-  
-  .boton-opcion::before {
-    content: "";
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23003a70' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z'/%3E%3Cline x1='14' y1='5' x2='14' y2='19' stroke-dasharray='2 3'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 26px 26px;
-    margin-bottom: 15px; 
-    background: #eef4ff; 
-    width: 55px; 
-    height: 55px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    border-radius: 14px; 
-    border: 1px solid #d1e0ff; 
-  }
-</style>
+<link rel="stylesheet" href="/css/procesos.css?v=20260916m">
 
 <div class="contenedor">
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'monitor' }) %></span>
     <div class="page-header__text">
-      <h2 class="page-title">Sistemas y Herramientas</h2>
-      <p class="page-description">Accesos rápidos a los sistemas principales:</p>
+      <h2 class="page-title">Sistemas y herramientas</h2>
+      <p class="page-description">Accesos rápidos a los sistemas principales.</p>
     </div>
 
     <div class="page-header-actions">
       <a href="#" role="button" class="page-header-btn js-open-ticket-modal">
-        <span aria-hidden="true">+</span> Abrir Nuevo Ticket
+        <%- include('../partials/icon', { name: 'plus' }) %> Abrir ticket
       </a>
     </div>
   </div>
 
-  <div class="grid-opciones">
-    <a class="boton-opcion" href="/sistemas/tickets">
-      Soporte
-      <span>Herramientas de autoayuda y seguimiento de tickets de soporte interno.</span>
+  <div class="procesos-grid">
+    <a href="/sistemas/tickets" class="procesos-card">
+      <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'ticket' }) %></span>
+      <div class="procesos-card__cuerpo">
+        <h4 class="procesos-card__titulo">Soporte</h4>
+        <p class="procesos-card__desc">Herramientas de autoayuda y seguimiento de tickets de soporte interno.</p>
+      </div>
     </a>
   </div>
 </div>

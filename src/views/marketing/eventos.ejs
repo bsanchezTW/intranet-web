@@ -10,7 +10,8 @@ const formatoFecha = (valor) => {
 };
 %>
 <div class="contenedor galeria">
-  <div class="page-header page-header--toolbar">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'camera' }) %></span>
     <div class="page-header__text">
       <h2 class="page-title">Galería</h2>
       <p class="page-description">Revive los eventos de Transworld: fotos y videos de cada celebración.</p>
@@ -19,7 +20,7 @@ const formatoFecha = (valor) => {
     <% if (can.eventos_write) { %>
     <div class="page-header-actions">
       <button type="button" class="page-header-btn" data-abrir-modal-evento>
-        <span aria-hidden="true">+</span> Nuevo evento
+        <%- include('../partials/icon', { name: 'plus' }) %> Nuevo evento
       </button>
     </div>
     <% } %>

@@ -1329,38 +1329,6 @@
 .media-bloque[id] { scroll-margin-top: 96px; }
 
 /* ==========================================================================
-   9. Botón de publicación (misma ubicación/estilo que Apps)
-   ========================================================================== */
-
-.noticias-add-btn {
-  background: var(--ink);
-  color: var(--color-bg);
-  border: none;
-  font-family: var(--font-sans, 'Instrument Sans', 'Segoe UI', system-ui, sans-serif);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: normal;
-  line-height: 1.2;
-  padding: 10px 18px;
-  border-radius: 10px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: transform 0.15s, opacity 0.2s;
-}
-
-.noticias-add-btn:hover {
-  transform: translateY(-1px);
-  opacity: 0.9;
-}
-
-.noticias-add-btn:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 3px;
-}
-
-/* ==========================================================================
    10. Avisos
    ========================================================================== */
 
@@ -1433,10 +1401,6 @@
   .noticias { padding-bottom: 40px; }
   .noticias__grid { grid-template-columns: 1fr; gap: 18px; }
   .noticias__header { margin-bottom: 24px; }
-  .noticias-add-btn {
-    width: 100%;
-    justify-content: center;
-  }
 
   /* Los chips scrollean en horizontal dentro de su propia caja, nunca la página. */
   .nt-toolbar { gap: 10px; }
@@ -1970,13 +1934,11 @@
   .noticias .home-featured,
   .galeria__item img,
   .noticia-card__media img,
-  .noticias-add-btn,
   .btn-nt {
     transition: none;
   }
   .noticia-card:hover,
   .noticias .home-featured:hover,
-  .noticias-add-btn:hover,
   .btn-nt:hover { transform: none; }
   .noticia-card:hover .noticia-card__media img {
     transform: scale(1.08);
