@@ -64,7 +64,7 @@
 
 .nt-buscador input::placeholder { color: var(--subtle); }
 
-/* Cruz nativa del input[type=search]: en oscuro queda invisible */
+/* Cruz nativa del input[type=search] */
 .nt-buscador input::-webkit-search-cancel-button { filter: grayscale(1) opacity(0.6); }
 
 .nt-chips {
@@ -98,9 +98,6 @@
   border-color: var(--brand);
   color: #fff;
 }
-
-html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
-
 .nt-chip .icon-svg { font-size: 0.9em; opacity: 0.8; }
 
 /* El filtrado usa [hidden]; sin esto, display:grid/flex le gana al atributo. */
@@ -639,9 +636,6 @@ html[data-theme="dark"] .nt-chip.is-activo { color: var(--color-bg); }
   box-shadow: var(--shadow-card);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
-html[data-theme="dark"] .doc { --doc-stage: #060f1b; }
-
 .doc:hover { border-color: var(--border2); box-shadow: var(--shadow-card-lg); }
 
 .doc__head {
@@ -1272,11 +1266,6 @@ html[data-theme="dark"] .doc { --doc-stage: #060f1b; }
 .doc-mini__ext--word { background: rgba(29, 95, 168, 0.12); color: #1d5fa8; }
 .doc-mini__ext--image { background: var(--green-soft); color: var(--green-ink); }
 .doc-mini__ext--video { background: rgba(124, 58, 237, 0.12); color: #7c3aed; }
-
-html[data-theme="dark"] .doc-mini__ext--pdf { color: #e88b80; }
-html[data-theme="dark"] .doc-mini__ext--word { color: #7ab3ee; }
-html[data-theme="dark"] .doc-mini__ext--video { color: #b79bf5; }
-
 .doc-mini__texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
 .doc-mini__nombre {
@@ -1496,40 +1485,17 @@ html[data-theme="dark"] .doc-mini__ext--video { color: #b79bf5; }
   .articulo__admin-acciones > * { flex: 1 1 100%; }
   .articulo__admin-acciones .btn-nt { width: 100%; justify-content: center; }
 }
-
-/* ==========================================================================
-   12. Ajustes de tema oscuro
-   Los tokens cubren casi todo; aquí solo lo que necesita matiz propio.
-   ========================================================================== */
-
-/* El lienzo del visor ya cambia por tema con --doc-stage; aquí solo la sombra,
-   que en oscuro necesita más peso para que la hoja blanca no flote plana. */
-html[data-theme="dark"] .pdf-pagina { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 16px 40px rgba(0, 0, 0, 0.55); }
-html[data-theme="dark"] .noticia-chip--pdf { color: #e88b80; }
-html[data-theme="dark"] .noticia-chip--word { color: #7ab3ee; }
-html[data-theme="dark"] .doc__icono--pdf { color: #e88b80; border-color: rgba(232, 139, 128, 0.3); }
-html[data-theme="dark"] .doc__icono--word { color: #7ab3ee; border-color: rgba(122, 179, 238, 0.3); }
-html[data-theme="dark"] .btn-nt--peligro,
-html[data-theme="dark"] .btn-nt--peligro:hover { color: #e88b80; border-color: rgba(232, 139, 128, 0.5); }
-html[data-theme="dark"] .nt-aviso--error { color: #e88b80; }
-html[data-theme="dark"] .galeria__mas { background: rgba(4, 12, 22, 0.7); }
-
-/* El Word llega con estilos propios del documento (colores de texto fijos);
-   en oscuro se fuerza el color heredado para no perder contraste. */
-html[data-theme="dark"] .doc-word [style*="color"] { color: inherit !important; }
-html[data-theme="dark"] .doc-word [style*="background"] { background: transparent !important; }
-
 /* ==========================================================================
    13. Impresión — el botón "Imprimir" del artículo debe dar un PDF legible
    ========================================================================== */
 
 @media print {
   /* Esta hoja solo se sirve en /noticias, así que puede ocultar el marco. */
-  header,
-  footer,
+  .topbar,
+  .site-footer,
   .mobile-sidebar,
   .mobile-overlay,
-  #toast-container { display: none !important; }
+  .toast-stack { display: none !important; }
 
   .contenedor-principal { max-width: none; padding: 0; }
 
@@ -1592,37 +1558,10 @@ html[data-theme="dark"] .doc-word [style*="background"] { background: transparen
    13. Modal de destinatarios del correo
    ========================================================================== */
 
-.modal-content--correo {
-  max-width: 580px;
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-height: min(90vh, 820px);
-}
-
-.correo-head {
-  padding: 22px 26px 16px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-}
-
-.correo-body { padding: 18px 26px; overflow-y: auto; flex: 1; min-height: 0; }
-
-.correo-foot {
-  padding: 16px 26px 20px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.correo-foot .btn-nt,
-.correo-foot .btn-primario,
-.correo-foot .btn-secundario {
-  flex: 1;
-  justify-content: center;
+/* El cromo (cabecera, pie, botones) sale de modal.css. Los bloques de la
+   lista traen sus propios márgenes. */
+.correo-body {
+  display: block;
 }
 
 .correo-todos {
@@ -1777,37 +1716,12 @@ html[data-theme="dark"] .doc-word [style*="background"] { background: transparen
 
 /* Ocupa casi toda la ventana: escribir una noticia en un cuadro pequeño es
    incómodo, y la columna de texto necesita el ancho. */
-.editor-modal {
-  max-width: 1320px;
-  width: min(1320px, 96vw);
-  height: min(94vh, 960px);
-  max-height: min(94vh, 960px);
-  padding: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.editor__head {
-  padding: 22px 28px 18px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-}
+/* El panel, la cabecera y el pie salen de modal.css (.modal-content--full,
+   .modal-body--split-end). Aquí sólo lo propio del editor. */
 
 /* La columna de escritura manda; la lateral es de ancho fijo. */
 .editor__cuerpo {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 0;
-  overflow: hidden;
-  flex: 1;
-  min-height: 0;
-}
-
-.editor__col {
-  padding: 24px 28px;
-  overflow-y: auto;
-  min-height: 0;
+  --modal-aside-width: 360px;
 }
 
 /* La columna principal es flex para que el editor de texto absorba el alto
@@ -1815,8 +1729,16 @@ html[data-theme="dark"] .doc-word [style*="background"] { background: transparen
 .editor__col--principal {
   display: flex;
   flex-direction: column;
+  gap: 0;
   overflow: hidden;
-  padding-bottom: 24px;
+}
+
+.editor__col--lateral {
+  display: block;
+}
+
+.editor__portada-btn {
+  width: 100%;
 }
 
 .editor__campo--contenido {
@@ -1832,11 +1754,6 @@ html[data-theme="dark"] .doc-word [style*="background"] { background: transparen
   min-height: 260px;
   border-radius: 9px !important;
   border-color: var(--color-border-strong) !important;
-}
-
-.editor__col--lateral {
-  border-left: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
 }
 
 .editor__campo { margin-bottom: 20px; }
@@ -2036,51 +1953,18 @@ html[data-theme="dark"] .doc-word [style*="background"] { background: transparen
 
 /* --- Pie del editor --- */
 
-.editor__foot {
-  padding: 16px 28px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.editor__estado { flex: 1; font-size: 0.84rem; color: var(--color-text-muted); min-width: 0; }
+.editor__estado { margin: 0; font-size: 0.84rem; color: var(--color-text-muted); }
 .editor__estado.is-error { color: #b4453a; font-weight: 600; }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .editor-modal {
     height: 100%;
-    max-height: none;
   }
-  .editor__cuerpo {
-    grid-template-columns: 1fr;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    flex: 1;
-    min-height: 0;
-  }
-  .editor__col { overflow: visible; }
   .editor__col--principal {
     overflow: visible;
     min-height: 420px;
   }
-  .editor__col--lateral { border-left: 0; border-top: 1px solid var(--color-border); }
-  .editor__foot {
-    flex-wrap: wrap;
-    padding: 14px 16px;
-    flex-shrink: 0;
-  }
-  .editor__estado { flex-basis: 100%; }
-  .editor__foot .btn-nt,
-  .editor__foot .btn-primario,
-  .editor__foot .btn-secundario { flex: 1; justify-content: center; min-width: 0; }
 }
-
-html[data-theme="dark"] .adj.is-error { background: rgba(232, 139, 128, 0.08); border-color: rgba(232, 139, 128, 0.5); }
-html[data-theme="dark"] .adj__meta--error,
-html[data-theme="dark"] .editor__estado.is-error { color: #e88b80; }
-
 @media (prefers-reduced-motion: reduce) {
   .noticia-card,
   .noticias .home-featured,

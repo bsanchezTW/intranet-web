@@ -1,0 +1,146 @@
+<%
+/* Barra superior y menú lateral móvil. Estilos en /css/shell.css.
+   Parámetros: currentUser, displayName, monogram. */
+const navLinks = [
+  { href: '/noticias', label: 'Noticias', icon: 'news' },
+  { href: '/procesos', label: 'Procesos y documentos', icon: 'folder', menu: 'procesos' },
+  { href: '/RRHH', label: 'RRHH', icon: 'users', menu: 'rrhh' },
+  { href: '/marketing/eventos', label: 'Galería', icon: 'camera' },
+  { href: '/apps', label: 'Apps', icon: 'grid' },
+];
+if (features.supportTickets) {
+  navLinks.push({ href: '/sistemas/tickets', label: 'Soporte', icon: 'headset', notif: true });
+}
+const correoUsuario = currentUser && currentUser.email ? currentUser.email : '';
+const fotoUsuario = currentUser ? (currentUser.photo || currentUser.foto) : null;
+const menuNav = (clave) => clave === 'procesos'
+  ? include('nav-procesos', { currentUser })
+  : include('nav-rrhh');
+%>
+
+<div class="mobile-overlay" id="mobile-overlay" hidden></div>
+<nav class="mobile-sidebar" id="mobile-sidebar" aria-label="Menú principal" aria-hidden="true">
+  <div class="mobile-sidebar__head">
+    <a href="/" class="mobile-sidebar__logo" title="Ir al inicio">
+      <img src="<%= countryConfig.brand.navbarLogo %>" alt="Transworld">
+    </a>
+    <button type="button" class="topbar__icon-btn" id="close-menu" aria-label="Cerrar menú">
+      <%- include('icon', { name: 'x' }) %>
+    </button>
+  </div>
+
+  <div class="mobile-sidebar__body">
+    <a href="/" class="mobile-sidebar__link" data-nav-href="/">
+      <span class="mobile-sidebar__icon"><%- include('icon', { name: 'home' }) %></span> Inicio
+    </a>
+    <% navLinks.forEach(function (link) { %>
+      <% if (link.menu) { %>
+        <button type="button" class="mobile-sidebar__link submenu-toggle" aria-expanded="false" data-nav-href="<%= link.href %>">
+          <span class="mobile-sidebar__icon"><%- include('icon', { name: link.icon }) %></span>
+          <%= link.label %>
+          <span class="mobile-sidebar__chevron"><%- include('icon', { name: 'chevron-down' }) %></span>
+        </button>
+        <div class="sub-menu">
+          <div class="sub-menu__inner">
+            <a href="<%= link.href %>" class="sub-menu__portada">Ir a <%= link.label %></a>
+            <%- menuNav(link.menu) %>
+          </div>
+        </div>
+      <% } else { %>
+        <a href="<%= link.href %>" class="mobile-sidebar__link<%= link.notif ? ' ticket-notif-target' : '' %>" data-nav-href="<%= link.href %>">
+          <span class="mobile-sidebar__icon"><%- include('icon', { name: link.icon }) %></span> <%= link.label %>
+        </a>
+      <% } %>
+    <% }) %>
+
+    <div class="mobile-sidebar__social">
+      <%- include('social-links') %>
+    </div>
+  </div>
+
+  <% if (currentUser) { %>
+    <div class="mobile-sidebar__footer">
+      <a href="/perfil" class="mobile-sidebar__profile">
+        <% if (fotoUsuario) { %>
+          <img src="<%= fotoUsuario %>" alt="" class="nav-user-photo">
+        <% } else { %>
+          <span class="nav-user-avatar monogram" style="<%= monogram.style %>"><%= monogram.initials %></span>
+        <% } %>
+        <span class="mobile-sidebar__profile-text">
+          <strong><%= displayName %></strong>
+          <span>Ver mi perfil</span>
+        </span>
+      </a>
+      <a href="/logout" class="mobile-sidebar__logout" aria-label="Cerrar sesión" title="Cerrar sesión">
+        <%- include('icon', { name: 'log-out' }) %>
+      </a>
+    </div>
+  <% } %>
+</nav>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <div class="header-left">
+      <button type="button" class="topbar__icon-btn menu-toggle" id="menu-toggle"
+              aria-label="Abrir menú" aria-controls="mobile-sidebar" aria-expanded="false">
+        <%- include('icon', { name: 'menu' }) %>
+      </button>
+      <a href="/" class="topbar__logo" title="Ir al inicio">
+        <img src="<%= countryConfig.brand.navbarLogo %>" alt="Transworld" class="logo-tw">
+      </a>
+    </div>
+
+    <nav class="main-nav" aria-label="Principal">
+      <% navLinks.forEach(function (link) { %>
+        <div class="nav-item<%= link.menu ? ' nav-item--menu' : '' %>">
+          <a href="<%= link.href %>" class="nav-link<%= link.notif ? ' ticket-notif-target' : '' %>"
+             <% if (link.menu) { %>aria-haspopup="true"<% } %>>
+            <%= link.label %>
+            <% if (link.menu) { %><span class="nav-link__chevron"><%- include('icon', { name: 'chevron-down' }) %></span><% } %>
+          </a>
+          <% if (link.menu) { %>
+            <div class="dropdown-menu dropdown-menu--grouped">
+              <div class="dropdown-menu__panel">
+                <%- menuNav(link.menu) %>
+              </div>
+            </div>
+          <% } %>
+        </div>
+      <% }) %>
+    </nav>
+
+    <div class="header-right">
+      <% if (features.supportTickets) { %>
+      <a href="#" role="button" class="btn-ticket-nav js-open-ticket-modal" title="Abrir un ticket de soporte">
+        <%- include('icon', { name: 'plus' }) %><span>Abrir ticket</span>
+      </a>
+      <% } %>
+
+      <div class="social-nav">
+        <%- include('social-links') %>
+      </div>
+
+      <% if (currentUser) { %>
+        <div class="nav-user nav-user-menu">
+          <button type="button" class="nav-user-trigger" aria-expanded="false" aria-haspopup="true"
+                  aria-label="Abrir menú de usuario">
+            <% if (fotoUsuario) { %>
+              <img src="<%= fotoUsuario %>" alt="" class="nav-user-photo">
+            <% } else { %>
+              <span class="nav-user-avatar monogram" style="<%= monogram.style %>"><%= monogram.initials %></span>
+            <% } %>
+            <span class="nav-user-trigger__chevron"><%- include('icon', { name: 'chevron-down' }) %></span>
+          </button>
+          <div class="nav-user-dropdown" role="menu">
+            <div class="nav-user-dropdown__head">
+              <strong><%= displayName %></strong>
+              <% if (correoUsuario) { %><span><%= correoUsuario %></span><% } %>
+            </div>
+            <a href="/perfil" role="menuitem"><%- include('icon', { name: 'user' }) %> Mi perfil</a>
+            <a href="/logout" role="menuitem" class="nav-user-dropdown__salir"><%- include('icon', { name: 'log-out' }) %> Cerrar sesión</a>
+          </div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</header>

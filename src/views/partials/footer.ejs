@@ -1,0 +1,66 @@
+<%
+/* Pie del sitio. Estilos en /css/shell.css. Parámetros: currentUser. */
+const anioActual = new Date().getFullYear();
+%>
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <div class="site-footer__top">
+      <div class="site-footer__brand">
+        <a href="/" class="site-footer__logo" title="Ir al inicio">
+          <img src="<%= countryConfig.brand.navbarLogo %>" alt="Transworld">
+        </a>
+        <p class="site-footer__tagline">
+          La intranet de Transworld <%= countryConfig.name %>: noticias, procesos, personas y soporte en un solo lugar.
+        </p>
+        <div class="site-footer__social">
+          <%- include('social-links') %>
+        </div>
+      </div>
+
+      <div class="site-footer__cols">
+        <div class="footer-col">
+          <h2 class="footer-col__title">Procesos y documentos</h2>
+          <%- include('nav-procesos', { currentUser }) %>
+        </div>
+
+        <div class="footer-col">
+          <h2 class="footer-col__title">Empresa</h2>
+          <a href="<%= countryConfig.corporateSite %>nosotros/" target="_blank" rel="noopener noreferrer">Nosotros</a>
+          <a href="/noticias">Noticias internas</a>
+          <a href="/marketing/eventos">Galería de eventos</a>
+          <a href="/RRHH/organigrama">Organigrama</a>
+        </div>
+
+        <div class="footer-col">
+          <h2 class="footer-col__title">Ayuda</h2>
+          <% if (features.supportTickets) { %>
+          <a href="/sistemas/tickets">Soporte</a>
+          <% } %>
+          <a href="/apps">Aplicaciones</a>
+          <% if (currentUser) { %>
+          <a href="/perfil">Mi perfil</a>
+          <% } %>
+        </div>
+
+        <div class="footer-col">
+          <h2 class="footer-col__title">Links externos</h2>
+          <% if (features.chileHrPortals) { %>
+          <a href="https://transworld.mirexmas.com/" target="_blank" rel="noopener noreferrer">Rex+</a>
+          <a href="https://www.achs.cl/" target="_blank" rel="noopener noreferrer">ACHS</a>
+          <a href="https://www.cajalosandes.cl/" target="_blank" rel="noopener noreferrer">Caja los Andes</a>
+          <a href="https://clientes.bciseguros.cl/HomePrivado/LinkLogin" target="_blank" rel="noopener noreferrer">BCI Seguros</a>
+          <% } %>
+          <a href="https://login.salesforce.com/" target="_blank" rel="noopener noreferrer">Salesforce</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="site-footer__bottom">
+      <span>© <%= anioActual %> Transworld · Intranet <%= countryConfig.name %></span>
+      <a href="<%= countryConfig.corporateSite %>" target="_blank" rel="noopener noreferrer">
+        <%= countryConfig.corporateSite.replace(/^https?:\/\//, '').replace(/\/$/, '') %>
+        <%- include('icon', { name: 'external-link' }) %>
+      </a>
+    </div>
+  </div>
+</footer>

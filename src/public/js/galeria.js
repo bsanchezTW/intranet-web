@@ -10,16 +10,8 @@
      Utilidades
      ====================================================================== */
 
-  function aviso(mensaje) {
-    var contenedor = document.getElementById("toast-container");
-    var texto = document.getElementById("toast-message");
-    if (!contenedor || !texto) return;
-    texto.textContent = mensaje;
-    contenedor.classList.add("is-visible");
-    clearTimeout(aviso.timer);
-    aviso.timer = setTimeout(function () {
-      contenedor.classList.remove("is-visible");
-    }, 3500);
+  function aviso(mensaje, tono) {
+    if (global.IntranetToast) global.IntranetToast.show(mensaje, { tone: tono });
   }
 
   function alertar(titulo, mensaje) {

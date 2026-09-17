@@ -5,19 +5,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= formatPageTitle(titulo) %></title>
-    <link rel="stylesheet" href="/css/intranet.css?v=20260914a">
-    <link rel="stylesheet" href="/css/modal.css?v=20260911b">
+    <link rel="stylesheet" href="/css/intranet.css?v=20260917b">
+    <link rel="stylesheet" href="/css/shell.css?v=20260917a">
+    <link rel="stylesheet" href="/css/modal.css?v=20260917a">
     <% if (features.supportTickets) { %>
-    <link rel="stylesheet" href="/css/ticket-modal.css?v=20260916d">
+    <link rel="stylesheet" href="/css/ticket-modal.css?v=20260916m">
     <% } %>
     <% if (typeof extraCss !== 'undefined' && Array.isArray(extraCss)) { %>
       <% extraCss.forEach((href) => { %>
         <link rel="stylesheet" href="<%= href %>">
       <% }) %>
     <% } %>
-    <link rel="stylesheet" href="/css/home.css?v=20260911a">
+    <link rel="stylesheet" href="/css/home.css?v=20260916m">
     <% if (typeof usuario !== 'undefined' && usuario && features.claudeAssistant) { %>
-    <link rel="stylesheet" href="/css/claude-assistant.css?v=20260916d">
+    <link rel="stylesheet" href="/css/claude-assistant.css?v=20260916g">
     <% } %>
     <script>
       // Sin defer y en el head: la clase se pone en cuanto el documento está
@@ -40,29 +41,19 @@
       })();
     </script>
     <noscript><style>.cargando-pagina { display: none; }</style></noscript>
-    <script src="/js/modal.js?v=20260911b" defer></script>
+    <script src="/js/modal.js?v=20260916m" defer></script>
+    <script src="/js/toast.js?v=20260917a" defer></script>
     <% if (features.supportTickets) { %>
     <script src="/js/ticket-create-form.js?v=20260916d" defer></script>
-    <script src="/js/ticket-detail.js" defer></script>
+    <script src="/js/ticket-detail.js?v=20260916m" defer></script>
     <% } %>
 </head>
 
 <body>
 
-  <div class="app-backdrop" aria-hidden="true">
-    <img src="/img/guirnaldas_laterales.png" alt="" class="festive-garlands festive-garlands--laterales" draggable="false">
-  </div>
-
   <div class="cargando-pagina" role="status">
     <span class="cargando-pagina__spinner" aria-hidden="true"></span>
     <span class="sr-only">Cargando…</span>
-  </div>
-
-  <div id="toast-container">
-    <div class="toast-success">
-      <span>✓</span>
-      <span id="toast-message">Operación exitosa</span>
-    </div>
   </div>
 
   <% 
@@ -78,129 +69,7 @@
     const monogram = currentUser ? getMonogram(currentUser) : null;
   %>
 
-<div class="mobile-overlay" id="mobile-overlay"></div>
-<nav class="mobile-sidebar" id="mobile-sidebar">
-  <span class="close-btn" id="close-menu">&times;</span>
-
-  <div class="mobile-sidebar__body">
-  <a href="/">INICIO</a>
-
-  <a href="/noticias">NOTICIAS</a>
-  
-  <a href="#" class="submenu-toggle">PROCESOS Y DOCUMENTOS <span class="arrow">▾</span></a>
-  <div class="sub-menu">
-    <%- include('partials/nav-procesos', { currentUser: currentUser }) %>
-  </div>
-
-  <a href="#" class="submenu-toggle">RRHH <span class="arrow">▾</span></a>
-  <div class="sub-menu">
-    <%- include('partials/nav-rrhh') %>
-  </div>
-
-  <a href="/marketing/eventos">GALERÍA</a>
-
-  <a href="/apps">APLICACIONES</a>
-  <% if (features.supportTickets) { %>
-  <a href="/sistemas/tickets" class="ticket-notif-target">SOPORTE</a>
-  <% } %>
-  </div>
-
-  <% if (currentUser) { %>
-    <div class="mobile-sidebar__footer">
-      <a href="/perfil" class="mobile-sidebar__profile">
-        <% if (currentUser.photo || currentUser.foto) { %>
-          <img src="<%= currentUser.photo || currentUser.foto %>" alt="Foto de perfil" class="nav-user-photo">
-        <% } else { %>
-          <div class="nav-user-avatar monogram" style="<%= monogram.style %>"><%= monogram.initials %></div>
-        <% } %>
-        <span>Mi perfil</span>
-      </a>
-      <a href="/logout" class="mobile-sidebar__logout">Cerrar sesión</a>
-    </div>
-  <% } %>
-</nav>
-
-<header>
-  <div class="header-inner">
-    
-    <div class="header-left">
-      <button class="menu-toggle" id="menu-toggle">☰</button>
-      
-      <div class="logo-container">
-        <a href="/" title="Ir al Inicio">
-          <img src="/img/logotw_blue.png" alt="Transworld" class="logo-tw logo-tw--light">
-          <img src="/img/logotw_white18.png" alt="Transworld" class="logo-tw logo-tw--dark">
-        </a>
-      </div>
-    </div>
-
-    <nav class="main-nav">      
-      <div class="nav-item"><a href="/noticias">NOTICIAS</a></div>
-      <div class="nav-item">
-        <a href="/procesos">PROCESOS Y DOCUMENTOS</a>
-        <div class="dropdown-menu dropdown-menu--grouped">
-          <%- include('partials/nav-procesos', { currentUser: currentUser }) %>
-        </div>
-      </div>
-      <div class="nav-item">
-        <a href="/RRHH">RRHH</a>
-        <div class="dropdown-menu dropdown-menu--grouped">
-          <%- include('partials/nav-rrhh') %>
-        </div>
-      </div>
-      <div class="nav-item"><a href="/marketing/eventos">GALERÍA</a></div>
-      <div class="nav-item"><a href="/apps">APPS</a></div>
-      <% if (features.supportTickets) { %>
-      <div class="nav-item"><a href="/sistemas/tickets" class="ticket-notif-target">SOPORTE</a></div>
-      <% } %>
-
-    </nav>
-    
-    <div class="header-right">
-      <% if (features.supportTickets) { %>
-      <a href="#" role="button" class="btn-ticket-nav js-open-ticket-modal" title="Abrir nuevo ticket de soporte">Abrir Ticket</a>
-      <% } %>
-
-      <div class="social-nav">
-        <% if (features.linkedinFeed) { %>
-        <a href="https://www.linkedin.com/company/transworldpowerandtelecom" target="_blank" title="LinkedIn">
-           <svg class="social-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="4" fill="#0077B5"/>
-            <path d="M12.5 30H8.5V16H12.5V30ZM10.5 14.4C9.2 14.4 8.2 13.4 8.2 12.2C8.2 11 9.2 10 10.5 10C11.8 10 12.8 11 12.8 12.2C12.8 13.4 11.8 14.4 10.5 14.4ZM31.5 30H27.5V22.8C27.5 21 26.8 19.8 25.2 19.8C24 19.8 23.3 20.6 23 21.4C22.9 21.7 22.9 22.1 22.9 22.5V30H18.9C18.9 30 19 17.1 18.9 16H22.9V18.2C23.4 17.3 24.6 16 26.8 16C29.6 16 31.5 17.9 31.5 22.1V30Z" fill="white"/>
-           </svg>
-        </a>
-        <% } %>
-        <a href="https://www.youtube.com/@transworld-tv" target="_blank" title="YouTube">
-          <svg class="social-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="4" fill="#FF0000"/>
-            <g transform="translate(20, 20) scale(1.5) translate(-20, -20)">
-              <path d="M29.2 14.2C29 13.5 28.5 13 27.8 12.8C26.5 12.5 21.5 12.5 21.5 12.5C21.5 12.5 16.5 12.5 15.2 12.8C14.5 13 14 13.5 13.8 14.2C13.5 15.5 13.5 18.2 13.5 18.2C13.5 18.2 13.5 21 13.8 22.2C14 22.9 14.5 23.4 15.2 23.6C16.5 24 21.5 24 21.5 24C21.5 24 26.5 24 27.8 23.6C28.5 23.4 29 22.9 29.2 22.2C29.5 21 29.5 18.2 29.5 18.2C29.5 18.2 29.5 15.5 29.2 14.2ZM19.8 20.7V15.7L24.2 18.2L19.8 20.7Z" fill="white"/>
-            </g>
-          </svg>
-        </a>
-        <a href="https://login.salesforce.com/" target="_blank" class="nav-social-icon" title="Salesforce">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg" alt="Salesforce" class="salesforce-logo">
-        </a>
-      </div>
-
-      <% if (currentUser) { %>
-        <div class="nav-user nav-user-menu">
-          <button type="button" class="user-name nav-user-link nav-user-trigger" aria-expanded="false" aria-haspopup="true" aria-label="Abrir menú de usuario">
-            <% if (currentUser.photo || currentUser.foto) { %>
-              <img src="<%= currentUser.photo || currentUser.foto %>" alt="Foto" class="nav-user-photo">
-            <% } else { %>
-              <div class="nav-user-avatar monogram" style="<%= monogram.style %>"><%= monogram.initials %></div>
-            <% } %>
-          </button>
-          <div class="nav-user-dropdown" role="menu">
-            <a href="/perfil" role="menuitem">Mi Perfil</a>
-            <a href="/logout" role="menuitem">Cerrar Sesión</a>
-          </div>
-        </div>
-      <% } %>
-    </div>
-  </div>
-</header>
+<%- include('partials/navbar', { currentUser, displayName, monogram }) %>
 
 <main>
     <div class="contenedor-principal">
@@ -221,41 +90,7 @@
   }) %>
 <% } %>
 
-<footer>
-  <div class="footer-content">
-
-    <div class="footer-col">
-      <strong>Procesos y documentos</strong>
-      <%- include('partials/nav-procesos', { currentUser: currentUser }) %>
-    </div>
-
-    <div class="footer-col">
-       <strong>Empresa</strong>
-       <a href="<%= countryConfig.corporateSite %>nosotros/" target="_blank" rel="noopener noreferrer">Nosotros</a>
-       <a href="/marketing/eventos">Eventos</a>
-       <a href="/noticias">Noticias internas</a>
-    </div>
-
-    <% if (features.supportTickets) { %>
-    <div class="footer-col">
-      <strong>Ayuda</strong>
-      <a href="/sistemas/tickets">Soporte</a>
-    </div>
-    <% } %>
-
-    <div class="footer-col">
-      <strong class="footer-heading-accent">Links Externos</strong>
-      <% if (features.chileHrPortals) { %>
-      <a href="https://transworld.mirexmas.com/" target="_blank" rel="noopener noreferrer">Rex+</a>
-      <a href="https://www.achs.cl/" target="_blank" rel="noopener noreferrer">ACHS</a>
-      <a href="https://www.cajalosandes.cl/" target="_blank" rel="noopener noreferrer">Caja los Andes</a>
-      <a href="https://clientes.bciseguros.cl/HomePrivado/LinkLogin" target="_blank" rel="noopener noreferrer">BCI Seguros</a>
-      <% } %>
-      <a href="https://login.salesforce.com/" target="_blank" rel="noopener noreferrer">Salesforce</a>
-    </div>
-
-  </div>
-</footer>
+<%- include('partials/footer', { currentUser }) %>
 
 <% if (currentUser && features.claudeAssistant) { %>
   <%- include('partials/claude-assistant', { displayName }) %>
@@ -275,50 +110,78 @@
 
     // --- ESTADO ACTIVO DE LA NAVEGACIÓN ---
     (function markActiveNav() {
-      const path = window.location.pathname;
-      const links = document.querySelectorAll('.main-nav .nav-item > a');
-      let best = null;
-      let bestLen = 0;
-      links.forEach((a) => {
-        let href;
-        try { href = new URL(a.getAttribute('href'), window.location.origin).pathname; }
-        catch (e) { return; }
-        if (href === '/' ) return;
-        if ((path === href || path.startsWith(href + '/') || path.startsWith(href)) && href.length > bestLen) {
-          best = a;
-          bestLen = href.length;
-        }
-      });
-      if (best) best.classList.add('is-active');
+      const path = window.location.pathname.toLowerCase();
+      function mejorCoincidencia(links, leerHref) {
+        let best = null;
+        let bestLen = 0;
+        links.forEach((el) => {
+          let href;
+          try { href = new URL(leerHref(el), window.location.origin).pathname.toLowerCase(); }
+          catch (e) { return; }
+          const coincide = href === '/' ? path === '/' : (path === href || path.startsWith(href + '/'));
+          if (coincide && href.length > bestLen) {
+            best = el;
+            bestLen = href.length;
+          }
+        });
+        return best;
+      }
+      const escritorio = mejorCoincidencia(
+        document.querySelectorAll('.main-nav .nav-link'), (a) => a.getAttribute('href'));
+      if (escritorio) {
+        escritorio.classList.add('is-active');
+        escritorio.setAttribute('aria-current', 'page');
+      }
+      const movil = mejorCoincidencia(
+        document.querySelectorAll('.mobile-sidebar [data-nav-href]'), (el) => el.getAttribute('data-nav-href'));
+      if (movil) movil.classList.add('is-active');
     })();
 
-    // --- LÓGICA DE MENÚ MÓVIL PRINCIPAL ---
+    // --- MENÚ LATERAL MÓVIL ---
     const menuToggle = document.getElementById('menu-toggle');
     const closeMenu = document.getElementById('close-menu');
     const mobileSidebar = document.getElementById('mobile-sidebar');
     const mobileOverlay = document.getElementById('mobile-overlay');
 
-    function toggleMenu() {
-      mobileSidebar.classList.toggle('open');
-      mobileOverlay.classList.toggle('open');
+    function setMenu(abrir) {
+      if (!mobileSidebar) return;
+      const estaAbierto = mobileSidebar.classList.contains('open');
+      if (abrir === estaAbierto) return;
+      mobileSidebar.classList.toggle('open', abrir);
+      mobileSidebar.setAttribute('aria-hidden', abrir ? 'false' : 'true');
+      mobileOverlay.hidden = false;
+      requestAnimationFrame(() => mobileOverlay.classList.toggle('open', abrir));
+      if (!abrir) setTimeout(() => { if (!mobileSidebar.classList.contains('open')) mobileOverlay.hidden = true; }, 350);
+      menuToggle.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+      document.body.classList.toggle('menu-movil-abierto', abrir);
+      if (window.IntranetModal) {
+        if (abrir) window.IntranetModal.lockScroll(); else window.IntranetModal.unlockScroll();
+      }
+      if (abrir) closeMenu.focus({ preventScroll: true });
+      else menuToggle.focus({ preventScroll: true });
     }
 
-    menuToggle.addEventListener('click', toggleMenu);
-    closeMenu.addEventListener('click', toggleMenu);
-    mobileOverlay.addEventListener('click', toggleMenu);
+    if (menuToggle && mobileSidebar) {
+      menuToggle.addEventListener('click', () => setMenu(true));
+      closeMenu.addEventListener('click', () => setMenu(false));
+      mobileOverlay.addEventListener('click', () => setMenu(false));
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && mobileSidebar.classList.contains('open')) setMenu(false);
+      });
+      // Si la ventana crece hasta mostrar la barra completa, el menú lateral sobra.
+      window.matchMedia('(min-width: 1300px)').addEventListener('change', (e) => {
+        if (e.matches) setMenu(false);
+      });
+    }
 
-    // --- LÓGICA DE SUBMENÚS DESPLEGABLES (MÓVIL) ---
-    const submenuToggles = document.querySelectorAll('.submenu-toggle');
-    submenuToggles.forEach(toggle => {
-      toggle.addEventListener('click', function(e) {
-        e.preventDefault(); // Evita que la página salte
-        
-        this.classList.toggle('active');
-        
+    // --- SUBMENÚS DESPLEGABLES (MÓVIL) ---
+    document.querySelectorAll('.mobile-sidebar .submenu-toggle').forEach((toggle) => {
+      toggle.addEventListener('click', function () {
+        const abrir = this.getAttribute('aria-expanded') !== 'true';
+        this.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+        this.classList.toggle('active', abrir);
         const submenu = this.nextElementSibling;
-        if (submenu && submenu.classList.contains('sub-menu')) {
-          submenu.classList.toggle('open');
-        }
+        if (submenu && submenu.classList.contains('sub-menu')) submenu.classList.toggle('open', abrir);
       });
     });
 
@@ -354,23 +217,19 @@
     });
 
 
-    // --- CÓDIGO EXISTENTE DEL TOAST ---
+    // --- AVISO DE ÉXITO (?ok=...) ---
     const urlParams = new URLSearchParams(window.location.search);
     const okMsg = urlParams.get('ok');
     const flashMsg = urlParams.get('msg');
     // ok=1&msg=... lo maneja la vista (p. ej. listado de personal); evita toast duplicado.
     // Claves tipo correo_enviado las traduce la propia página (nt-aviso), no el toast.
     const okEsClave = okMsg && /_/.test(okMsg);
-    if (okMsg && !okEsClave && !(okMsg === '1' && flashMsg)) {
-      const toastContainer = document.getElementById('toast-container');
-      const toastMessage = document.getElementById('toast-message');
-      toastMessage.textContent = decodeURIComponent(okMsg.replace(/\+/g, ' '));
-      toastContainer.classList.add('is-visible');
-
-      setTimeout(() => {
-        toastContainer.classList.remove('is-visible');
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }, 4000);
+    if (okMsg && !okEsClave && !(okMsg === '1' && flashMsg) && window.IntranetToast) {
+      // URLSearchParams ya decodifica %20 y "+" como espacios.
+      window.IntranetToast.show(okMsg);
+      urlParams.delete('ok');
+      const resto = urlParams.toString();
+      window.history.replaceState({}, document.title, window.location.pathname + (resto ? '?' + resto : '') + window.location.hash);
     }
 
     <% if (features.supportTickets) { %>
