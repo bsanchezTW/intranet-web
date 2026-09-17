@@ -2,23 +2,24 @@
 /* Editor de noticias: sirve tanto para crear como para editar. Los estilos
    viven en /css/noticias.css y la lógica en /js/noticias-editor.js. */
 %>
-<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
 <div id="modalCrearNoticia" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="editorTitulo" aria-hidden="true">
-  <div class="modal-content editor-modal">
+  <div class="modal-content modal-content--full editor-modal">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
 
-    <div class="editor__head">
-      <h2 id="editorTitulo">Publicar noticia</h2>
-      <p id="editorDesc">Las imágenes, PDF y documentos se mostrarán dentro de la noticia y del correo.</p>
-    </div>
+    <form id="formNoticia" action="/noticias/crear" method="POST" enctype="multipart/form-data"
+          data-max-files="20" data-max-mb="200">
+      <div class="modal-head">
+        <h2 id="editorTitulo" class="modal-title">Publicar noticia</h2>
+        <p id="editorDesc" class="modal-subtitle">Las imágenes, PDF y documentos se mostrarán dentro de la noticia y del correo.</p>
+      </div>
 
-    <form id="formNoticia" action="/noticias/crear" method="POST" style="display:contents;">
-      <div class="editor__cuerpo">
+      <div class="modal-body modal-body--split modal-body--split-end editor__cuerpo">
 
         <%# ---------- Columna principal: texto ---------- %>
-        <div class="editor__col editor__col--principal">
+        <div class="modal-main editor__col--principal">
           <div class="editor__campo">
             <label class="editor__label" for="noticia_titulo">Título</label>
             <input type="text" class="editor__input editor__input--titulo" id="noticia_titulo"
@@ -38,7 +39,7 @@
         </div>
 
         <%# ---------- Columna lateral: portada y archivos ---------- %>
-        <div class="editor__col editor__col--lateral">
+        <div class="modal-aside editor__col--lateral">
 
           <div class="editor__campo">
             <span class="editor__label">Portada</span>
@@ -50,13 +51,13 @@
             </div>
 
             <%# Sin icono: el recortador reescribe el texto del botón al aplicar. %>
-            <button type="button" class="btn-nt" id="btn-select-cover" style="width:100%; justify-content:center;">
+            <button type="button" class="btn-secundario editor__portada-btn" id="btn-select-cover">
               Seleccionar portada
             </button>
 
-            <input type="file" id="filePortada" accept="image/*" hidden>
+            <input type="file" id="filePortada" name="portada" accept="image/*" hidden>
             <input type="hidden" name="imagen_portada" id="url_portada">
-            <p class="editor__ayuda">JPG, PNG o WebP · se recorta a 16:9 · máx. 8 MB</p>
+            <p class="editor__ayuda">JPG, PNG o WebP · se recorta a 16:9 · máx. 8 MB · se sube al guardar</p>
           </div>
 
           <div class="editor__campo">
@@ -66,10 +67,10 @@
                  aria-label="Añadir archivos: arrástralos aquí o pulsa para elegirlos">
               <%- include('../../partials/icon', { name: 'upload' }) %>
               <strong>Arrastra archivos aquí</strong>
-              <span>Imágenes, PDF, Word o video</span>
+              <span>Imágenes, PDF, Word o video · se suben al publicar</span>
             </div>
 
-            <input type="file" id="fileGaleria" multiple hidden
+            <input type="file" id="fileGaleria" name="adjuntos" multiple hidden
                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf,.doc,.docx,video/mp4,video/webm">
             <input type="hidden" name="adjuntos_data" id="adjuntos_data" value="[]">
 
@@ -79,8 +80,8 @@
         </div>
       </div>
 
-      <div class="editor__foot">
-        <p class="editor__estado" id="editorEstado" aria-live="polite"></p>
+      <div class="modal-foot">
+        <p class="modal-foot__start editor__estado" id="editorEstado" aria-live="polite"></p>
         <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
         <button type="submit" class="btn-primario" id="btnGuardarNoticia">Publicar</button>
       </div>
@@ -110,6 +111,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="/js/profile-photo-cropper.js"></script>
+<script src="/js/profile-photo-cropper.js?v=20260916m"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.8.2/tinymce.min.js" referrerpolicy="origin"></script>
-<script src="/js/noticias-editor.js?v=20260728e"></script>
+<script src="/js/noticias-editor.js?v=20260917r"></script>

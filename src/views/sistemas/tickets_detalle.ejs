@@ -28,9 +28,10 @@
 
 <div class="ticket-detail-view <%= esModal ? 'ticket-detail-view--modal' : 'contenedor' %>">
   <% if (!esModal) { %>
-  <div class="ticket-detail-back">
-    <a href="<%= volverA %>" class="link-volver">← Volver al listado</a>
-  </div>
+  <nav class="page-header__migas migas-sueltas" aria-label="Ruta de navegación">
+    <a href="<%= volverA %>">Soporte</a> <span aria-hidden="true">/</span>
+    <span>Ticket #<%= ticket.id %></span>
+  </nav>
   <% } %>
 
 <div class="ticket-container">
@@ -167,7 +168,7 @@
             <button type="submit" class="ticket-btn ticket-btn--ok">Confirmar solución</button>
           </form>
           <form action="/sistemas/tickets/<%= ticket.id %>/rechazar" method="POST">
-            <button type="submit" class="ticket-btn ticket-btn--ghost" data-confirm-message="¿Estás seguro de reabrir el ticket?">Aún tengo problemas</button>
+            <button type="submit" class="ticket-btn ticket-btn--ghost" data-confirm="El ticket volverá a quedar abierto para que soporte lo revise." data-confirm-title="¿Reabrir el ticket?" data-confirm-accept="Reabrir">Aún tengo problemas</button>
           </form>
         </div>
       </section>
@@ -182,7 +183,7 @@
 
   <% } else if (puedeGestionar) { %>
     <div class="ticket-foot">
-      <form id="form-upload-admin" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/actualizar" method="POST">
+      <form id="form-upload-admin" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/actualizar" method="POST" data-ticket-id="<%= ticket.id %>">
         <input type="hidden" name="redirect_to" value="<%= volverA %>">
         <input type="hidden" name="accion" id="ticketAccion" value="guardar">
         <input type="hidden" name="assign_mode" id="ticketAssignMode" value="">
@@ -291,7 +292,7 @@
 
   <% } else if (esPropio) { %>
     <div class="ticket-foot">
-      <form id="form-upload-user" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/responder" method="POST">
+      <form id="form-upload-user" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/responder" method="POST" data-ticket-id="<%= ticket.id %>">
         <input type="hidden" name="redirect_to" value="<%= volverA %>">
         <input type="hidden" name="adjuntos_data" id="adjuntos_data_user">
 

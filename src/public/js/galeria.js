@@ -94,7 +94,6 @@
     var nombre = document.getElementById("eventoNombre");
     var descripcion = document.getElementById("eventoDescripcion");
     var guardar = document.getElementById("eventoGuardar");
-    var textoGuardar = guardar.textContent.trim();
 
     var portada = document.getElementById("eventoPortada");
     var portadaImg = document.getElementById("eventoPortadaImg");
@@ -252,11 +251,7 @@
     /* ---- Envío ---- */
     function ocupado(activo, texto) {
       enviando = activo;
-      guardar.disabled = activo;
-      guardar.classList.toggle("is-enviando", activo);
-      guardar.innerHTML = activo
-        ? '<span class="btn-submit-spinner" aria-hidden="true"></span> ' + (texto || "Guardando…")
-        : textoGuardar;
+      if (global.IntranetModal) global.IntranetModal.ocuparBoton(guardar, activo);
       if (eliminar) eliminar.disabled = activo;
       estadoPie.textContent = activo ? texto || "" : "";
     }
@@ -332,12 +327,12 @@
         if (!confirmado) return;
 
         ocupado(true, "Eliminando evento…");
-        eliminar.classList.add("is-enviando");
+        if (global.IntranetModal) global.IntranetModal.ocuparBoton(eliminar, true);
         try {
           var respuesta = await enviar(rutaEvento(slug) + "/eliminar");
           global.location.href = respuesta.redirect || "/marketing/eventos";
         } catch (error) {
-          eliminar.classList.remove("is-enviando");
+          if (global.IntranetModal) global.IntranetModal.ocuparBoton(eliminar, false);
           ocupado(false);
           mostrarAlerta(error.message);
         }

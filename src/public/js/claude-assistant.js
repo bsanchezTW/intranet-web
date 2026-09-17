@@ -56,13 +56,99 @@
     }
   }
 
+  // ── Botón: íconos que rotan y burbuja con preguntas ────────────────────
+  // Un solo ciclo, en orden, para que nada se pise: entra un ícono, al rato
+  // aparece su pregunta, se lee con calma, se va la burbuja y recién entonces
+  // cambia al siguiente. El texto sólo se reemplaza con la burbuja oculta.
+  // Se detiene con el panel abierto, un modal, la pestaña oculta o el mouse encima.
+  const FabRotacion = (() => {
+    const PRIMERA_PAUSA_MS = 2500;  // tras cargar, antes de la primera burbuja
+    const ANTES_BURBUJA_MS = 900;   // el ícono nuevo termina de girar
+    const BURBUJA_MS = 6500;        // tiempo de lectura
+    const DESPUES_BURBUJA_MS = 1600; // botón solo, antes del siguiente ícono
+
+    const iconos = Array.from(fab.querySelectorAll(".claude-fab__icono"));
+    const tooltip = document.getElementById("claudeFabTooltip");
+    const quieto = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let actual = Math.max(0, iconos.findIndex((el) => el.classList.contains("is-visible")));
+    let timer = null;
+    let encima = false;
+    let activo = false;
+
+    function puedeMoverse() {
+      // Con un modal abierto el botón se oculta (claude-assistant.css): no habla.
+      return !isOpen() && !document.hidden && !encima && !document.body.classList.contains("modal-open");
+    }
+
+    function esperar(ms, paso) {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!activo) return;
+        // Si algo lo interrumpe, reintenta el mismo paso un poco después.
+        if (!puedeMoverse()) return esperar(1000, paso);
+        paso();
+      }, ms);
+    }
+
+    function cambiarIcono() {
+      if (iconos.length < 2) return;
+      const saliente = iconos[actual];
+      saliente.classList.remove("is-visible");
+      saliente.classList.add("is-saliendo");
+      setTimeout(() => saliente.classList.remove("is-saliendo"), 600);
+      actual = (actual + 1) % iconos.length;
+      iconos[actual].classList.add("is-visible");
+      if (tooltip) tooltip.textContent = iconos[actual].dataset.mensaje || "";
+    }
+
+    function hablar() {
+      fab.classList.add("is-hablando");
+      esperar(BURBUJA_MS, callarYSeguir);
+    }
+
+    function callarYSeguir() {
+      fab.classList.remove("is-hablando");
+      if (quieto) return esperar(DESPUES_BURBUJA_MS + ANTES_BURBUJA_MS, hablar);
+      esperar(DESPUES_BURBUJA_MS, () => {
+        cambiarIcono();
+        esperar(ANTES_BURBUJA_MS, hablar);
+      });
+    }
+
+    function reanudar() {
+      if (activo) return;
+      activo = true;
+      esperar(PRIMERA_PAUSA_MS, hablar);
+    }
+
+    function pausar() {
+      activo = false;
+      clearTimeout(timer);
+      fab.classList.remove("is-hablando");
+    }
+
+    // Con el mouse encima la burbuja queda fija (CSS :hover) y el ciclo espera.
+    fab.addEventListener("mouseenter", () => { encima = true; });
+    fab.addEventListener("mouseleave", () => {
+      encima = false;
+      if (activo) { fab.classList.remove("is-hablando"); esperar(DESPUES_BURBUJA_MS, callarYSeguir); }
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) pausar();
+      else if (!isOpen()) reanudar();
+    });
+
+    return { reanudar, pausar };
+  })();
+
   function openPanel({ focus = true } = {}) {
+    FabRotacion.pausar();
     clearTimeout(closeTimer);
     panel.hidden = false;
     requestAnimationFrame(() => panel.classList.add("is-open"));
     fab.classList.add("is-active");
     fab.setAttribute("aria-expanded", "true");
-    fab.setAttribute("aria-label", "Cerrar asistente");
+    fab.setAttribute("aria-label", "Cerrar el Asistente de Transworld");
     rememberOpen(true);
     loadHistory();
     if (focus) input.focus();
@@ -72,8 +158,9 @@
     panel.classList.remove("is-open");
     fab.classList.remove("is-active");
     fab.setAttribute("aria-expanded", "false");
-    fab.setAttribute("aria-label", "Abrir asistente de ayuda de la intranet");
+    fab.setAttribute("aria-label", "Abrir el Asistente de Transworld");
     rememberOpen(false);
+    FabRotacion.reanudar();
     closeTimer = setTimeout(() => { panel.hidden = true; }, 220);
   }
 
@@ -625,6 +712,7 @@
 
   // ── Eventos ─────────────────────────────────────────────────────────────
   fab.addEventListener("click", () => (isOpen() ? closePanel() : openPanel()));
+  if (!isOpen()) FabRotacion.reanudar();
   document.getElementById("claudeClose")?.addEventListener("click", () => {
     closePanel();
     fab.focus();

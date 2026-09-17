@@ -165,6 +165,7 @@
     if (!overlay) return;
 
     if (!overlay.classList.contains('is-open')) {
+      overlay.dispatchEvent(new CustomEvent('modal:cerrando'));
       cancelarCierrePendiente(overlay);
       desapilar(overlay);
       overlay.style.zIndex = '';
@@ -177,6 +178,9 @@
     }
 
     cancelarCierrePendiente(overlay);
+    // Aviso para quien espera la respuesta de un diálogo: el cierre puede venir
+    // de Escape o del fondo, no sólo de sus botones.
+    overlay.dispatchEvent(new CustomEvent('modal:cerrando'));
     // Sale de la pila en el acto —Escape ya debe apuntar al de abajo— pero
     // conserva su z-index hasta que acabe la animación: quitárselo ahora lo
     // hundiría bajo el modal que estaba tapando a mitad del fundido.
@@ -275,14 +279,82 @@
       if (e.key !== 'Escape') return;
       // Con modales apilados, Escape cierra sólo el de arriba.
       const openOverlay = topeDePila();
-      if (openOverlay && openOverlay.dataset.dismiss !== 'false') close(openOverlay);
+      if (openOverlay && openOverlay.dataset.dismiss !== 'false') {
+        // Marca la tecla como atendida: un modal que gestiona su propio
+        // Escape (data-dismiss="false") no debe reaccionar a la misma pulsación.
+        e.preventDefault();
+        close(openOverlay);
+      }
     });
   }
 
+  /**
+   * Botón en espera: el spinner se superpone al texto, que queda invisible
+   * pero sigue ocupando su lugar, así el botón no cambia de ancho ni de alto.
+   * Toma el color del texto para que el spinner se lea sobre cualquier fondo.
+   *
+   *   IntranetModal.ocuparBoton(boton, true);   // al enviar
+   *   IntranetModal.ocuparBoton(boton, false);  // si el envío falla
+   */
+  function ocuparBoton(boton, activo = true) {
+    if (!boton) return;
+    if (activo) {
+      if (boton.classList.contains('is-enviando')) return;
+      boton.style.setProperty('--spinner-color', window.getComputedStyle(boton).color);
+      boton.classList.add('is-enviando');
+      boton.setAttribute('aria-busy', 'true');
+      if (!boton.querySelector(':scope > .btn-submit-spinner')) {
+        const spinner = document.createElement('span');
+        spinner.className = 'btn-submit-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        boton.appendChild(spinner);
+      }
+      // No se deshabilita en el mismo tick: en algunos navegadores deshabilitar
+      // el botón que dispara el submit aborta el POST.
+      window.setTimeout(() => {
+        if (boton.classList.contains('is-enviando')) boton.disabled = true;
+      }, 0);
+      return;
+    }
+    boton.classList.remove('is-enviando');
+    boton.removeAttribute('aria-busy');
+    boton.disabled = false;
+    boton.querySelectorAll(':scope > .btn-submit-spinner').forEach((el) => el.remove());
+  }
+
+  /**
+   * Todo formulario que se envía de verdad (nadie hizo preventDefault) muestra
+   * el spinner en su botón mientras carga la página siguiente. Va en window y
+   * en burbuja para enterarse después de todos los oyentes del formulario.
+   * Los envíos con fetch llaman a ocuparBoton por su cuenta.
+   */
+  function bindSpinnerDeEnvio() {
+    window.addEventListener('submit', (e) => {
+      const form = e.target;
+      if (e.defaultPrevented || !(form instanceof HTMLFormElement)) return;
+      if (form.method === 'dialog' || form.target === '_blank' || form.hasAttribute('data-sin-spinner')) return;
+      const boton = (e.submitter && e.submitter.form === form && e.submitter.tagName === 'BUTTON')
+        ? e.submitter
+        : form.querySelector('button[type="submit"]') ||
+          (form.id ? document.querySelector(`button[type="submit"][form="${form.id}"]`) : null);
+      ocuparBoton(boton, true);
+    });
+    // Al volver con "atrás" la página sale de la caché con el botón ocupado.
+    window.addEventListener('pageshow', (e) => {
+      if (!e.persisted) return;
+      document.querySelectorAll('.is-enviando').forEach((boton) => ocuparBoton(boton, false));
+    });
+  }
+
+  bindSpinnerDeEnvio();
+
   global.IntranetModal = {
+    ocuparBoton,
     open,
     close,
     isOpen,
+    /** El modal abierto más arriba de la pila (el que recibe Escape). */
+    top: topeDePila,
     lockScroll,
     unlockScroll,
     gestoCompletoSobre,
@@ -294,4 +366,279 @@
   } else {
     bindOverlayDismiss();
   }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     IntranetDialog — confirmar, avisar y pedir un dato con el modal propio.
+
+     Reemplaza a window.confirm/alert/prompt, que el navegador pinta a su
+     manera (con "localhost:3000" de título) y bloquean la página. Todo
+     devuelve una promesa:
+
+       await IntranetDialog.confirm({ title, message, acceptLabel, tone })  → boolean
+       await IntranetDialog.alert({ title, message })                       → void
+       await IntranetDialog.prompt({ title, message, label, required })     → string | null
+
+     Y sin JavaScript propio, en el marcado:
+
+       <form data-confirm="Mensaje" data-confirm-title="…"
+             data-confirm-accept="Eliminar" data-confirm-tone="peligro">
+       <button data-confirm="…">  ·  <a href data-confirm="…">
+     ════════════════════════════════════════════════════════════════════════ */
+
+  const ICONOS = {
+    peligro:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    normal:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  };
+
+  let dialogoSeq = 0;
+
+  function normalizarOpciones(opciones, defecto) {
+    const base = typeof opciones === 'string' ? { message: opciones } : { ...(opciones || {}) };
+    // Un atributo ausente llega como undefined y no debe pisar el valor por defecto.
+    Object.keys(base).forEach((k) => {
+      if (base[k] === undefined || base[k] === '') delete base[k];
+    });
+    return { ...defecto, ...base };
+  }
+
+  function crearElemento(tag, clase, texto) {
+    const el = document.createElement(tag);
+    if (clase) el.className = clase;
+    if (texto != null) el.textContent = texto;
+    return el;
+  }
+
+  /**
+   * Arma un diálogo, lo abre y resuelve cuando se cierra por cualquier vía.
+   * Cada llamada crea su propio overlay y lo borra al terminar: dos diálogos
+   * seguidos no comparten estado.
+   */
+  function abrirDialogo({ kind, title, message, acceptLabel, cancelLabel, tone, label, placeholder, required, multiline, defaultValue, maxLength }) {
+    return new Promise((resolver) => {
+      dialogoSeq += 1;
+      const idBase = `intranet-dialogo-${dialogoSeq}`;
+      const peligro = tone === 'peligro';
+      const previo = document.activeElement;
+
+      const overlay = crearElemento('div', 'modal-overlay modal-overlay--dialogo');
+      overlay.id = idBase;
+      overlay.setAttribute('role', kind === 'alert' ? 'alertdialog' : 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', `${idBase}-titulo`);
+      overlay.setAttribute('aria-hidden', 'true');
+
+      const panel = crearElemento('div', `modal-content modal-content--sm modal-dialogo${peligro ? ' modal-dialogo--peligro' : ''}`);
+      const form = crearElemento('form');
+      form.noValidate = true;
+
+      const head = crearElemento('header', 'modal-head');
+      const icono = crearElemento('span', 'modal-head__icono');
+      icono.innerHTML = peligro ? ICONOS.peligro : ICONOS.normal;
+      const titulo = crearElemento('h2', 'modal-title', title);
+      titulo.id = `${idBase}-titulo`;
+      head.append(icono, titulo);
+
+      const body = crearElemento('div', 'modal-body');
+      if (message) {
+        const texto = crearElemento('p', 'modal-text', message);
+        texto.id = `${idBase}-texto`;
+        overlay.setAttribute('aria-describedby', texto.id);
+        body.append(texto);
+      }
+
+      let campo = null;
+      let errorCampo = null;
+      if (kind === 'prompt') {
+        const wrap = crearElemento('div', 'campo-form');
+        const lbl = crearElemento('label', null, label || 'Respuesta');
+        campo = crearElemento(multiline ? 'textarea' : 'input');
+        campo.id = `${idBase}-campo`;
+        lbl.htmlFor = campo.id;
+        if (!multiline) campo.type = 'text';
+        if (multiline) campo.rows = 3;
+        if (placeholder) campo.placeholder = placeholder;
+        if (maxLength) campo.maxLength = maxLength;
+        campo.value = defaultValue || '';
+        errorCampo = crearElemento('span', 'campo-form__error', 'Este dato es obligatorio.');
+        wrap.append(lbl, campo, errorCampo);
+        body.append(wrap);
+      }
+
+      const foot = crearElemento('footer', 'modal-foot');
+      let cancelar = null;
+      if (kind !== 'alert') {
+        cancelar = crearElemento('button', 'btn-secundario', cancelLabel);
+        cancelar.type = 'button';
+        foot.append(cancelar);
+      }
+      const aceptar = crearElemento('button', peligro ? 'btn-peligro' : 'btn-primario', acceptLabel);
+      aceptar.type = 'submit';
+      foot.append(aceptar);
+
+      form.append(head, body, foot);
+      panel.append(form);
+      overlay.append(panel);
+      document.body.append(overlay);
+
+      let resultado = kind === 'confirm' ? false : kind === 'prompt' ? null : undefined;
+      let resuelto = false;
+
+      overlay.addEventListener('modal:cerrando', () => {
+        if (resuelto) return;
+        resuelto = true;
+        resolver(resultado);
+        window.setTimeout(() => {
+          overlay.remove();
+          if (previo && typeof previo.focus === 'function' && document.contains(previo)) {
+            previo.focus({ preventScroll: true });
+          }
+        }, ANIM_MS + 60);
+      });
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (kind === 'prompt') {
+          const valor = campo.value.trim();
+          if (required && !valor) {
+            campo.closest('.campo-form').classList.add('is-invalid');
+            campo.focus();
+            return;
+          }
+          resultado = valor;
+        } else if (kind === 'confirm') {
+          resultado = true;
+        }
+        close(overlay);
+      });
+
+      if (cancelar) cancelar.addEventListener('click', () => close(overlay));
+      if (campo) {
+        campo.addEventListener('input', () => campo.closest('.campo-form').classList.remove('is-invalid'));
+      }
+
+      open(overlay);
+      // Lo destructivo arranca en Cancelar: un Enter distraído no borra nada.
+      const foco = campo || (peligro && cancelar) || aceptar;
+      window.requestAnimationFrame(() => foco.focus({ preventScroll: true }));
+    });
+  }
+
+  const IntranetDialog = {
+    confirm(opciones) {
+      return abrirDialogo(normalizarOpciones(opciones, {
+        kind: 'confirm',
+        title: '¿Confirmas esta acción?',
+        acceptLabel: 'Confirmar',
+        cancelLabel: 'Cancelar',
+        tone: 'normal',
+      }));
+    },
+    alert(opciones) {
+      return abrirDialogo(normalizarOpciones(opciones, {
+        kind: 'alert',
+        title: 'Aviso',
+        acceptLabel: 'Entendido',
+        tone: 'normal',
+      }));
+    },
+    prompt(opciones) {
+      return abrirDialogo(normalizarOpciones(opciones, {
+        kind: 'prompt',
+        title: 'Completa el dato',
+        acceptLabel: 'Aceptar',
+        cancelLabel: 'Cancelar',
+        tone: 'normal',
+        required: true,
+      }));
+    },
+  };
+
+  const confirmados = new WeakSet();
+
+  /**
+   * Para un oyente de `submit` que decide en el momento si pide confirmación:
+   *
+   *   form.addEventListener('submit', (e) => {
+   *     if (!IntranetDialog.confirmarEnvio(e, { title, message })) return;
+   *     …lo que tenga que pasar sólo con el envío ya confirmado…
+   *   });
+   *
+   * La primera vez frena el envío y pregunta; si se acepta, lo repite con el
+   * mismo botón y en esa segunda pasada devuelve true sin volver a preguntar.
+   */
+  IntranetDialog.confirmarEnvio = function confirmarEnvio(evento, opciones) {
+    const form = evento.target;
+    if (confirmados.has(form)) {
+      confirmados.delete(form);
+      return true;
+    }
+    evento.preventDefault();
+    const boton = evento.submitter && evento.submitter.form === form ? evento.submitter : null;
+    IntranetDialog.confirm(opciones).then((ok) => {
+      if (!ok) return;
+      confirmados.add(form);
+      if (typeof form.requestSubmit === 'function') form.requestSubmit(boton || undefined);
+      else form.submit();
+    });
+    return false;
+  };
+
+  function opcionesDesde(el) {
+    const d = el.dataset;
+    return {
+      message: d.confirm,
+      title: d.confirmTitle || undefined,
+      acceptLabel: d.confirmAccept || undefined,
+      cancelLabel: d.confirmCancel || undefined,
+      tone: d.confirmTone || undefined,
+    };
+  }
+
+  /**
+   * Confirmación declarativa. Los oyentes van en captura sobre document para
+   * adelantarse a cualquier otro manejador del formulario: si el usuario
+   * cancela, nadie más se entera; si acepta, el envío se repite completo
+   * —con su botón original— y ahí sí corren todos.
+   */
+  function bindConfirmacionesDeclarativas() {
+    document.addEventListener('submit', (e) => {
+      const form = e.target;
+      if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-confirm')) return;
+      if (confirmados.has(form)) {
+        confirmados.delete(form);
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const boton = e.submitter && e.submitter.form === form ? e.submitter : null;
+      IntranetDialog.confirm(opcionesDesde(form)).then((ok) => {
+        if (!ok) return;
+        confirmados.add(form);
+        if (typeof form.requestSubmit === 'function') form.requestSubmit(boton || undefined);
+        else form.submit();
+      });
+    }, true);
+
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest && e.target.closest('[data-confirm]');
+      if (!el || el instanceof HTMLFormElement) return;
+      if (confirmados.has(el)) {
+        confirmados.delete(el);
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      IntranetDialog.confirm(opcionesDesde(el)).then((ok) => {
+        if (!ok) return;
+        confirmados.add(el);
+        el.click();
+      });
+    }, true);
+  }
+
+  bindConfirmacionesDeclarativas();
+
+  global.IntranetDialog = IntranetDialog;
 })(window);

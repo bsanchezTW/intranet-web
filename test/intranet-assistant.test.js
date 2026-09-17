@@ -151,6 +151,29 @@ describe("assistantTools — ejecución en el servidor", () => {
     assert.ok(buildToolDefinitions(entries).some((tool) => tool.name === "search_events"));
   });
 
+  it("la autoayuda de Soporte se lista con sus descargas y sólo donde hay Soporte", async () => {
+    const apps = [
+      { name: "Reparación de Impresora", description: "Repara la cola de impresión.", url_pc: "/content/apps/impresora.exe", url_apk: "" },
+      { name: "", description: "sin nombre, se descarta" },
+    ];
+    const executor = createToolExecutor({
+      entries,
+      currentPath: "/",
+      tickets: { attachmentCount: 0 },
+      selfHelp: async () => apps,
+    });
+    const result = JSON.parse((await executor.execute("list_self_help_tools")).content);
+    assert.equal(result.total, 1);
+    assert.deepEqual(result.herramientas[0].descargas, { windows: "/content/apps/impresora.exe" });
+    assert.equal(result.herramientas[0].enlace, "/sistemas/tickets");
+
+    const sinSoporte = createToolExecutor({ entries, currentPath: "/", selfHelp: async () => apps });
+    assert.equal((await sinSoporte.execute("list_self_help_tools")).isError, true);
+    const names = (options) => buildToolDefinitions(entries, options).map((tool) => tool.name);
+    assert.equal(names().includes("list_self_help_tools"), false);
+    assert.ok(names({ supportTickets: true }).includes("list_self_help_tools"));
+  });
+
   it("los tools de tickets sólo existen donde hay Soporte", () => {
     const names = (options) => buildToolDefinitions(entries, options).map((tool) => tool.name);
     assert.equal(names().includes("draft_support_ticket"), false);
@@ -224,19 +247,24 @@ describe("assistantTools — ejecución en el servidor", () => {
 });
 
 describe("directorySearch — lo que viaja al modelo", () => {
-  it("una persona sólo expone nombre, correo, teléfono y área", () => {
+  it("una persona sólo expone nombre, contacto de empresa y área", () => {
     const person = toPublicPerson({
       first_name: "Ana",
       last_name: "Pérez",
       email: "ana@transworld.cl",
-      phone: null,
+      work_phone: null,
+      phone: "56912345678",
+      personal_email: "ana.perez@gmail.com",
       area_name: "TI",
       national_id: "12345678-5",
       birth_date: "1990-01-01",
       role: "Administrador",
     });
-    assert.deepEqual(Object.keys(person).sort(), ["area", "email", "nombre", "telefono"]);
+    assert.deepEqual(Object.keys(person).sort(), ["area", "correo_empresa", "nombre", "telefono_empresa"]);
     assert.equal(person.nombre, "Ana Pérez");
+    assert.equal(person.correo_empresa, "ana@transworld.cl");
+    assert.equal(person.telefono_empresa, null);
+    assert.doesNotMatch(JSON.stringify(person), /gmail|912345678/);
   });
 
   it("un evento se entrega con su enlace a la galería", () => {
@@ -360,6 +388,19 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
     assert.deepEqual(blocks[1].cache_control, { type: "ephemeral" });
     assert.equal(blocks[0].cache_control, undefined);
     assert.equal(blocks[2].cache_control, undefined);
+  });
+
+  it("deriva los datos personales a RRHH e Informática", () => {
+    const [instrucciones] = claudeService.buildSystemPrompt();
+    assert.match(instrucciones.text, /correo de empresa, teléfono de empresa/);
+    assert.match(instrucciones.text, /sólo RRHH e Informática pueden ver los datos personales/);
+  });
+
+  it("las instrucciones piden revisar la autoayuda antes de ofrecer un ticket", () => {
+    const [instrucciones] = claudeService.buildSystemPrompt();
+    assert.match(instrucciones.text, /Asistente de Transworld/);
+    assert.match(instrucciones.text, /list_self_help_tools antes de ofrecer un ticket/);
+    assert.match(instrucciones.text, /Reparación de Impresora/);
   });
 });
 

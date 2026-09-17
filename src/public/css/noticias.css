@@ -360,20 +360,17 @@
   font-family: var(--font-sans, 'Instrument Sans', 'Segoe UI', system-ui, sans-serif);
 }
 
-/* Cuerpo a la izquierda; volver, ficha del autor y documentos a la derecha.
-   Dos filas: el botón ocupa la primera de la columna lateral y el artículo
-   abarca ambas, de modo que titular y botón arrancan a la misma altura. */
+/* Cuerpo a la izquierda; ficha del autor y documentos a la derecha. La vuelta
+   al listado la dan las migas de arriba. */
 .articulo__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
-  grid-template-rows: auto 1fr;
   gap: 14px 30px;
   align-items: start;
 }
 
-.articulo__layout > .aside-volver { grid-column: 2; grid-row: 1; }
-.articulo__principal { grid-column: 1; grid-row: 1 / span 2; }
-.articulo__aside { grid-column: 2; grid-row: 2; }
+.articulo__principal { grid-column: 1; }
+.articulo__aside { grid-column: 2; }
 
 .articulo__principal {
   min-width: 0;
@@ -437,13 +434,14 @@
 }
 
 .btn-nt--sutil {
-  padding: 8px 13px;
+  height: 34px;
+  padding: 0 12px;
   font-size: 0.8rem;
-  color: var(--muted);
 }
 
 .btn-nt--sutil.is-hecho {
-  border-color: var(--green-ink);
+  border-color: var(--green-deep);
+  background: var(--green-soft);
   color: var(--green-ink);
 }
 
@@ -1006,36 +1004,50 @@
    8. Botones de acción del artículo (aside)
    ========================================================================== */
 
+/* Mismo sistema que los botones de modales y cabeceras: secundario blanco,
+   principal oscuro y peligro con fondo tenue. */
 .btn-nt {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 9px 15px;
-  border-radius: 9px;
+  height: 38px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border-radius: 10px;
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
-  color: var(--color-text);
+  color: var(--color-text-muted);
   font-family: inherit;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.15s ease, opacity 0.18s ease;
 }
 
-.btn-nt:hover { transform: translateY(-1px); border-color: var(--corp-blue-light); color: var(--corp-blue); }
-.btn-nt:focus-visible { outline: 2px solid var(--corp-blue); outline-offset: 2px; }
+.btn-nt .icon-svg { font-size: 0.95rem; }
+
+.btn-nt:hover { transform: translateY(-1px); border-color: var(--brand); color: var(--brand); }
+.btn-nt:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 .btn-nt--principal {
-  background: var(--corp-blue);
-  border-color: var(--corp-blue);
-  color: #fff;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--color-bg);
 }
 
-.btn-nt--principal:hover { background: var(--corp-blue-dark); border-color: var(--corp-blue-dark); color: #fff; }
+.btn-nt--principal:hover { border-color: var(--ink); color: var(--color-bg); opacity: 0.92; }
 
-.btn-nt--peligro { color: #b4453a; }
-.btn-nt--peligro:hover { background: rgba(180, 69, 58, 0.09); border-color: #b4453a; color: #b4453a; }
+.btn-nt--peligro {
+  background: rgba(208, 92, 92, 0.08);
+  border-color: rgba(208, 92, 92, 0.35);
+  color: #a33b3b;
+}
+
+.btn-nt--peligro:hover { background: rgba(208, 92, 92, 0.14); border-color: rgba(208, 92, 92, 0.5); color: #a33b3b; }
 
 /* ==========================================================================
    8.1 Columna lateral del artículo
@@ -1059,31 +1071,6 @@
 }
 
 /* Vuelta al listado: mismo botón sólido que "Publicar noticia". */
-.aside-volver {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 11px 18px;
-  border-radius: 10px;
-  background: var(--ink);
-  color: var(--color-bg);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-decoration: none;
-  transition: transform 0.15s ease, opacity 0.2s ease;
-}
-
-.aside-volver:hover {
-  transform: translateY(-1px);
-  opacity: 0.9;
-  color: var(--color-bg);
-}
-
-.aside-volver:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
-.aside-volver span { transition: transform 0.2s ease; }
-.aside-volver:hover span { transform: translateX(-3px); }
-
 .aside-bloque {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -1180,27 +1167,31 @@
   flex-wrap: wrap;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--nt-radius-sm);
-  box-shadow: var(--shadow);
-  /* Franja lateral: deja claro de un vistazo que es una zona restringida. */
-  border-left: 3px solid var(--brand);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
 }
 
 .articulo__admin-cabecera { flex: 1 1 160px; min-width: 0; }
 
+/* Mismo título de sección que los modales (.modal-section__title). */
 .articulo__admin-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--brand);
+  color: var(--color-text-subtle);
 }
 
+.articulo__admin-titulo .icon-svg { color: var(--brand); font-size: 1rem; }
+
 .articulo__admin-ayuda {
-  margin: 3px 0 0;
-  font-size: 0.76rem;
-  color: var(--muted);
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
 }
 
 .articulo__admin-acciones {
@@ -1364,21 +1355,14 @@
    ========================================================================== */
 
 @media (max-width: 1080px) {
-  /* Una sola columna: volver, artículo y aside en ese orden. */
+  /* Una sola columna: artículo y aside en ese orden. */
   .articulo__layout {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
     gap: 20px;
   }
 
-  .articulo__layout > .aside-volver,
   .articulo__principal,
-  .articulo__aside { grid-column: auto; grid-row: auto; }
-
-  .articulo__layout > .aside-volver {
-    justify-self: start;
-    max-width: var(--nt-measure);
-  }
+  .articulo__aside { grid-column: auto; }
 
   .articulo__aside {
     position: static;
@@ -1463,8 +1447,7 @@
 
   .contenedor-principal { max-width: none; padding: 0; }
 
-  .aside-volver,
-  .nt-aviso,
+  .migas-sueltas,
   .aside-acciones,
   .articulo__admin,
   .doc__acciones,
@@ -1532,45 +1515,53 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  background: var(--brand-soft);
-  border: 1px solid var(--corp-blue-light);
-  border-radius: var(--nt-radius-sm);
+  padding: 12px 14px;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   margin-bottom: 14px;
   cursor: pointer;
-  transition: background 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.correo-todos:hover { background: var(--color-surface-muted); }
+.correo-todos:hover { border-color: var(--color-border-strong); }
+
+.correo-todos:has(input:checked) {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.08);
+}
 
 .correo-todos input[type="checkbox"] {
   width: 18px;
   height: 18px;
-  accent-color: var(--corp-blue);
+  accent-color: var(--brand);
   cursor: pointer;
   flex-shrink: 0;
 }
 
-.correo-todos strong { display: block; color: var(--corp-blue); font-size: 0.93rem; margin-bottom: 2px; }
-.correo-todos span { color: var(--color-text-muted); font-size: 0.81rem; }
+.correo-todos strong { display: block; color: var(--color-heading); font-size: 0.9rem; margin-bottom: 2px; }
+.correo-todos span { color: var(--color-text-muted); font-size: 0.8rem; }
 
+/* Mismo control que los campos de los modales, con lupa. */
 .correo-buscar {
   width: 100%;
   box-sizing: border-box;
-  padding: 11px 14px;
+  padding: 9px 11px 9px 36px;
   border: 1px solid var(--color-border-strong);
-  border-radius: 9px;
-  background: var(--color-surface);
-  color: var(--color-text);
+  border-radius: 10px;
+  background: var(--color-input-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238494a7' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 12px center / 16px;
+  color: var(--color-input-text);
   font-family: inherit;
   font-size: 0.9rem;
+  line-height: 1.4;
   margin-bottom: 12px;
 }
 
 .correo-buscar:focus {
   outline: none;
-  border-color: var(--corp-blue);
-  box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.14);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 .correo-toolbar {
@@ -1585,17 +1576,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--color-text-muted);
   cursor: pointer;
 }
 
+.correo-toolbar input[type="checkbox"] { accent-color: var(--brand); }
+
 .correo-contador { font-size: 0.81rem; font-weight: 600; color: var(--color-text-muted); }
 
 .correo-lista {
   border: 1px solid var(--color-border);
-  border-radius: var(--nt-radius-sm);
+  border-radius: 12px;
   max-height: 280px;
   overflow-y: auto;
   background: var(--color-surface);
@@ -1620,7 +1613,7 @@
 .correo-item input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: var(--corp-green-dark);
+  accent-color: var(--brand);
   cursor: pointer;
   flex-shrink: 0;
 }

@@ -13,7 +13,7 @@ const { EVENTO_VIEW_COLUMNS } = require('../utils/schemaMappers');
 const router = express.Router();
 const WRITE_ROLES = ['admin'];
 
-const ASSET_VERSION = '20260917a';
+const ASSET_VERSION = '20260917r';
 const ASSETS_LISTA = {
   extraCss: [`/css/galeria.css?v=${ASSET_VERSION}`],
   extraJs: [`/js/galeria.js?v=${ASSET_VERSION}`],

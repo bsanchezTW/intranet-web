@@ -31,10 +31,14 @@ const requireRole = require("../middlewares/requireRole");
 const requireRrhhManager = require("../middlewares/requireRrhhManager");
 const requireFeature = require("../middlewares/requireFeature");
 const { sendMail } = require("../services/mailer");
+const { MAIL_SENDERS } = require("../constants/mailSenders");
+const { escapeHtml, secretBox } = require("../services/emailLayout");
 const { toTitleCase } = require("../utils/formatName");
 const { getMonogram, applyIdentityToSession } = require("../utils/monogram");
 const {
   validateMobilePhone,
+  validateWorkPhone,
+  maskPhone,
   formatPhoneForDisplay,
   toTelHref,
 } = require("../utils/phone");
@@ -45,6 +49,13 @@ const {
   formatNationalId,
 } = require("../utils/nationalId");
 const { mapPersonaForView } = require("../utils/schemaMappers");
+const {
+  companyEmail,
+  companyEmailSql,
+  accountUsesPersonalEmail,
+  accountUsesPersonalEmailSql,
+  maskEmail,
+} = require("../utils/contactEmails");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
 const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
@@ -73,6 +84,28 @@ function redirectPersonalCrearError(res, message) {
     `/RRHH/personal?crearError=${encodeURIComponent(message)}`,
   );
 }
+
+/**
+ * Teléfono de empresa, correo personal y teléfono personal de la ficha. Son
+ * opcionales; el correo de empresa se valida aparte porque es el login.
+ * El error lleva el nombre del campo: el formulario tiene dos correos y dos
+ * teléfonos, y "Teléfono incorrecto" solo no dice cuál.
+ */
+function validarContactoFicha({ work_phone, personal_email, phone }) {
+  const workPhone = validateWorkPhone(work_phone);
+  if (!workPhone.valid) return { error: `Teléfono de empresa: ${workPhone.error}` };
+  const personalEmail = validateEmail(personal_email);
+  if (!personalEmail.valid) return { error: `Correo personal: ${personalEmail.error}` };
+  const personalPhone = validateMobilePhone(phone);
+  if (!personalPhone.valid) return { error: `Teléfono personal: ${personalPhone.error}` };
+  return {
+    error: null,
+    workPhone: workPhone.storageValue,
+    personalEmail: personalEmail.value,
+    personalPhone: personalPhone.storageValue,
+  };
+}
+
 
 function redirectPersonalEditarError(res, id, message) {
   return res.redirect(
@@ -152,13 +185,15 @@ function puedeCrearCuentaIntranet(email) {
 function enviarClaveTemporal(email, firstName, passwordTemporal) {
   return sendMail({
     to: email,
-    subject: "Cuenta creada - Intranet",
+    subject: "Cuenta creada en Intranet",
+    senderName: MAIL_SENDERS.hr,
+    heading: "Cuenta creada",
+    cta: { href: "/login", label: "Ingresar a la intranet" },
     html: `
-      <h3>Hola ${firstName},</h3>
-      <p>Tu cuenta fue creada en la Intranet Transworld.</p>
-      <p>Tu contraseña temporal es: <strong>${passwordTemporal}</strong></p>
-      <p>Ingresa con tu correo y esta contraseña. En el primer acceso te pediremos verificar tu correo.</p>
-      <p>Por seguridad, se te solicitará cambiarla en tu primer ingreso.</p>
+      <p style="margin:0 0 16px 0;">Hola <strong>${escapeHtml(firstName)}</strong>,</p>
+      <p style="margin:0 0 16px 0;">Tu cuenta fue creada en la Intranet Transworld.</p>
+      ${secretBox(passwordTemporal, { label: "Contraseña temporal" })}
+      <p style="margin:0; color:#51637a;">En el primer acceso te pediremos verificar tu correo y cambiar esta contraseña.</p>
     `,
     text: `Hola ${firstName}, tu contraseña temporal es: ${passwordTemporal}. Ingresa con tu correo y esta contraseña; en el primer acceso te pediremos verificar tu correo.`,
   }).catch((mailErr) =>
@@ -328,25 +363,29 @@ async function refreshSessionIdentity(req, userId) {
 // 1. PÁGINA PRINCIPAL
 router.get("/", (req, res) => {
   res.render("RRHH/index", {
-    titulo: "Recursos Humanos",
+    titulo: "Recursos humanos",
     user: req.session.user,
   });
 });
 
 // 2. LISTADO DE PERSONAL
-// FIX: Se agregan columnas faltantes: telefono, usuario_intranet
-// FIX: Los campos se mapean 1:1 desde la BD sin transformaciones intermedias
+// Lo ve cualquier usuario: muestra el contacto de empresa completo y el
+// personal enmascarado (parte del correo, últimos 4 dígitos del teléfono). El
+// dato real no llega al navegador; RR.HH. lo ve y corrige en la ficha.
 router.get("/personal", async (req, res) => {
   const sql = `
     SELECT
       u.id,
       u.first_name,
       u.last_name,
-      u.email,
+      ${companyEmailSql("u")} AS email,
+      ${accountUsesPersonalEmailSql("u")} AS cuenta_con_correo_personal,
       u.role,
       u.photo,
       u.birth_date,
       u.work_area_id,
+      u.work_phone,
+      u.personal_email,
       u.phone,
       u.is_intranet_user,
       u.email_confirmed,
@@ -364,21 +403,23 @@ router.get("/personal", async (req, res) => {
 
     const personasFormateadas = results.map((p) => {
       const birthDate = p.birth_date ?? p.fecha_nacimiento;
-      const phoneRaw = p.phone ?? p.telefono;
+      const workPhoneRaw = p.work_phone;
       const partes = parseFechaNacimiento(birthDate);
       const ordenCumple = partes ? partes.month * 100 + partes.day : 9999;
       const fechaCumpleFmt = partes
         ? `${String(partes.day).padStart(2, "0")}-${String(partes.month + 1).padStart(2, "0")}`
         : "-";
 
-      const telefonoHref = toTelHref(phoneRaw);
-      const telefonoDisplay = formatPhoneForDisplay(phoneRaw);
+      const telefonoHref = toTelHref(workPhoneRaw);
+      const telefonoDisplay = formatPhoneForDisplay(workPhoneRaw);
       const pill = getWorkAreaPill(p.area, p.area_color);
 
+      const { personal_email: correoPersonalRaw, phone: telefonoPersonalRaw, ...resto } = p;
       const persona = {
-        ...p,
-        phone: telefonoDisplay || phoneRaw,
-        telefono: telefonoDisplay || phoneRaw,
+        ...resto,
+        work_phone: telefonoDisplay || workPhoneRaw,
+        correoPersonal: maskEmail(correoPersonalRaw),
+        telefonoPersonal: maskPhone(telefonoPersonalRaw),
         // Guardado normalizado ("12345678-5"); los puntos se agregan al mostrar.
         documento: formatNationalId(p.national_id),
         ordenCumple,
@@ -452,7 +493,6 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
     email,
     work_area_id,
     birth_date,
-    phone,
     hire_date,
     prior_years_credited,
     progressive_days_override,
@@ -470,10 +510,10 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
     const emailCheck = emailRaw
       ? validateEmail(emailRaw)
       : { valid: true, value: null };
-    const emailClean = emailCheck.value;
+    const contacto = validarContactoFicha(req.body);
+    // La cuenta usa el correo de empresa y, si no hay, el personal.
+    const emailClean = emailCheck.value || contacto.personalEmail || null;
     const areaId = (work_area_id && String(work_area_id).trim()) ? Number(work_area_id) : null;
-    const telefonoCheck = (phone && typeof phone === 'string' && phone.trim()) ? validateMobilePhone(phone) : { valid: true, value: null, storageValue: null };
-    const telefonoVal = telefonoCheck.storageValue;
 
     // Opcional al crear la ficha: RR.HH. no siempre tiene el documento a mano.
     // La rendición de gastos sí lo exige, que es donde el dato importa.
@@ -521,8 +561,8 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
       return redirectPersonalCrearError(res, emailCheck.error);
     }
 
-    if (!telefonoCheck.valid) {
-      return redirectPersonalCrearError(res, telefonoCheck.error);
+    if (contacto.error) {
+      return redirectPersonalCrearError(res, contacto.error);
     }
 
     if (emailClean) {
@@ -548,8 +588,8 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
 
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
-          (first_name, last_name, email, password_hash, password_salt, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id)
-        VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, $8, $9, TRUE, FALSE, $10, $11, $12, $13, $14)
+          (first_name, last_name, email, password_hash, password_salt, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id, work_phone, personal_email)
+        VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, $8, $9, TRUE, FALSE, $10, $11, $12, $13, $14, $15, $16)
         RETURNING id`,
         [
           firstName,
@@ -560,12 +600,14 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
           ROLES.DESHABILITADO,
           areaId,
           fechaVal,
-          telefonoVal,
+          contacto.personalPhone,
           hireVal,
           priorYearsVal,
           progressiveOverrideVal,
           workDaysVal,
           documentoVal,
+          contacto.workPhone,
+          contacto.personalEmail,
         ],
       );
       userId = inserted[0].id;
@@ -576,8 +618,8 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
     } else {
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
-          (first_name, last_name, email, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id)
-        VALUES ($1, $2, $3, $4, FALSE, FALSE, $5, $6, $7, FALSE, $8, $9, $10, $11, $12)
+          (first_name, last_name, email, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id, work_phone, personal_email)
+        VALUES ($1, $2, $3, $4, FALSE, FALSE, $5, $6, $7, FALSE, $8, $9, $10, $11, $12, $13, $14)
         RETURNING id`,
         [
           firstName,
@@ -586,12 +628,14 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
           ROLES.DESHABILITADO,
           areaId,
           fechaVal,
-          telefonoVal,
+          contacto.personalPhone,
           hireVal,
           priorYearsVal,
           progressiveOverrideVal,
           workDaysVal,
           documentoVal,
+          contacto.workPhone,
+          contacto.personalEmail,
         ],
       );
       userId = inserted[0].id;
@@ -658,6 +702,12 @@ router.get("/editar/:id", requireRrhhManager(), async (req, res) => {
       ...rows[0],
       phone: phoneDisplay,
       telefono: phoneDisplay,
+      work_phone:
+        formatPhoneForDisplay(rows[0].work_phone) || rows[0].work_phone || "",
+      // `email` sigue siendo el de la cuenta; el campo "Correo de empresa"
+      // sólo se llena si no es el personal.
+      correo_empresa: companyEmail(rows[0]) || "",
+      cuenta_con_correo_personal: accountUsesPersonalEmail(rows[0]),
       // Guardado sin separadores; los puntos se agregan sólo al mostrarlo.
       documento: formatNationalId(rows[0].national_id),
     });
@@ -697,7 +747,6 @@ router.post(
       role,
       work_area_id,
       birth_date,
-      phone,
       email,
       eliminar_foto,
       hire_date,
@@ -713,8 +762,7 @@ router.post(
       const progressiveOverrideVal = parseProgressiveOverride(progressive_days_override);
       const workDaysVal = parseWorkDaysPerWeek(work_days_per_week);
       const areaId = (work_area_id && String(work_area_id).trim()) ? Number(work_area_id) : null;
-      const telefonoCheck = (phone && typeof phone === 'string' && phone.trim()) ? validateMobilePhone(phone) : { valid: true, value: null, storageValue: null };
-      const telefonoVal = telefonoCheck.storageValue;
+      const contacto = validarContactoFicha(req.body);
       const documentoCheck = validateNationalId(national_id);
       if (!documentoCheck.valid) {
         return redirectPersonalEditarError(res, id, documentoCheck.error);
@@ -727,7 +775,8 @@ router.post(
       const emailCheck = emailRaw
         ? validateEmail(emailRaw)
         : { valid: true, value: null };
-      const emailClean = emailCheck.value;
+      // La cuenta usa el correo de empresa y, si no hay, el personal.
+      const emailClean = emailCheck.value || contacto.personalEmail || null;
       const fechaVal =
         birth_date && String(birth_date).trim()
           ? birth_date
@@ -767,8 +816,8 @@ router.post(
         return redirectPersonalEditarError(res, id, emailCheck.error);
       }
 
-      if (!telefonoCheck.valid) {
-        return redirectPersonalEditarError(res, id, telefonoCheck.error);
+      if (contacto.error) {
+        return redirectPersonalEditarError(res, id, contacto.error);
       }
 
       if (emailClean) {
@@ -798,7 +847,7 @@ router.post(
         return redirectPersonalEditarError(
           res,
           id,
-          "No puedes quitar el correo de un usuario ya registrado en la intranet.",
+          "Deja al menos un correo, de empresa o personal: la cuenta de intranet usa uno.",
         );
       }
       const previousUrl = prevUser.foto || null;
@@ -833,10 +882,9 @@ router.post(
         "phone=$6",
         "email=$7",
         "hire_date=$8",
-        "prior_years_credited=$9",
-        "progressive_days_override=$10",
-        "work_days_per_week=$11",
-        "national_id=$12",
+        "national_id=$9",
+        "work_phone=$10",
+        "personal_email=$11",
       ];
       const values = [
         firstName,
@@ -844,14 +892,27 @@ router.post(
         roleToSave,
         areaId,
         fechaVal,
-        telefonoVal,
+        contacto.personalPhone,
         emailClean,
         hireVal,
-        priorYearsVal,
-        progressiveOverrideVal,
-        workDaysVal,
         documentoVal,
+        contacto.workPhone,
+        contacto.personalEmail,
       ];
+
+      // Datos de vacaciones: sólo se guardan si la ficha los muestra. En Chile
+      // las vacaciones van por Rex+ y el formulario no los trae; sin este
+      // filtro, cada edición borraría lo que ya estaba cargado.
+      const camposVacaciones = [
+        ["prior_years_credited", priorYearsVal],
+        ["progressive_days_override", progressiveOverrideVal],
+        ["work_days_per_week", workDaysVal],
+      ];
+      for (const [columna, valor] of camposVacaciones) {
+        if (!Object.prototype.hasOwnProperty.call(req.body, columna)) continue;
+        setClauses.push(`${columna}=$${values.length + 1}`);
+        values.push(valor);
+      }
 
       if (fotoValue !== undefined) {
         setClauses.push(`photo=$${values.length + 1}`);

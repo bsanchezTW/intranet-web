@@ -7,8 +7,7 @@
    compartidos (.campo-form en intranet.css). */
 
 .perfil-page {
-  max-width: 1040px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .perfil-layout {
@@ -341,18 +340,4 @@
   .perfil-guardar .btn-perfil {
     flex: 1 1 100%;
   }
-}
-
-/* En modo oscuro el azul de marca es claro: el texto blanco encima no contrasta. */
-html[data-theme="dark"] .btn-perfil--primary,
-html[data-theme="dark"] .btn-perfil--primary:hover {
-  color: var(--color-bg);
-}
-
-/* La banda usa el azul claro del tema oscuro, sobre el que la foto cantaría;
-   se apaga a un degradado de superficie. */
-html[data-theme="dark"] .perfil-ficha__banda {
-  background:
-    radial-gradient(120% 140% at 50% 0%, rgba(166, 216, 74, 0.16), transparent 62%),
-    linear-gradient(135deg, #1c3252 0%, #14243c 100%);
 }

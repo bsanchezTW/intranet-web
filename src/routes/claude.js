@@ -27,6 +27,7 @@ const { createSupportTicket, listOpenTicketsForUser } = require("../services/tic
 const { isAreaManager } = require("../services/expenses/areaManager");
 const { isFinanceApprover } = require("../services/expenses/financeTeam");
 const { canManageRrhh } = require("../services/access/staffAccess");
+const { listAppsByCatalog } = require("../services/appCatalogService");
 
 const router = express.Router();
 
@@ -167,6 +168,7 @@ router.post("/api/chat", async (req, res) => {
       searchPeople,
       searchDocuments,
       searchEvents,
+      selfHelp: supportTickets ? () => listAppsByCatalog("support") : null,
       tickets: supportTickets
         ? {
             attachmentCount: chatAttachments.length,

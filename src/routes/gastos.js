@@ -135,7 +135,7 @@ router.get("/", async (req, res) => {
     const formulario = requisitos.ok ? await datosFormulario(user, requisitos, fondos) : null;
 
     res.render("gastos/index", {
-      titulo: "Mis solicitudes de gastos",
+      titulo: "Mis solicitudes",
       solicitudes,
       requisitos,
       esRevisor,
@@ -147,9 +147,9 @@ router.get("/", async (req, res) => {
       ...VIEW_HELPERS,
       // procesos.css: las tarjetas de "Nueva solicitud" y el aviso de
       // requisitos son las de Procesos y Documentos.
-      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260915g"],
+      extraCss: ["/css/procesos.css?v=20260916m", "/css/gastos.css?v=20260916m"],
       extraJs: formulario
-        ? ["/js/gastos-lista.js?v=20260915i", "/js/gastos-form.js?v=20260915g"]
+        ? ["/js/gastos-lista.js?v=20260915i", "/js/gastos-form.js?v=20260917r"]
         : ["/js/gastos-lista.js?v=20260915i"],
     });
   } catch (err) {
@@ -423,7 +423,7 @@ router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
-      extraCss: ["/css/gastos.css?v=20260915g"],
+      extraCss: ["/css/gastos.css?v=20260916m"],
     extraJs: ["/js/gastos-lista.js?v=20260915i"],
     });
   } catch (err) {
@@ -508,7 +508,7 @@ router.get("/:id", async (req, res) => {
       user,
       ...VIEW_HELPERS,
       // procesos.css: las migas de navegación son las de Procesos.
-      extraCss: ["/css/procesos.css", "/css/gastos.css?v=20260915h"],
+      extraCss: ["/css/procesos.css?v=20260916m", "/css/gastos.css?v=20260916m"],
     });
   } catch (err) {
     console.error("[Gastos] Error abriendo el detalle:", err);

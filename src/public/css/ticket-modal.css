@@ -84,10 +84,6 @@
   color: var(--color-text);
 }
 
-.ticket-detail-back {
-  margin-bottom: 16px;
-}
-
 .ticket-container {
   position: relative;
   background: var(--color-surface);

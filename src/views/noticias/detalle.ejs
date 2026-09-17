@@ -22,6 +22,7 @@ const AVISOS_ERROR = {
   sin_destinatarios: 'Ningún destinatario tiene correo registrado.',
   correo_fallido: 'No se pudo enviar el correo. Inténtalo nuevamente.',
   destacada_fallida: 'No se pudo actualizar la noticia destacada.',
+  adjuntos_fallidos: 'La noticia se publicó, pero no se pudieron subir los archivos. Edítala para adjuntarlos de nuevo.',
 };
 
 const mensajeOk = ok ? (AVISOS_OK[ok] || ok) : null;
@@ -38,28 +39,23 @@ function formatNewsDate(fecha) {
 
 <div class="contenedor articulo">
 
+  <nav class="page-header__migas migas-sueltas" aria-label="Ruta de navegación">
+    <a href="/noticias">Noticias</a> <span aria-hidden="true">/</span>
+    <span><%= noticia.title %></span>
+  </nav>
+
   <% if (mensajeOk) { %>
-    <div class="nt-aviso nt-aviso--ok" role="status">
-      <%- include('../partials/icon', { name: 'sparkles' }) %>
-      <span><%= mensajeOk %></span>
-    </div>
+    <div hidden data-toast="<%= mensajeOk %>"></div>
   <% } %>
 
   <% if (mensajeError) { %>
-    <div class="nt-aviso nt-aviso--error" role="alert">
-      <%- include('../partials/icon', { name: 'alert-triangle' }) %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
       <span><%= mensajeError %></span>
     </div>
   <% } %>
 
   <div class="articulo__layout">
-
-    <%# Fuera del <aside> a propósito: la rejilla lo coloca sobre la columna
-        lateral en escritorio y, al apilarse, queda al inicio de la página en
-        vez de quedar enterrado bajo el artículo. %>
-    <a href="/noticias" class="aside-volver">
-      <span aria-hidden="true">←</span> Volver a noticias
-    </a>
 
     <article class="articulo__principal">
 
@@ -95,7 +91,7 @@ function formatNewsDate(fecha) {
       <% if (puedeEscribir) { %>
         <section class="articulo__admin">
           <div class="articulo__admin-cabecera">
-            <h2 class="articulo__admin-titulo">Administración</h2>
+            <h2 class="articulo__admin-titulo"><%- include('../partials/icon', { name: 'shield' }) %> Administración</h2>
             <p class="articulo__admin-ayuda">Solo visible para administradores.</p>
           </div>
 
@@ -106,7 +102,11 @@ function formatNewsDate(fecha) {
             </button>
 
             <form action="/noticias/destacar/<%= noticia.id %>" method="POST"
-                  <%= noticia.featured ? '' : 'data-confirmar="¿Marcar esta noticia como destacada en el inicio? Reemplazará a la destacada actual."' %>>
+                  <% if (!noticia.featured) { %>
+                    data-confirm="Aparecerá como destacada en el inicio y reemplazará a la destacada actual."
+                    data-confirm-title="¿Destacar esta noticia?"
+                    data-confirm-accept="Destacar"
+                  <% } %>>
               <% if (noticia.featured) { %><input type="hidden" name="quitar" value="1"><% } %>
               <button type="submit" class="btn-nt">
                 <%- include('../partials/icon', { name: 'sparkles' }) %>
@@ -120,7 +120,10 @@ function formatNewsDate(fecha) {
             </button>
 
             <form action="/noticias/eliminar/<%= noticia.id %>" method="POST"
-                  data-confirmar="¿Eliminar esta noticia de forma permanente? También se borrarán sus archivos.">
+                  data-confirm="Se eliminará de forma permanente junto con sus archivos. Esta acción no se puede deshacer."
+                  data-confirm-title="¿Eliminar la noticia?"
+                  data-confirm-accept="Eliminar"
+                  data-confirm-tone="peligro">
               <button type="submit" class="btn-nt btn-nt--peligro">
                 <%- include('../partials/icon', { name: 'trash' }) %>
                 Eliminar
@@ -159,16 +162,16 @@ function formatNewsDate(fecha) {
 
   <%# ---------- Modal: elegir destinatarios ---------- %>
   <div class="modal-overlay" id="modal-correo-destinatarios" role="dialog" aria-modal="true" aria-labelledby="correo-titulo" aria-hidden="true">
-    <div class="modal-content modal-content--correo">
+    <div class="modal-content modal-content--md modal-content--correo">
       <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
 
-      <div class="correo-head">
-        <h3 id="correo-titulo">Enviar por correo</h3>
-        <p>El correo mostrará la noticia completa: imágenes y documentos visibles al abrir, sin descargas.</p>
-      </div>
+      <form id="form-correo-destinatarios" action="/noticias/enviar-correo/<%= noticia.id %>" method="POST">
+        <div class="modal-head">
+          <h2 id="correo-titulo" class="modal-title">Enviar por correo</h2>
+          <p class="modal-subtitle">El correo mostrará la noticia completa: imágenes y documentos visibles al abrir, sin descargas.</p>
+        </div>
 
-      <form id="form-correo-destinatarios" action="/noticias/enviar-correo/<%= noticia.id %>" method="POST" style="display:contents;">
-        <div class="correo-body">
+        <div class="modal-body correo-body">
           <label class="correo-todos" for="correo-enviar-todos">
             <input type="checkbox" id="correo-enviar-todos" name="enviar_todos" value="1">
             <span>
@@ -212,7 +215,7 @@ function formatNewsDate(fecha) {
           </div>
         </div>
 
-        <div class="correo-foot">
+        <div class="modal-foot">
           <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
           <button type="submit" class="btn-primario" id="correo-btn-enviar" disabled>Enviar</button>
         </div>
@@ -223,13 +226,16 @@ function formatNewsDate(fecha) {
   <%# ---------- Modal: recién publicada ---------- %>
   <% if (publicada) { %>
     <div class="modal-overlay" id="modal-correo-publicada" role="dialog" aria-modal="true" aria-labelledby="publicada-titulo" aria-hidden="true">
-      <div class="modal-content">
+      <div class="modal-content modal-content--sm">
         <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-        <h3 id="publicada-titulo" class="modal-title">Noticia publicada</h3>
-        <p class="modal-description">
-          Ya está disponible en la intranet. ¿Quieres avisar por correo a los colaboradores?
-        </p>
-        <div class="modal-actions">
+        <div class="modal-head">
+          <div class="modal-head__eyebrow"><span class="modal-tag">Publicada</span></div>
+          <h2 id="publicada-titulo" class="modal-title">Noticia publicada</h2>
+        </div>
+        <div class="modal-body">
+          <p class="modal-text">Ya está disponible en la intranet. ¿Quieres avisar por correo a los colaboradores?</p>
+        </div>
+        <div class="modal-foot">
           <button type="button" class="btn-secundario" data-modal-close>Ahora no</button>
           <button type="button" class="btn-primario" id="btn-elegir-destinatarios">
             Elegir destinatarios
@@ -239,5 +245,5 @@ function formatNewsDate(fecha) {
     </div>
   <% } %>
 
-  <script src="/js/noticias-detalle.js?v=20260729a" defer></script>
+  <script src="/js/noticias-detalle.js?v=20260917r" defer></script>
 <% } %>

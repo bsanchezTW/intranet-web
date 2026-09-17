@@ -1,21 +1,35 @@
-/* Shared modal system — design reference: Abrir Ticket
-   Single design line for all intranet modals.
-   Feature CSS may only adjust layout (width, grid, aside), not chrome. */
+/* ══════════════════════════════════════════════════════════════════════════
+   Modales de la intranet — un solo diseño, tomado del modal "Abrir ticket".
+
+   Anatomía (todas las piezas son opcionales salvo el panel):
+
+     .modal-overlay
+       .modal-content [.modal-content--sm | --md | --lg | --xl | --full]
+         button.modal-close            ← hijo directo del panel: nunca scrollea
+         header.modal-head
+           .modal-head__eyebrow        ← línea chica sobre el título (+ .modal-tag)
+           h2.modal-title
+           p.modal-subtitle
+         .modal-body                   ← lo único que scrollea
+           (.modal-body--split > .modal-aside + .modal-main, cada columna scrollea)
+         footer.modal-foot
+           .modal-foot__start          ← acción secundaria a la izquierda (opcional)
+           botones                     ← van a la derecha
+
+   Un <form> puede envolver cuerpo y pie: si es hijo directo del panel (o lleva
+   .modal-stack) se vuelve columna flexible y la cadena de alto no se rompe.
+
+   Campos: .campo-form (intranet.css) con .campos-grid para dos columnas.
+   Botones: .btn-primario, .btn-secundario, .btn-peligro.
+
+   El CSS de cada módulo sólo ajusta ancho y distribución interna; el cromo
+   (bordes, colores, tipografía, botones) vive aquí.
+   ══════════════════════════════════════════════════════════════════════════ */
 
 .modal-overlay {
-  --modal-bg: #ffffff;
-  --modal-text: #1a202c;
-  --modal-heading: #0f4c81;
-  --modal-muted: #475467;
-  --modal-label: #4a5568;
-  --modal-border: #dbe5ef;
-  --modal-border-strong: #cbd5e0;
-  --modal-input-bg: #f8fafc;
-  --modal-overlay-bg: rgba(0, 0, 0, 0.72);
+  --modal-overlay-bg: rgba(13, 31, 51, 0.62);
   --modal-radius: 12px;
-  --modal-radius-sm: 8px;
-  --modal-primary: #0f4c81;
-  --modal-primary-hover: #0b3a63;
+  --modal-pad-x: 24px;
 
   display: none;
   position: fixed;
@@ -26,8 +40,7 @@
   justify-content: center;
   box-sizing: border-box;
   padding: 16px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--modal-overlay-bg);
   opacity: 0;
   z-index: 2000;
@@ -43,21 +56,19 @@
 }
 
 /* Modal abierto encima de otro: el fondo se aclara para no sepultar al de
-   abajo. Dos capas al 72 % dejan la lista de detrás prácticamente negra. */
+   abajo. Dos capas oscuras dejan la lista de detrás prácticamente negra. */
 .modal-overlay.is-apilado,
 .modal-imagen.is-apilado {
-  --modal-overlay-bg: rgba(0, 0, 0, 0.38);
-  background: rgba(0, 0, 0, 0.38);
+  --modal-overlay-bg: rgba(13, 31, 51, 0.3);
+  background: var(--modal-overlay-bg);
 }
 
-/* Panel enter animation — transform only, NEVER opacity 0 */
+/* Entrada del panel: sólo transform, nunca opacity 0. */
 .modal-overlay > .modal-content,
-.modal-overlay > .modal-content2,
 .modal-imagen > .modal-imagen-contenido {
   box-sizing: border-box;
   min-width: 0;
   margin-inline: auto;
-  opacity: 1;
   transform: translateY(18px) scale(0.96);
   transform-origin: center center;
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
@@ -65,111 +76,66 @@
 }
 
 .modal-overlay.is-open > .modal-content,
-.modal-overlay.is-open > .modal-content2,
 .modal-imagen.is-open > .modal-imagen-contenido {
   transform: translateY(0) scale(1);
 }
 
 .modal-overlay.is-closing > .modal-content,
-.modal-overlay.is-closing > .modal-content2,
 .modal-imagen.is-closing > .modal-imagen-contenido {
   transform: translateY(12px) scale(0.98);
 }
 
-/* ── Panel base (solid, ticket look) ── */
-.modal-content,
-.modal-content2 {
+/* ── Panel ───────────────────────────────────────────────────────────────── */
+
+/*
+ * El panel no scrollea nunca: es una columna de cabecera, cuerpo y pie donde
+ * sólo el cuerpo se desplaza. Por eso la X, el título y los botones siguen a la
+ * vista en formularios largos.
+ */
+.modal-content {
+  --modal-width: 560px;
+
   position: relative;
-  width: 100%;
-  max-width: 500px;
-  margin: auto;
-  padding: 28px 30px;
-  border: 1px solid var(--modal-border, #dbe5ef);
-  border-radius: var(--modal-radius, 12px);
-  background: var(--modal-bg, #ffffff) !important;
-  color: var(--modal-text, #1a202c);
-  box-shadow: 0 20px 48px rgba(0, 20, 40, 0.28);
-  max-height: min(90vh, 820px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  /* El panel scrollea, y la barra se comería el padding derecho: el contenido
-     quedaría descentrado y pegado a ella. Reservando el hueco a los dos lados
-     el margen es simétrico y no baila según si el contenido llega a scrollear.
-     En móvil la barra es superpuesta y no ocupa, así que ahí no cambia nada.
-     Un panel "flush" (sin padding, con su propio layout scrolleable dentro)
-     debe apagarlo con scrollbar-gutter: auto, como hacen los de más abajo. */
-  scrollbar-gutter: stable both-edges;
-  -webkit-overflow-scrolling: touch;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  opacity: 1 !important;
-}
-
-.modal-content2.modal-content2-large,
-.modal-content.modal-content--large,
-.modal-content.modal-content2-large {
-  max-width: 680px;
-}
-
-/* Flush panels: nested layouts keep solid fill + no outer padding */
-.modal-content.editor-modal,
-.modal-content.app-modal__content,
-.modal-content.qr-modal__content,
-.modal-content.pdf-modal__content,
-.modal-content.modal-content--correo,
-.modal-content.modal-editar-panel,
-.modal-content.modal-panel--flush {
-  padding: 0;
-  /* El hueco de barra del panel base no corresponde aquí: estos paneles no
-     scrollean ellos mismos —lo hace su layout interno— y reservarlo dejaría una
-     franja muerta contra el borde. */
-  scrollbar-gutter: auto;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: var(--modal-bg, #ffffff) !important;
-}
-
-/* Titles — direct children and nested feature titles */
-.modal-content > .modal-title,
-.modal-content > h2,
-.modal-content > h3,
-.modal-content2 > .modal-title,
-.modal-content2 > h2,
-.modal-content2 > h3,
-.modal-overlay .modal-title,
-.modal-overlay .ticket-modal-title,
-.modal-overlay .app-modal__title,
-.modal-overlay .qr-modal__title,
-.modal-overlay .app-notify__title,
-.modal-overlay .modal-editar-title,
-.modal-overlay .correo-head h3,
-.modal-overlay .editor__head h2,
-.modal-overlay .home-tutorial__title {
-  margin: 0 0 6px;
-  padding: 0 36px 0 0;
-  border-bottom: 0;
-  color: var(--modal-heading, #0f4c81);
-  font-size: 1.35rem;
-  font-weight: 700;
+  width: 100%;
+  max-width: var(--modal-width);
+  max-height: min(90vh, 880px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--modal-radius, 12px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 20px 48px rgba(0, 20, 40, 0.28);
   text-align: left;
-  line-height: 1.3;
 }
 
-.modal-description,
-.ticket-modal-description,
-.modal-overlay .app-modal__subtitle,
-.modal-overlay .qr-modal__text,
-.modal-overlay .app-notify__hint,
-.modal-overlay .correo-head p,
-.modal-overlay .editor__head p {
-  margin: 0 0 16px;
-  color: var(--modal-muted, #475467);
-  font-size: 0.94rem;
-  line-height: 1.45;
+.modal-content--sm { --modal-width: 440px; }
+.modal-content--md { --modal-width: 560px; }
+.modal-content--lg { --modal-width: 720px; }
+.modal-content--xl { --modal-width: 940px; }
+
+/* Para editores y visores que necesitan casi toda la ventana. */
+.modal-content--full {
+  --modal-width: 1320px;
+  height: min(94vh, 960px);
+  max-height: min(94vh, 960px);
 }
 
-.modal-content2-close,
+/* Formularios y huecos de inyección que envuelven cuerpo + pie. */
+.modal-content > form,
+.modal-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+}
+
+/* ── Botón cerrar ────────────────────────────────────────────────────────── */
+
 .modal-close {
   position: absolute;
   top: 14px;
@@ -178,219 +144,587 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #555;
-  font-size: 1.5rem;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 1.6rem;
+  font-weight: 400;
   line-height: 1;
   cursor: pointer;
+  transition: background 0.18s, color 0.18s;
 }
 
-.modal-content2-close:hover,
 .modal-close:hover {
-  background: #f5f8fc;
-  color: #0f4c81;
+  background: var(--surface2);
+  color: var(--brand);
 }
 
-/* ── Forms (shared: modal-form, ticket, app-field, campo, form-control) ── */
-.modal-form,
-.ticket-modal-form {
-  display: grid;
-  gap: 10px;
+.modal-close:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
 }
 
-.modal-form label,
-.modal-form-label,
-.ticket-modal-form label,
-.modal-overlay .campo > label,
-.modal-overlay .form-label,
-.modal-overlay .app-field > label,
-.modal-overlay .change-password-field > label {
-  display: block;
-  color: var(--modal-label, #4a5568);
-  font-weight: 700;
-  font-size: 0.92rem;
-}
+/* ── Cabecera ────────────────────────────────────────────────────────────── */
 
-.modal-form-group,
-.modal-overlay .form-group,
-.modal-overlay .campo,
-.modal-overlay .app-field {
-  margin-bottom: 0;
-  display: grid;
-  gap: 6px;
-  /* Sin esto, una fila de 2 columnas estira el .campo más bajo y los
-     controles (teléfono, select de rol) se inflan con el hint del vecino. */
-  align-content: start;
-}
-
-.modal-overlay .app-field {
-  margin-bottom: 16px;
-}
-
-.modal-overlay .app-field:last-child {
-  margin-bottom: 0;
-}
-
-.modal-form input[type="text"],
-.modal-form input[type="email"],
-.modal-form input[type="password"],
-.modal-form input[type="number"],
-.modal-form input[type="date"],
-.modal-form input[type="url"],
-.modal-form input[type="tel"],
-.modal-form input[type="file"],
-.modal-form input[type="search"],
-.modal-form select,
-.modal-form textarea,
-.modal-form-input,
-.ticket-modal-form input[type="text"],
-.ticket-modal-form select,
-.ticket-modal-form textarea,
-.modal-overlay .campo input,
-.modal-overlay .campo select,
-.modal-overlay .campo textarea,
-.modal-overlay .form-control,
-.modal-overlay .app-field input,
-.modal-overlay .app-field textarea,
-.modal-overlay .app-notify__textarea {
-  width: 100%;
+/* intranet.css da estilo global a <header> y <footer> (la barra y el pie del
+   sitio: sticky, azul, con blur y margen). Cabecera y pie del modal pueden
+   usar esas etiquetas, así que aquí se anula todo eso. */
+.modal-head,
+.modal-foot {
+  position: relative;
+  top: auto;
+  z-index: auto;
+  isolation: auto;
+  width: auto;
+  margin: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: inherit;
+  font-size: inherit;
   box-sizing: border-box;
-  border: 1px solid var(--modal-border-strong, #cbd5e0);
-  border-radius: var(--modal-radius-sm, 8px);
-  padding: 11px 12px;
-  background: var(--modal-input-bg, #f8fafc);
-  color: var(--modal-text, #1a202c);
-  font-size: 0.94rem;
-  font-family: inherit;
 }
 
-.modal-form input:focus,
-.modal-form select:focus,
-.modal-form textarea:focus,
-.modal-form-input:focus,
-.ticket-modal-form input:focus,
-.ticket-modal-form select:focus,
-.ticket-modal-form textarea:focus,
-.modal-overlay .campo input:focus,
-.modal-overlay .campo select:focus,
-.modal-overlay .campo textarea:focus,
-.modal-overlay .form-control:focus,
-.modal-overlay .app-field input:focus,
-.modal-overlay .app-field textarea:focus,
-.modal-overlay .app-notify__textarea:focus {
-  outline: none;
-  border-color: var(--modal-heading, #0f4c81);
-  box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.12);
-  background: #ffffff;
+.modal-head {
+  flex-shrink: 0;
+  padding: 20px 60px 16px var(--modal-pad-x);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
-.modal-form textarea,
-.ticket-modal-form textarea,
-.modal-overlay .campo textarea,
-.modal-overlay .app-field textarea,
-.modal-overlay .app-notify__textarea {
-  min-height: 120px;
-  resize: vertical;
-}
-
-.ticket-modal-form textarea {
-  min-height: 140px;
-}
-
-.modal-form-row,
-.modal-form-grid-2,
-.ticket-modal-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  align-items: start;
-}
-
-.modal-actions,
-.modal-form-actions,
-.modal-actions-row,
-.ticket-modal-actions {
-  margin-top: 8px;
+.modal-head__eyebrow {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
-  gap: 10px;
-  border-top: 1px solid #e7edf3;
-  padding-top: 14px;
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--color-text-subtle);
 }
 
-.modal-actions--center {
+.modal-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 76, 129, 0.18);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.modal-tag--peligro {
+  border-color: rgba(208, 92, 92, 0.3);
+  background: rgba(208, 92, 92, 0.12);
+  color: #a33b3b;
+}
+
+.modal-title {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--color-heading);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.modal-subtitle,
+.modal-head .modal-description {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+/* ── Cuerpo ──────────────────────────────────────────────────────────────── */
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 14px;
+  padding: 18px var(--modal-pad-x) 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-body > [hidden] {
+  display: none;
+}
+
+/* Cuerpo sin relleno, para visores (iframe, imagen) que llegan al borde. */
+.modal-body--flush {
+  padding: 0;
+  gap: 0;
+}
+
+/* Dos columnas: lateral fija + principal. Cada una scrollea por su cuenta. */
+.modal-body--split,
+.modal-body--split-end {
+  --modal-aside-width: 300px;
+
+  display: grid;
+  grid-template-columns: var(--modal-aside-width) minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.modal-body--split-end {
+  grid-template-columns: minmax(0, 1fr) var(--modal-aside-width);
+}
+
+.modal-aside,
+.modal-main {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 14px;
+  padding: 18px var(--modal-pad-x) 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-aside {
+  background: var(--color-surface-muted);
+  border-right: 1px solid var(--color-border);
+}
+
+.modal-body--split-end .modal-aside {
+  border-right: 0;
+  border-left: 1px solid var(--color-border);
+}
+
+/* Bloque con título en mayúsculas, como "Descripción" en el detalle de ticket. */
+.modal-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.modal-section + .modal-section {
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Un <form> que agrupa varias secciones dentro de una columna. */
+.modal-section-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+
+.modal-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.modal-section__title .icon-svg {
+  color: var(--brand);
+}
+
+.modal-section__hint {
+  margin: -6px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+/* Párrafos sueltos dentro del cuerpo (mensajes de confirmación, avisos). */
+.modal-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.modal-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.modal-note--peligro {
+  border-color: rgba(208, 92, 92, 0.3);
+  background: rgba(208, 92, 92, 0.08);
+  color: #8f2f2f;
+}
+
+.modal-alert {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(208, 92, 92, 0.3);
+  background: rgba(208, 92, 92, 0.1);
+  color: #a33b3b;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.modal-alert:empty,
+.modal-alert[hidden] {
+  display: none;
+}
+
+.modal-loading {
+  margin: 0;
+  padding: 42px 18px;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Pie ─────────────────────────────────────────────────────────────────── */
+
+.modal-foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px var(--modal-pad-x) 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.modal-foot[hidden] {
+  display: none;
+}
+
+.modal-foot__start {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-right: auto;
+  font-size: 0.8rem;
+  color: var(--color-text-subtle);
+}
+
+.modal-foot--center {
   justify-content: center;
 }
 
-.modal-actions-row {
-  justify-content: space-between;
+/* ── Campos ──────────────────────────────────────────────────────────────── */
+
+/* El campo compartido (.campo-form) toma aquí la piel del ticket: etiqueta
+   corta en mayúsculas y control compacto. */
+.modal-content .campo-form {
+  gap: 5px;
+  margin-bottom: 0;
 }
 
-.modal-footer-center {
-  text-align: center;
-  margin-top: 25px;
+.modal-content .campo-form > label,
+.modal-content .campo-form__label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
 }
+
+.modal-content .campo-form > label .required-mark,
+.modal-content .campo-form__opcional {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.modal-content .campo-form__opcional {
+  font-weight: 600;
+}
+
+.modal-content .campos-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+}
+
+.modal-content .campos-grid > .campo-form--ancho {
+  grid-column: 1 / -1;
+}
+
+.modal-content .campo-form__control,
+.modal-content .campo-form input[type="text"],
+.modal-content .campo-form input[type="email"],
+.modal-content .campo-form input[type="tel"],
+.modal-content .campo-form input[type="date"],
+.modal-content .campo-form input[type="number"],
+.modal-content .campo-form input[type="password"],
+.modal-content .campo-form input[type="search"],
+.modal-content .campo-form input[type="url"],
+.modal-content .campo-form input[type="file"],
+.modal-content .campo-form textarea,
+.modal-content .campo-form select {
+  padding: 9px 11px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.modal-content .campo-form textarea {
+  min-height: 110px;
+  line-height: 1.45;
+}
+
+.modal-content .campo-form input:focus,
+.modal-content .campo-form select:focus,
+.modal-content .campo-form textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.modal-content .campo-form input[readonly],
+.modal-content .campo-form select:disabled,
+.modal-content .campo-form input:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.modal-content .campo-form input[type="file"] {
+  padding: 6px;
+  border-style: dashed;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.modal-content .campo-form input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-content .campo-form__ayuda {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--color-text-subtle);
+}
+
+.modal-content .campo-form.is-invalid input,
+.modal-content .campo-form.is-invalid textarea,
+.modal-content .campo-form.is-invalid select,
+.modal-content .campo-form.is-invalid .phone-field__prefix {
+  border-color: var(--down);
+}
+
+.modal-content .campo-form.is-invalid input:focus,
+.modal-content .campo-form.is-invalid select:focus,
+.modal-content .campo-form.is-invalid textarea:focus {
+  border-color: var(--down);
+  box-shadow: 0 0 0 3px rgba(208, 92, 92, 0.18);
+}
+
+.modal-counter {
+  margin-top: 2px;
+  text-align: right;
+  font-size: 0.74rem;
+  color: var(--color-text-subtle);
+}
+
+.modal-counter.limit-reached {
+  color: var(--down);
+  font-weight: 700;
+}
+
+/* ── Botones ─────────────────────────────────────────────────────────────── */
 
 .modal-overlay .btn-primario,
 .modal-overlay .btn-secundario,
-.modal-button-primary,
-.modal-button-secondary {
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-weight: 700;
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-family: inherit;
-  line-height: 1.2;
+.modal-overlay .btn-peligro,
+.modal-overlay .btn-peligro-suave {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  text-decoration: none;
+  gap: 6px;
   box-sizing: border-box;
-  min-height: 40px;
-  opacity: 1;
+  min-height: 0;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.18s, background 0.18s, border-color 0.18s, color 0.18s;
 }
 
-.modal-overlay .btn-primario,
-.modal-button-primary {
-  background: var(--modal-primary, #0f4c81);
-  color: #ffffff;
+.modal-overlay .btn-primario:hover:not(:disabled),
+.modal-overlay .btn-secundario:hover:not(:disabled),
+.modal-overlay .btn-peligro:hover:not(:disabled),
+.modal-overlay .btn-peligro-suave:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
-.modal-overlay .btn-primario:hover,
-.modal-button-primary:hover {
-  background: var(--modal-primary-hover, #0b3a63);
-  color: #ffffff;
-}
-
-.modal-overlay .btn-primario:disabled {
+.modal-overlay .btn-primario:disabled,
+.modal-overlay .btn-secundario:disabled,
+.modal-overlay .btn-peligro:disabled,
+.modal-overlay .btn-peligro-suave:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
 }
 
-.modal-overlay .btn-secundario,
-.modal-button-secondary {
-  background: #ffffff;
-  color: #4a5568;
-  border-color: #cbd5e0;
+.modal-overlay .btn-primario:focus-visible,
+.modal-overlay .btn-secundario:focus-visible,
+.modal-overlay .btn-peligro:focus-visible,
+.modal-overlay .btn-peligro-suave:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
-.modal-overlay .btn-secundario:hover,
-.modal-button-secondary:hover {
-  background: #f8fafc;
-  color: #1a202c;
+.modal-overlay .btn-primario {
+  background: var(--ink);
+  color: var(--color-bg);
 }
 
-.modal-button-primary-sm {
-  padding: 10px 25px;
+.modal-overlay .btn-primario:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--color-bg);
+  opacity: 0.92;
+}
+
+.modal-overlay .btn-primario.is-enviando,
+.modal-overlay .btn-secundario.is-enviando,
+.modal-overlay .btn-peligro.is-enviando,
+.modal-overlay .btn-peligro-suave.is-enviando,
+.modal-overlay .btn-primario.is-enviando:disabled,
+.modal-overlay .btn-secundario.is-enviando:disabled,
+.modal-overlay .btn-peligro.is-enviando:disabled,
+.modal-overlay .btn-peligro-suave.is-enviando:disabled {
+  opacity: 1;
+  cursor: progress;
+  pointer-events: none;
+}
+
+/* Botón en espera (IntranetModal.ocuparBoton): el contenido queda invisible
+   pero ocupa su lugar y el spinner se centra encima. Sirve para cualquier
+   botón de la intranet, dentro o fuera de un modal. */
+.is-enviando {
+  position: relative;
+  color: transparent !important;
+  cursor: progress;
+}
+
+.is-enviando > :not(.btn-submit-spinner) {
+  visibility: hidden;
+}
+
+.btn-submit-spinner {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--spinner-color, currentColor) 28%, transparent);
+  border-top-color: var(--spinner-color, currentColor);
+  animation: btn-submit-giro 0.7s linear infinite;
+}
+
+.is-enviando > .btn-submit-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -8px 0 0 -8px;
+}
+
+@keyframes btn-submit-giro {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-submit-spinner {
+    animation-duration: 1.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+.modal-overlay .btn-secundario {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.modal-overlay .btn-secundario:hover:not(:disabled) {
+  background: var(--color-surface);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.modal-overlay .btn-peligro {
+  background: #b83b3b;
+  color: #ffffff;
+}
+
+.modal-overlay .btn-peligro:hover:not(:disabled) {
+  background: #9c2f2f;
+}
+
+.modal-overlay .btn-peligro-suave {
+  background: rgba(208, 92, 92, 0.08);
+  border-color: rgba(208, 92, 92, 0.35);
+  color: #a33b3b;
+}
+
+.modal-overlay .btn-peligro-suave:hover:not(:disabled) {
+  background: rgba(208, 92, 92, 0.14);
+}
+
+/* ── Listas de datos (menú semanal y similares) ──────────────────────────── */
+
+.modal-list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .modal-list-item {
@@ -398,51 +732,69 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 15px;
-  border-radius: 8px;
-  background: #f4f6f8;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
 }
 
 .modal-item-label {
-  color: #333;
+  font-size: 0.84rem;
   font-weight: 700;
+  color: var(--color-text-muted);
 }
 
 .modal-item-value {
-  color: #0f4c81;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-heading);
   text-align: right;
 }
 
-.modal-list-stack {
+/* ── Diálogo de confirmación (IntranetDialog) ────────────────────────────── */
+
+.modal-overlay--dialogo {
+  z-index: 3000;
+}
+
+.modal-dialogo .modal-body {
+  padding-top: 16px;
+  padding-bottom: 18px;
+}
+
+.modal-dialogo .modal-head__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.modal-dialogo--peligro .modal-head__icono {
+  background: rgba(208, 92, 92, 0.12);
+  color: #b83b3b;
+}
+
+.modal-dialogo .modal-head__icono svg {
+  width: 17px;
+  height: 17px;
+}
+
+.modal-dialogo .modal-head {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
+  padding-right: var(--modal-pad-x);
 }
 
-.modal-info-box {
-  background: #f5f8fc;
-  border: 1px solid #dbe5ef;
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
+.modal-dialogo .modal-head .modal-title {
+  font-size: 1.08rem;
 }
 
-.modal-info-box p {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.modal-rules-list {
-  padding-left: 20px;
-  color: #555;
-  line-height: 1.6;
-  margin: 0 0 8px;
-}
-
-.modal-rules-list li {
-  margin-bottom: 10px;
-}
+/* ── Visor de imagen ─────────────────────────────────────────────────────── */
 
 .modal-imagen {
   box-sizing: border-box;
@@ -458,7 +810,6 @@
   max-width: 100%;
   min-width: 0;
   margin-inline: auto;
-  opacity: 1;
 }
 
 .modal-imagen.is-open {
@@ -468,6 +819,8 @@
 .modal-imagen.is-closing {
   opacity: 0;
 }
+
+/* ── Bloqueo de scroll de la página ──────────────────────────────────────── */
 
 body.modal-open {
   position: fixed;
@@ -483,152 +836,20 @@ body.modal-open {
   overscroll-behavior: none;
 }
 
-/* Dark */
-html[data-theme="dark"] .modal-overlay {
-  --modal-bg: #1a2332;
-  --modal-text: #f8fafc;
-  --modal-heading: #a8d4ff;
-  --modal-muted: #94a3b8;
-  --modal-label: #e2e8f0;
-  --modal-border: #3b4a65;
-  --modal-border-strong: #4f617f;
-  --modal-input-bg: #243147;
-  --modal-overlay-bg: rgba(0, 0, 0, 0.78);
-  --modal-primary: #0d4c83;
-  --modal-primary-hover: #0a3d69;
-  background: var(--modal-overlay-bg);
-}
-
-html[data-theme="dark"] .modal-content,
-html[data-theme="dark"] .modal-content2,
-html[data-theme="dark"] .modal-content.editor-modal,
-html[data-theme="dark"] .modal-content.app-modal__content,
-html[data-theme="dark"] .modal-content.qr-modal__content,
-html[data-theme="dark"] .modal-content.pdf-modal__content,
-html[data-theme="dark"] .modal-content.modal-content--correo,
-html[data-theme="dark"] .modal-content.modal-editar-panel {
-  background: #1a2332 !important;
-  color: #f8fafc;
-  border-color: #3b4a65;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.7);
-}
-
-html[data-theme="dark"] .modal-content > .modal-title,
-html[data-theme="dark"] .modal-content > h2,
-html[data-theme="dark"] .modal-content > h3,
-html[data-theme="dark"] .modal-content2 > .modal-title,
-html[data-theme="dark"] .modal-content2 > h2,
-html[data-theme="dark"] .modal-content2 > h3 {
-  color: #a8d4ff;
-}
-
-html[data-theme="dark"] .modal-description,
-html[data-theme="dark"] .modal-rules-list {
-  color: #94a3b8;
-}
-
-html[data-theme="dark"] .modal-content2-close,
-html[data-theme="dark"] .modal-close {
-  color: #f8fafc;
-}
-
-html[data-theme="dark"] .modal-content2-close:hover,
-html[data-theme="dark"] .modal-close:hover {
-  background: #243147;
-  color: #a8d4ff;
-}
-
-html[data-theme="dark"] .modal-list-item {
-  background: #243147;
-  color: #f8fafc;
-}
-
-html[data-theme="dark"] .modal-item-label {
-  color: #f8fafc;
-}
-
-html[data-theme="dark"] .modal-item-value {
-  color: #a8d4ff;
-}
-
-html[data-theme="dark"] .modal-overlay .btn-secundario,
-html[data-theme="dark"] .modal-button-secondary {
-  background: #2e3a51;
-  border-color: #4f617f;
-  color: #f8fafc;
-}
-
-html[data-theme="dark"] .modal-overlay .btn-secundario:hover,
-html[data-theme="dark"] .modal-button-secondary:hover {
-  background: #3b4a65;
-  color: #ffffff;
-}
-
-html[data-theme="dark"] .modal-overlay .btn-primario,
-html[data-theme="dark"] .modal-button-primary {
-  background: #0d4c83;
-  color: #ffffff;
-}
-
-html[data-theme="dark"] .modal-form label,
-html[data-theme="dark"] .modal-form-label,
-html[data-theme="dark"] .modal-overlay .campo > label,
-html[data-theme="dark"] .modal-overlay .form-label,
-html[data-theme="dark"] .modal-content2 label,
-html[data-theme="dark"] .modal-content label {
-  color: #e2e8f0;
-}
-
-html[data-theme="dark"] .modal-form input,
-html[data-theme="dark"] .modal-form select,
-html[data-theme="dark"] .modal-form textarea,
-html[data-theme="dark"] .modal-form-input,
-html[data-theme="dark"] .modal-overlay .campo input,
-html[data-theme="dark"] .modal-overlay .campo select,
-html[data-theme="dark"] .modal-overlay .campo textarea,
-html[data-theme="dark"] .modal-overlay .form-control,
-html[data-theme="dark"] .modal-content2 input,
-html[data-theme="dark"] .modal-content2 select,
-html[data-theme="dark"] .modal-content2 textarea {
-  background: #243147;
-  color: #f8fafc;
-  border-color: #4f617f;
-}
-
-html[data-theme="dark"] .modal-form input:focus,
-html[data-theme="dark"] .modal-form select:focus,
-html[data-theme="dark"] .modal-form textarea:focus,
-html[data-theme="dark"] .modal-form-input:focus,
-html[data-theme="dark"] .modal-overlay .campo input:focus,
-html[data-theme="dark"] .modal-overlay .campo select:focus,
-html[data-theme="dark"] .modal-overlay .campo textarea:focus,
-html[data-theme="dark"] .modal-overlay .form-control:focus {
-  background: #1a2332;
-  border-color: #a8d4ff;
-}
-
-html[data-theme="dark"] .modal-actions,
-html[data-theme="dark"] .modal-form-actions,
-html[data-theme="dark"] .modal-actions-row {
-  border-top-color: #3b4a65;
-}
-
-html[data-theme="dark"] .modal-info-box,
-html[data-theme="dark"] .modal-list-item {
-  background: #243147;
-  border-color: #3b4a65;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .modal-overlay,
-  .modal-overlay > .modal-content,
-  .modal-overlay > .modal-content2 {
+  .modal-overlay > .modal-content {
     transition: none !important;
   }
 }
 
-/* Mobile fullscreen */
+/* ── Móvil: pantalla completa ────────────────────────────────────────────── */
+
 @media (max-width: 768px) {
+  .modal-overlay {
+    --modal-pad-x: 16px;
+  }
+
   .modal-overlay,
   .modal-imagen,
   .foto-crop-overlay.is-open {
@@ -645,154 +866,99 @@ html[data-theme="dark"] .modal-list-item {
   }
 
   .modal-overlay > .modal-content,
-  .modal-overlay > .modal-content2,
   .modal-imagen > .modal-imagen-contenido,
   .foto-crop-overlay .foto-crop-modal {
-    width: 100% !important;
-    max-width: none !important;
-    height: 100% !important;
-    max-height: none !important;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
     min-height: 100dvh;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
     transform: none !important;
-    opacity: 1 !important;
+  }
+
+  .modal-imagen > .modal-imagen-contenido {
+    overflow-y: auto;
+  }
+
+  .foto-crop-overlay .foto-crop-modal {
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
     background: #ffffff !important;
   }
 
-  /* Recorte: layout fijo en fullscreen; la imagen no debe empujar el modal */
-  .foto-crop-overlay .foto-crop-modal {
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
+  /* Un diálogo de confirmación no necesita la pantalla: queda como hoja
+     anclada abajo, al alcance del pulgar. */
+  .modal-overlay.modal-overlay--dialogo {
+    align-items: flex-end !important;
   }
 
-  html[data-theme="dark"] .foto-crop-overlay .foto-crop-modal {
-    background: #1a2332 !important;
+  .modal-overlay.modal-overlay--dialogo > .modal-content {
+    height: auto;
+    min-height: 0;
+    max-height: 90dvh;
+    border-radius: 14px 14px 0 0;
   }
 
-  .modal-overlay > .modal-content.editor-modal,
-  .modal-overlay > .modal-content.app-modal__content,
-  .modal-overlay > .modal-content.qr-modal__content,
-  .modal-overlay > .modal-content.pdf-modal__content,
-  .modal-overlay > .modal-content.modal-content--correo,
-  .modal-overlay > .modal-content.modal-editar-panel,
-  .modal-overlay > .modal-content.modal-panel--flush {
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
+  .modal-head {
+    padding: 16px 54px 14px var(--modal-pad-x);
   }
 
-  html[data-theme="dark"] .modal-overlay > .modal-content,
-  html[data-theme="dark"] .modal-overlay > .modal-content2 {
-    background: #1a2332 !important;
+  .modal-body {
+    padding: 16px var(--modal-pad-x);
   }
 
-  .modal-content,
-  .modal-content2 {
-    padding: 22px 16px;
-  }
-
-  .modal-content.editor-modal,
-  .modal-content.app-modal__content,
-  .modal-content.qr-modal__content,
-  .modal-content.pdf-modal__content,
-  .modal-content.modal-content--correo,
-  .modal-content.modal-editar-panel,
-  .modal-content.modal-panel--flush {
+  .modal-body--flush,
+  .modal-body--split {
     padding: 0;
   }
 
-  .modal-form-row,
-  .modal-form-grid-2,
-  .ticket-modal-row {
-    grid-template-columns: 1fr;
-    gap: 10px;
+  .modal-foot {
+    padding: 12px var(--modal-pad-x) calc(14px + env(safe-area-inset-bottom, 0px));
   }
 
-  .modal-actions,
-  .modal-form-actions,
-  .ticket-modal-actions {
-    flex-direction: column-reverse;
+  .modal-foot > .btn-primario,
+  .modal-foot > .btn-secundario,
+  .modal-foot > .btn-peligro,
+  .modal-foot > .btn-peligro-suave {
+    flex: 1 1 auto;
   }
 
-  .modal-overlay .btn-primario,
-  .modal-overlay .btn-secundario,
-  .modal-button-primary,
-  .modal-button-secondary {
-    width: 100%;
+  .modal-foot__start {
+    flex-basis: 100%;
+    margin-right: 0;
   }
-}
 
+  /* En una columna todo el cuerpo scrollea junto: dos zonas de scroll
+     apiladas en una pantalla chica se pisan. */
+  .modal-body--split {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
 
-/* ── .campo-form dentro de un modal ───────────────────────────────────────────
-   El campo compartido (intranet.css) usa la paleta de la página. Dentro de un
-   modal el panel tiene fondo propio, así que aquí sólo se reasignan los colores
-   a los tokens del modal; la geometría sigue siendo la del campo. */
+  .modal-aside,
+  .modal-main {
+    overflow: visible;
+    padding: 16px var(--modal-pad-x);
+  }
 
-.modal-overlay .campo-form > label {
-  color: var(--modal-label);
-}
+  .modal-aside {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
 
-.modal-overlay .campo-form input[type="text"],
-.modal-overlay .campo-form input[type="email"],
-.modal-overlay .campo-form input[type="tel"],
-.modal-overlay .campo-form input[type="date"],
-.modal-overlay .campo-form input[type="number"],
-.modal-overlay .campo-form input[type="password"],
-.modal-overlay .campo-form input[type="search"],
-.modal-overlay .campo-form input[type="file"],
-.modal-overlay .campo-form textarea,
-.modal-overlay .campo-form select,
-.modal-overlay .campo-form .phone-field__prefix {
-  border-color: var(--modal-border-strong);
-  background: var(--modal-input-bg);
-  color: var(--modal-text);
-}
+  .modal-body--split-end .modal-aside {
+    order: 2;
+    border-left: 0;
+    border-bottom: 0;
+    border-top: 1px solid var(--color-border);
+  }
 
-.modal-overlay .campo-form input:focus,
-.modal-overlay .campo-form select:focus,
-.modal-overlay .campo-form textarea:focus {
-  border-color: var(--modal-heading);
-  box-shadow: 0 0 0 3px rgba(15, 76, 129, 0.12);
-  background: var(--modal-bg);
-}
-
-.modal-overlay .campo-form input[readonly] {
-  background: var(--modal-border);
-  color: var(--modal-muted);
-  cursor: default;
-}
-
-.modal-overlay .campo-form__ayuda {
-  color: var(--modal-muted);
-}
-
-.modal-overlay .campo-form.is-invalid input[type="text"],
-.modal-overlay .campo-form.is-invalid input[type="email"],
-.modal-overlay .campo-form.is-invalid input[type="tel"],
-.modal-overlay .campo-form.is-invalid input[type="date"],
-.modal-overlay .campo-form.is-invalid input[type="number"],
-.modal-overlay .campo-form.is-invalid input[type="password"],
-.modal-overlay .campo-form.is-invalid input[type="search"],
-.modal-overlay .campo-form.is-invalid input[type="file"],
-.modal-overlay .campo-form.is-invalid textarea,
-.modal-overlay .campo-form.is-invalid select,
-.modal-overlay .campo-form.is-invalid .phone-field__prefix {
-  border-color: var(--down);
-}
-
-.modal-overlay .campo-form.is-invalid input:focus,
-.modal-overlay .campo-form.is-invalid select:focus,
-.modal-overlay .campo-form.is-invalid textarea:focus {
-  border-color: var(--down);
-  box-shadow: 0 0 0 3px rgba(208, 92, 92, 0.18);
-}
-
-.modal-overlay .form-seccion__title {
-  color: var(--modal-heading);
-  border-bottom-color: var(--modal-border);
+  .modal-content .campos-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

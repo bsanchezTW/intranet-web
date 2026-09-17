@@ -9,6 +9,7 @@ const { isAdministrador, normalizeRole } = require("../constants/roles");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { areaSlug, enrichAreaWithPill } = require("../constants/workAreas");
 const { isFeatureEnabled } = require("../config/features");
+const { folderForUpload, SLUG_SIN_AREA } = require("../services/documents/processDocumentStorage");
 const areaManager = require("../services/expenses/areaManager");
 const financeTeam = require("../services/expenses/financeTeam");
 const expenses = require("../services/expenses/expenseRequestService");
@@ -24,6 +25,9 @@ const funds = require("../services/expenses/expenseFundService");
  *
  * `documents.type` sigue escribiéndose por compatibilidad con las filas
  * históricas, pero ya no se lee para navegar.
+ *
+ * Las subidas nuevas van a Storage (`/content/documentos/...`). Las filas
+ * heredadas de Cloudinary se migran con scripts/migrate-cloudinary-process-docs.js.
  */
 
 // Secciones que viven en `documents` con carpeta por área.
@@ -36,9 +40,6 @@ const SECCION_LABEL = {
   procedimientos: "Procedimientos",
   protocolos: "Protocolos",
 };
-
-/** Carpeta de los documentos legacy cuyo slug no correspondía a ningún área. */
-const SLUG_SIN_AREA = "sin-area";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -120,7 +121,7 @@ router.get("/", async (req, res) => {
     }
 
     res.render("procesos/index", {
-      titulo: "Procesos y Documentos",
+      titulo: "Procesos y documentos",
       esAdmin: admin,
       areaContext: context,
       conteosArea,
@@ -130,7 +131,7 @@ router.get("/", async (req, res) => {
       fondosVencidos,
       sinRendir,
       user,
-      extraCss: ["/css/procesos.css"],
+      extraCss: ["/css/procesos.css?v=20260916m"],
     });
   } catch (err) {
     console.error("[Procesos] Error cargando la portada:", err);
@@ -187,7 +188,7 @@ async function renderCarpetas(req, res, seccion) {
     huerfanos: huerfanosResult.rows[0].n,
     slugSinArea: SLUG_SIN_AREA,
     user,
-    extraCss: ["/css/procesos.css"],
+    extraCss: ["/css/procesos.css?v=20260916m"],
   });
 }
 
@@ -228,7 +229,7 @@ async function renderGeneral(req, res, { seccion, titulo, sql, params }) {
     user: req.session.user,
     permisos,
     can: { [`${seccion}_write`]: permisos.can_upload },
-    extraCss: ["/css/procesos.css"],
+    extraCss: ["/css/procesos.css?v=20260916m"],
   });
 }
 
@@ -297,7 +298,8 @@ router.get("/:seccion/:area", async (req, res) => {
     const user = req.session.user;
     const admin = esAdmin(user);
 
-    // Carpeta de huérfanos: sólo para administradores, sólo de lectura.
+    // Carpeta de huérfanos: sólo administradores. Se puede borrar o
+    // renombrar; no se sube nada nuevo aquí.
     if (area === SLUG_SIN_AREA) {
       if (!admin) return res.redirect(`/procesos/${seccion}`);
       const { rows } = await db.query(
@@ -318,7 +320,7 @@ router.get("/:seccion/:area", async (req, res) => {
         permisos: { ...getPermissions(user), can_upload: false },
         can: { [`${seccion}_write`]: false },
         avisoHuerfanos: true,
-        extraCss: ["/css/procesos.css"],
+        extraCss: ["/css/procesos.css?v=20260916m"],
       });
     }
 
@@ -358,7 +360,7 @@ router.get("/:seccion/:area", async (req, res) => {
       user,
       permisos,
       can: { [`${seccion}_write`]: permisos.can_upload },
-      extraCss: ["/css/procesos.css"],
+      extraCss: ["/css/procesos.css?v=20260916m"],
     });
   } catch (err) {
     console.error("[Procesos] Error cargando documentos:", err);
@@ -383,7 +385,7 @@ router.post(
         return res.status(400).json({ error: "El archivo excede el límite de 20 MB" });
       }
 
-      const folder = `documentos/${seccion}/${area}`;
+      const folder = folderForUpload(seccion, area);
       const result = await fileStorage.saveFile(
         req.file.buffer,
         folder,

@@ -253,7 +253,13 @@ const GUIDE_ENTRIES = Object.freeze([
     href: "/sistemas/tickets",
     feature: "supportTickets",
     paths: [/^\/sistemas\/?$/, /^\/sistemas\/tickets\/?$/, /^\/sistemas\/tickets\/\d+(\/|$)/],
-    summary: "Autoayuda para problemas comunes y tus tickets con el equipo de TI (abiertos, en curso y cerrados). Un ticket nuevo se abre con «Abrir Ticket» en la barra superior o pidiéndoselo al asistente.",
+    summary: "Autoayuda para problemas comunes y tus tickets con el equipo de TI (abiertos, en curso y cerrados). Un ticket nuevo se abre con «Abrir ticket» en la barra superior o pidiéndoselo al asistente.",
+    steps: [
+      "Entra a Soporte desde la barra superior.",
+      "En «Autoayuda» busca la herramienta para tu problema (por ejemplo «Reparación de Impresora» si no puedes imprimir) y descárgala con el botón de tu sistema.",
+      "Ábrela y sigue sus instrucciones. Si el problema sigue, abre un ticket con «Abrir ticket» y cuenta lo que ya probaste.",
+      "Tus tickets aparecen más abajo, en «Tickets de soporte», con su estado.",
+    ],
   },
   {
     id: "perfil",
@@ -261,7 +267,7 @@ const GUIDE_ENTRIES = Object.freeze([
     href: "/perfil",
     paths: [/^\/perfil(\/|$)/],
     summary: "Tus datos de contacto, foto de perfil y contraseña. Algunos datos los administra RRHH.",
-    steps: ["Haz clic en tu foto (arriba a la derecha) y elige «Mi Perfil»."],
+    steps: ["Haz clic en tu foto (arriba a la derecha) y elige «Mi perfil»."],
   },
   {
     id: "rex",

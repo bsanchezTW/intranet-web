@@ -5,9 +5,15 @@ const router = express.Router();
 const pool = require("../db");
 const logger = require("../utils/logger");
 const { sendMail } = require("../services/mailer");
+const { MAIL_SENDERS } = require("../constants/mailSenders");
+const { escapeHtml, secretBox } = require("../services/emailLayout");
+const { supportAgentEmails } = require("../services/tickets/supportTeam");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { toTitleCase } = require("../utils/formatName");
-const { isPasswordStrongEnough } = require("../utils/passwordStrength");
+const {
+  isPasswordStrongEnough,
+  PASSWORD_POLICY_MESSAGE,
+} = require("../utils/passwordStrength");
 const { validateMobilePhone } = require("../utils/phone");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const {
@@ -77,14 +83,14 @@ async function sendVerificationCodeEmail(email, firstName, code) {
   const minutes = Math.round(OTP_EXPIRES_MS / 60000);
   await sendMail({
     to: email,
-    subject: "Código de verificación - Intranet Transworld",
+    subject: "Código de verificación de Intranet",
+    senderName: MAIL_SENDERS.intranet,
+    heading: "Código de verificación",
     text: `Hola ${firstName},\n\nTu código de verificación es: ${code}\n\nIngrésalo en la intranet para activar tu cuenta. El código expira en ${minutes} minutos.\n`,
-    html: `<div style="font-family: sans-serif; max-width: 520px;">
-      <p>Hola <strong>${firstName}</strong>,</p>
-      <p>Usa este código para verificar tu correo en la intranet:</p>
-      <p style="font-size: 2rem; letter-spacing: 0.35em; font-weight: 800; color: #003a70; margin: 24px 0;">${code}</p>
-      <p style="color: #555;">Válido por ${minutes} minutos. Si no solicitaste este registro, ignora este mensaje.</p>
-    </div>`,
+    html: `<p style="margin:0 0 16px 0;">Hola <strong>${escapeHtml(firstName)}</strong>,</p>
+      <p style="margin:0 0 16px 0;">Usa este código para verificar tu correo en la intranet:</p>
+      ${secretBox(code, { label: "Código de verificación", letterSpacing: "0.3em" })}
+      <p style="margin:0; color:#51637a;">Válido por ${minutes} minutos. Si no solicitaste este registro, ignora este mensaje.</p>`,
   });
 }
 
@@ -159,26 +165,11 @@ function needsAdminAuthorization(user) {
 }
 
 async function notifyTIAdminsNewUser(firstName, lastName, email, isTransworld) {
-  // Solo administradores que pertenecen al área de trabajo Informática.
-  const { rows } = await pool.query(
-    `SELECT u.email
-     FROM users u
-     JOIN work_areas at ON at.id = u.work_area_id
-     WHERE u.role IN ($1, $2)
-       AND at.area_name ILIKE 'Informática'
-       AND u.email IS NOT NULL AND TRIM(u.email) <> ''`,
-    [ROLES.ADMINISTRADOR, "admin"],
-  );
-  const adminEmails = [
-    ...new Set(rows.map((r) => String(r.email).trim().toLowerCase()).filter(Boolean)),
-  ];
+  const adminEmails = await supportAgentEmails();
 
-  if (!adminEmails.length && process.env.ADMIN_NOTIFY_EMAIL) {
-    adminEmails.push(String(process.env.ADMIN_NOTIFY_EMAIL).trim().toLowerCase());
-  }
   if (!adminEmails.length) {
     console.warn(
-      "[Registro] No hay administradores de TI con correo para notificar el nuevo registro.",
+      "[Registro] No hay usuarios de Informática con correo para notificar el nuevo registro.",
     );
     return;
   }
@@ -187,7 +178,7 @@ async function notifyTIAdminsNewUser(firstName, lastName, email, isTransworld) {
     ? `El usuario tiene rol "${ROLES.USUARIO}" y está pendiente de asignación de área de trabajo en RRHH.`
     : `El correo es de un dominio externo: el usuario quedará deshabilitado hasta que un administrador lo autorice y le asigne área de trabajo.`;
 
-  const subject = "Nuevo usuario registrado en la Intranet";
+  const subject = "Nuevo usuario registrado en Intranet";
   const text = `Se registró un nuevo usuario en la intranet:
 
 Nombre: ${firstName} ${lastName}
@@ -195,21 +186,17 @@ Correo: ${email}
 
 ${pendingText}`;
 
-  const html = `<div style="font-family: sans-serif; max-width: 520px;">
-    <p>Se registró un nuevo usuario en la intranet:</p>
-    <p><strong>${firstName} ${lastName}</strong><br>${email}</p>
-    <p>${pendingText}</p>
-  </div>`;
-
-  const [primary, ...rest] = adminEmails;
   await sendMail({
-    to: primary,
-    bcc: rest.length ? rest : undefined,
+    to: adminEmails,
     subject,
+    heading: "Nuevo usuario registrado",
     text,
-    html,
+    html: `<p style="margin:0 0 16px 0;">Se registró un nuevo usuario en la intranet:</p>
+    <p style="margin:0 0 16px 0;"><strong>${escapeHtml(firstName)} ${escapeHtml(lastName)}</strong><br>${escapeHtml(email)}</p>
+    <p style="margin:0;">${escapeHtml(pendingText)}</p>`,
+    senderName: MAIL_SENDERS.support,
   }).catch((err) => {
-    console.error("Error notificando a administradores de TI:", err);
+    console.error("Error notificando a Informática:", err);
   });
 }
 
@@ -570,8 +557,7 @@ router.post(
       if (!isPasswordStrongEnough(password)) {
         return renderAuthPage(res, "register", {
           status: 400,
-          error:
-            "La contraseña es muy débil. Debe tener al menos 8 caracteres e incluir mayúsculas, minúsculas, números y símbolos.",
+          error: PASSWORD_POLICY_MESSAGE,
           formData,
         });
       }
@@ -936,8 +922,15 @@ router.post("/forgot-password", async (req, res) => {
 
     await sendMail({
       to: cleanEmail,
-      subject: "Recuperación de contraseña - Intranet Transworld",
+      subject: "Recuperación de contraseña de Intranet",
+      senderName: MAIL_SENDERS.intranet,
+      heading: "Recuperación de contraseña",
+      cta: { href: "/login", label: "Ingresar a la intranet" },
       text: `Hola ${user.first_name},\n\nSe ha solicitado restablecer tu contraseña.\n\nTu nueva contraseña temporal es: ${tempPassword}\n\nPor favor inicia sesión con ella. El sistema te pedirá cambiarla inmediatamente.\n`,
+      html: `<p style="margin:0 0 16px 0;">Hola <strong>${escapeHtml(user.first_name)}</strong>,</p>
+        <p style="margin:0 0 16px 0;">Se ha solicitado restablecer tu contraseña.</p>
+        ${secretBox(tempPassword, { label: "Contraseña temporal" })}
+        <p style="margin:0; color:#51637a;">Inicia sesión con ella. El sistema te pedirá cambiarla de inmediato.</p>`,
     });
 
     return succeed("/login?reset=1");
@@ -976,18 +969,19 @@ router.post("/reset-password", async (req, res) => {
 
   if (!userId) return res.redirect("/login");
 
-  const { new_password, confirm_password } = req.body;
+  const new_password = bodyString(req.body && req.body.new_password);
+  const confirm_password = bodyString(req.body && req.body.confirm_password);
 
+  if (!isPasswordStrongEnough(new_password)) {
+    return renderAuthPage(res, "reset", {
+      status: 400,
+      error: PASSWORD_POLICY_MESSAGE,
+    });
+  }
   if (new_password !== confirm_password) {
     return renderAuthPage(res, "reset", {
       status: 400,
       error: "Las contraseñas no coinciden.",
-    });
-  }
-  if (new_password.length < 6) {
-    return renderAuthPage(res, "reset", {
-      status: 400,
-      error: "La contraseña debe tener al menos 6 caracteres.",
     });
   }
 
@@ -1042,17 +1036,19 @@ router.post("/change-password", async (req, res) => {
   }
 
   const json = wantsJsonResponse(req);
-  const { old_password, new_password, confirm_password } = req.body;
+  const old_password = bodyString(req.body && req.body.old_password);
+  const new_password = bodyString(req.body && req.body.new_password);
+  const confirm_password = bodyString(req.body && req.body.confirm_password);
   const userId = req.session.user.id;
 
   try {
-    if (new_password !== confirm_password) {
-      const error = "Las nuevas contraseñas no coinciden.";
+    if (!isPasswordStrongEnough(new_password)) {
+      const error = PASSWORD_POLICY_MESSAGE;
       if (json) return res.status(400).json({ ok: false, error });
       return redirectPasswordError(res, error);
     }
-    if (new_password.length < 6) {
-      const error = "Mínimo 6 caracteres.";
+    if (new_password !== confirm_password) {
+      const error = "Las nuevas contraseñas no coinciden.";
       if (json) return res.status(400).json({ ok: false, error });
       return redirectPasswordError(res, error);
     }
@@ -1171,7 +1167,7 @@ router.get("/perfil/cursos", async (req, res) => {
         : 0;
 
     res.render("ver-cursos", {
-      titulo: "Mis Cursos Realizados | Transworld",
+      titulo: "Mis cursos | Transworld",
       user: user,
       cursos: cursosRealizados,
       puntajeTotal: puntajeTotal,

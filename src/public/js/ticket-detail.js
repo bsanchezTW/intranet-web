@@ -59,11 +59,7 @@
       if (files.length === 0) return;
 
       e.preventDefault();
-      if (btnSubmit) {
-        btnSubmit.disabled = true;
-        btnSubmit.dataset.labelOriginal = btnSubmit.textContent;
-        btnSubmit.textContent = 'Subiendo archivos...';
-      }
+      if (btnSubmit && window.IntranetModal) window.IntranetModal.ocuparBoton(btnSubmit, true);
       setUploadStatus(statusEl, `Preparando subida (${files.length} archivo/s)...`, 'ticket-status-text');
 
       try {
@@ -72,8 +68,11 @@
           const file = files[i];
           setUploadStatus(statusEl, `Subiendo archivo ${i + 1} de ${files.length}: ${file.name}...`, 'ticket-status-text');
 
+          const ticketId = form.getAttribute('data-ticket-id') || '';
           const formData = new FormData();
           formData.append('file', file);
+          formData.append('ticket_id', ticketId);
+          formData.append('index', String(i + 1));
 
           let dbType = 'doc';
           if (file.type.startsWith('video/')) dbType = 'video';
@@ -93,10 +92,7 @@
       } catch (err) {
         console.error(err);
         setUploadStatus(statusEl, 'Error al subir. Inténtalo de nuevo.', 'ticket-status-text--error');
-        if (btnSubmit) {
-          btnSubmit.disabled = false;
-          btnSubmit.textContent = btnSubmit.dataset.labelOriginal || 'Reintentar';
-        }
+        if (btnSubmit && window.IntranetModal) window.IntranetModal.ocuparBoton(btnSubmit, false);
       }
     });
   }
@@ -210,12 +206,7 @@
     setupAssignStep(root);
   }
 
-  document.addEventListener('click', (e) => {
-    const confirmButton = e.target.closest('[data-confirm-message]');
-    if (confirmButton && !confirm(confirmButton.dataset.confirmMessage)) {
-      e.preventDefault();
-    }
-  });
+  // Las confirmaciones (data-confirm) las atiende IntranetDialog en modal.js.
 
   window.TicketDetail = { init };
 

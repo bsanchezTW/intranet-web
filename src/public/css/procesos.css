@@ -1,6 +1,4 @@
-/* Procesos y Documentos — usa tokens de theme.css.
-   Antes esta zona llevaba <style> embebido con hex fijos (#003a70, #f8fafc),
-   por eso la tabla de archivos no tenía modo oscuro. */
+/* Procesos y Documentos — usa tokens de theme.css. */
 
 /* ── Tarjetas de sección ─────────────────────────────────────────────────── */
 
@@ -56,7 +54,7 @@ a.procesos-card:focus-visible {
   color: var(--green-deep);
 }
 
-/* Logos de portales externos: lienzo blanco para que no se pierdan en oscuro. */
+/* Logos de portales externos: lienzo blanco para PNG con fondo claro. */
 .procesos-card__tile--logo {
   background: #fff;
   border: 1px solid var(--color-border);
@@ -343,32 +341,12 @@ a.procesos-card:focus-visible {
 
 /* ── Migas y subida ──────────────────────────────────────────────────────── */
 
-.procesos-migas {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-  font-size: 0.88rem;
-  color: var(--color-text-muted);
-}
-
-.procesos-migas a {
-  color: var(--color-link);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.procesos-migas a:hover {
-  text-decoration: underline;
-}
-
 .procesos-subida-estado {
-  margin-top: 10px;
-  font-size: 0.92rem;
   font-weight: 600;
   color: var(--brand);
-  text-align: center;
+}
+
+.procesos-subida-estado[hidden] {
   display: none;
 }
 

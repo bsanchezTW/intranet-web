@@ -711,10 +711,16 @@
       sincronizarNumero();
     }
 
-    function eliminarCuenta(btn) {
+    async function eliminarCuenta(btn) {
       var tarjeta = btn.closest("[data-cuenta]");
       var radio = tarjeta.querySelector("input");
-      if (!window.confirm("¿Eliminar esta cuenta guardada?")) return;
+      var ok = await window.IntranetDialog.confirm({
+        title: "¿Eliminar la cuenta guardada?",
+        message: "Dejará de ofrecerse en tus próximas solicitudes.",
+        acceptLabel: "Eliminar",
+        tone: "peligro",
+      });
+      if (!ok) return;
 
       btn.disabled = true;
       limpiarError();
@@ -1160,10 +1166,12 @@
   function ocupar(activo, boton, texto) {
     estado.ocupado = activo;
     botones.forEach(function (b) {
+      if (window.IntranetModal) window.IntranetModal.ocuparBoton(b, false);
       b.disabled = activo;
       b.textContent = b.dataset.texto;
     });
-    if (activo && boton) boton.textContent = texto;
+    if (activo && boton && window.IntranetModal) window.IntranetModal.ocuparBoton(boton, true);
+    if (activo && texto) mostrarEstado(texto);
   }
 
   function mostrarEstado(texto) {
@@ -1289,10 +1297,21 @@
     }
   }
 
-  function cerrar() {
-    if (estado.ocupado) return;
-    if (estado.sucio && !window.confirm("Tienes cambios sin guardar. ¿Cerrar de todos modos?")) {
-      return;
+  var confirmandoCierre = false;
+
+  async function cerrar() {
+    if (estado.ocupado || confirmandoCierre) return;
+    if (estado.sucio) {
+      confirmandoCierre = true;
+      var salir = await window.IntranetDialog.confirm({
+        title: "¿Cerrar sin guardar?",
+        message: "Tienes cambios sin guardar en esta solicitud. Si cierras, se pierden.",
+        acceptLabel: "Cerrar sin guardar",
+        cancelLabel: "Seguir editando",
+        tone: "peligro",
+      });
+      confirmandoCierre = false;
+      if (!salir) return;
     }
     estado.sucio = false;
     // Los File locales se sueltan; lo subido en un guardado fallido se borra.
@@ -1311,7 +1330,11 @@
   // data-dismiss="false" apaga el Escape genérico de modal.js: aquí se cierra
   // igual, pero preguntando si hay cambios.
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && window.IntranetModal.isOpen(overlay)) cerrar();
+    // Sólo si este modal es el de arriba: con el aviso de cambios abierto,
+    // Escape es para el aviso.
+    if (e.key !== "Escape" || e.defaultPrevented || !window.IntranetModal.isOpen(overlay)) return;
+    if (window.IntranetModal.top && window.IntranetModal.top() !== overlay) return;
+    cerrar();
   });
 
   window.addEventListener("beforeunload", function (e) {
@@ -1472,7 +1495,13 @@
 
   btnEliminarBorrador.addEventListener("click", async function () {
     if (!estado.borradorId || estado.ocupado) return;
-    if (!window.confirm("¿Descartar este borrador? Se borran también sus comprobantes.")) return;
+    var descartar = await window.IntranetDialog.confirm({
+      title: "¿Descartar el borrador?",
+      message: "Se borran también sus comprobantes. Esta acción no se puede deshacer.",
+      acceptLabel: "Descartar",
+      tone: "peligro",
+    });
+    if (!descartar) return;
     try {
       ocupar(true, btnEliminarBorrador, "Eliminando…");
       // Los guardados los borra el servidor con el borrador; los subidos
@@ -1514,7 +1543,10 @@
         abrir(borrador.kind, borrador);
       })
       .catch(function (err) {
-        window.alert(mensajeDeRed(err, "No se pudo abrir el borrador."));
+        window.IntranetDialog.alert({
+          title: "No se pudo abrir el borrador",
+          message: mensajeDeRed(err, "Intenta de nuevo en un momento."),
+        });
       });
   }
 

@@ -34,19 +34,8 @@
     window.history.replaceState({}, "", url.pathname + url.search);
   }
 
-  /* ======================================================================
-     Confirmaciones declarativas: data-confirmar en el <form>
-     ====================================================================== */
-  function iniciarConfirmaciones() {
-    var formularios = document.querySelectorAll("form[data-confirmar]");
-    Array.prototype.forEach.call(formularios, function (form) {
-      form.addEventListener("submit", function (event) {
-        if (!window.confirm(form.getAttribute("data-confirmar"))) {
-          event.preventDefault();
-        }
-      });
-    });
-  }
+  /* Las confirmaciones (destacar, eliminar) van con data-confirm en el <form>
+     y las atiende IntranetDialog en modal.js. */
 
   /* ======================================================================
      Selector de destinatarios
@@ -149,10 +138,6 @@
         actualizar();
         return;
       }
-      if (botonEnviar) {
-        botonEnviar.disabled = true;
-        botonEnviar.textContent = "Enviando…";
-      }
     });
 
     window.abrirModalDestinatarios = function () {
@@ -192,7 +177,6 @@
   }
 
   function iniciar() {
-    iniciarConfirmaciones();
     iniciarSelectorCorreo();
     iniciarPostPublicacion();
   }

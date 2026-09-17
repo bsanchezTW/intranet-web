@@ -25,7 +25,7 @@ const {
   listAppsByCatalog,
   reorderAppsInCatalog,
 } = require("../services/appCatalogService");
-const { getLocale, getCountryConfig } = require("../config/country");
+const { getLocale } = require("../config/country");
 const { isFeatureEnabled } = require("../config/features");
 const requireRole = require("../middlewares/requireRole");
 const requireFeature = require("../middlewares/requireFeature");
@@ -36,7 +36,9 @@ const {
   formatPhoneForDisplay,
   validateMobilePhone,
 } = require("../utils/phone");
-const { sendMail } = require("../services/mailer");
+const { sendMail, resolveMailFrom } = require("../services/mailer");
+const { MAIL_SENDERS } = require("../constants/mailSenders");
+const { escapeHtml } = require("../services/emailLayout");
 const attachmentModel = require("../services/noticias/attachmentModel");
 const {
   NOTICIA_VIEW_COLUMNS,
@@ -427,7 +429,7 @@ router.get("/", async (req, res) => {
 
     await res.render("home", {
       // El sufijo por país lo añade formatPageTitle en la vista.
-      titulo: "Home",
+      titulo: "Inicio",
       finanzas: dataFinanciera,
       clima: dataClima,
       saludo,
@@ -557,7 +559,7 @@ router.get("/perfil", async (req, res) => {
   const documentoBloqueado = Boolean(raw.national_id);
 
   res.render("perfil", {
-    titulo: "Mi Perfil",
+    titulo: "Mi perfil",
     documentoConfig: nationalIdClientConfig(),
     documentoBloqueado,
     success: req.query.ok || null,
@@ -1506,8 +1508,8 @@ router.post("/apps/orden", requireRole.administrador(), async (req, res) => {
   }
 });
 
-const uploadFileLocally = async (buffer, folder, fileName) => {
-  return fileStorage.saveFile(buffer, folder, fileName);
+const uploadAppFile = async (buffer, folder, fileName) => {
+  return fileStorage.saveFileInAllCountryBuckets(buffer, folder, fileName);
 };
 
 function esArchivoPdf(file) {
@@ -1528,7 +1530,7 @@ async function subirInstructivoIos(file) {
     err.statusCode = 400;
     throw err;
   }
-  return uploadFileLocally(
+  return uploadAppFile(
     file.buffer,
     "apps_instructivos",
     file.originalname || "instructivo-ios.pdf",
@@ -1555,7 +1557,7 @@ router.post(
 
     try {
       if (req.files && req.files["icon"]) {
-        const result = await uploadFileLocally(
+        const result = await uploadAppFile(
           req.files["icon"][0].buffer,
           "apps_icons",
           req.files["icon"][0].originalname || "icono-app.jpg",
@@ -1637,7 +1639,7 @@ router.post(
       }
 
       if (req.files && req.files["icon"]) {
-        const result = await uploadFileLocally(
+        const result = await uploadAppFile(
           req.files["icon"][0].buffer,
           "apps_icons",
           req.files["icon"][0].originalname || "icono-app.jpg",
@@ -1654,7 +1656,7 @@ router.post(
       await db.query(updateQuery, queryParams);
 
       if (obsoleteFiles.length) {
-        fileStorage.deleteFiles(obsoleteFiles).catch((err) => {
+        fileStorage.deleteFilesInAllCountryBuckets(obsoleteFiles).catch((err) => {
           console.warn("[Apps] Limpieza de archivos antiguos incompleta:", err.message || err);
         });
       }
@@ -1689,7 +1691,7 @@ router.post(
 
       if (app) {
         fileStorage
-          .deleteFiles([app.icon_url, app.url_ios])
+          .deleteFilesInAllCountryBuckets([app.icon_url, app.url_ios])
           .catch((err) => {
             console.warn("[Apps] Limpieza de archivos incompleta:", err.message || err);
           });
@@ -1742,31 +1744,28 @@ router.post("/apps/notificar/:id", requireRole.administrador(), async (req, res)
 
     if (listaCorreos.length > 0) {
       const htmlCorreo = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
-          <div style="background-color: #003a70; padding: 20px; text-align: center;">
-            <h2 style="color: white; margin: 0;">${esSoporte ? "Actualización de Herramienta de Soporte" : "Actualización de Aplicación"}</h2>
-          </div>
-          <div style="padding: 25px; background-color: #ffffff;">
-            <h3 style="color: #003a70; margin-top: 0;">${nombreApp}</h3>
-            <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 20px;">Se han realizado cambios importantes en esta herramienta:</p>
-            <div style="background-color: #f1f5f9; padding: 15px; border-left: 4px solid #003a70; color: #334155; font-size: 15px; line-height: 1.6;">
-              ${cambios_texto.replace(/\n/g, "<br>")}
-            </div>
-            <div style="text-align: center; margin-top: 35px; margin-bottom: 10px;">
-              <a href="${process.env.APP_BASE_URL || "http://localhost:3000"}${rutaCatalogo}"
-                 style="display: inline-block; background-color: #ffffff; color: #003a70; border: 3px solid #003a70; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                ${esSoporte ? "Ir a Autoayuda" : "Ir a Descargas"}
-              </a>
-            </div>
-          </div>
+        <p style="margin:0 0 8px 0; color:#0b3a63; font-size:18px; font-weight:700;">${escapeHtml(nombreApp)}</p>
+        <p style="margin:0 0 16px 0; color:#51637a;">Se han realizado cambios importantes en esta herramienta:</p>
+        <div style="background-color:#f5f7fa; padding:16px; border-left:4px solid #0f4c81; color:#334155; font-size:15px; line-height:1.6; border-radius:0 8px 8px 0;">
+          ${escapeHtml(cambios_texto).replace(/\r?\n/g, "<br>")}
         </div>
       `;
 
       await sendMail({
-        to: process.env.MAIL_FROM || getCountryConfig().noReplyEmail,
+        to: resolveMailFrom(),
         bcc: listaCorreos,
-        subject: `Actualización: ${nombreApp}`,
+        subject: esSoporte
+          ? `Actualización de ${nombreApp}`
+          : `Actualización de ${nombreApp}`,
+        heading: esSoporte
+          ? "Actualización de herramienta de soporte"
+          : "Actualización de aplicación",
+        cta: {
+          href: rutaCatalogo,
+          label: esSoporte ? "Ir a Autoayuda" : "Ir a Descargas",
+        },
         html: htmlCorreo,
+        senderName: esSoporte ? MAIL_SENDERS.support : MAIL_SENDERS.intranet,
       });
     }
 

@@ -69,10 +69,34 @@
     campo.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
+  /** Botón que dispara el POST: dentro del form o asociado con `form="id"`. */
+  function botonSubmit(form) {
+    if (!form) return null;
+    var interno = form.querySelector('button[type="submit"]');
+    if (interno) return interno;
+    if (!form.id) return null;
+    var raiz = form.closest(".modal-overlay") || document;
+    return raiz.querySelector('button[type="submit"][form="' + form.id + '"]');
+  }
+
+  /**
+   * Deja el envío en curso con el spinner compartido de modal.js: el texto
+   * queda oculto bajo el icono girando y el botón conserva su tamaño.
+   */
+  function ocuparSubmit(form) {
+    if (global.IntranetModal) global.IntranetModal.ocuparBoton(botonSubmit(form), true);
+  }
+
+  function restaurarSubmit(form) {
+    if (global.IntranetModal) global.IntranetModal.ocuparBoton(botonSubmit(form), false);
+  }
+
   global.CampoForm = {
     marcar: marcar,
     limpiar: limpiar,
     esInvalido: esInvalido,
     enfocarPrimerError: enfocarPrimerError,
+    ocuparSubmit: ocuparSubmit,
+    restaurarSubmit: restaurarSubmit,
   };
 })(window);

@@ -43,10 +43,7 @@ const filtrosVisibles = FILTROS.filter(f => tiposPresentes.has(f.tipo));
   </div>
 
   <% if (typeof ok !== 'undefined' && ok) { %>
-    <div class="nt-aviso nt-aviso--ok" role="status">
-      <%- include('../partials/icon', { name: 'sparkles' }) %>
-      <span><%= ok %></span>
-    </div>
+    <div hidden data-toast="<%= ok %>"></div>
   <% } %>
 
   <% if (!noticias || noticias.length === 0) { %>

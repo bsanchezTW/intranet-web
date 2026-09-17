@@ -111,8 +111,7 @@
         setStatus(statusEl, `«${pesado.name}» supera los ${maxMb} MB.`, 'error');
         return;
       }
-      submit.disabled = true;
-      label.textContent = files.length ? 'Enviando ticket y archivos…' : 'Enviando ticket…';
+      setStatus(statusEl, files.length ? 'Enviando ticket y archivos…' : 'Enviando ticket…');
     });
   }
 

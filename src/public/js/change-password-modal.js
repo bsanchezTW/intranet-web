@@ -36,10 +36,24 @@
       });
     }
 
+    const newPasswordInput = document.getElementById('new_password');
+    const confirmPasswordInput = document.getElementById('confirm_password');
+    const strengthBox = document.getElementById('changePasswordStrength');
+    const strength = global.PasswordStrength;
+
+    function updateStrength() {
+      if (strength && newPasswordInput) {
+        strength.renderMeter(strengthBox, newPasswordInput.value);
+      }
+    }
+
+    newPasswordInput?.addEventListener('input', updateStrength);
+
     function resetForm() {
       form.reset();
       clearError();
       resetPasswordFields();
+      updateStrength();
     }
 
     function clearQueryParams() {
@@ -97,8 +111,21 @@
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       clearError();
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Guardando…';
+
+      // Misma política que el registro; el servidor la vuelve a validar.
+      const newPassword = newPasswordInput ? newPasswordInput.value : '';
+      if (strength && !strength.isPasswordStrongEnough(newPassword)) {
+        showError(strength.POLICY_HINT);
+        newPasswordInput?.focus();
+        return;
+      }
+      if (confirmPasswordInput && newPassword !== confirmPasswordInput.value) {
+        showError('Las nuevas contraseñas no coinciden.');
+        confirmPasswordInput.focus();
+        return;
+      }
+
+      if (global.IntranetModal) global.IntranetModal.ocuparBoton(submitBtn, true);
 
       const formData = new FormData(form);
 
@@ -127,8 +154,7 @@
           showError('Error de conexión. Intenta de nuevo.');
         })
         .finally(function () {
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Actualizar contraseña';
+          if (global.IntranetModal) global.IntranetModal.ocuparBoton(submitBtn, false);
         });
     });
 

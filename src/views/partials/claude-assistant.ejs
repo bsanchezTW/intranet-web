@@ -8,12 +8,33 @@
     ? displayName.split(' ')[0]
     : '';
   // Ícono de soporte (auricular), el mismo en el botón y en el encabezado.
-  const assistantIcon = '<svg class="claude-assistant-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/></svg>';
+  const headsetPath = '<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/>';
+  const assistantIcon = '<svg class="claude-assistant-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + headsetPath + '</svg>';
+
+  // El botón va rotando entre temas de soporte; cada ícono trae la pregunta
+  // que muestra la burbuja mientras está a la vista. El primero es el de reposo.
+  const fabTopics = [
+    { key: 'ayuda', path: headsetPath, message: '¿Te ayudo a encontrar algo?' },
+    { key: 'impresora', path: '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>', message: '¿Tienes problemas para imprimir?', soporte: true },
+    { key: 'buscar', path: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', message: '¿Estás buscando algo?' },
+    { key: 'computador', path: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>', message: '¿Tu computador está fallando?', soporte: true },
+    { key: 'personas', path: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', message: '¿Buscas a alguien del equipo?' },
+    { key: 'wifi', path: '<path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>', message: '¿Problemas con internet?', soporte: true },
+    { key: 'documento', path: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>', message: '¿Necesitas un documento o procedimiento?' },
+    { key: 'correo', path: '<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/>', message: '¿Te ayudo a redactar un correo?' },
+    { key: 'acceso', path: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>', message: '¿No puedes entrar a algún sistema?', soporte: true },
+    { key: 'ticket', path: '<path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z"/><line x1="14" y1="5" x2="14" y2="19" stroke-dasharray="2 3"/>', message: '¿Quieres saber cómo va tu ticket?', soporte: true },
+  ].filter((topic) => !topic.soporte || features.supportTickets);
 %>
-<button type="button" class="claude-fab" id="claudeFab" aria-controls="claudePanel" aria-expanded="false" aria-label="Abrir asistente de ayuda de la intranet">
-  <%- assistantIcon %>
+<button type="button" class="claude-fab" id="claudeFab" aria-controls="claudePanel" aria-expanded="false" aria-label="Abrir el Asistente de Transworld">
+  <span class="claude-fab__iconos" aria-hidden="true">
+    <% fabTopics.forEach(function (topic, i) { %>
+      <svg class="claude-fab__icono<%= i === 0 ? ' is-visible' : '' %>" data-mensaje="<%= topic.message %>"
+           viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><%- topic.path %></svg>
+    <% }) %>
+  </span>
   <svg class="claude-fab-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-  <span class="claude-fab-tooltip" role="tooltip">¿Te ayudo a encontrar algo?</span>
+  <span class="claude-fab-tooltip" id="claudeFabTooltip" role="tooltip" aria-live="polite"><%= fabTopics[0].message %></span>
 </button>
 
 <section class="claude-panel" id="claudePanel" role="dialog" aria-labelledby="claudePanelTitle"
@@ -21,7 +42,7 @@
   <header class="claude-panel__header">
     <span class="claude-panel__avatar"><%- assistantIcon %></span>
     <div class="claude-panel__heading">
-      <h2 id="claudePanelTitle">Asistente Transworld</h2>
+      <h2 id="claudePanelTitle">Asistente de Transworld</h2>
       <p>Te ayudo a moverte por la intranet</p>
     </div>
     <button type="button" class="claude-panel__icon" id="claudeReset" title="Empezar de nuevo" aria-label="Borrar la conversación y empezar de nuevo">
@@ -39,6 +60,7 @@
       <div class="claude-chips">
         <% if (features.supportTickets) { %>
         <button type="button" class="claude-chip" data-prompt="Tengo un problema con ">Tengo un problema</button>
+        <button type="button" class="claude-chip" data-send="No puedo imprimir">No puedo imprimir</button>
         <% } %>
         <button type="button" class="claude-chip" data-prompt="Busca a ">Buscar a una persona</button>
         <button type="button" class="claude-chip" data-send="¿Cómo pido vacaciones?">¿Cómo pido vacaciones?</button>

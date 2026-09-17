@@ -244,7 +244,7 @@
         statusText.textContent = msg;
         statusDiv.hidden = false;
         spinner.style.display = subiendo ? "inline-block" : "none";
-        btnSubmit.disabled = subiendo;
+        if (window.IntranetModal) window.IntranetModal.ocuparBoton(btnSubmit, subiendo);
         btnCancelar.disabled = subiendo;
       }
 

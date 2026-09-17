@@ -28,7 +28,27 @@ const STATUS_LABELS = Object.freeze({
   offer_support_ticket: "Preparando opciones de ticket…",
   draft_support_ticket: "Armando el borrador del ticket…",
   my_tickets: "Revisando tus tickets…",
+  list_self_help_tools: "Revisando la autoayuda de Soporte…",
 });
+
+/**
+ * Herramienta de autoayuda (catálogo "support" de aplicaciones) tal como la ve
+ * el modelo: sólo lo que sirve para recomendarla y enlazarla.
+ */
+function toSelfHelpTool(app = {}) {
+  const descargas = {};
+  if (app.url_pc) descargas.windows = app.url_pc;
+  if (app.url_apk) descargas.android = app.url_apk;
+  if (app.url_ios) descargas.ios = app.url_ios;
+  if (app.url_web) descargas.web = app.url_web;
+  return {
+    nombre: app.name || app.nombre || "",
+    descripcion: app.description || app.descripcion || "",
+    descargas,
+    donde: "Soporte › Autoayuda",
+    enlace: "/sistemas/tickets",
+  };
+}
 
 /** Respuesta de los tools de tickets donde no existe la ticketera. */
 const TICKETS_UNAVAILABLE = Object.freeze({ content: "Soporte no está disponible en esta intranet.", isError: true });
@@ -85,6 +105,14 @@ function ticketToolDefinitions() {
       description: "Lista los tickets de Soporte abiertos del usuario con su estado y enlace.",
       input_schema: { type: "object", properties: {} },
     },
+    {
+      name: "list_self_help_tools",
+      description:
+        "Lista las herramientas de autoayuda publicadas en Soporte › Autoayuda (por ejemplo, reparar la impresora, " +
+        "escanear o buscar archivos) con su descripción y enlaces de descarga. " +
+        "Úsalo ante un problema técnico, antes de ofrecer un ticket, para ver si el usuario puede resolverlo solo.",
+      input_schema: { type: "object", properties: {} },
+    },
   ];
 }
 
@@ -107,7 +135,8 @@ function buildToolDefinitions(entries, { supportTickets = false } = {}) {
       name: "search_people",
       description:
         "Busca colaboradores en el directorio de la intranet por nombre, apellido, correo o área. " +
-        "Devuelve nombre, correo, teléfono y área. Úsalo cuando pregunten por una persona o por quién está en un área.",
+        "Devuelve nombre, correo de empresa, teléfono de empresa y área. Úsalo cuando pregunten por una persona o por quién está en un área. " +
+        "Nunca trae datos personales (correo o teléfono personal, RUT, cumpleaños): sólo RRHH e Informática pueden verlos.",
       input_schema: {
         type: "object",
         properties: {
@@ -163,7 +192,7 @@ function buildToolDefinitions(entries, { supportTickets = false } = {}) {
  * Ejecutor de tools para un turno. Las búsquedas se inyectan para poder
  * probarlo sin base de datos.
  */
-function createToolExecutor({ entries, currentPath, searchPeople, searchDocuments, searchEvents, tickets = null }) {
+function createToolExecutor({ entries, currentPath, searchPeople, searchDocuments, searchEvents, tickets = null, selfHelp = null }) {
   let navigation = null;
   // Tarjetas para el cliente al terminar el turno.
   let ticketOffer = null;
@@ -251,6 +280,16 @@ function createToolExecutor({ entries, currentPath, searchPeople, searchDocument
           return { content: "No pude consultar tus tickets en este momento.", isError: true };
         }
       }
+      case "list_self_help_tools": {
+        if (!tickets || !selfHelp) return TICKETS_UNAVAILABLE;
+        try {
+          const herramientas = (await selfHelp()).map(toSelfHelpTool).filter((tool) => tool.nombre);
+          return { content: JSON.stringify({ total: herramientas.length, herramientas }) };
+        } catch (err) {
+          console.error("[Asistente] Error listando autoayuda:", err.message);
+          return { content: "No pude revisar la autoayuda en este momento.", isError: true };
+        }
+      }
       default:
         return { content: `Tool desconocida: ${name}`, isError: true };
     }
@@ -304,6 +343,7 @@ ${formatGuideForPrompt(entries)}`;
 
 module.exports = {
   STATUS_LABELS,
+  toSelfHelpTool,
   buildToolDefinitions,
   createToolExecutor,
   sanitizePage,

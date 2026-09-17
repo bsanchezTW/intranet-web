@@ -1,8 +1,8 @@
 /* ==========================================================================
    Noticias — editor (crear y editar)
-   Los archivos se suben en cuanto se sueltan, no al guardar: así el servidor
-   ya devuelve la portada del PDF o el HTML del Word y el autor ve exactamente
-   lo que verán los lectores.
+   Los archivos se quedan en el navegador y se suben recién al guardar, como
+   en tickets: en el bucket quedan <N° de noticia>_1, _2… (la portada,
+   `_portada`). Mientras tanto se muestra una vista previa local.
    ========================================================================== */
 (function () {
   "use strict";
@@ -11,17 +11,36 @@
   var CALIDAD_JPEG = 0.85;
 
   var ICONOS = { image: "IMG", pdf: "PDF", word: "DOC", video: "VID", file: "FILE" };
+  var MAX_MB_POR_TIPO = { image: 20, pdf: 40, word: 25, video: 200, file: 25 };
 
   var estado = {
     modo: "crear",
     adjuntos: [],
-    subiendo: 0,
+    preparando: 0,
     cropper: null,
   };
 
   var el = {};
 
   function $(id) { return document.getElementById(id); }
+
+  function maxFiles() {
+    return Number(el.form && el.form.dataset.maxFiles) || 20;
+  }
+
+  function kindOf(name, mime) {
+    var ext = String(name || "").split(".").pop().toLowerCase();
+    var tipo = String(mime || "").toLowerCase();
+    if (/^(jpe?g|png|gif|webp|bmp|avif)$/.test(ext) || tipo.indexOf("image/") === 0) return "image";
+    if (ext === "pdf" || tipo === "application/pdf") return "pdf";
+    if (ext === "doc" || ext === "docx") return "word";
+    if (/^(mp4|webm|mov|avi|mkv|m4v)$/.test(ext) || tipo.indexOf("video/") === 0) return "video";
+    return "file";
+  }
+
+  function maxBytesFor(kind) {
+    return (MAX_MB_POR_TIPO[kind] || MAX_MB_POR_TIPO.file) * 1024 * 1024;
+  }
 
   function cachearElementos() {
     el.modal = $("modalCrearNoticia");
@@ -106,64 +125,75 @@
   }
 
   /* ======================================================================
-     Subida
+     Archivos locales: se cachean aquí y viajan con el formulario al guardar.
      ====================================================================== */
-  async function subirArchivo(file) {
-    var datos = new FormData();
-    datos.append("archivo", file);
+  function esBlob(url) {
+    return String(url || "").indexOf("blob:") === 0;
+  }
 
-    var respuesta = await fetch("/noticias/upload", {
-      method: "POST",
-      body: datos,
-      credentials: "same-origin",
-    });
-
-    var cuerpo = await respuesta.json().catch(function () { return {}; });
-
-    if (!respuesta.ok) {
-      throw new Error(cuerpo.error || "No se pudo subir " + file.name);
+  function soltarVistaPrevia(adjunto) {
+    if (adjunto && esBlob(adjunto.previewUrl)) {
+      URL.revokeObjectURL(adjunto.previewUrl);
+      adjunto.previewUrl = "";
     }
-    return cuerpo.adjunto;
+  }
+
+  function contarValidos() {
+    return estado.adjuntos.filter(function (a) { return !a.error; }).length;
   }
 
   async function agregarArchivos(archivos) {
     var lista = Array.prototype.slice.call(archivos);
     if (!lista.length) return;
 
+    if (contarValidos() + lista.length > maxFiles()) {
+      mostrarEstado("Puedes adjuntar hasta " + maxFiles() + " archivos.", true);
+      return;
+    }
+
     for (var i = 0; i < lista.length; i += 1) {
       var original = lista[i];
-
-      // Marcador provisional: el usuario ve el archivo desde el primer momento.
-      var provisional = {
-        id: "tmp_" + Date.now() + "_" + i,
+      var kind = kindOf(original.name, original.type);
+      var local = {
+        id: "local_" + Date.now() + "_" + i,
+        local: true,
         pendiente: true,
         name: original.name,
-        kind: "file",
+        kind: kind,
+        file: original,
       };
-      estado.adjuntos.push(provisional);
+      estado.adjuntos.push(local);
       renderizar();
 
-      estado.subiendo += 1;
-      mostrarEstado("Procesando " + original.name + "…");
+      estado.preparando += 1;
+      mostrarEstado("Preparando " + original.name + "…");
       actualizarBotonGuardar();
 
       try {
+        if (original.size > maxBytesFor(kind)) {
+          throw new Error("«" + original.name + "» supera el máximo de " + MAX_MB_POR_TIPO[kind] + " MB.");
+        }
         var preparado = await reducirImagen(original);
-        var adjunto = await subirArchivo(preparado);
-        var posicion = estado.adjuntos.indexOf(provisional);
-        if (posicion !== -1) estado.adjuntos[posicion] = adjunto;
+        local.file = preparado;
+        local.name = preparado.name || original.name;
+        local.kind = kindOf(local.name, preparado.type || original.type);
+        local.pendiente = false;
+        if (local.kind === "image" || local.kind === "video") {
+          local.previewUrl = URL.createObjectURL(preparado);
+        }
       } catch (error) {
-        provisional.pendiente = false;
-        provisional.error = error.message;
-        console.warn("[Noticias] Error subiendo:", error);
+        local.pendiente = false;
+        local.file = null;
+        local.error = error.message;
+        console.warn("[Noticias] No se pudo preparar el archivo:", error);
       } finally {
-        estado.subiendo -= 1;
+        estado.preparando -= 1;
         renderizar();
         actualizarBotonGuardar();
       }
     }
 
-    mostrarEstado(estado.subiendo > 0 ? "Procesando archivos…" : "");
+    mostrarEstado(estado.preparando > 0 ? "Preparando archivos…" : "");
   }
 
   /* ======================================================================
@@ -183,7 +213,8 @@
 
   function descripcion(adjunto) {
     if (adjunto.error) return '<span class="adj__meta--error">' + escapar(adjunto.error) + "</span>";
-    if (adjunto.pendiente) return "Subiendo…";
+    if (adjunto.pendiente) return "Preparando…";
+    if (adjunto.local) return "Se subirá al guardar";
 
     var partes = [];
     if (adjunto.kind === "pdf") {
@@ -235,14 +266,20 @@
 
   function sincronizarCampoOculto() {
     if (!el.hiddenAdjuntos) return;
-    // Los provisionales y los fallidos no se guardan.
-    var validos = estado.adjuntos.filter(function (a) { return !a.pendiente && !a.error; });
-    el.hiddenAdjuntos.value = JSON.stringify(validos);
+    // Los provisionales y los fallidos no se guardan. Los locales viajan
+    // como archivos del formulario; aquí solo queda el plan de orden.
+    var plan = estado.adjuntos
+      .filter(function (a) { return !a.pendiente && !a.error; })
+      .map(function (a) {
+        if (a.local || a.file) return { nuevo: true, name: a.name };
+        return { public_id: a.public_id, url: a.url };
+      });
+    el.hiddenAdjuntos.value = JSON.stringify(plan);
   }
 
   function actualizarBotonGuardar() {
     if (!el.guardar) return;
-    el.guardar.disabled = estado.subiendo > 0;
+    el.guardar.disabled = estado.preparando > 0;
   }
 
   function iniciarDelegacionLista() {
@@ -251,7 +288,8 @@
     el.lista.addEventListener("click", function (evento) {
       var quitar = evento.target.closest("[data-quitar]");
       if (quitar) {
-        estado.adjuntos.splice(parseInt(quitar.getAttribute("data-quitar"), 10), 1);
+        var quitado = estado.adjuntos.splice(parseInt(quitar.getAttribute("data-quitar"), 10), 1)[0];
+        soltarVistaPrevia(quitado);
         renderizar();
         return;
       }
@@ -314,11 +352,13 @@
   function pintarPortada(url) {
     if (!el.portadaWrap) return;
     if (url) {
+      el.portadaImg.hidden = false;
       el.portadaImg.src = url;
       el.portadaWrap.hidden = false;
       if (el.btnSelectCover) el.btnSelectCover.textContent = "Cambiar portada";
     } else {
       el.portadaWrap.hidden = true;
+      el.portadaImg.hidden = true;
       el.portadaImg.removeAttribute("src");
       if (el.btnSelectCover) el.btnSelectCover.textContent = "Seleccionar portada";
     }
@@ -327,25 +367,8 @@
   function quitarPortada() {
     if (el.urlPortada) el.urlPortada.value = "";
     if (el.filePortada) el.filePortada.value = "";
+    if (estado.cropper && estado.cropper.clearPhoto) estado.cropper.clearPhoto();
     pintarPortada(null);
-  }
-
-  async function subirPortada(file) {
-    estado.subiendo += 1;
-    actualizarBotonGuardar();
-    mostrarEstado("Subiendo portada…");
-
-    try {
-      var adjunto = await subirArchivo(file);
-      el.urlPortada.value = adjunto.url;
-      pintarPortada(adjunto.previewUrl || adjunto.url);
-      mostrarEstado("");
-    } catch (error) {
-      mostrarEstado("No se pudo subir la portada: " + error.message, true);
-    } finally {
-      estado.subiendo -= 1;
-      actualizarBotonGuardar();
-    }
   }
 
   function iniciarCropper() {
@@ -369,9 +392,10 @@
       outputFilename: "portada-noticia.jpg",
       selectLabel: "Seleccionar portada",
       changeLabel: "Cambiar portada",
-      onCropped: function (file) {
+      onCropped: function () {
         if (el.portadaWrap) el.portadaWrap.hidden = false;
-        subirPortada(file);
+        // El recortador deja el JPEG en el input `portada`; se sube al guardar.
+        mostrarEstado("");
       },
     });
 
@@ -428,8 +452,9 @@
      Apertura del modal
      ====================================================================== */
   function reiniciar() {
+    estado.adjuntos.forEach(soltarVistaPrevia);
     estado.adjuntos = [];
-    estado.subiendo = 0;
+    estado.preparando = 0;
     if (el.form) el.form.reset();
     quitarPortada();
     mostrarEstado("");
@@ -503,9 +528,9 @@
         window.tinymce.triggerSave();
       }
 
-      if (estado.subiendo > 0) {
+      if (estado.preparando > 0) {
         evento.preventDefault();
-        mostrarEstado("Espera a que terminen de procesarse los archivos.", true);
+        mostrarEstado("Espera a que terminen de prepararse los archivos.", true);
         return;
       }
 
@@ -516,9 +541,29 @@
         return;
       }
 
+      var fallidos = estado.adjuntos.filter(function (a) { return a.error; });
+      if (fallidos.length) {
+        evento.preventDefault();
+        mostrarEstado("Quita los archivos con error antes de guardar.", true);
+        return;
+      }
+
+      // Los File cacheados viajan con el POST; el servidor los nombra
+      // <N° de noticia>_1, _2… cuando la noticia ya existe.
+      if (el.fileGaleria && typeof DataTransfer === "function") {
+        var transferencia = new DataTransfer();
+        estado.adjuntos.forEach(function (adjunto) {
+          if (adjunto.file) transferencia.items.add(adjunto.file);
+        });
+        el.fileGaleria.files = transferencia.files;
+      }
+
       sincronizarCampoOculto();
-      el.guardar.disabled = true;
-      mostrarEstado(estado.modo === "editar" ? "Guardando cambios…" : "Publicando…");
+      mostrarEstado(
+        estado.modo === "editar"
+          ? "Guardando y subiendo archivos…"
+          : "Publicando y subiendo archivos…",
+      );
     });
   }
 

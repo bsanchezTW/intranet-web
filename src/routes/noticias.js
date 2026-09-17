@@ -5,16 +5,11 @@
 // attachmentProcessor y el correo en noticiaEmailService.
 
 const express = require("express");
-const multer = require("multer");
-const crypto = require("node:crypto");
-const fs = require("node:fs/promises");
-const os = require("node:os");
-const path = require("node:path");
-const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 
 const router = express.Router();
 
 const requireRole = require("../middlewares/requireRole");
+const receiveNewsMedia = require("../middlewares/receiveNewsMedia");
 const { isAdministrador } = require("../constants/roles");
 const { sanitizeArticleHtml } = require("../utils/sanitizeContent");
 
@@ -32,7 +27,7 @@ const ROLES_ESCRITURA = ["admin"];
 // Súbela SIEMPRE que cambie noticias.css o los scripts del módulo: los
 // estáticos se sirven con `maxAge: 1d`, así que sin bump el navegador se queda
 // con la hoja anterior y la vista se ve rota.
-const CSS_VERSION = "20260911a";
+const CSS_VERSION = "20260917r";
 
 const ASSETS = {
   extraCss: [`/css/noticias.css?v=${CSS_VERSION}`],
@@ -51,20 +46,6 @@ const ASSETS_DETALLE = {
 };
 
 const RELACIONADAS_EN_DETALLE = 4;
-
-const NEWS_UPLOAD_TEMP_DIR = path.join(os.tmpdir(), "transworld-intranet-news");
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      fs.mkdir(NEWS_UPLOAD_TEMP_DIR, { recursive: true })
-        .then(() => cb(null, NEWS_UPLOAD_TEMP_DIR), cb);
-    },
-    filename: (_req, _file, cb) => {
-      cb(null, `${Date.now()}-${crypto.randomUUID()}.upload`);
-    },
-  }),
-  limits: { fileSize: UPLOAD_LIMITS_BYTES.NEWS_ATTACHMENT },
-});
 
 const MAX_TITULO = 200;
 const MAX_SUBTITULO = 300;
@@ -94,10 +75,29 @@ function parseNoticiaBody(body) {
       subtitle: subtitulo,
       content: contenido,
       image: String(body.imagen_portada || "").trim() || null,
-      // normalize + serialize descartan cualquier campo inesperado del cliente.
-      attachments: attachmentModel.serialize(attachmentModel.normalize(body.adjuntos_data)),
     },
   };
+}
+
+function newsFiles(req) {
+  return {
+    adjuntos: req.files?.adjuntos || [],
+    portada: req.files?.portada?.[0] || null,
+  };
+}
+
+function scheduleCleanup(tasks) {
+  if (!tasks.length) return;
+  Promise.allSettled(tasks).then((results) => {
+    results.forEach((result) => {
+      if (result.status === "rejected") {
+        console.warn(
+          "[Noticias] Limpieza de archivos incompleta:",
+          result.reason?.message || result.reason,
+        );
+      }
+    });
+  });
 }
 
 /**
@@ -159,116 +159,122 @@ router.get("/editar/:id", requireRole(...ROLES_ESCRITURA), (req, res) =>
 );
 
 // ==========================================
-// SUBIDA DE ARCHIVOS
+// CREAR
 // ==========================================
-// Devuelve el adjunto ya procesado (portada del PDF, HTML del Word,
-// dimensiones de la imagen), listo para guardarse tal cual con la noticia.
+// Los archivos viajan con el formulario y se suben recién cuando la noticia
+// existe, con el nombre <N° de noticia>_1, _2…
 router.post(
-  "/upload",
+  "/crear",
   requireRole(...ROLES_ESCRITURA),
-  upload.single("archivo"),
+  receiveNewsMedia(),
   async (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({ error: "No se recibió ningún archivo." });
-    }
+    const parsed = parseNoticiaBody(req.body);
+    if (!parsed.ok) return res.status(400).send(parsed.error);
 
     try {
-      const adjunto = await attachmentProcessor.processUploadedFile(req.file);
-      res.json({ ok: true, adjunto });
-    } catch (err) {
-      if (err instanceof attachmentProcessor.AttachmentError) {
-        return res.status(err.statusCode).json({ error: err.message });
-      }
-      console.error("[Noticias] Error subiendo archivo:", err);
-      res.status(500).json({ error: "No se pudo subir el archivo. Inténtalo nuevamente." });
-    } finally {
-      await fs.unlink(req.file.path).catch((cleanupError) => {
-        console.warn(
-          "[Noticias] No se pudo limpiar el temporal de subida:",
-          cleanupError.message || cleanupError,
-        );
+      const slug = await repository.generateUniqueSlug(parsed.data.title);
+      const autor = req.session.user?.username || req.session.user?.email || "Anónimo";
+      const { adjuntos, portada } = newsFiles(req);
+
+      const id = await repository.create({
+        ...parsed.data,
+        slug,
+        author: autor,
+        image: null,
+        attachments: "[]",
       });
+
+      try {
+        const media = await attachmentProcessor.persistNewsMedia({
+          noticiaId: id,
+          previousAttachments: [],
+          previousCover: null,
+          planRaw: req.body.adjuntos_data,
+          files: adjuntos,
+          coverFile: portada,
+          keepCoverUrl: parsed.data.image,
+        });
+        await repository.update(id, {
+          ...parsed.data,
+          slug,
+          image: media.image,
+          attachments: media.attachments,
+        });
+      } catch (mediaErr) {
+        console.error("[Noticias] Error subiendo archivos de la noticia nueva:", mediaErr);
+        if (mediaErr instanceof attachmentProcessor.AttachmentError) {
+          return res.redirect(`/noticias/${id}?error=adjuntos_fallidos`);
+        }
+        throw mediaErr;
+      }
+
+      await repository.logChange(req.session.user?.id, "publicó una nueva noticia", `/noticias/${id}`);
+      res.redirect(`/noticias/${id}?publicada=1`);
+    } catch (err) {
+      console.error("[Noticias] Error creando:", err);
+      res.status(500).send("Error guardando la noticia");
     }
   },
 );
 
 // ==========================================
-// CREAR
-// ==========================================
-router.post("/crear", requireRole(...ROLES_ESCRITURA), async (req, res) => {
-  const parsed = parseNoticiaBody(req.body);
-  if (!parsed.ok) return res.status(400).send(parsed.error);
-
-  try {
-    const slug = await repository.generateUniqueSlug(parsed.data.title);
-    const autor = req.session.user?.username || req.session.user?.email || "Anónimo";
-
-    const id = await repository.create({ ...parsed.data, slug, author: autor });
-    await repository.logChange(req.session.user?.id, "publicó una nueva noticia", `/noticias/${id}`);
-
-    res.redirect(`/noticias/${id}?publicada=1`);
-  } catch (err) {
-    console.error("[Noticias] Error creando:", err);
-    res.status(500).send("Error guardando la noticia");
-  }
-});
-
-// ==========================================
 // EDITAR
 // ==========================================
-router.post("/editar/:id", requireRole(...ROLES_ESCRITURA), async (req, res) => {
-  const { id } = req.params;
-  const parsed = parseNoticiaBody(req.body);
-  if (!parsed.ok) return res.status(400).send(parsed.error);
+router.post(
+  "/editar/:id",
+  requireRole(...ROLES_ESCRITURA),
+  receiveNewsMedia(),
+  async (req, res) => {
+    const { id } = req.params;
+    const parsed = parseNoticiaBody(req.body);
+    if (!parsed.ok) return res.status(400).send(parsed.error);
 
-  try {
-    const actual = await repository.findById(id);
-    if (!actual) return res.status(404).send("Noticia no encontrada");
+    try {
+      const actual = await repository.findById(id);
+      if (!actual) return res.status(404).send("Noticia no encontrada");
 
-    // El slug solo se regenera si cambió el título; así no se rompen los
-    // enlaces ya compartidos de noticias cuyo título no se tocó.
-    const slug =
-      actual.title === parsed.data.title && actual.slug
-        ? actual.slug
-        : await repository.generateUniqueSlug(parsed.data.title, { excludeId: id });
+      // El slug solo se regenera si cambió el título; así no se rompen los
+      // enlaces ya compartidos de noticias cuyo título no se tocó.
+      const slug =
+        actual.title === parsed.data.title && actual.slug
+          ? actual.slug
+          : await repository.generateUniqueSlug(parsed.data.title, { excludeId: id });
 
-    const removedAttachments = attachmentProcessor.findRemovedAttachments(
-      actual.attachments,
-      parsed.data.attachments,
-    );
-    const previousCover = actual.image || null;
-    const nextCover = parsed.data.image || null;
-
-    await repository.update(id, { ...parsed.data, slug });
-    await repository.logChange(req.session.user?.id, "editó una noticia", `/noticias/${id}`);
-
-    // Limpia del bucket los adjuntos/portada que ya no referencia la noticia.
-    const cleanup = [];
-    if (removedAttachments.length) {
-      cleanup.push(attachmentProcessor.deleteAttachmentFiles(removedAttachments));
-    }
-    if (previousCover && previousCover !== nextCover) {
-      cleanup.push(fileStorage.deleteFile(previousCover));
-    }
-    if (cleanup.length) {
-      Promise.allSettled(cleanup).then((results) => {
-        results.forEach((result) => {
-          if (result.status === "rejected") {
-            console.warn(
-              "[Noticias] Limpieza de archivos incompleta:",
-              result.reason?.message || result.reason,
-            );
-          }
-        });
+      const { adjuntos, portada } = newsFiles(req);
+      const media = await attachmentProcessor.persistNewsMedia({
+        noticiaId: id,
+        previousAttachments: actual.attachments,
+        previousCover: actual.image || null,
+        planRaw: req.body.adjuntos_data,
+        files: adjuntos,
+        coverFile: portada,
+        keepCoverUrl: parsed.data.image,
       });
-    }
 
-    res.redirect(`/noticias/${id}?ok=noticia_actualizada`);
-  } catch (err) {
-    console.error("[Noticias] Error editando:", err);
-    res.status(500).send("Error actualizando la noticia");
-  }
-});
+      await repository.update(id, {
+        ...parsed.data,
+        slug,
+        image: media.image,
+        attachments: media.attachments,
+      });
+      await repository.logChange(req.session.user?.id, "editó una noticia", `/noticias/${id}`);
+
+      const cleanup = [];
+      if (media.removed.length) {
+        cleanup.push(attachmentProcessor.deleteAttachmentFiles(media.removed));
+      }
+      scheduleCleanup(cleanup);
+
+      res.redirect(`/noticias/${id}?ok=noticia_actualizada`);
+    } catch (err) {
+      if (err instanceof attachmentProcessor.AttachmentError) {
+        return res.status(err.statusCode).send(err.message);
+      }
+      console.error("[Noticias] Error editando:", err);
+      res.status(500).send("Error actualizando la noticia");
+    }
+  },
+);
 
 // ==========================================
 // ELIMINAR
@@ -289,17 +295,7 @@ router.post("/eliminar/:id", requireRole(...ROLES_ESCRITURA), async (req, res) =
       attachmentProcessor.deleteAttachmentFiles(noticia.attachments),
     ];
     if (noticia.image) cleanupTasks.push(fileStorage.deleteFile(noticia.image));
-
-    Promise.allSettled(cleanupTasks).then((results) => {
-      results.forEach((result) => {
-        if (result.status === "rejected") {
-          console.warn(
-            "[Noticias] Limpieza de archivos incompleta:",
-            result.reason?.message || result.reason,
-          );
-        }
-      });
-    });
+    scheduleCleanup(cleanupTasks);
 
     res.redirect("/noticias?ok=Noticia eliminada");
   } catch (err) {

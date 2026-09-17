@@ -15,7 +15,9 @@
 }
 
 /* ── Cabecera de página ───────────────────────────────────────────────────────
-   Banner azul con el mismo degradado y brillo verde de la barra y el pie.
+   Sobre el fondo de la página, sin caja ni línea divisoria: la barra superior
+   ya es el bloque de color. El carácter lo dan el ícono en azul de marca, el
+   título grande y las migas con chevrón.
 
    .page-header
      span.page-header__icono            ← ícono de la sección (opcional)
@@ -30,48 +32,12 @@
 
 .page-header {
   position: relative;
-  isolation: isolate;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px 20px;
-  margin: 0 0 28px;
-  padding: 26px 28px;
-  overflow: hidden;
-  border-radius: 20px;
-  color: #fff;
-  background:
-    radial-gradient(ellipse 55% 150% at 0% 0%, rgba(166, 216, 74, 0.2), transparent 62%),
-    radial-gradient(ellipse 45% 130% at 100% 100%, rgba(42, 107, 168, 0.6), transparent 70%),
-    linear-gradient(135deg, #0b3a63 0%, #0f4c81 100%);
-  box-shadow: 0 14px 34px rgba(11, 58, 99, 0.2);
-  animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-
-/* Anillos decorativos a la derecha. */
-.page-header::before,
-.page-header::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.page-header::before {
-  top: -120px;
-  right: -70px;
-  width: 300px;
-  height: 300px;
-  border: 46px solid rgba(255, 255, 255, 0.04);
-}
-
-.page-header::after {
-  right: 150px;
-  bottom: -90px;
-  width: 160px;
-  height: 160px;
-  border: 1px solid rgba(166, 216, 74, 0.22);
+  gap: 14px 18px;
+  margin: 8px 0 28px;
+  animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .page-header__icono {
@@ -79,18 +45,19 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 54px;
-  height: 54px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.1);
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  background: var(--brand);
   color: var(--green);
-  font-size: 1.5rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  font-size: 1.4rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 6px 16px rgba(15, 76, 129, 0.24);
 }
 
 .page-header__text {
-  flex: 1 1 300px;
+  flex: 1 1 280px;
   min-width: 0;
 }
 
@@ -98,33 +65,42 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px 8px;
-  margin: 0 0 6px;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
+  gap: 2px 8px;
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-subtle);
 }
 
 .page-header__migas a {
-  color: var(--green);
+  color: var(--brand);
   text-decoration: none;
   transition: color 0.15s;
 }
 
 .page-header__migas a:hover {
-  color: #fff;
+  color: var(--brand-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .page-header__migas a:focus-visible {
-  outline: 2px solid var(--green);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
   border-radius: 3px;
 }
 
+/* El separador "/" del marcado se dibuja como chevrón. */
 .page-header__migas [aria-hidden="true"] {
-  color: rgba(255, 255, 255, 0.35);
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 1px 1px -1px;
+  border-top: 1.5px solid var(--color-text-subtle);
+  border-right: 1.5px solid var(--color-text-subtle);
+  font-size: 0;
+  opacity: 0.7;
+  transform: rotate(45deg);
 }
 
 .page-title,
@@ -132,23 +108,29 @@ h2.page-title {
   margin: 0;
   padding: 0;
   border: 0;
-  color: #fff;
-  font-size: clamp(1.45rem, 2.4vw, 1.95rem);
+  color: var(--color-heading);
+  font-size: clamp(1.5rem, 2.2vw, 1.85rem);
   font-weight: 800;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   overflow-wrap: anywhere;
 }
 
 .page-description {
-  margin: 6px 0 0;
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 0.95rem;
+  margin: 5px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.93rem;
   line-height: 1.5;
 }
 
 .page-description strong {
-  color: #fff;
+  color: var(--color-text);
+}
+
+/* Migas sobre páginas de detalle que tienen su propia cabecera (noticia,
+   ticket, solicitud de gastos). */
+.migas-sueltas {
+  margin: 8px 0 18px;
 }
 
 /* Etiqueta del área dentro de la descripción: punto con su color. */
@@ -156,11 +138,12 @@ h2.page-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 10px 2px 8px;
+  padding: 1px 9px 1px 7px;
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: 0.82rem;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
@@ -169,8 +152,7 @@ h2.page-title {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--area-color, var(--green));
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  background: var(--area-color, var(--brand));
 }
 
 /* Dato destacado a la derecha del título (puntaje, saldo). */
@@ -178,15 +160,15 @@ h2.page-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 16px 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.1);
+  padding: 6px 14px 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
 }
 
 .page-header__stat strong {
-  color: var(--green);
-  font-size: 1.7rem;
+  color: var(--brand);
+  font-size: 1.45rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -194,8 +176,8 @@ h2.page-title {
 
 .page-header__stat span {
   max-width: 70px;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.7rem;
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0.04em;
@@ -206,9 +188,10 @@ h2.page-title {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
+/* Principal: el mismo botón oscuro de los modales (.btn-primario). */
 .page-header-btn,
 a.page-header-btn,
 button.page-header-btn {
@@ -216,40 +199,38 @@ button.page-header-btn {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 18px;
+  height: 38px;
+  padding: 0 16px;
   box-sizing: border-box;
   border: 1px solid transparent;
-  border-radius: 999px;
-  background: var(--green);
-  color: var(--ink);
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--color-bg);
   font-family: var(--font-sans, 'Instrument Sans', 'Segoe UI', system-ui, sans-serif);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 700;
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 18px rgba(166, 216, 74, 0.22);
-  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.18s, box-shadow 0.2s, border-color 0.18s;
+  transition: transform 0.15s, opacity 0.18s, background 0.18s, border-color 0.18s, color 0.18s;
 }
 
 .page-header-btn .icon-svg {
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .page-header-btn:hover,
 a.page-header-btn:hover,
 button.page-header-btn:hover {
-  background: #b5e35c;
   transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px rgba(166, 216, 74, 0.34);
+  opacity: 0.92;
 }
 
 .page-header-btn:focus-visible,
 a.page-header-btn:focus-visible,
 button.page-header-btn:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
@@ -258,49 +239,51 @@ button.page-header-btn:focus-visible {
 a.page-header-btn--secundario,
 button.page-header-btn--secundario,
 .page-header .apps-orden-btn {
-  height: 40px;
-  padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  font-size: 0.84rem;
-  box-shadow: none;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
 }
 
 .page-header-btn--secundario:hover,
 a.page-header-btn--secundario:hover,
 button.page-header-btn--secundario:hover,
 .page-header .apps-orden-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.34);
-  color: #fff;
-  box-shadow: none;
+  border-color: var(--brand);
+  color: var(--brand);
+  opacity: 1;
 }
 
 .page-header .apps-orden-btn.is-active {
-  background: #fff;
-  border-color: #fff;
-  color: var(--brand);
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
 }
 
 @media (max-width: 768px) {
   .page-header {
     align-items: flex-start;
-    gap: 14px;
-    padding: 20px;
-    border-radius: 16px;
+    gap: 12px;
   }
 
   .page-header__icono {
     width: 44px;
     height: 44px;
     border-radius: 13px;
-    font-size: 1.25rem;
+    font-size: 1.2rem;
   }
 
+  /* Ícono y texto comparten fila; las acciones bajan completas. */
   .page-header__text {
-    flex-basis: calc(100% - 60px);
+    flex: 1 1 0;
+  }
+
+  .page-title,
+  h2.page-title {
+    font-size: 1.3rem;
   }
 
   .page-header-actions {
