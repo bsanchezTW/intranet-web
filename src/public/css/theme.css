@@ -90,79 +90,6 @@
   --status-equal: #8494a7;
 }
 
-/* ── Modo oscuro ── */
-html[data-theme="dark"] {
-  color-scheme: dark;
-
-  --corp-blue: #79b4e8;
-  --corp-blue-light: #a9cff2;
-  --corp-blue-dark: #a9cff2;
-  --corp-green: #a6d84a;
-  --corp-green-dark: #bce36e;
-  --corp-green-muted: rgba(166, 216, 74, 0.13);
-
-  --brand: var(--corp-blue);
-  --brand-deep: var(--corp-blue-dark);
-  --brand-soft: rgba(121, 180, 232, 0.12);
-  --green: var(--corp-green);
-  --green-deep: var(--corp-green-dark);
-  --green-soft: rgba(166, 216, 74, 0.13);
-  --green-ink: var(--corp-green-dark);
-  --ink: #e8eef6;
-  --muted: #9fb0c4;
-  --subtle: #6b7d93;
-  --surface2: #18253a;
-  --border2: rgba(255, 255, 255, 0.16);
-  --nav-bg: rgba(5, 12, 24, 0.92);
-
-  --color-bg: #0a1220;
-  --color-bg-image-opacity: 0;
-  --color-surface: #111c2e;
-  --color-surface-muted: #18253a;
-  --color-surface-elevated: #111c2e;
-  --color-border: rgba(255, 255, 255, 0.09);
-  --color-border-strong: rgba(255, 255, 255, 0.16);
-  --color-text: #e8eef6;
-  --color-text-muted: #9fb0c4;
-  --color-text-subtle: #6b7d93;
-  --color-heading: #a9cff2;
-  --color-link: #79b4e8;
-  --color-input-bg: #18253a;
-  --color-input-text: #e8eef6;
-  --color-overlay: rgba(0, 5, 15, 0.75);
-
-  --glass-bg: rgba(17, 28, 46, 0.92);
-  --glass-bg-strong: #111c2e;
-  --glass-bg-gradient: linear-gradient(145deg, #131f33 0%, #101a2b 100%);
-  --glass-blur-filter: blur(12px) saturate(1.1);
-  --glass-bg-dark: rgba(5, 15, 30, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.09);
-  --glass-border-outer: rgba(255, 255, 255, 0.04);
-  --glass-border-subtle: rgba(255, 255, 255, 0.06);
-  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
-  --glass-shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.35), 0 16px 48px rgba(0, 0, 0, 0.5);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-
-  /* Mismos halos que en claro, pero por encima del fondo oscuro: la superficie
-     de las tarjetas (#111c2e) sigue destacando sobre el degradado. */
-  --app-background:
-    radial-gradient(880px 520px at 6% -10%, rgba(121, 180, 232, 0.16), transparent 62%),
-    radial-gradient(760px 460px at 98% 0%, rgba(166, 216, 74, 0.07), transparent 58%),
-    linear-gradient(180deg, #0c1626 0%, #0a1220 52%, #070d18 100%);
-  --bg-gradient: none;
-  --bg-gradient-glow: none;
-
-  --shadow: var(--glass-shadow);
-  --shadow-lg: var(--glass-shadow-lg);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.2), 0 8px 22px rgba(0, 0, 0, 0.18);
-  --shadow-card-lg: 0 8px 22px rgba(0, 0, 0, 0.28), 0 16px 36px rgba(0, 0, 0, 0.24);
-
-  --up: #6cc78d;
-  --down: #e07f7f;
-  --status-up: #6cc78d;
-  --status-down: #e07f7f;
-}
-
 /* ── Fondo global (intranet; login conserva blanco propio) ── */
 html {
   min-height: 100%;
@@ -281,12 +208,6 @@ html.pagina-lista .cargando-pagina {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* Botón de tema — oculto */
-.theme-toggle,
-.theme-toggle--mobile {
-  display: none !important;
 }
 
 /* ── Cursos / Academy ── */

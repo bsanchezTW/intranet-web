@@ -6,6 +6,7 @@ const {
   SHARED_INTRANET_PROJECT_REF,
   SupabaseProjectBindingError,
   getCountryDbBinding,
+  countryStorageBuckets,
   searchPathStatement,
   postgresStartupOptions,
   extractDatabaseRole,
@@ -25,6 +26,10 @@ describe("aislamiento Chile / Perú en el mismo proyecto", () => {
     assert.equal(COUNTRY_BINDINGS.CL.bucket, "intranet-content");
     assert.equal(COUNTRY_BINDINGS.PE.bucket, "intranet-content-pe");
     assert.notEqual(COUNTRY_BINDINGS.CL.bucket, COUNTRY_BINDINGS.PE.bucket);
+    assert.deepEqual(countryStorageBuckets(), [
+      "intranet-content",
+      "intranet-content-pe",
+    ]);
   });
 
   it("fija search_path exclusivo al schema del país", () => {

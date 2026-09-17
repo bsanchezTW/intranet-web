@@ -81,9 +81,22 @@ function invalidateSupportTeam() {
   cache = { expiresAt: 0, agents: [] };
 }
 
+/** Correos del personal de Informática (Chile y Perú: el equipo de esta instancia). */
+async function supportAgentEmails() {
+  const agents = await listSupportAgents();
+  return [
+    ...new Set(
+      agents
+        .map((agent) => String(agent.email || "").trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 module.exports = {
   listSupportAgents,
   isSupportAgent,
   getAgentById,
+  supportAgentEmails,
   invalidateSupportTeam,
 };

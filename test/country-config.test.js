@@ -61,6 +61,8 @@ describe("config/country — COUNTRY sin fallback", () => {
     assert.equal(pe.locale, "es-PE");
     assert.equal(cl.corporateEmailDomain, "transworld.cl");
     assert.equal(pe.corporateEmailDomain, "transworld.pe");
+    assert.equal(cl.noReplyEmail, "noreply@transworld.cl");
+    assert.equal(pe.noReplyEmail, "noreply@transworld.pe");
     assert.equal(cl.sessionCookieName, "tw_sid_cl");
     assert.equal(pe.sessionCookieName, "tw_sid_pe");
     assert.equal(cl.devPort, 3000);
@@ -101,6 +103,32 @@ describe("config/country — COUNTRY sin fallback", () => {
       getCountryConfig("CL").sessionCookieName,
       getCountryConfig("PE").sessionCookieName,
     );
+  });
+
+  it("CFG-09: login y navbar tienen arte propio por país", () => {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const imgRoot = path.join(__dirname, "..", "src", "public");
+    const cl = getCountryConfig("CL").brand;
+    const pe = getCountryConfig("PE").brand;
+
+    assert.equal(cl.loginLogo, "/img/brand/cl/login-logo.png");
+    assert.equal(cl.loginBackground, "/img/brand/cl/login-background.jpg");
+    assert.equal(cl.navbarLogo, "/img/brand/cl/navbar-logo.png");
+    assert.equal(pe.loginLogo, "/img/brand/pe/login-logo.png");
+    assert.equal(pe.loginBackground, "/img/brand/pe/login-background.jpg");
+    assert.equal(pe.navbarLogo, "/img/brand/pe/navbar-logo.png");
+    assert.match(cl.loginBackground, /\.jpg$/);
+    assert.match(pe.loginBackground, /\.jpg$/);
+    assert.notEqual(cl.loginLogo, pe.loginLogo);
+    assert.notEqual(cl.loginBackground, pe.loginBackground);
+    assert.notEqual(cl.navbarLogo, pe.navbarLogo);
+
+    for (const asset of [...Object.values(cl), ...Object.values(pe)]) {
+      assert.match(asset, /^\/img\//);
+      const file = path.join(imgRoot, ...asset.replace(/^\//, "").split("/"));
+      assert.equal(fs.existsSync(file), true, `falta ${asset}`);
+    }
   });
 });
 

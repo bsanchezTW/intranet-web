@@ -18,16 +18,13 @@
 
 <div id="modalGasto" class="modal-overlay gasto-modal" role="dialog" aria-modal="true"
      aria-labelledby="modalGastoTitulo" aria-hidden="true" data-dismiss="false">
-  <div class="modal-content modal-panel--flush gasto-modal__panel">
+  <div class="modal-content modal-content--xl gasto-modal__panel">
+    <%# Sin data-modal-close: el cierre pregunta si hay cambios sin guardar. %>
+    <button type="button" class="modal-close" data-gasto-cerrar aria-label="Cerrar">&times;</button>
 
-    <%# div y no <header>/<footer>: intranet.css da estilo global a esas etiquetas
-        (son las del sitio) y pintaba la cabecera del modal de azul. %>
-    <div class="gasto-modal__head">
-      <div class="gasto-modal__cabecera">
-        <h2 class="modal-title gasto-modal__titulo" id="modalGastoTitulo">Rendición de gastos</h2>
-        <p class="gasto-modal__estado" id="modalGastoEstado" aria-live="polite"></p>
-      </div>
-      <button type="button" class="gasto-modal__cerrar" data-gasto-cerrar aria-label="Cerrar">&times;</button>
+    <div class="modal-head">
+      <h2 class="modal-title" id="modalGastoTitulo">Rendición de gastos</h2>
+      <p class="modal-subtitle gasto-modal__estado" id="modalGastoEstado" aria-live="polite"></p>
     </div>
 
     <form class="gasto-form" id="formGasto" novalidate
@@ -35,7 +32,7 @@
           data-decimales="<%= moneda.decimals %>"
           data-hoy="<%= hoy %>">
 
-      <div class="gasto-modal__body">
+      <div class="modal-body gasto-modal__body">
 
         <%# 0. Fondo que se rinde (sólo rendiciones y sólo si hay fondos por rendir).
             Relación 1:1: cada fondo aprobado se rinde en una rendición. Sin
@@ -341,14 +338,13 @@
 
       </div>
 
-      <div class="gasto-modal__foot">
+      <div class="modal-foot gasto-modal__foot">
         <div class="gasto-form-error" id="formError" role="alert"></div>
-        <div class="gasto-modal__acciones">
-          <button type="button" class="gasto-modal__eliminar" id="btnEliminarBorrador" hidden>Eliminar borrador</button>
-          <span class="gasto-modal__espacio" aria-hidden="true"></span>
-          <button type="button" class="btn-secundario" id="btnGuardarBorrador">Guardar borrador</button>
-          <button type="submit" class="btn-primario" id="btnEnviar">Enviar solicitud</button>
+        <div class="modal-foot__start">
+          <button type="button" class="btn-peligro-suave" id="btnEliminarBorrador" hidden>Eliminar borrador</button>
         </div>
+        <button type="button" class="btn-secundario" id="btnGuardarBorrador">Guardar borrador</button>
+        <button type="submit" class="btn-primario" id="btnEnviar">Enviar solicitud</button>
       </div>
     </form>
   </div>

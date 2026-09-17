@@ -95,7 +95,11 @@
             onclick="abrirModalEditar('<%= app.id %>', '<%= cardNombreJs %>', '<%= cardJsSafe(app.description) %>', '<%= cardJsSafe(app.url_pc || '') %>', '<%= cardJsSafe(app.url_apk || '') %>', '<%= cardJsSafe(app.url_ios || '') %>', '<%= cardJsSafe(app.url_web || '') %>', '<%= cardJsSafe(cardIconUrl) %>')">
       Editar
     </button>
-    <form action="/apps/eliminar/<%= app.id %>" method="POST" class="app-card__delete-form" onsubmit="return confirm('¿Estás seguro que deseas eliminar la aplicación? Esta acción es irreversible.');">
+    <form action="/apps/eliminar/<%= app.id %>" method="POST" class="app-card__delete-form"
+          data-confirm="Se eliminará «<%= app.name %>» con sus enlaces e instructivo. Esta acción no se puede deshacer."
+          data-confirm-title="¿Eliminar la aplicación?"
+          data-confirm-accept="Eliminar"
+          data-confirm-tone="peligro">
       <button type="submit" class="app-action app-action--delete" title="Eliminar app">Eliminar</button>
     </form>
   </div>

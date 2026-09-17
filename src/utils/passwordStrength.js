@@ -34,4 +34,9 @@ function isPasswordStrongEnough(password) {
   return score >= 3;
 }
 
-module.exports = { isPasswordStrongEnough };
+// Mensaje único para todos los flujos que crean o cambian contraseñas
+// (registro, restablecer clave temporal y cambio desde el perfil).
+const PASSWORD_POLICY_MESSAGE =
+  "La contraseña es muy débil. Debe tener al menos 8 caracteres y combinar 3 de estos 4: minúsculas, mayúsculas, números o símbolos.";
+
+module.exports = { isPasswordStrongEnough, PASSWORD_POLICY_MESSAGE };

@@ -39,7 +39,7 @@ const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
 const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
-const { migrateTicketCategories } = require("./services/tickets/ticketSchema");
+const { migrateTicketCategories, ensureTicketReplyCorrelatives } = require("./services/tickets/ticketSchema");
 const { UPLOAD_LIMITS_MB } = require("./config/uploadLimits");
 const ticketsRoutes = isFeatureEnabled("supportTickets")
   ? require("./routes/tickets")
@@ -52,6 +52,7 @@ const gastosRoutes = isFeatureEnabled("expenseRequests")
   : null;
 const { syncUnverifiedUsersToDisabled } = require("./utils/syncDisabledUsers");
 const storageService = require("./services/storage/storageService");
+const fileStorage = require("./services/fileStorage");
 const {
   isActiveContentType,
   contentDispositionFor,
@@ -192,7 +193,7 @@ app.use("/media", async (req, res, next) => {
   let requestContext;
   try {
     if (req.method === "HEAD") {
-      const metadata = await storageService.statFile(relativePath);
+      const metadata = await fileStorage.statStoredObject(relativePath);
       const tipo = metadata.contentType || signedMedia.contentTypeFor(relativePath);
       if (!signedMedia.isSafeContentType(tipo)) {
         return res.status(404).send("No encontrado");
@@ -203,7 +204,7 @@ app.use("/media", async (req, res, next) => {
     }
 
     requestContext = storageRequestContext(req);
-    const file = await storageService.downloadStream(relativePath, {
+    const file = await fileStorage.streamStoredObject(relativePath, {
       range: req.get("range") || undefined,
       signal: requestContext.signal,
     });
@@ -281,14 +282,14 @@ app.use("/content", async (req, res, next) => {
   let requestContext;
   try {
     if (req.method === "HEAD") {
-      const metadata = await storageService.statFile(relativePath);
+      const metadata = await fileStorage.statStoredObject(relativePath);
       setStorageHeaders(res, metadata);
       res.set("Cache-Control", "private, max-age=300, no-transform");
       return res.end();
     }
 
     requestContext = storageRequestContext(req);
-    const file = await storageService.downloadStream(relativePath, {
+    const file = await fileStorage.streamStoredObject(relativePath, {
       range: req.get("range") || undefined,
       signal: requestContext.signal,
     });
@@ -632,6 +633,30 @@ async function asegurarColumnaNoticiasDestacada() {
   }
 }
 
+async function asegurarColumnasApps() {
+  try {
+    const { rows } = await db.query(`
+      SELECT c.relkind
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = current_schema() AND c.relname = 'applications'
+      LIMIT 1
+    `);
+    // Vista sobre shared.applications: las columnas ya viven en el catálogo compartido.
+    if (rows[0] && rows[0].relkind === "v") return;
+  } catch (err) {
+    logger.error("apps", err);
+    return;
+  }
+  await Promise.all([
+    asegurarColumnaAppsIconUrl(),
+    asegurarColumnaAppsUrlIos(),
+    asegurarColumnaAppsUrlWeb(),
+    asegurarColumnaAppsCatalog(),
+    asegurarColumnaAppsOrden(),
+  ]);
+}
+
 async function asegurarColumnaAppsIconUrl() {
   try {
     await db.query(`
@@ -764,8 +789,9 @@ async function asegurarSchemaAreas() {
   }
 }
 
-async function asegurarCategoriasTickets() {
+async function asegurarSchemaTickets() {
   try {
+    await ensureTicketReplyCorrelatives();
     const migradas = await migrateTicketCategories();
     if (migradas > 0) logger.info("tickets", `${migradas} ticket(s) con la categoría actualizada`);
   } catch (err) {
@@ -783,15 +809,11 @@ function startBackgroundJobs() {
   Promise.allSettled([
     asegurarCorreoUnico(),
     asegurarColumnaNoticiasDestacada(),
-    asegurarColumnaAppsIconUrl(),
-    asegurarColumnaAppsUrlIos(),
-    asegurarColumnaAppsUrlWeb(),
-    asegurarColumnaAppsCatalog(),
-    asegurarColumnaAppsOrden(),
+    asegurarColumnasApps(),
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
     asegurarSchemaAreas(),
-    isFeatureEnabled("supportTickets") ? asegurarCategoriasTickets() : null,
+    isFeatureEnabled("supportTickets") ? asegurarSchemaTickets() : null,
     asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),
   ]).finally(() => {
     if (isFeatureEnabled("vacations")) iniciarTransicionesVacaciones();

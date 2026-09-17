@@ -14,6 +14,7 @@ const {
   attachmentKind,
   isAllowedAttachment,
   attachmentFileName,
+  replyAttachmentFileName,
   validateAttachmentFiles,
   validateTicketInput,
 } = require("../src/services/tickets/ticketRules");
@@ -78,6 +79,12 @@ describe("reglas de un ticket", () => {
     assert.equal(attachmentFileName(4821, 2, "informe.docx"), "4821_2.docx");
     assert.equal(attachmentFileName(4821, 3, "sin-extension"), "4821_3");
     assert.equal(attachmentFileName(4821, 4, "raro.ext-muy-larga!"), "4821_4");
+  });
+
+  it("los adjuntos de una respuesta usan el correlativo del hilo, no el id global", () => {
+    assert.equal(replyAttachmentFileName(2986, 5, 1, "IMG_0716.jpeg"), "2986_5_1.jpeg");
+    assert.equal(replyAttachmentFileName(2986, 5, 2, "foto.PNG"), "2986_5_2.png");
+    assert.equal(replyAttachmentFileName(2986, 1, 1, "sin-extension"), "2986_1_1");
   });
 
   it("valida los archivos antes de crear el ticket", () => {

@@ -151,20 +151,25 @@
   color: #fff;
 }
 
+/* Recorte de imagen. Tiene su propio JS (profile-photo-cropper.js) y se usa
+   también en el login, que no carga modal.css; por eso repite aquí el cromo
+   del modal estándar (cabecera, pie y botones del modal "Abrir ticket"). */
 .foto-crop-overlay {
-  --crop-modal-bg: var(--modal-bg, #ffffff);
-  --crop-modal-text: var(--modal-text, #1a202c);
-  --crop-modal-heading: var(--modal-heading, #0f4c81);
-  --crop-modal-muted: var(--modal-muted, #475467);
-  --crop-modal-border: var(--modal-border, #dbe5ef);
-  --crop-modal-primary: var(--modal-primary, #0f4c81);
-  --crop-modal-primary-hover: var(--modal-primary-hover, #0b3a63);
+  --crop-modal-bg: var(--color-surface, #ffffff);
+  --crop-modal-muted-bg: var(--color-surface-muted, #eef2f6);
+  --crop-modal-text: var(--color-text, #0d1f33);
+  --crop-modal-heading: var(--color-heading, #0b3a63);
+  --crop-modal-muted: var(--color-text-muted, #51637a);
+  --crop-modal-border: var(--color-border, #e3e9f0);
+  --crop-modal-border-strong: var(--color-border-strong, #d3dce6);
+  --crop-modal-ink: var(--ink, #0d1f33);
+  --crop-modal-brand: var(--brand, #0f4c81);
   --crop-stage-h: 320px;
 
   display: none;
   position: fixed;
   inset: 0;
-  background: var(--modal-overlay-bg, rgba(0, 0, 0, 0.72));
+  background: rgba(13, 31, 51, 0.62);
   z-index: 10000;
   padding: 24px 16px;
   box-sizing: border-box;
@@ -202,34 +207,40 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 20px;
+  padding: 16px 14px 14px 24px;
   border-bottom: 1px solid var(--crop-modal-border);
 }
 
 .foto-crop-header h3 {
   margin: 0;
   padding: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-size: 1.2rem;
+  font-weight: 800;
   line-height: 1.3;
   color: var(--crop-modal-heading);
 }
 
 .foto-crop-close {
-  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: none;
-  font-size: 1.5rem;
+  border-radius: 8px;
+  background: none;
+  color: var(--crop-modal-muted);
+  font-family: inherit;
+  font-size: 1.6rem;
   line-height: 1;
   cursor: pointer;
-  color: #64748b;
-  padding: 4px 8px;
-  border-radius: 6px;
   flex-shrink: 0;
 }
 
 .foto-crop-close:hover {
-  color: #1a202c;
-  background: #f1f5f9;
+  color: var(--crop-modal-brand);
+  background: var(--crop-modal-muted-bg);
 }
 
 .foto-crop-body {
@@ -269,7 +280,7 @@
 .foto-crop-modal > .foto-crop-hint {
   flex: 0 0 auto;
   margin: 0;
-  padding: 12px 20px 0;
+  padding: 12px 24px 0;
   text-align: left;
 }
 
@@ -287,48 +298,53 @@
   gap: 10px;
   justify-content: flex-end;
   align-items: center;
-  padding: 16px 20px;
+  padding: 14px 24px 16px;
   border-top: 1px solid var(--crop-modal-border);
   flex-wrap: wrap;
-  background: var(--crop-modal-bg);
+  gap: 8px;
+  background: var(--crop-modal-muted-bg);
 }
 
 .foto-crop-overlay .btn-crop-cancel,
 .foto-crop-overlay .btn-crop-save {
-  border-radius: 8px;
-  padding: 10px 16px;
+  border-radius: 10px;
+  padding: 9px 16px;
   font-weight: 700;
   border: 1px solid transparent;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   font-family: inherit;
   line-height: 1.2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-height: 40px;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: transform 0.15s, opacity 0.18s, border-color 0.18s, color 0.18s;
+}
+
+.foto-crop-overlay .btn-crop-cancel:hover:not(:disabled),
+.foto-crop-overlay .btn-crop-save:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .foto-crop-overlay .btn-crop-cancel {
-  background: #ffffff;
-  color: #4a5568;
-  border-color: #cbd5e0;
+  background: var(--crop-modal-bg);
+  color: var(--crop-modal-muted);
+  border-color: var(--crop-modal-border-strong);
 }
 
 .foto-crop-overlay .btn-crop-cancel:hover {
-  background: #f8fafc;
-  color: #1a202c;
+  border-color: var(--crop-modal-brand);
+  color: var(--crop-modal-brand);
 }
 
 .foto-crop-overlay .btn-crop-save {
-  background: var(--crop-modal-primary);
+  background: var(--crop-modal-ink);
   color: #ffffff;
 }
 
 .foto-crop-overlay .btn-crop-save:hover:not(:disabled) {
-  background: var(--crop-modal-primary-hover);
+  opacity: 0.92;
   color: #ffffff;
 }
 
@@ -353,47 +369,6 @@
 .foto-crop-error.is-visible {
   display: block;
 }
-
-html[data-theme="dark"] .foto-crop-overlay {
-  --crop-modal-bg: #1a2332;
-  --crop-modal-text: #e2e8f0;
-  --crop-modal-heading: #a8d4ff;
-  --crop-modal-muted: #94a3b8;
-  --crop-modal-border: #3b4a65;
-  --crop-modal-primary: #79b4e8;
-  --crop-modal-primary-hover: #a9cff2;
-}
-
-html[data-theme="dark"] .foto-crop-close {
-  color: #94a3b8;
-}
-
-html[data-theme="dark"] .foto-crop-close:hover {
-  color: #f8fafc;
-  background: #243147;
-}
-
-html[data-theme="dark"] .foto-crop-overlay .btn-crop-cancel {
-  background: #243147;
-  color: #e2e8f0;
-  border-color: #3b4a65;
-}
-
-html[data-theme="dark"] .foto-crop-overlay .btn-crop-cancel:hover {
-  background: #2d3f56;
-  color: #ffffff;
-}
-
-html[data-theme="dark"] .foto-crop-overlay .btn-crop-save {
-  color: #0b1a2a;
-}
-
-html[data-theme="dark"] .foto-crop-error {
-  background: #3f1d1d;
-  color: #fecaca;
-  border-color: #7f1d1d;
-}
-
 @media (max-width: 768px) {
   .foto-crop-modal {
     display: flex;

@@ -1,12 +1,15 @@
 const db = require("../../db");
 const { formatPhoneForDisplay } = require("../../utils/phone");
+const { companyEmailSql } = require("../../utils/contactEmails");
 
 /**
  * Búsquedas de solo lectura que usa el asistente como tools.
  *
  * No son endpoints: sólo las llama el servidor dentro de un turno del chat,
  * y lo que devuelven viaja a Anthropic. Por eso cada resultado se reduce a los
- * campos públicos del directorio — nunca RUT, fecha de nacimiento ni rol.
+ * campos públicos del directorio — nunca RUT, fecha de nacimiento ni rol — y
+ * el contacto es sólo el de empresa: el correo y el teléfono personales no se
+ * leen de la base, así no hay forma de que lleguen al modelo.
  */
 
 const MAX_PEOPLE = 5;
@@ -33,8 +36,10 @@ function likePattern(term) {
 function toPublicPerson(row) {
   return {
     nombre: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
-    email: row.email || null,
-    telefono: row.phone ? formatPhoneForDisplay(row.phone) || null : null,
+    correo_empresa: row.email || null,
+    telefono_empresa: row.work_phone
+      ? formatPhoneForDisplay(row.work_phone) || null
+      : null,
     area: row.area_name || null,
   };
 }
@@ -46,11 +51,11 @@ async function searchPeople(query) {
   const conditions = terms.map(
     (_, i) =>
       `(concat_ws(' ', u.first_name, u.last_name) ILIKE $${i + 1}
-        OR u.email ILIKE $${i + 1}
+        OR ${companyEmailSql("u")} ILIKE $${i + 1}
         OR at.area_name ILIKE $${i + 1})`,
   );
   const { rows } = await db.query(
-    `SELECT u.first_name, u.last_name, u.email, u.phone, at.area_name
+    `SELECT u.first_name, u.last_name, ${companyEmailSql("u")} AS email, u.work_phone, at.area_name
        FROM users u
        LEFT JOIN work_areas at ON at.id = u.work_area_id
       WHERE ${conditions.join(" AND ")}

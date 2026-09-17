@@ -919,11 +919,6 @@
   line-height: 1.2;
   white-space: nowrap;
 }
-
-html[data-theme="dark"] .home-quick__glyph--sky { background: rgba(80, 190, 240, 0.15); color: #7fd4f5; }
-html[data-theme="dark"] .home-quick__glyph--mint { background: rgba(60, 180, 110, 0.15); color: #7cd9a5; }
-html[data-theme="dark"] .home-quick__glyph--indigo { background: rgba(120, 150, 240, 0.15); color: #a9b8f0; }
-
 /* Badge de notificaciones sobre el acceso a Tickets */
 .home-quick__item.ticket-notif-target {
   position: relative;
@@ -1421,40 +1416,8 @@ html[data-theme="dark"] .home-quick__glyph--indigo { background: rgba(120, 150, 
   z-index: 2500;
 }
 
-.home-tutorial {
-  max-width: 520px;
-  width: min(520px, calc(100vw - 32px));
-}
-
-.home-tutorial__badge {
-  display: inline-block;
-  margin-bottom: 10px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--corp-blue, #0f4c81);
-  background: rgba(15, 76, 129, 0.1);
-}
-
-.home-tutorial__title {
-  margin: 0 0 8px;
-  font-size: 1.35rem;
-  line-height: 1.25;
-  color: var(--corp-blue, #0f4c81);
-}
-
-.home-tutorial__lead {
-  margin: 0 0 18px;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: #445;
-}
-
 .home-tutorial__steps {
-  margin: 0 0 22px;
+  margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
@@ -1477,65 +1440,27 @@ html[data-theme="dark"] .home-quick__glyph--indigo { background: rgba(120, 150, 
   justify-content: center;
   font-size: 1.1rem;
   border-radius: 10px;
-  background: rgba(15, 76, 129, 0.08);
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
 .home-tutorial__step strong {
   display: block;
-  font-size: 0.88rem;
-  color: var(--corp-blue, #0f4c81);
   margin-bottom: 2px;
+  font-size: 0.88rem;
+  color: var(--color-heading);
 }
 
 .home-tutorial__step p {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   line-height: 1.45;
-  color: #556;
+  color: var(--color-text-muted);
 }
 
 .home-tutorial__step em {
   font-style: normal;
-  font-weight: 600;
-  color: var(--corp-blue-light, #2a6ba8);
+  font-weight: 700;
+  color: var(--brand);
 }
 
-.home-tutorial__actions {
-  display: flex;
-  justify-content: center;
-  border-top: 0;
-  padding-top: 0;
-  margin-top: 8px;
-}
-
-.home-tutorial__btn {
-  min-width: 200px;
-}
-
-html[data-theme="dark"] .home-tutorial__lead,
-html[data-theme="dark"] .home-tutorial__step p {
-  color: rgba(255, 255, 255, 0.78);
-}
-
-html[data-theme="dark"] .home-tutorial__badge {
-  background: rgba(255, 255, 255, 0.1);
-  color: #9ec5f0;
-}
-
-html[data-theme="dark"] .home-tutorial__icon {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-@media (max-width: 768px) {
-  .home-tutorial {
-    width: 100% !important;
-    min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-
-  .home-tutorial__btn {
-    width: 100%;
-  }
-}

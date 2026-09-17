@@ -1,4 +1,6 @@
 const { sendMail } = require("../mailer");
+const { MAIL_SENDERS } = require("../../constants/mailSenders");
+const { escapeHtml } = require("../emailLayout");
 const { VACATION_CONFIG } = require("../../constants/vacationConfig");
 const { formatDisplay } = require("../../utils/vacationDateUtils");
 const { requestDays } = require("./vacationRequestService");
@@ -33,13 +35,16 @@ function notifyNewRequest({ request, user, accumulationAlert = false }) {
     subject: accumulationAlert
       ? "Nueva solicitud de vacaciones — alerta de acumulación"
       : "Nueva solicitud de vacaciones",
+    senderName: MAIL_SENDERS.hr,
+    heading: accumulationAlert
+      ? "Nueva solicitud — alerta de acumulación"
+      : "Nueva solicitud de vacaciones",
+    cta: { href: "/RRHH/vacaciones/gestion", label: "Revisar solicitud" },
     html: `
-      <h3>Nueva solicitud de vacaciones</h3>
-      <p><strong>${fullName(user)}</strong> solicitó vacaciones.</p>
-      <p>Período: ${rangeText(request)}</p>
-      ${request.requester_notes ? `<p>Comentario: ${request.requester_notes}</p>` : ""}
+      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> solicitó vacaciones.</p>
+      <p style="margin:0 0 16px 0;">Período: ${rangeText(request)}</p>
+      ${request.requester_notes ? `<p style="margin:0 0 16px 0;">Comentario: ${escapeHtml(request.requester_notes)}</p>` : ""}
       ${accumulationNote}
-      <p>Revisa la solicitud en la intranet: /RRHH/vacaciones/gestion</p>
     `,
     text: `${fullName(user)} solicitó vacaciones: ${rangeText(request)}.`,
   });
@@ -52,11 +57,14 @@ function notifyApproved({ request, user }) {
   return safeSend({
     to: user.email,
     subject: "Tu solicitud de vacaciones fue aprobada",
+    senderName: MAIL_SENDERS.hr,
+    heading: "Solicitud aprobada",
+    cta: { href: "/RRHH/vacaciones/mis_vacaciones", label: "Ver mis vacaciones" },
     html: `
-      <h3>Hola ${fullName(user)},</h3>
-      <p>Tu solicitud de vacaciones fue <strong>aprobada</strong>.</p>
-      <p>Período: ${rangeText(request)}</p>
-      ${request.reviewer_notes ? `<p>Comentario de RRHH: ${request.reviewer_notes}</p>` : ""}
+      <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
+      <p style="margin:0 0 16px 0;">Tu solicitud de vacaciones fue <strong>aprobada</strong>.</p>
+      <p style="margin:0 0 16px 0;">Período: ${rangeText(request)}</p>
+      ${request.reviewer_notes ? `<p style="margin:0;">Comentario de RRHH: ${escapeHtml(request.reviewer_notes)}</p>` : ""}
     `,
     text: `Tu solicitud de vacaciones (${rangeText(request)}) fue aprobada.`,
   });
@@ -68,10 +76,13 @@ function notifyRejected({ request, user }) {
   return safeSend({
     to: user.email,
     subject: "Tu solicitud de vacaciones fue rechazada",
+    senderName: MAIL_SENDERS.hr,
+    heading: "Solicitud rechazada",
+    cta: { href: "/RRHH/vacaciones/mis_vacaciones", label: "Ver mis vacaciones" },
     html: `
-      <h3>Hola ${fullName(user)},</h3>
-      <p>Tu solicitud de vacaciones (${rangeText(request)}) fue <strong>rechazada</strong>.</p>
-      <p>Motivo: ${request.reviewer_notes || "No especificado"}</p>
+      <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
+      <p style="margin:0 0 16px 0;">Tu solicitud de vacaciones (${rangeText(request)}) fue <strong>rechazada</strong>.</p>
+      <p style="margin:0;">Motivo: ${escapeHtml(request.reviewer_notes || "No especificado")}</p>
     `,
     text: `Tu solicitud de vacaciones (${rangeText(request)}) fue rechazada. Motivo: ${request.reviewer_notes || "No especificado"}.`,
   });

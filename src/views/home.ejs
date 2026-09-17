@@ -472,11 +472,14 @@
     : 'bienvenido/a';
 %>
 <div id="modalHomeTutorial" class="modal-overlay home-tutorial-overlay" data-dismiss="false" role="dialog" aria-modal="true" aria-labelledby="home-tutorial-title" aria-hidden="true">
-  <div class="modal-content2 home-tutorial">
-    <div class="home-tutorial__badge" aria-hidden="true">Primer ingreso</div>
-    <h3 id="home-tutorial-title" class="home-tutorial__title">¡Hola, <%= tutorialNombre %>!</h3>
-    <p class="home-tutorial__lead">Te damos la bienvenida a la intranet de Transworld. Estos son los puntos clave para comenzar:</p>
+  <div class="modal-content modal-content--md home-tutorial">
+    <header class="modal-head">
+      <div class="modal-head__eyebrow"><span class="modal-tag">Primer ingreso</span></div>
+      <h2 id="home-tutorial-title" class="modal-title">¡Hola, <%= tutorialNombre %>!</h2>
+      <p class="modal-subtitle">Te damos la bienvenida a la intranet de Transworld. Estos son los puntos clave para comenzar:</p>
+    </header>
 
+    <div class="modal-body">
     <ol class="home-tutorial__steps">
       <li class="home-tutorial__step">
         <span class="home-tutorial__icon" aria-hidden="true"><%- include('partials/icon', { name: 'home' }) %></span>
@@ -518,33 +521,38 @@
       </li>
       <% } %>
     </ol>
-
-    <div class="home-tutorial__actions">
-      <button type="button" id="btnHomeTutorialCerrar" class="btn-primario home-tutorial__btn">Entendido, comenzar</button>
     </div>
+
+    <footer class="modal-foot">
+      <button type="button" id="btnHomeTutorialCerrar" class="btn-primario">Entendido, comenzar</button>
+    </footer>
   </div>
 </div>
 <% } %>
 
 <% if (features.lunchMenu && typeof isAdministrador !== 'undefined' && isAdministrador) { %>
 <div id="modalPlatos" class="modal-overlay modal-editar-menu" role="dialog" aria-modal="true" aria-labelledby="modalPlatosTitle" aria-hidden="true">
-  <div class="modal-content2 modal-content2-large">
-    <button type="button" class="modal-content2-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalPlatosTitle" class="modal-title">Editar Menú Semanal</h3>
-    <p class="modal-description">Actualiza el plato del casino para cada día de la semana.</p>
-    <form action="/platos/editar" method="POST" class="modal-form">
-      <% const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']; %>
-      <% for (let i = 1; i <= 5; i++) { %>
-        <% const platoDia = (typeof menuSemanal !== 'undefined' && menuSemanal) ? menuSemanal.find(p => p.day_number === i) : null; %>
-        <div class="modal-form-group">
-          <label class="modal-form-label" for="plato_<%= i %>"><%= dias[i - 1] %></label>
-          <input type="text" id="plato_<%= i %>" name="plato_<%= i %>" value="<%= platoDia ? platoDia.dish_name : '' %>" required class="modal-form-input">
-        </div>
-      <% } %>
-      <div class="modal-actions">
-        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-        <button type="submit" class="btn-primario">Guardar Menú</button>
+  <div class="modal-content modal-content--md">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <form action="/platos/editar" method="POST">
+      <header class="modal-head">
+        <h2 id="modalPlatosTitle" class="modal-title">Editar menú semanal</h2>
+        <p class="modal-subtitle">Actualiza el plato del casino para cada día de la semana.</p>
+      </header>
+      <div class="modal-body">
+        <% const dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']; %>
+        <% for (let i = 1; i <= 5; i++) { %>
+          <% const platoDia = (typeof menuSemanal !== 'undefined' && menuSemanal) ? menuSemanal.find(p => p.day_number === i) : null; %>
+          <div class="campo-form">
+            <label for="plato_<%= i %>"><%= dias[i - 1] %></label>
+            <input type="text" id="plato_<%= i %>" name="plato_<%= i %>" value="<%= platoDia ? platoDia.dish_name : '' %>" required>
+          </div>
+        <% } %>
       </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario">Guardar menú</button>
+      </footer>
     </form>
   </div>
 </div>
@@ -552,21 +560,25 @@
 
 <% if (features.lunchMenu) { %>
 <div id="modalVerMenu" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalVerMenuTitle" aria-hidden="true">
-  <div class="modal-content2">
-    <button type="button" class="modal-content2-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalVerMenuTitle" class="modal-title">Menú de la Semana</h3>
-    <div class="modal-list-stack">
-      <% for (let i = 1; i <= 5; i++) { %>
-        <% const pDia = (typeof menuSemanal !== 'undefined' && menuSemanal) ? menuSemanal.find(p => p.day_number === i) : null; %>
-        <div class="modal-list-item">
-          <span class="modal-item-label"><%= nombresDiasMenu[i - 1] %></span>
-          <span class="modal-item-value"><%= pDia && pDia.dish_name ? pDia.dish_name : 'No definido' %></span>
-        </div>
-      <% } %>
+  <div class="modal-content modal-content--sm">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <header class="modal-head">
+      <h2 id="modalVerMenuTitle" class="modal-title">Menú de la semana</h2>
+    </header>
+    <div class="modal-body">
+      <div class="modal-list-stack">
+        <% for (let i = 1; i <= 5; i++) { %>
+          <% const pDia = (typeof menuSemanal !== 'undefined' && menuSemanal) ? menuSemanal.find(p => p.day_number === i) : null; %>
+          <div class="modal-list-item">
+            <span class="modal-item-label"><%= nombresDiasMenu[i - 1] %></span>
+            <span class="modal-item-value"><%= pDia && pDia.dish_name ? pDia.dish_name : 'No definido' %></span>
+          </div>
+        <% } %>
+      </div>
     </div>
-    <div class="modal-actions modal-actions--center">
+    <footer class="modal-foot">
       <button type="button" class="btn-primario" data-modal-close>Cerrar</button>
-    </div>
+    </footer>
   </div>
 </div>
 <% } %>
@@ -850,11 +862,6 @@
     if (!revealed) {
       showHomeGalleryEmpty(gallery);
     }
-  });
-
-  window.addEventListener('click', function (event) {
-    if (event.target.id === 'modalPlatos') IntranetModal.close('modalPlatos');
-    if (event.target.id === 'modalVerMenu') IntranetModal.close('modalVerMenu');
   });
 
   (function initHomeTutorial() {

@@ -1,5 +1,6 @@
 /**
- * Catálogos de la tabla `applications`.
+ * Catálogos de la tabla compartida `shared.applications` (vistas
+ * `chile.applications` / `peru.applications`).
  *
  * Las apps corporativas (`/apps`) y las herramientas de autoayuda de la zona de
  * Soporte (`/sistemas/tickets`) comparten forma: nombre, descripción, icono y

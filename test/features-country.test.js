@@ -52,12 +52,12 @@ describe("config/features — capacidades por país", () => {
     });
   });
 
-  it("Perú no incluye LinkedIn, UF, menú, Claude, tickets, accesos del home ni portales RRHH chilenos", () => {
+  it("Perú no incluye LinkedIn, UF, menú, tickets, accesos del home ni portales RRHH chilenos", () => {
     withCountry("PE", () => {
       assert.equal(isFeatureEnabled("linkedinFeed"), false);
       assert.equal(isFeatureEnabled("chileUfIndicator"), false);
       assert.equal(isFeatureEnabled("lunchMenu"), false);
-      assert.equal(isFeatureEnabled("claudeAssistant"), false);
+      assert.equal(isFeatureEnabled("claudeAssistant"), true);
       assert.equal(isFeatureEnabled("supportTickets"), false);
       assert.equal(isFeatureEnabled("homeQuickAccess"), false);
       assert.equal(isFeatureEnabled("chileHrPortals"), false);

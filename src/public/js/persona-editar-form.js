@@ -34,8 +34,14 @@
         },
       });
 
-      function onRemovePhoto() {
-        if (!confirm('¿Quitar la foto de este colaborador?')) return;
+      async function onRemovePhoto() {
+        const ok = await global.IntranetDialog.confirm({
+          title: '¿Quitar la foto?',
+          message: 'El colaborador volverá a mostrarse con sus iniciales. El cambio se aplica al guardar.',
+          acceptLabel: 'Quitar foto',
+          tone: 'peligro',
+        });
+        if (!ok) return;
         photoCropper.clearPhoto();
         eliminarInput.value = '1';
         btnRemove.hidden = true;
@@ -52,15 +58,26 @@
     const emailInput = document.getElementById('email');
     const fechaInput = document.getElementById('fecha_nacimiento');
     const fechaLabel = document.getElementById('fecha_nacimiento_label');
-    const telefonoField = form.querySelector('[data-phone-field]');
-    const telefonoLocal = telefonoField?.querySelector('.phone-field__local');
+    // Teléfono de empresa y personal; correo personal. Todos opcionales: sólo
+    // se marcan si tienen algo escrito que no es válido.
+    const telefonoFields = Array.from(form.querySelectorAll('[data-phone-field]'));
+    const correosExtra = Array.from(form.querySelectorAll('input[type="email"]'))
+      .filter(function (input) { return input !== emailInput; });
     const FECHA_REQUERIDA_MSG = 'Fecha requerida sin correo';
-    const EMAIL_LOCKED_MSG = 'El correo no se puede quitar';
+    const EMAIL_LOCKED_MSG = 'Deja un correo de empresa o personal';
+
+    /** La cuenta usa el correo de empresa y, si no hay, el personal. */
+    function sinCorreos() {
+      return (
+        global.EmailValidate.isEmpty(emailInput) &&
+        correosExtra.every(function (input) { return global.EmailValidate.isEmpty(input); })
+      );
+    }
 
     /** Sin correo no hay cuenta de intranet: el cumpleaños pasa a ser obligatorio. */
     function syncFechaRequired() {
       if (!fechaInput || !emailInput) return;
-      const obligatoria = global.EmailValidate.isEmpty(emailInput);
+      const obligatoria = sinCorreos();
       fechaInput.required = obligatoria;
       if (fechaLabel) {
         const marca = fechaLabel.querySelector('.required-mark');
@@ -77,10 +94,11 @@
     }
 
     global.EmailValidate.initField(emailInput);
-    global.PhoneField.initField(telefonoField);
+    correosExtra.forEach(function (input) { global.EmailValidate.initField(input); });
+    telefonoFields.forEach(function (field) { global.PhoneField.initField(field); });
 
     function mensajeCorreo() {
-      if (emailInput?.dataset.emailLocked === '1' && global.EmailValidate.isEmpty(emailInput)) {
+      if (emailInput?.dataset.emailLocked === '1' && sinCorreos()) {
         return EMAIL_LOCKED_MSG;
       }
       if (!global.EmailValidate.isValid(emailInput)) return global.EmailValidate.ERROR_MSG;
@@ -92,11 +110,23 @@
       syncFechaRequired();
     }
 
-    function onTelefonoInput() {
-      const invalid =
-        !global.PhoneField.isFieldEmpty(telefonoField) &&
-        !global.PhoneField.isFieldValid(telefonoField);
-      global.CampoForm.marcar(telefonoLocal, invalid ? global.PhoneField.ERROR_MSG : '');
+    function telefonoInvalido(field) {
+      return !global.PhoneField.isFieldEmpty(field) && !global.PhoneField.isFieldValid(field);
+    }
+
+    function onTelefonoInput(event) {
+      const field = event.target.closest('[data-phone-field]');
+      global.CampoForm.marcar(event.target, telefonoInvalido(field) ? global.PhoneField.ERROR_MSG : '');
+    }
+
+    function onCorreoExtraInput(event) {
+      global.CampoForm.marcar(
+        event.target,
+        global.EmailValidate.isValid(event.target) ? '' : global.EmailValidate.ERROR_MSG,
+      );
+      // Escribir el personal puede resolver el aviso del de empresa y la fecha.
+      global.CampoForm.marcar(emailInput, mensajeCorreo());
+      syncFechaRequired();
     }
 
     function onSubmit(event) {
@@ -108,35 +138,45 @@
         global.CampoForm.marcar(emailInput, errorCorreo);
       }
 
-      if (
-        !global.PhoneField.isFieldEmpty(telefonoField) &&
-        !global.PhoneField.isFieldValid(telefonoField)
-      ) {
+      correosExtra.forEach(function (input) {
+        if (global.EmailValidate.isValid(input)) return;
         hasError = true;
-        global.CampoForm.marcar(telefonoLocal, global.PhoneField.ERROR_MSG);
-      }
+        global.CampoForm.marcar(input, global.EmailValidate.ERROR_MSG);
+      });
 
-      if (
-        global.EmailValidate.isEmpty(emailInput) &&
-        !String(fechaInput?.value || '').trim()
-      ) {
+      telefonoFields.forEach(function (field) {
+        if (!telefonoInvalido(field)) return;
+        hasError = true;
+        global.CampoForm.marcar(field.querySelector('.phone-field__local'), global.PhoneField.ERROR_MSG);
+      });
+
+      if (sinCorreos() && !String(fechaInput?.value || '').trim()) {
         hasError = true;
         global.CampoForm.marcar(fechaInput, FECHA_REQUERIDA_MSG);
       }
 
-      if (!hasError) return;
-      event.preventDefault();
-      global.CampoForm.enfocarPrimerError(form);
+      if (hasError) {
+        event.preventDefault();
+        global.CampoForm.enfocarPrimerError(form);
+        return;
+      }
+      global.CampoForm.ocuparSubmit(form);
     }
 
     emailInput?.addEventListener('input', onEmailInput);
-    telefonoLocal?.addEventListener('input', onTelefonoInput);
+    correosExtra.forEach(function (input) { input.addEventListener('input', onCorreoExtraInput); });
+    telefonoFields.forEach(function (field) {
+      field.querySelector('.phone-field__local')?.addEventListener('input', onTelefonoInput);
+    });
     form.addEventListener('submit', onSubmit);
     syncFechaRequired();
 
     destroyFns.push(function () {
       emailInput?.removeEventListener('input', onEmailInput);
-      telefonoLocal?.removeEventListener('input', onTelefonoInput);
+      correosExtra.forEach(function (input) { input.removeEventListener('input', onCorreoExtraInput); });
+      telefonoFields.forEach(function (field) {
+        field.querySelector('.phone-field__local')?.removeEventListener('input', onTelefonoInput);
+      });
       form.removeEventListener('submit', onSubmit);
     });
 

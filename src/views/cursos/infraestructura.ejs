@@ -50,8 +50,8 @@
   .marcas-grid img { max-width: 140px; max-height: 60px; object-fit: contain; }
 
   .videos-empty-container { width: 100%; min-height: 150px; border: 2px dashed #ccc; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999; font-style: italic; box-sizing: border-box; }
-  .modal-rules-list { padding-left: 20px; color: #555; line-height: 1.6; margin-bottom: 25px; }
-  .modal-rules-list li { margin-bottom: 10px; }
+  .modal-rules-list { margin: 0; padding-left: 20px; color: var(--color-text-muted); font-size: 0.9rem; line-height: 1.55; }
+  .modal-rules-list li + li { margin-top: 8px; }
   
   /* ESTILOS MATERIAL DE ESTUDIO */
   .material-header-container .btn-primario { padding: 12px 24px; font-size: 1rem; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; color: #fff; transition: background 0.2s, transform 0.2s; }
@@ -312,7 +312,11 @@
                 <button type="button" class="btn-material btn-mat-edit" onclick="abrirModalEditarMaterial('<%= mat.id %>', '<%= mat.name.replace(/'/g, "\\'") %>')" title="Editar nombre o archivo">
                     Editar
                 </button>
-                <form action="/cursos/material/eliminar/<%= mat.id %>" method="POST" style="margin: 0;" onsubmit="return confirm('¿Seguro que deseas eliminar este material? Se borrará de la nube permanentemente.');">
+                <form action="/cursos/material/eliminar/<%= mat.id %>" method="POST" style="margin: 0;"
+                  data-confirm="«<%= mat.name %>» se borrará de la nube de forma permanente."
+                  data-confirm-title="¿Eliminar el material?"
+                  data-confirm-accept="Eliminar"
+                  data-confirm-tone="peligro">
                     <input type="hidden" name="return_url" class="mat_return_url">
                     <button type="submit" class="btn-material btn-mat-del" title="Eliminar">
                         Eliminar
@@ -332,90 +336,116 @@
 </section>
 
 <div id="modalNuevoMaterial" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalNuevoMaterialTitle" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--sm">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalNuevoMaterialTitle" class="modal-title">Subir Nuevo Material</h3>
-    <form action="/cursos/material/nuevo" method="POST" enctype="multipart/form-data" class="modal-form">
+    <form action="/cursos/material/nuevo" method="POST" enctype="multipart/form-data">
+      <div class="modal-head">
+        <h2 id="modalNuevoMaterialTitle" class="modal-title">Subir nuevo material</h2>
+      </div>
+      <div class="modal-body">
         <input type="hidden" name="seccion" id="new_mat_seccion">
         <input type="hidden" name="return_url" class="mat_return_url">
 
-        <label for="new_mat_name">Nombre del Archivo</label>
-        <input type="text" id="new_mat_name" name="name" required placeholder="Ej: Manual de Antenas">
-
-        <label for="new_mat_file">Archivo (PDF, Word, Excel, Video, etc.)</label>
-        <input type="file" id="new_mat_file" name="archivo" required>
-
-        <div class="modal-actions">
-            <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-            <button type="submit" class="btn-primario">Subir Archivo</button>
+        <div class="campo-form">
+          <label for="new_mat_name">Nombre del archivo <span class="required-mark">*</span></label>
+          <input type="text" id="new_mat_name" name="name" required placeholder="Ej: Manual de Antenas">
         </div>
+
+        <div class="campo-form">
+          <label for="new_mat_file">Archivo <span class="required-mark">*</span></label>
+          <input type="file" id="new_mat_file" name="archivo" required>
+          <span class="campo-form__ayuda">PDF, Word, Excel, video, etc.</span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario">Subir archivo</button>
+      </div>
     </form>
   </div>
 </div>
 
 <div id="modalEditarMaterial" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalEditarMaterialTitle" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--sm">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalEditarMaterialTitle" class="modal-title">Editar Material</h3>
-    <form id="formEditarMaterial" method="POST" enctype="multipart/form-data" class="modal-form">
+    <form id="formEditarMaterial" method="POST" enctype="multipart/form-data">
+      <div class="modal-head">
+        <h2 id="modalEditarMaterialTitle" class="modal-title">Editar material</h2>
+      </div>
+      <div class="modal-body">
         <input type="hidden" name="return_url" class="mat_return_url">
 
-        <label for="edit_mat_nombre">Nombre del Archivo</label>
-        <input type="text" name="name" id="edit_mat_nombre" required>
-
-        <label for="edit_mat_file">Reemplazar Archivo (Opcional)</label>
-        <input type="file" id="edit_mat_file" name="archivo">
-        <small style="color: #64748b;">Si no subes nada, se mantendrá el archivo original.</small>
-
-        <div class="modal-actions">
-            <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-            <button type="submit" class="btn-primario">Guardar Cambios</button>
+        <div class="campo-form">
+          <label for="edit_mat_nombre">Nombre del archivo <span class="required-mark">*</span></label>
+          <input type="text" name="name" id="edit_mat_nombre" required>
         </div>
+
+        <div class="campo-form">
+          <label for="edit_mat_file">Reemplazar archivo <span class="campo-form__opcional">(opcional)</span></label>
+          <input type="file" id="edit_mat_file" name="archivo">
+          <span class="campo-form__ayuda">Si no subes nada, se mantiene el archivo original.</span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario">Guardar cambios</button>
+      </div>
     </form>
   </div>
 </div>
 
 <div id="modalReglasCurso" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalCursoTitulo" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--md">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalCursoTitulo" class="modal-title">Reglas del Curso</h3>
-    <p class="modal-description">Antes de comenzar, por favor lee atentamente:</p>
-    <ul class="modal-rules-list">
-      <li>Deberás visualizar el material de estudio completo antes de poder acceder a la evaluación.</li>
-      <li>El tiempo de visualización será registrado por el sistema automáticamente.</li>
-      <li>Una vez iniciada la prueba final, no podrás pausarla.</li>
-      <li>Este curso no tiene limitaciones de intentos.</li>
-      <li>La nota mínima de aprobación exigida por Transworld es de un 80% de respuestas correctas.</li>
-    </ul>
-
-    <div class="modal-actions">
+    <div class="modal-head">
+      <div class="modal-head__eyebrow"><span class="modal-tag">Reglas del curso</span></div>
+      <h2 id="modalCursoTitulo" class="modal-title">Reglas del curso</h2>
+      <p class="modal-subtitle">Antes de comenzar, por favor lee atentamente:</p>
+    </div>
+    <div class="modal-body">
+      <ul class="modal-rules-list">
+        <li>Deberás visualizar el material de estudio completo antes de poder acceder a la evaluación.</li>
+        <li>El tiempo de visualización será registrado por el sistema automáticamente.</li>
+        <li>Una vez iniciada la prueba final, no podrás pausarla.</li>
+        <li>Este curso no tiene limitaciones de intentos.</li>
+        <li>La nota mínima de aprobación exigida por Transworld es de un 80% de respuestas correctas.</li>
+      </ul>
+    </div>
+    <div class="modal-foot">
       <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-      <a href="javascript:void(0)" class="btn-primario" id="btnVerResultados" style="display: none;">Ver resultados</a>
+      <a href="javascript:void(0)" class="btn-secundario" id="btnVerResultados" style="display: none;">Ver resultados</a>
       <a href="javascript:void(0)" class="btn-primario" id="btnAccionPrincipal">Iniciar curso</a>
     </div>
   </div>
 </div>
 
 <div id="modalEditarSub" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalEditarSubTitle" aria-hidden="true">
-  <div class="modal-content">
+  <div class="modal-content modal-content--sm">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
-    <h3 id="modalEditarSubTitle" class="modal-title">Editar Subsección</h3>
-    <form action="/cursos/editar-subseccion" method="POST" enctype="multipart/form-data" class="modal-form">
+    <form action="/cursos/editar-subseccion" method="POST" enctype="multipart/form-data">
+      <div class="modal-head">
+        <h2 id="modalEditarSubTitle" class="modal-title">Editar subsección</h2>
+      </div>
+      <div class="modal-body">
         <input type="hidden" name="old_name" id="edit_old_name">
         <input type="hidden" name="current_url" id="edit_current_url">
         <input type="hidden" name="return_url" id="edit_return_url">
 
-        <label for="edit_new_name">Nombre de la Subsección</label>
-        <input type="text" name="new_name" id="edit_new_name" required>
-
-        <label for="edit_sub_img">Imagen de Portada (Opcional)</label>
-        <input type="file" id="edit_sub_img" name="imagen" accept="image/*">
-        <small style="color: #64748b;">Si no subes nada, se mantendrá la imagen actual.</small>
-
-        <div class="modal-actions">
-            <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-            <button type="submit" class="btn-primario">Guardar Cambios</button>
+        <div class="campo-form">
+          <label for="edit_new_name">Nombre de la subsección <span class="required-mark">*</span></label>
+          <input type="text" name="new_name" id="edit_new_name" required>
         </div>
+
+        <div class="campo-form">
+          <label for="edit_sub_img">Imagen de portada <span class="campo-form__opcional">(opcional)</span></label>
+          <input type="file" id="edit_sub_img" name="imagen" accept="image/*">
+          <span class="campo-form__ayuda">Si no subes nada, se mantiene la imagen actual.</span>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario">Guardar cambios</button>
+      </div>
     </form>
   </div>
 </div>
@@ -460,17 +490,21 @@
     btnPrincipal.onclick = null;
     btnResultados.style.display = 'none';
     if (estadoCurso && estadoCurso.status === 'evaluated') {
-        btnResultados.style.display = 'inline-block';
+        btnResultados.style.display = 'inline-flex';
         btnResultados.href = `/cursos/evaluacion/${idCurso}`;
         btnPrincipal.innerText = 'Repetir curso';
         btnPrincipal.href = 'javascript:void(0)';
-        btnPrincipal.onclick = function() {
-            if(confirm("¿Seguro que deseas repetir este curso? Se reiniciará tu progreso de video para que lo veas nuevamente.")) {
-                fetch(`/cursos/api/reintentar/${idCurso}`, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => { if(data.success) window.location.href = `/cursos/reproductor/${idCurso}`; })
-                .catch(e => alert("Error al reiniciar."));
-            }
+        btnPrincipal.onclick = async function() {
+            const repetir = await IntranetDialog.confirm({
+                title: '¿Repetir el curso?',
+                message: 'Se reiniciará tu progreso de video para que lo veas nuevamente.',
+                acceptLabel: 'Repetir curso',
+            });
+            if (!repetir) return;
+            fetch(`/cursos/api/reintentar/${idCurso}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => { if(data.success) window.location.href = `/cursos/reproductor/${idCurso}`; })
+            .catch(() => IntranetDialog.alert({ title: 'No se pudo reiniciar', message: 'Intenta de nuevo en un momento.' }));
         };
     } else if (estadoCurso && estadoCurso.seconds_watched > 0) {
         btnPrincipal.innerText = 'Reanudar curso';

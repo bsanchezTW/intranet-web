@@ -3,8 +3,9 @@ const { normalizeAppCatalog } = require("../constants/appCatalogs");
 
 /**
  * Lista las apps de un catálogo con los alias en español que esperan las
- * vistas. La consulta es la misma para "Apps" y para la autoayuda de Soporte:
- * lo único que cambia es el catálogo.
+ * vistas. Chile y Perú leen la misma tabla (`shared.applications`, expuesta
+ * como `applications` en el search_path). Lo único que cambia entre "Apps" y
+ * la autoayuda de Soporte es el catálogo.
  */
 async function listAppsByCatalog(catalog) {
   // `sort_order` manda cuando alguien ordenó a mano; lo que nunca se tocó

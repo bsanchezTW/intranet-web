@@ -145,12 +145,12 @@ describe("env Perú — contrato de instancia (cPanel / dev:pe)", () => {
     assert.match(storage.url, new RegExp(SHARED_INTRANET_PROJECT_REF));
   });
 
-  it("PE-06: features de Perú están apagadas (no hereda Chile)", () => {
+  it("PE-06: features de Perú no heredan Chile (asistente sí; LinkedIn/UF/menú/tickets no)", () => {
     const features = getFeatures("PE");
     assert.equal(features.linkedinFeed, false);
     assert.equal(features.chileUfIndicator, false);
     assert.equal(features.lunchMenu, false);
-    assert.equal(features.claudeAssistant, false);
+    assert.equal(features.claudeAssistant, true);
     assert.equal(features.supportTickets, false);
     assert.equal(features.homeQuickAccess, false);
     assert.equal(features.chileHrPortals, false);
@@ -162,6 +162,9 @@ describe("env Perú — contrato de instancia (cPanel / dev:pe)", () => {
     assert.ok(!pe.allowedLoginDomains.includes("transworld.cl"));
     assert.ok(!pe.allowedLoginDomains.includes("hotmail.cl"));
     assert.equal(pe.forbiddenEmailTld, "cl");
+    assert.ok(!pe.brand.loginLogo.includes("18"));
+    assert.ok(!pe.brand.navbarLogo.includes("18"));
+    assert.ok(!pe.brand.loginBackground.includes("18"));
   });
 });
 

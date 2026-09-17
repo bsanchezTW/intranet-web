@@ -1,13 +1,16 @@
 const db = require("../../db");
 const fileStorage = require("../fileStorage");
 const { sendMail } = require("../mailer");
-const { getCountryConfig } = require("../../config/country");
+const { MAIL_SENDERS } = require("../../constants/mailSenders");
+const { escapeHtml } = require("../emailLayout");
 const { UPLOAD_LIMITS_BYTES } = require("../../config/uploadLimits");
 const { ticketCategoryLabel } = require("../../constants/ticketCategories");
+const { supportAgentEmails } = require("./supportTeam");
 const { ticketStatusFromDb } = require("../../utils/schemaMappers");
 const {
   attachmentKind,
   attachmentFileName,
+  replyAttachmentFileName,
   isAllowedAttachment,
   validateAttachmentFiles,
   validateTicketInput,
@@ -24,6 +27,12 @@ const {
 
 const ATTACHMENT_FOLDER = "tickets_adjuntos";
 const MAX_MB = Math.round(UPLOAD_LIMITS_BYTES.TICKET_ATTACHMENT / (1024 * 1024));
+
+/** Sólo enlaces http(s) en el correo: nada de javascript: ni data:. */
+function safeHttpUrl(url) {
+  const raw = String(url || "").trim();
+  return /^https?:\/\//i.test(raw) ? raw : "#";
+}
 
 function parseAttachments(adjuntosJSON) {
   try {
@@ -47,40 +56,29 @@ function ticketMailText(mensaje, adjuntosJSON) {
   return texto;
 }
 
-/** Correo HTML con la lista de adjuntos. */
+/**
+ * Correo HTML con la lista de adjuntos (el marco visual lo pone el mailer).
+ * El mensaje lo escribe el usuario: se escapa para que no pueda meter enlaces
+ * ni HTML con la apariencia oficial del correo.
+ */
 function ticketMailHtml(mensaje, adjuntosJSON) {
-  const previewText = mensaje.replace(/\n/g, " ").substring(0, 130) + "...";
-
-  let html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; background-color: #ffffff;">
-
-  <div style="display: none; max-height: 0px; overflow: hidden; opacity: 0; font-size: 0px; line-height: 0px; color: #ffffff;">
-    ${previewText}
-  </div>
-
-  <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5; max-width: 650px; margin: 0 auto; padding: 15px;">
-    <p>${mensaje.replace(/\n/g, "<br>")}</p>`;
+  let html = `<p style="margin:0 0 16px 0;">${escapeHtml(mensaje).replace(/\r?\n/g, "<br>")}</p>`;
 
   const archivos = parseAttachments(adjuntosJSON);
   if (archivos.length > 0) {
-    html += `<div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 5px;">`;
-    html += `<p style="font-weight: bold; margin-top: 0; margin-bottom: 10px;">Archivos Adjuntos:</p>`;
-    html += `<ul style="list-style-type: none; padding: 0; margin: 0;">`;
+    html += `<div style="margin:20px 0 0 0; padding:16px; background-color:#f5f7fa; border:1px solid #e3e9f0; border-radius:10px;">`;
+    html += `<p style="font-weight:700; margin:0 0 10px 0; color:#0b3a63;">Archivos adjuntos</p>`;
+    html += `<ul style="list-style-type:none; padding:0; margin:0;">`;
 
     archivos.forEach((a) => {
       let label = "Archivo";
       if (a.tipo === "image") label = "Imagen";
       if (a.tipo === "video") label = "Video";
 
-      html += `<li style="margin-bottom: 8px;">
-        <strong>[${label}]:</strong>
-        <a href="${a.url}" target="_blank" style="color: #0056b3; text-decoration: underline; font-weight: bold;">
-          ${a.nombre || "Ver archivo"}
+      html += `<li style="margin:0 0 8px 0;">
+        <strong>[${label}]</strong>
+        <a href="${escapeHtml(safeHttpUrl(a.url))}" target="_blank" style="color:#0f4c81; text-decoration:underline; font-weight:700;">
+          ${escapeHtml(a.nombre || "Ver archivo")}
         </a>
       </li>`;
     });
@@ -88,10 +86,6 @@ function ticketMailHtml(mensaje, adjuntosJSON) {
     html += `</ul></div>`;
   }
 
-  html += `
-  </div>
-</body>
-</html>`;
   return html;
 }
 
@@ -113,20 +107,39 @@ async function requesterFor(user) {
   };
 }
 
+/** Avisa al equipo de Informática. Si no hay correos, no se envía. */
+async function notifyTicketTeam({ subject, text, html, heading, cta }) {
+  const emails = await supportAgentEmails();
+  if (!emails.length) {
+    console.warn(
+      "[Tickets] No hay usuarios de Informática con correo para notificar.",
+    );
+    return;
+  }
+  return sendMail({
+    to: emails,
+    subject,
+    text,
+    html,
+    heading,
+    cta,
+    senderName: MAIL_SENDERS.support,
+  }).catch(console.error);
+}
+
 function notifyNewTicket({ id, ticket, requester, adjuntosJSON }) {
-  if (!process.env.ADMIN_NOTIFY_EMAIL) return;
   const mensaje =
     `Ticket generado por ${requester.name}\n\n` +
     `Título: ${ticket.title}\n\n` +
     `Categoría: ${ticketCategoryLabel(ticket.category)}\n\n` +
     `Descripción: ${ticket.description}`;
-  sendMail({
-    to: process.env.ADMIN_NOTIFY_EMAIL,
-    subject: `Nuevo Ticket #${id}: ${ticket.title}`,
+  notifyTicketTeam({
+    subject: `Nuevo ticket #${id} — ${ticket.title}`,
+    heading: "Nuevo ticket",
+    cta: { href: `/sistemas/tickets?ticket=${id}`, label: "Ver ticket" },
     text: ticketMailText(mensaje, adjuntosJSON),
     html: ticketMailHtml(mensaje, adjuntosJSON),
-    bcc: getCountryConfig().supportEmail,
-  }).catch(console.error);
+  });
 }
 
 /**
@@ -186,13 +199,22 @@ async function createSupportTicket({ user, files = [], ...input }) {
   return { ok: true, id, ticket, attachments, failedAttachments: failed };
 }
 
+/** El id que tendrá la próxima respuesta de este ticket (MAX + 1). */
+async function nextReplyOrdinal(ticketId) {
+  const { rows } = await db.query(
+    "SELECT COALESCE(MAX(id), 0)::int + 1 AS n FROM ticket_replies WHERE ticket_id = $1",
+    [ticketId],
+  );
+  return rows[0]?.n || 1;
+}
+
 /**
- * Sube un archivo suelto a la carpeta de adjuntos de tickets (respuestas de
- * Soporte sobre un ticket existente). `anyType` conserva el comportamiento de
- * esas respuestas, que no restringían el tipo.
+ * Sube un archivo de una respuesta. El nombre es
+ * <N° de ticket>_<id de la respuesta>_<n>.<ext>; el id lo asigna el trigger
+ * correlativo del hilo. `anyType` admite planillas y texto, como el formulario.
  * @returns {Promise<{ ok: true, attachment, publicId } | { ok: false, error }>}
  */
-async function saveTicketAttachment(file, { anyType = false } = {}) {
+async function saveTicketAttachment(file, { anyType = false, ticketId, fileIndex } = {}) {
   if (!file || !file.buffer || !file.buffer.length) {
     return { ok: false, error: "No se recibió el archivo." };
   }
@@ -203,7 +225,20 @@ async function saveTicketAttachment(file, { anyType = false } = {}) {
     return { ok: false, error: `El archivo supera el máximo de ${MAX_MB} MB.` };
   }
 
-  const saved = await fileStorage.saveFile(file.buffer, ATTACHMENT_FOLDER, file.originalname);
+  const id = Number(ticketId);
+  const index = Number(fileIndex);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { ok: false, error: "Falta el número de ticket para nombrar el adjunto." };
+  }
+  if (!Number.isSafeInteger(index) || index <= 0) {
+    return { ok: false, error: "Falta el correlativo del archivo en la respuesta." };
+  }
+
+  const replyOrdinal = await nextReplyOrdinal(id);
+  const fileName = replyAttachmentFileName(id, replyOrdinal, index, file.originalname);
+  const saved = await fileStorage.saveFileAs(file.buffer, ATTACHMENT_FOLDER, fileName, {
+    contentType: file.mimetype,
+  });
   return {
     ok: true,
     publicId: saved.public_id,
@@ -242,4 +277,5 @@ module.exports = {
   createSupportTicket,
   saveTicketAttachment,
   listOpenTicketsForUser,
+  notifyTicketTeam,
 };

@@ -7,6 +7,7 @@ const {
   formatPhoneForDisplay,
   isValidMobilePhone,
   validateMobilePhone,
+  validateWorkPhone,
   toTelHref,
   localMaxLength,
 } = require("../src/utils/phone");
@@ -105,5 +106,29 @@ describe("phone — aislamiento entre países", () => {
   it("PH-X-06: faltar y estar mal escrito son avisos distintos", () => {
     assert.equal(validateMobilePhone("", { required: true }, CL).error, "Teléfono requerido");
     assert.equal(validateMobilePhone("123", { required: true }, CL).error, "Teléfono incorrecto");
+  });
+});
+
+describe("phone — teléfono de empresa (celular o fijo)", () => {
+  it("PH-W-01: Chile acepta un fijo de Santiago y lo guarda con código de país", () => {
+    const check = validateWorkPhone("2 7439 1435", CL);
+    assert.equal(check.valid, true);
+    assert.equal(check.storageValue, "56274391435");
+    assert.equal(formatPhoneForDisplay(check.storageValue, CL), "+56 2 7439 1435");
+    assert.equal(toTelHref(check.storageValue, CL), "tel:+56274391435");
+  });
+
+  it("PH-W-02: también acepta celulares y rechaza números imposibles", () => {
+    assert.equal(validateWorkPhone("9 1234 5678", CL).storageValue, "56912345678");
+    assert.equal(validateWorkPhone("1 2345 6789", CL).valid, false);
+    assert.equal(validateWorkPhone("", CL).valid, true);
+  });
+
+  it("PH-W-03: Perú acepta un fijo de Lima de 8 dígitos", () => {
+    assert.equal(validateWorkPhone("1 234 5678", PE).storageValue, "5112345678");
+  });
+
+  it("PH-W-04: el celular personal sigue sin aceptar fijos", () => {
+    assert.equal(validateMobilePhone("2 7439 1435", {}, CL).valid, false);
   });
 });

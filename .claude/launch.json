@@ -4,13 +4,19 @@
     {
       "name": "intranet-cl",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:cl"],
+      "runtimeArgs": [
+        "run",
+        "dev:cl"
+      ],
       "port": 3000
     },
     {
       "name": "intranet-pe",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:pe"],
+      "runtimeArgs": [
+        "run",
+        "dev:pe"
+      ],
       "port": 3001
     }
   ]

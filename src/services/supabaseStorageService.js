@@ -132,11 +132,19 @@ async function errorFromResponse(response, context = {}) {
     // El cuerpo de error no siempre está disponible (p. ej. una respuesta mock).
   }
 
+  const json = details && typeof details === "object" ? details : {};
+  const jsonStatus = Number(json.statusCode);
+  const looksMissing =
+    jsonStatus === 404 ||
+    json.error === "not_found" ||
+    json.errorCode === "not_found" ||
+    /object not found|not found|no such key/i.test(String(message));
+
   return toStorageError(
     {
       message,
-      statusCode: response.status,
-      code: details?.errorCode || details?.code,
+      statusCode: looksMissing ? 404 : response.status,
+      code: json.errorCode || json.code || (looksMissing ? "STORAGE_NOT_FOUND" : undefined),
       details,
     },
     context,

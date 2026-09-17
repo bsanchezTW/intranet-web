@@ -3,6 +3,18 @@
 const path = require("path");
 const crypto = require("crypto");
 const storage = require("./storage/storageService");
+const { createSupabaseStorageService } = require("./supabaseStorageService");
+const { getStorageConfig } = require("../config/storage");
+const {
+  countryStorageBuckets,
+  defaultStorageBucketForCountry,
+} = require("../config/supabaseProjects");
+
+const SHARED_APP_OBJECT_PREFIXES = Object.freeze([
+  "apps_icons/",
+  "apps_instructivos/",
+  "apps_qr/",
+]);
 
 function getPublicUrl(relativePath) {
   const clean = storage.normalizeRelativePath(relativePath);
@@ -55,6 +67,70 @@ function mapUploadedFile(uploaded, relativePath, fileName, fallbackSize, options
   };
 }
 
+function storageServiceForBucket(bucket, deps = {}) {
+  const createService = deps.createService || createSupabaseStorageService;
+  const config = deps.storageConfig || getStorageConfig();
+  return createService({ config: { ...config, bucket } });
+}
+
+function isSharedAppObjectPath(relativePath) {
+  const clean = String(relativePath || "");
+  return SHARED_APP_OBJECT_PREFIXES.some((prefix) => clean.startsWith(prefix));
+}
+
+function orderedCountryBuckets(deps = {}) {
+  const buckets = countryStorageBuckets();
+  const current =
+    deps.storageConfig?.bucket || defaultStorageBucketForCountry(process.env.COUNTRY);
+  if (!current || !buckets.includes(current)) return buckets;
+  return [current, ...buckets.filter((bucket) => bucket !== current)];
+}
+
+function isMissingObjectError(err) {
+  if (!err) return false;
+  if (err.statusCode === 404) return true;
+  const message = String(err.message || "");
+  return (
+    err.statusCode === 400 &&
+    /not found|no such key|object not found/i.test(message)
+  );
+}
+
+async function withSharedAppBuckets(relativePath, deps = {}, operation) {
+  const clean = storage.normalizeRelativePath(relativePath);
+  if (!isSharedAppObjectPath(clean)) {
+    const buckets = orderedCountryBuckets(deps);
+    const svc =
+      deps.createService || deps.storageConfig
+        ? storageServiceForBucket(buckets[0], deps)
+        : storage;
+    return operation(svc);
+  }
+
+  let lastError;
+  for (const bucket of orderedCountryBuckets(deps)) {
+    try {
+      return await operation(storageServiceForBucket(bucket, deps));
+    } catch (err) {
+      lastError = err;
+      if (!isMissingObjectError(err)) throw err;
+    }
+  }
+  throw lastError;
+}
+
+async function streamStoredObject(relativePath, options = {}, deps = {}) {
+  return withSharedAppBuckets(relativePath, deps, (svc) =>
+    svc.downloadStream(relativePath, options),
+  );
+}
+
+async function statStoredObject(relativePath, options = {}, deps = {}) {
+  return withSharedAppBuckets(relativePath, deps, (svc) =>
+    svc.statFile(relativePath, options),
+  );
+}
+
 /**
  * Guarda un buffer en el storage privado de la instancia.
  * @param {{contentType?: string, cacheControl?: string, upsert?: boolean}} options
@@ -72,6 +148,79 @@ async function saveFile(buffer, folder, originalFileName = "file", options = {})
 }
 
 /**
+ * Sube el mismo objeto a los buckets de Chile y Perú. El catálogo de apps es
+ * compartido: /content/... tiene que resolver en las dos instancias.
+ */
+async function saveFileInAllCountryBuckets(
+  buffer,
+  folder,
+  originalFileName = "file",
+  options = {},
+  deps = {},
+) {
+  const fileName = generateFileName(originalFileName);
+  const folderClean = storage.normalizeRelativePath(folder);
+  const relativePath = folderClean ? `${folderClean}/${fileName}` : fileName;
+  const uploaded = [];
+
+  try {
+    let first = null;
+    for (const bucket of countryStorageBuckets()) {
+      const result = await storageServiceForBucket(bucket, deps).uploadFile(
+        buffer,
+        relativePath,
+        options,
+      );
+      uploaded.push({ bucket, relativePath });
+      if (!first) first = result;
+    }
+    return mapUploadedFile(first || {}, relativePath, fileName, buffer.length, options);
+  } catch (err) {
+    await Promise.allSettled(
+      uploaded.map(({ bucket, relativePath: objectPath }) =>
+        storageServiceForBucket(bucket, deps).deleteFile(objectPath),
+      ),
+    );
+    throw err;
+  }
+}
+
+/**
+ * Borra referencias de apps en todos los buckets de país. Un objeto ausente
+ * en uno de ellos no aborta el lote.
+ */
+async function deleteFilesInAllCountryBuckets(publicIdsOrUrls = [], deps = {}) {
+  const uniquePaths = [];
+  const seen = new Set();
+
+  for (const ref of publicIdsOrUrls) {
+    const relativePath = resolveStoredPath(ref);
+    if (!relativePath || seen.has(relativePath)) continue;
+    seen.add(relativePath);
+    uniquePaths.push(relativePath);
+  }
+
+  if (!uniquePaths.length) {
+    return { deleted: 0, failed: 0, paths: [] };
+  }
+
+  let deleted = 0;
+  let failed = 0;
+  for (const bucket of countryStorageBuckets()) {
+    const svc = storageServiceForBucket(bucket, deps);
+    const results = await Promise.allSettled(
+      uniquePaths.map((relativePath) => svc.deleteFile(relativePath)),
+    );
+    results.forEach((result) => {
+      if (result.status === "fulfilled" && result.value) deleted += 1;
+      else if (result.status === "rejected") failed += 1;
+    });
+  }
+
+  return { deleted, failed, paths: uniquePaths };
+}
+
+/**
  * Guarda un buffer con un nombre exacto, sin sufijo aleatorio (p. ej. los
  * adjuntos de tickets, <N° de ticket>_1.png). Quien llama garantiza que el
  * nombre es único.
@@ -83,6 +232,28 @@ async function saveFileAs(buffer, folder, fileName, options = {}) {
 
   const uploaded = await storage.uploadFile(buffer, relativePath, options);
   return mapUploadedFile(uploaded, relativePath, cleanName, buffer.length, options);
+}
+
+/**
+ * Igual que saveFileAs, pero lee desde un archivo temporal (videos grandes)
+ * en vez de cargar el buffer completo en el heap.
+ */
+async function saveFileAsFromPath(localFilePath, folder, fileName, options = {}) {
+  const cleanName = sanitizeBaseName(fileName);
+  const folderClean = storage.normalizeRelativePath(folder);
+  const relativePath = folderClean ? `${folderClean}/${cleanName}` : cleanName;
+  const uploaded = await storage.uploadFileFromPath(
+    localFilePath,
+    relativePath,
+    options,
+  );
+  return mapUploadedFile(
+    uploaded,
+    relativePath,
+    cleanName,
+    uploaded.size,
+    options,
+  );
 }
 
 async function saveFileFromPath(
@@ -204,10 +375,16 @@ function validateFileSize(buffer, maxSizeMB = 100) {
 
 module.exports = {
   saveFile,
+  saveFileInAllCountryBuckets,
   saveFileAs,
+  saveFileAsFromPath,
   saveFileFromPath,
   deleteFile,
   deleteFiles,
+  deleteFilesInAllCountryBuckets,
+  streamStoredObject,
+  statStoredObject,
+  isSharedAppObjectPath,
   moveFile,
   deleteFolder,
   listFiles,

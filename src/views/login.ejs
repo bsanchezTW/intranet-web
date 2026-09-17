@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= formatPageTitle(titulo || "Iniciar sesión") %></title>
-  <link rel="stylesheet" href="/css/login.css?v=20260910o">
+  <link rel="stylesheet" href="/css/login.css?v=20260917a">
   <script>
     (function () {
       var raiz = document.documentElement;
@@ -22,14 +22,13 @@
   </script>
   <noscript><style>.cargando-pagina { display: none; }</style></noscript>
   <script>
-    document.documentElement.setAttribute('data-theme','light');
     try {
       if (sessionStorage.getItem('loginShellReady') === '1') {
         document.documentElement.classList.add('login-shell-settled');
       }
     } catch (_) {}
   </script>
-  <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260907b">
+  <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
   <link rel="stylesheet" href="/css/phone.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
@@ -55,7 +54,7 @@
         <div class="login-auth-main" id="loginAuthMain">
 
         <div class="login-split__brand" id="loginAuthBrand"<% if (activeView === 'register') { %> hidden<% } %>>
-          <img src="/img/favicon18.png" alt="Transworld" class="login-split__logo">
+          <img src="<%= countryConfig.brand.loginLogo %>" alt="Transworld" class="login-split__logo">
         </div>
 
         <%
@@ -100,7 +99,6 @@
                   name="username"
                   class="login-field__input"
                   autocomplete="username"
-                  placeholder="Ej: mgonzalez"
                   title="Ingresa solo el usuario, sin dominio"
                   required
                   <% if (activeView === 'login') { %>autofocus<% } %>
@@ -200,7 +198,6 @@
                   id="reg-username"
                   name="username"
                   class="login-field__input"
-                  placeholder="Ej: mgonzalez"
                   title="Ingresa solo el usuario, sin dominio"
                   value="<%= fd.username || '' %>"
                   required
@@ -258,6 +255,7 @@
                 <span class="login-password-strength-segment" data-segment="5"></span>
               </div>
               <div class="login-password-strength-label" id="password-strength-label"></div>
+              <p class="login-password-rules-hint">Mínimo 8 caracteres y 3 de los otros 4 requisitos.</p>
               <ul class="login-password-rules" id="password-rules">
                 <li data-rule="length">Mínimo 8 caracteres</li>
                 <li data-rule="lowercase">Una minúscula</li>
@@ -272,7 +270,7 @@
             <p class="login-form-section">Contacto</p>
             <div class="login-form-grid-2">
               <div class="login-field login-field--phone">
-                <label class="login-field__label" for="telefono_local">Teléfono</label>
+                <label class="login-field__label" for="telefono_local">Teléfono personal</label>
                 <div class="phone-field" data-phone-field>
                   <span class="phone-field__prefix" aria-hidden="true"><%= countryConfig.phone.callingCode ? "+" + countryConfig.phone.callingCode : "" %></span>
                   <input type="tel" id="telefono_local" class="login-field__input phone-field__local" required placeholder="<%= countryConfig.phone.example %>" maxlength="<%= countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1 %>" inputmode="numeric" autocomplete="tel-national" aria-label="Número celular sin código de país">
@@ -384,12 +382,31 @@
                 class="login-field__input"
                 autocomplete="new-password"
                 required
-                minlength="6"
+                minlength="8"
                 <% if (activeView === 'reset') { %>autofocus<% } %>
               >
               <button type="button" class="login-field__toggle" onclick="toggleVisibility('reset-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
+            </div>
+
+            <div class="login-password-strength" id="reset-password-strength" hidden>
+              <div class="login-password-strength-bar" aria-hidden="true">
+                <span class="login-password-strength-segment" data-segment="1"></span>
+                <span class="login-password-strength-segment" data-segment="2"></span>
+                <span class="login-password-strength-segment" data-segment="3"></span>
+                <span class="login-password-strength-segment" data-segment="4"></span>
+                <span class="login-password-strength-segment" data-segment="5"></span>
+              </div>
+              <div class="login-password-strength-label"></div>
+              <p class="login-password-rules-hint">Mínimo 8 caracteres y 3 de los otros 4 requisitos.</p>
+              <ul class="login-password-rules">
+                <li data-rule="length">Mínimo 8 caracteres</li>
+                <li data-rule="lowercase">Una minúscula</li>
+                <li data-rule="uppercase">Una mayúscula</li>
+                <li data-rule="number">Un número</li>
+                <li data-rule="symbol">Un símbolo</li>
+              </ul>
             </div>
 
             <div class="login-field login-field--password">
@@ -401,7 +418,7 @@
                 class="login-field__input"
                 autocomplete="new-password"
                 required
-                minlength="6"
+                minlength="8"
               >
               <button type="button" class="login-field__toggle" onclick="toggleVisibility('reset-password2', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -410,7 +427,7 @@
 
             <div class="login-password-match" id="reset-match-msg" hidden></div>
 
-            <button type="submit" class="login-split__submit">Guardar y entrar</button>
+            <button type="submit" class="login-split__submit" id="reset-submit-btn" disabled>Guardar y entrar</button>
           </form>
         </div>
 
@@ -447,9 +464,8 @@
     </section>
 
     <!-- Panel derecho: área visual -->
-    <section class="login-split__visual-panel" aria-label="Información corporativa">
+    <section class="login-split__visual-panel" aria-label="Información corporativa" style="--login-visual-bg: url('<%= countryConfig.brand.loginBackground %>')">
       <div class="login-split__visual-overlay" aria-hidden="true"></div>
-      <img src="/img/guirnaldas18.png" alt="" class="festive-garlands" aria-hidden="true" draggable="false">
 
       <div class="login-visual-content">
       <div class="login-carousel" id="loginCarousel" aria-live="polite">
@@ -913,16 +929,29 @@
       const p1 = document.getElementById('reset-password');
       const p2 = document.getElementById('reset-password2');
       const msg = document.getElementById('reset-match-msg');
+      const strengthBox = document.getElementById('reset-password-strength');
+      const submitBtn = document.getElementById('reset-submit-btn');
       if (!p1 || !p2 || !msg) return;
 
+      // Misma política que el registro: /js/password-strength.js se carga más
+      // abajo, así que sólo se consulta dentro de los handlers.
       function update() {
+        PasswordStrength.renderMeter(strengthBox, p1.value);
+        const strongEnough = PasswordStrength.isPasswordStrongEnough(p1.value);
+        const match = p2.value.length > 0 && p1.value === p2.value;
+
+        if (submitBtn) {
+          submitBtn.disabled = !(strongEnough && match);
+          submitBtn.setAttribute('aria-disabled', strongEnough && match ? 'false' : 'true');
+        }
+
         if (!p2.value.length) {
           msg.hidden = true;
           msg.textContent = '';
           return;
         }
         msg.hidden = false;
-        if (p1.value === p2.value) {
+        if (match) {
           msg.textContent = 'Las contraseñas coinciden';
           msg.className = 'login-password-match ok';
         } else {
@@ -933,6 +962,7 @@
 
       p1.addEventListener('input', update);
       p2.addEventListener('input', update);
+      document.addEventListener('DOMContentLoaded', update);
     })();
 
     (function initLoginTabOrder() {
@@ -1195,8 +1225,8 @@
   </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="/js/profile-photo-cropper.js"></script>
-  <script src="/js/password-strength.js"></script>
+  <script src="/js/profile-photo-cropper.js?v=20260916m"></script>
+  <script src="/js/password-strength.js?v=20260916q"></script>
   <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
   <script src="/js/phone.js?v=20260910n"></script>
   <script>
@@ -1350,7 +1380,7 @@
         marcarCampo(usernameInput, hasUsername ? '' : 'Ingresa tu usuario de correo.');
         marcarCampo(
           passwordInput,
-          strongEnough ? '' : 'Usa al menos 8 caracteres, con mayúscula, minúscula, número y símbolo.',
+          strongEnough ? '' : PasswordStrength.POLICY_HINT,
         );
         marcarCampo(
           password2Input,
@@ -1423,17 +1453,15 @@
      * canceló el envío (evento.defaultPrevented).
      */
     (function initBotonesEnviando() {
-      var ETIQUETA = 'Enviando…';
-
       function marcar(boton) {
         if (boton.classList.contains('is-enviando')) return;
         var texto = boton.textContent.trim();
         boton.classList.add('is-enviando');
         boton.setAttribute('aria-busy', 'true');
+        boton.setAttribute('aria-label', 'Enviando');
         boton.dataset.textoOriginal = texto;
-        boton.innerHTML =
-          '<span class="login-split__submit__spinner" aria-hidden="true"></span>' +
-          '<span>' + ETIQUETA + '</span>';
+        boton.style.minWidth = boton.offsetWidth + 'px';
+        boton.innerHTML = '<span class="login-split__submit__spinner" aria-hidden="true"></span>';
         // Deshabilitar dentro del propio submit puede abortar el envío en
         // algunos navegadores; en el siguiente tick ya salió la petición.
         window.setTimeout(function () { boton.disabled = true; }, 0);
@@ -1443,7 +1471,9 @@
         if (!boton.classList.contains('is-enviando')) return;
         boton.classList.remove('is-enviando');
         boton.removeAttribute('aria-busy');
+        boton.removeAttribute('aria-label');
         boton.disabled = false;
+        boton.style.minWidth = '';
         boton.textContent = boton.dataset.textoOriginal || boton.textContent;
       }
 

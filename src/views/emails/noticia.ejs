@@ -1,121 +1,21 @@
 <%
-/* Newsletter de noticias. Se renderiza con ejs.renderFile (sin el layout de la
-   app). Todo va en tablas con estilos en línea: es lo único que Outlook,
-   Gmail y Apple Mail interpretan igual. Ancho fijo 600 px, contenido 536 px. */
+/* Cuerpo del correo de una noticia: texto del artículo y archivos
+   renderizados. La cabecera, portada, titular, botón y pie los pone el marco
+   común (views/emails/layout.ejs) desde noticiaEmailService.
+   Tablas + estilos en línea: contenido de 536 px. */
 %>
-<!--[if mso]><style>body,table,td{font-family:Arial,Helvetica,sans-serif !important;}</style><![endif]-->
-<div style="background-color:#eef2f7; margin:0; padding:24px 12px; font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased;">
+<% if (contenidoHtml) { %>
+  <%- contenidoHtml %>
+<% } %>
 
-  <!-- Preencabezado: lo que se ve en la bandeja de entrada antes de abrir -->
-  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent; height:0; width:0;">
-    <%= preheader %>
-  </div>
-
-  <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" width="600"
-         style="max-width:600px; width:100%; margin:0 auto; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 2px 8px rgba(13,31,51,0.06), 0 12px 32px rgba(13,31,51,0.08);">
-
-    <!-- ============ Cabecera ============ -->
+<% if (adjuntos.length) { %>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
     <tr>
-      <td style="background-color:#0f4c81; padding:24px 32px 22px 32px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-          <tr>
-            <td align="left" style="vertical-align:middle;">
-              <img src="<%= logoUrl %>" alt="Transworld" width="160" height="46"
-                   style="width:160px; max-width:160px; height:auto; display:block; border:0;">
-            </td>
-            <td align="right" style="vertical-align:middle;">
-              <span style="color:#9cc3ee; font-size:11px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase;">Noticias</span>
-            </td>
-          </tr>
-        </table>
+      <td style="padding:<%= contenidoHtml ? '10px' : '0' %> 0 0 0;">
+        <% adjuntos.forEach(function (adjunto) { %>
+          <%- include('partials/_adjunto', { adjunto: adjunto, noticiaUrl: noticiaUrl }) %>
+        <% }); %>
       </td>
     </tr>
-    <!-- Filete corporativo -->
-    <tr><td style="background-color:#a6d84a; height:4px; line-height:4px; font-size:0;">&nbsp;</td></tr>
-
-    <!-- ============ Portada 600×180 (el recorte ya viene en el archivo) ============ -->
-    <% if (coverUrl) { %>
-      <tr>
-        <td style="padding:0; line-height:0; font-size:0;">
-          <a href="<%= noticiaUrl %>" target="_blank" style="display:block; text-decoration:none; line-height:0;">
-            <img src="<%= coverUrl %>" alt="<%= noticia.title %>" width="600"
-                 style="width:100%; max-width:600px; height:auto; display:block; border:0;">
-          </a>
-        </td>
-      </tr>
-    <% } %>
-
-    <!-- ============ Titular ============ -->
-    <tr>
-      <td style="padding:<%= coverUrl ? '30px' : '34px' %> 32px 0 32px;">
-        <p style="margin:0 0 12px 0; color:#8494a7; font-size:12px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase;">
-          <%= fechaTexto %>
-        </p>
-        <h1 style="margin:0; color:#0b3a63; font-size:29px; font-weight:800; line-height:1.22; letter-spacing:-0.4px;">
-          <%= noticia.title %>
-        </h1>
-        <% if (noticia.subtitle) { %>
-          <p style="margin:14px 0 0 0; color:#51637a; font-size:18px; font-weight:400; line-height:1.55;">
-            <%= noticia.subtitle %>
-          </p>
-        <% } %>
-      </td>
-    </tr>
-
-    <tr>
-      <td style="padding:26px 32px 0 32px;">
-        <div style="border-top:1px solid #e3e9f0; height:1px; line-height:1px; font-size:0;">&nbsp;</div>
-      </td>
-    </tr>
-
-    <!-- ============ Cuerpo ============ -->
-    <% if (contenidoHtml) { %>
-      <tr>
-        <td style="padding:26px 32px 6px 32px;">
-          <%- contenidoHtml %>
-        </td>
-      </tr>
-    <% } %>
-
-    <!-- ============ Archivos renderizados ============ -->
-    <% if (adjuntos.length) { %>
-      <tr>
-        <td style="padding:10px 32px 0 32px;">
-          <% adjuntos.forEach(function (adjunto) { %>
-            <%- include('partials/_adjunto', { adjunto: adjunto, noticiaUrl: noticiaUrl }) %>
-          <% }); %>
-        </td>
-      </tr>
-    <% } %>
-
-    <!-- ============ Llamada a la acción ============ -->
-    <tr>
-      <td align="center" style="padding:18px 32px 36px 32px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-          <tr>
-            <td style="border-radius:10px; background-color:#0f4c81;">
-              <a href="<%= noticiaUrl %>" target="_blank"
-                 style="display:inline-block; padding:15px 38px; color:#ffffff; font-size:16px; font-weight:700; text-decoration:none; border-radius:10px;">
-                Leer en la Intranet →
-              </a>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- ============ Pie ============ -->
-    <tr>
-      <td style="background-color:#f5f7fa; padding:22px 32px; border-top:1px solid #e3e9f0;" align="center">
-        <p style="margin:0 0 6px 0; color:#51637a; font-size:13px; font-weight:700;">
-          Transworld Power &amp; Telcom SpA
-        </p>
-        <p style="margin:0; color:#8494a7; font-size:12px; line-height:1.6;">
-          Mensaje automático de la Intranet Transworld. No es necesario responder;
-          <br>para consultas usa la sección de tickets.
-        </p>
-      </td>
-    </tr>
-
   </table>
-</div>
+<% } %>

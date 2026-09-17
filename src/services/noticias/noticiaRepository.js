@@ -3,6 +3,7 @@
 
 const db = require("../../db");
 const { NOTICIA_VIEW_COLUMNS } = require("../../utils/schemaMappers");
+const { accountUsesPersonalEmailSql, maskEmail } = require("../../utils/contactEmails");
 
 const COLUMNS = NOTICIA_VIEW_COLUMNS;
 
@@ -172,16 +173,25 @@ async function findAuthorNames(claves) {
   return { ...porCorreo, ...porConvencion };
 }
 
+/**
+ * Destinatarios para enviar una noticia. Se elige por id; el correo es sólo
+ * para reconocer a la persona, así que el personal se muestra enmascarado.
+ */
 async function listUsersWithEmail() {
   const { rows } = await db.query(`
-    SELECT u.id, u.first_name, u.last_name, u.email, at.area_name AS area,
+    SELECT u.id, u.first_name, u.last_name, u.email,
+           ${accountUsesPersonalEmailSql("u")} AS cuenta_con_correo_personal,
+           at.area_name AS area,
            at.color AS area_color
     FROM users u
     LEFT JOIN work_areas at ON at.id = u.work_area_id
     WHERE u.email IS NOT NULL AND TRIM(u.email) <> ''
     ORDER BY u.last_name ASC NULLS LAST, u.first_name ASC
   `);
-  return rows;
+  return rows.map(({ cuenta_con_correo_personal: esPersonal, ...row }) => ({
+    ...row,
+    email: esPersonal ? maskEmail(row.email) : row.email,
+  }));
 }
 
 async function emailsForAll() {

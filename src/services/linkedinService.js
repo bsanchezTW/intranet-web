@@ -76,7 +76,6 @@ function isLegacyExternalImageUrl(url) {
   if (!url) return true;
   const value = String(url);
   return (
-    value.includes("cloudinary.com") ||
     value.includes("licdn.com") ||
     value.startsWith("http://") ||
     value.startsWith("https://")

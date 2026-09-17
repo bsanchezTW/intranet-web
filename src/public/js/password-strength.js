@@ -34,8 +34,42 @@
     return analyzePasswordStrength(password).score >= 3;
   }
 
+  const POLICY_HINT =
+    "Usa al menos 8 caracteres y combina 3 de estos 4: minúsculas, mayúsculas, números o símbolos.";
+
+  /**
+   * Pinta un medidor con el mismo marcado que el del registro
+   * (.login-password-strength: segmentos, etiqueta y lista de reglas).
+   * Devuelve el resultado del análisis.
+   */
+  function renderMeter(box, password) {
+    const result = analyzePasswordStrength(password);
+    if (!box) return result;
+    const hasValue = String(password || "").length > 0;
+    const label = box.querySelector(".login-password-strength-label");
+
+    box.hidden = !hasValue;
+    if (label) {
+      label.textContent = hasValue ? result.label : "";
+      label.className =
+        "login-password-strength-label" + (hasValue ? " " + result.level : "");
+    }
+    box.querySelectorAll(".login-password-strength-segment").forEach((seg) => {
+      const idx = Number(seg.dataset.segment);
+      seg.className =
+        "login-password-strength-segment" +
+        (hasValue && idx <= result.score ? " active-" + result.score : "");
+    });
+    box.querySelectorAll("[data-rule]").forEach((item) => {
+      item.classList.toggle("valid", hasValue && Boolean(result.checks[item.dataset.rule]));
+    });
+    return result;
+  }
+
   global.PasswordStrength = {
     analyzePasswordStrength,
     isPasswordStrongEnough,
+    renderMeter,
+    POLICY_HINT,
   };
 })(window);

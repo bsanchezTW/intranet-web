@@ -16,8 +16,7 @@
   border: 1px solid transparent;
 }
 
-/* Colores literales y no tokens: el significado del estado es el mismo en
-   claro y en oscuro, y los tonos ya llevan contraste suficiente en ambos. */
+/* Colores literales y no tokens: el significado del estado es fijo. */
 .gasto-badge--pending {
   background: #fef3c7;
   color: #92400e;
@@ -469,25 +468,6 @@
   cursor: pointer;
 }
 
-.gasto-confirm {
-  max-width: 28rem;
-}
-
-.gasto-confirm .gasto-modal__body {
-  padding: 4px 20px 8px;
-}
-
-.gasto-confirm .gasto-modal__body p {
-  margin: 0 0 10px;
-  color: var(--color-text);
-  line-height: 1.45;
-  font-size: 0.95rem;
-}
-
-.gasto-confirm__aviso {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-}
 
 .gasto-confirm__acciones {
   display: flex;
@@ -1101,78 +1081,19 @@
 }
 
 /* ── Modal del formulario ────────────────────────────────────────────────────
-   Panel "flush" del sistema de modales: cabecera y pie fijos, cuerpo con
-   scroll. En móvil modal.css lo pasa a pantalla completa. */
+   El cromo (cabecera, pie, botones) sale de modal.css; aquí sólo el tamaño y
+   lo propio del formulario. */
 
 .gasto-modal .gasto-modal__panel {
-  max-width: 960px;
   height: min(92vh, 920px);
-  max-height: min(92vh, 920px);
-}
-
-.gasto-modal .gasto-modal__panel.gasto-confirm {
-  max-width: 28rem;
-  height: auto;
-  max-height: min(92vh, 32rem);
-}
-
-.gasto-modal__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-shrink: 0;
-  padding: 18px 18px 14px 26px;
-  border-bottom: 1px solid var(--modal-border);
-}
-
-.gasto-modal__cabecera {
-  min-width: 0;
-}
-
-.gasto-modal .gasto-modal__titulo {
-  margin: 0;
-  text-align: left;
-}
-
-.gasto-modal__estado {
-  margin: 3px 0 0;
-  font-size: 0.82rem;
-  color: var(--modal-muted);
 }
 
 .gasto-modal__estado:empty {
   display: none;
 }
 
-.gasto-modal__cerrar {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--modal-muted);
-  font-size: 1.6rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.gasto-modal__cerrar:hover,
-.gasto-modal__cerrar:focus-visible {
-  background: var(--modal-input-bg);
-  color: var(--modal-text);
-}
-
 /* Dentro del modal el formulario deja de ser tarjeta: es el panel. */
 .gasto-modal .gasto-form {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
   max-width: none;
   padding: 0;
   border: none;
@@ -1181,59 +1102,19 @@
   background: transparent;
 }
 
-.gasto-modal__body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 20px 26px 24px;
+/* Las secciones traen sus propios márgenes: el cuerpo no las reparte en grilla. */
+.gasto-modal .gasto-modal__body {
+  display: block;
+  padding-top: 20px;
 }
 
 .gasto-modal__body > :last-child {
   margin-bottom: 0;
 }
 
-.gasto-modal__foot {
-  flex-shrink: 0;
-  padding: 12px 26px;
-  border-top: 1px solid var(--modal-border);
-  background: var(--modal-bg);
-}
-
 .gasto-modal .gasto-form-error {
-  margin: 0 0 10px;
-}
-
-.gasto-modal__acciones {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.gasto-modal__espacio {
-  flex: 1;
-}
-
-.gasto-modal__eliminar {
-  padding: 8px 10px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: #d93025;
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.gasto-modal__eliminar:hover {
-  background: rgba(217, 48, 37, 0.08);
-}
-
-.gasto-modal__eliminar:disabled {
-  opacity: 0.5;
-  cursor: progress;
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .gasto-modal .gasto-ficha > .gasto-ficha__titulo {
@@ -1374,11 +1255,6 @@
   background: var(--color-surface-muted);
   color: var(--color-heading);
   cursor: default;
-}
-
-.modal-overlay .gasto-item-fila .gasto-monto input[readonly] {
-  background: var(--modal-border);
-  color: var(--modal-heading);
 }
 
 .gasto-item-adjuntos {
@@ -1612,38 +1488,14 @@
     grid-template-columns: 1fr;
   }
 
-  /* Modal a pantalla completa: menos aire y acciones a dos columnas, con
-     "Eliminar borrador" debajo para que no compita con enviar. */
-  .gasto-modal__head {
-    padding: 12px 8px 10px 16px;
-  }
-
-  .gasto-modal__body {
-    padding: 16px 16px 20px;
-  }
-
   .gasto-modal .gasto-ficha {
     padding: 14px;
   }
 
-  .gasto-modal__foot {
-    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .gasto-modal__acciones {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .gasto-modal__espacio {
-    display: none;
-  }
-
-  .gasto-modal__eliminar {
-    grid-column: 1 / -1;
+  /* "Eliminar borrador" va al final para que no compita con enviar. */
+  .gasto-modal__foot .modal-foot__start {
     order: 3;
-    padding: 6px;
+    justify-content: center;
   }
 
   /* Va aquí y no en el primer bloque móvil: la regla de 3 columnas está más
@@ -1662,8 +1514,7 @@
 
 /* ── Mis fondos ──────────────────────────────────────────────────────────────
    Resumen del dinero asignado y lista de fondos abiertos y rendiciones por
-   liquidar. Colores de saldo literales, como los badges: el significado es
-   el mismo en claro y en oscuro. */
+   liquidar. */
 
 .fondos-card {
   background: var(--color-surface);

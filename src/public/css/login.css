@@ -272,6 +272,11 @@ body.login-split-page {
   gap: 0 16px;
 }
 
+/* Sin esto, el teléfono (prefijo + input) ensancha su columna. */
+.login-form-grid-2 > * {
+  min-width: 0;
+}
+
 .login-field__input--readonly {
   background: #e2e8f0 !important;
   color: #4a5568 !important;
@@ -586,60 +591,109 @@ body.login-split-page {
   display: none !important;
 }
 
-/* ── Campos flotantes ── */
+/* ── Campos de texto ──
+ * Etiqueta fija sobre el campo (no montada en el borde): se lee siempre, aun
+ * con el campo lleno o autocompletado. Todas las cajas comparten alto, borde,
+ * radio y anillo de foco, así usuario+dominio y teléfono se ven como una pieza.
+ */
+.login-split-page {
+  --login-field-height: 48px;
+  --login-field-radius: 10px;
+  --login-field-label-space: 22px; /* alto de etiqueta (16px) + separación (6px) */
+  --login-field-border: var(--color-border-strong, rgba(0, 58, 112, 0.16));
+  --login-field-border-hover: rgba(0, 58, 112, 0.32);
+  --login-field-bg: var(--color-input-bg, rgba(255, 255, 255, 0.92));
+  --login-field-focus: var(--login-blue);
+  --login-field-ring: 0 0 0 3px rgba(170, 221, 85, 0.45);
+}
+
 .login-field {
   position: relative;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
 
 .login-field__label {
-  position: absolute;
-  top: -9px;
-  left: 14px;
-  padding: 0 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.01em;
   color: var(--login-blue);
-  background: rgba(255, 255, 255, 0.92);
-  z-index: 1;
-  pointer-events: none;
-  border-radius: 4px;
 }
 
 .login-field__input {
+  display: block;
   width: 100%;
-  height: 52px;
-  padding: 16px 16px 10px;
-  border: 1px solid var(--color-border-strong, rgba(0, 58, 112, 0.12));
-  border-radius: 12px;
-  background: var(--login-glass-input);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  box-sizing: border-box;
+  height: var(--login-field-height);
+  padding: 0 14px;
+  border: 1px solid var(--login-field-border);
+  border-radius: var(--login-field-radius);
+  background: var(--login-field-bg);
   color: var(--color-input-text, #1a202c);
-  font-size: 1rem;
+  font-size: 0.97rem;
   font-family: inherit;
   outline: none;
-  box-shadow: 0 2px 8px rgba(0, 58, 112, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 58, 112, 0.05);
+  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+}
+
+.login-field__input::placeholder {
+  color: var(--login-text-muted);
+  opacity: 0.8;
+}
+
+.login-field__input:hover {
+  border-color: var(--login-field-border-hover);
 }
 
 .login-field__input:focus {
-  border-color: var(--login-green);
-  box-shadow: 0 0 0 3px rgba(170, 221, 85, 0.25), 0 2px 8px rgba(0, 58, 112, 0.08);
+  border-color: var(--login-field-focus);
+  background: var(--color-input-bg-focus, #ffffff);
+  box-shadow: var(--login-field-ring);
 }
 
-/* Usuario + dominio */
+/* Usuario + dominio: una sola caja con el dominio como sufijo */
 .login-field--username .login-username-row {
   display: flex;
   align-items: stretch;
+  height: var(--login-field-height);
+  border: 1px solid var(--login-field-border);
+  border-radius: var(--login-field-radius);
+  background: var(--login-field-bg);
+  box-shadow: 0 1px 2px rgba(0, 58, 112, 0.05);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.login-field--username .login-username-row:hover {
+  border-color: var(--login-field-border-hover);
+}
+
+.login-field--username .login-username-row:focus-within {
+  border-color: var(--login-field-focus);
+  box-shadow: var(--login-field-ring);
+}
+
+.login-field--username .login-username-row:has(.login-domain--invalid) {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);
 }
 
 .login-field--username .login-field__input {
   flex: 1;
   min-width: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  border-right: none;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-field--username .login-field__input:focus {
+  box-shadow: none;
+  background: transparent;
 }
 
 .login-field--username .login-domain {
@@ -647,21 +701,15 @@ body.login-split-page {
   align-items: center;
   flex: 0 0 auto;
   gap: 1px;
-  padding: 0 6px 0 8px;
-  background: var(--login-glass-input);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--color-border-strong, rgba(0, 58, 112, 0.12));
-  border-left: none;
-  border-radius: 0 12px 12px 0;
-  color: var(--color-input-text, #1a202c);
-  font-size: 1rem;
-  font-weight: 400;
+  margin: 8px 0;
+  padding: 0 6px 0 10px;
+  border-left: 1px solid var(--login-field-border);
+  color: var(--login-text-muted);
+  font-size: 0.93rem;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 58, 112, 0.06);
 }
 
 .login-field--username .login-domain__at {
-  color: var(--login-text-muted);
   margin-right: 1px;
 }
 
@@ -670,7 +718,6 @@ body.login-split-page {
   background: transparent;
   color: inherit;
   font: inherit;
-  font-weight: 400;
   outline: none;
   width: 12ch;
   min-width: 7ch;
@@ -685,16 +732,7 @@ body.login-split-page {
 
 .login-field--username .login-domain__input:not([readonly]) {
   cursor: text;
-}
-
-.login-field--username .login-domain--editing {
-  border-color: var(--login-green);
-  box-shadow: 0 0 0 3px rgba(170, 221, 85, 0.25), 0 2px 8px rgba(0, 58, 112, 0.08);
-}
-
-.login-field--username .login-domain--invalid {
-  border-color: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18);
+  color: var(--color-input-text, #1a202c);
 }
 
 .login-field--username .login-domain__edit {
@@ -702,9 +740,9 @@ body.login-split-page {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  margin-left: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -725,59 +763,63 @@ body.login-split-page {
   background: rgba(0, 58, 112, 0.08);
 }
 
+/* Teléfono: prefijo + número en la misma caja visual */
 .login-field--phone .phone-field__prefix {
-  height: 52px;
-  padding: 0 14px;
-  background: var(--login-glass-input);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--color-border-strong, rgba(0, 58, 112, 0.12));
+  height: var(--login-field-height);
+  padding: 0 12px;
+  background: rgba(0, 58, 112, 0.05);
+  border: 1px solid var(--login-field-border);
   border-right: none;
-  border-radius: 12px 0 0 12px;
-  color: var(--color-input-text, #1a202c);
-  font-size: 0.95rem;
-  box-shadow: 0 2px 8px rgba(0, 58, 112, 0.06);
+  border-radius: var(--login-field-radius) 0 0 var(--login-field-radius);
+  color: var(--login-blue);
+  font-size: 0.93rem;
 }
 
 .login-field--phone .phone-field__local {
-  height: 52px;
-  border-radius: 0 10px 10px 0 !important;
+  height: var(--login-field-height);
+  border-radius: 0 var(--login-field-radius) var(--login-field-radius) 0 !important;
 }
 
-.login-field--phone:focus-within .phone-field__prefix {
-  border-color: var(--login-green);
+.login-field--phone:focus-within .phone-field__prefix,
+.login-field--phone:focus-within .phone-field__local {
+  border-color: var(--login-field-focus);
 }
 
 /* Contraseña + ojo */
 .login-field--password .login-field__input {
-  padding-right: 48px;
+  padding-right: 46px;
 }
 
 .login-field__toggle {
   position: absolute;
-  right: 14px;
-  top: 50%;
+  right: 10px;
+  /* Centrado en la caja, no en todo el campo (etiqueta y error cambian su alto). */
+  top: calc(var(--login-field-label-space) + var(--login-field-height) / 2);
   transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: none;
+  border-radius: 8px;
   background: none;
   color: #7a8699;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s;
+  transition: color 0.15s, background-color 0.15s;
 }
 
 .login-field__toggle:hover {
   color: var(--login-blue);
+  background: rgba(0, 58, 112, 0.06);
 }
 
 .login-field__toggle svg {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
 }
+
 
 /* Botón principal — acento verde corporativo */
 .login-split__submit {
@@ -786,7 +828,7 @@ body.login-split-page {
   justify-content: center;
   gap: 10px;
   width: 100%;
-  height: 52px;
+  height: var(--login-field-height, 48px);
   margin-top: 8px;
   border: none;
   border-radius: 12px;
@@ -800,10 +842,10 @@ body.login-split-page {
 }
 
 /* Enviado: el formulario navega, y hasta que el servidor responda el botón
-   tiene que decir que está trabajando. Sin esto se puede pulsar dos veces. */
+   muestra el icono girando. Sin esto se puede pulsar dos veces. */
 .login-split__submit__spinner {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.2);
@@ -967,11 +1009,12 @@ body.login-split-page {
 
 /* ── Panel derecho (foto sin efectos) ── */
 .login-split__visual-panel {
+  --login-visual-bg: url("/img/brand/cl/login-background.jpg");
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  background: #ffffff url("/img/background_login18.png") center center / cover no-repeat;
+  background: #ffffff var(--login-visual-bg) center center / cover no-repeat;
   overflow: hidden;
   z-index: 1;
 }
@@ -989,18 +1032,6 @@ body.login-split-page {
       rgba(0, 22, 44, 0.48) 42%,
       transparent 72%
     );
-}
-
-.login-split__visual-panel .festive-garlands {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: auto;
-  display: block;
-  pointer-events: none;
-  user-select: none;
-  z-index: 1;
 }
 
 /* Bloque carrusel + banner (centrado en la foto derecha, más abajo) */
@@ -1247,7 +1278,7 @@ body.login-split-page {
   }
 
   .login-field {
-    margin-bottom: 18px;
+    margin-bottom: 16px;
   }
 
   .login-field--username .login-domain {
@@ -1289,4 +1320,10 @@ body.login-split-page {
   .login-split__help-phone {
     font-size: 0.68rem;
   }
+}
+
+.login-password-rules-hint {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  color: var(--color-text-subtle, #64748b);
 }

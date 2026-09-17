@@ -85,8 +85,8 @@ router.get("/", async (req, res) => {
       documentoLabel: getDocumentConfig().label,
       ...flashFrom(req),
       user: req.session.user,
-      extraCss: ["/css/areas.css?v=20260911a", "/css/gastos.css", "/css/procesos.css"],
-      extraJs: ["/js/ac-cards.js?v=20260911d", "/js/centros-costo.js?v=20260911a"],
+      extraCss: ["/css/areas.css?v=20260916m", "/css/gastos.css?v=20260916m", "/css/procesos.css?v=20260916m"],
+      extraJs: ["/js/ac-cards.js?v=20260916m", "/js/centros-costo.js?v=20260916m"],
     });
   } catch (err) {
     console.error("[Centros de costo] Error listando:", err);

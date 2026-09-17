@@ -1,7 +1,6 @@
 /**
  * Colores de áreas de trabajo: hex persistido en work_areas.color.
- * Los chips derivan fondo y texto de matiz/saturación para que el modo
- * oscuro no necesite un par de hex por área.
+ * Los chips derivan fondo y texto de matiz y saturación.
  *
  * El id público es un entero de 4 dígitos (1111–9999), no IDENTITY 1, 2, 3.
  */

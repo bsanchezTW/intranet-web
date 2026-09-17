@@ -66,7 +66,6 @@ process.env.COUNTRY = country;
 process.env.PORT = String(port);
 process.env.APP_BASE_URL = baseUrl;
 process.env.SUPABASE_STORAGE_BUCKET = defaultStorageBucketForCountry(country);
-process.env.MAIL_FROM = process.env.MAIL_FROM || config.noReplyEmail;
 
 const dbBinding = getCountryDbBinding(country);
 applyCountryPoolerUser(process.env);

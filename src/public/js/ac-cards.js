@@ -259,6 +259,9 @@
           grupo: grupo.titulo,
         }),
       );
+      quitar.setAttribute("data-ac-confirmar-titulo", "¿Quitar del grupo?");
+      quitar.setAttribute("data-ac-confirmar-aceptar", "Quitar");
+      quitar.setAttribute("data-ac-confirmar-tono", "peligro");
       quitar.title = textos.quitar || "Quitar";
       quitar.setAttribute("aria-label", (textos.quitar || "Quitar") + ": " + persona.nombre);
       quitar.innerHTML = "&times;";
@@ -440,7 +443,12 @@
       if (!form || form.tagName !== "FORM") return;
       var boton = form.querySelector("[data-ac-confirmar]");
       if (!boton || boton.disabled) return;
-      if (!window.confirm(boton.dataset.acConfirmar)) evento.preventDefault();
+      window.IntranetDialog.confirmarEnvio(evento, {
+        title: boton.dataset.acConfirmarTitulo || "¿Confirmas el cambio?",
+        message: boton.dataset.acConfirmar,
+        acceptLabel: boton.dataset.acConfirmarAceptar || "Confirmar",
+        tone: boton.dataset.acConfirmarTono || "normal",
+      });
     });
 
     listaAgregar.addEventListener("change", actualizarSeleccion);
@@ -483,7 +491,11 @@
         n: mueven.length,
         grupo: actual ? actual.titulo : "",
       });
-      if (!window.confirm(mensaje)) evento.preventDefault();
+      window.IntranetDialog.confirmarEnvio(evento, {
+        title: "¿Mover de grupo?",
+        message: mensaje,
+        acceptLabel: "Agregar y mover",
+      });
     });
   }
 

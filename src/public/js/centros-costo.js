@@ -26,7 +26,12 @@
       if (!form || form.tagName !== "FORM") return;
       var boton = form.querySelector("[data-confirmar]");
       if (!boton || boton.disabled) return;
-      if (!window.confirm(boton.dataset.confirmar)) evento.preventDefault();
+      window.IntranetDialog.confirmarEnvio(evento, {
+        title: boton.dataset.confirmarTitulo || "¿Confirmas el cambio?",
+        message: boton.dataset.confirmar,
+        acceptLabel: boton.dataset.confirmarAceptar || "Confirmar",
+        tone: boton.dataset.confirmarTono || "normal",
+      });
     });
   }
 

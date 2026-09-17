@@ -6,7 +6,6 @@
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 }
 
-
 /* ── Ticketera ── */
 
 .tickets-panel {
@@ -253,10 +252,8 @@
   color: var(--green-ink);
 }
 
-
 /* Las píldoras de estado (.ticket-estado*) y toda la tarjeta de detalle viven
    en ticket-modal.css, que se carga en todas las páginas. */
-
 
 /* La prioridad en texto solo aparece cuando no cabe la barra lateral (móvil). */
 .ticket-item__prioridad-txt {
@@ -283,18 +280,6 @@
   color: var(--color-text-subtle);
   font-size: 0.9rem;
 }
-
-/* ── Modo oscuro: los estados llevan color propio, no tokens de superficie ── */
-html[data-theme="dark"] .ticket-estado--in_progress,
-html[data-theme="dark"] .ticket-estado--pending_close,
-html[data-theme="dark"] .ticket-item__prioridad-txt--medium {
-  color: #e8b860;
-}
-
-html[data-theme="dark"] .ticket-item__prioridad-txt--high {
-  color: #e88f8f;
-}
-
 /* ── Badges heredados (los usa el detalle del ticket) ── */
 .badge { padding: 5px 10px; border-radius: 20px; font-size: 0.85em; font-weight: bold; }
 .bg-success { background-color: #28a745; color: #ffffff; }
@@ -315,8 +300,6 @@ html[data-theme="dark"] .ticket-item__prioridad-txt--high {
 .btn-primario:hover {
   background-color: #0b3a63;
 }
-
-
 
 @media (max-width: 768px) {
   .contenedor {

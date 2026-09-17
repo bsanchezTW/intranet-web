@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { sendMail } = require("../services/mailer");
+const { MAIL_SENDERS } = require("../constants/mailSenders");
 const { isAdministrador } = require("../constants/roles");
 const multer = require('multer');
 const {
@@ -15,7 +16,7 @@ const {
   getLocalDateOnly,
   getTZ,
 } = require("../utils/businessHours");
-const { getCurrentCountry, getCountryConfig } = require("../config/country");
+const { getCurrentCountry } = require("../config/country");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { APP_CATALOGS } = require("../constants/appCatalogs");
 const { listAppsByCatalog } = require("../services/appCatalogService");
@@ -26,6 +27,7 @@ const {
   saveTicketAttachment,
   ticketMailHtml: generarHtmlCorreo,
   ticketMailText: generarTextoCorreo,
+  notifyTicketTeam,
 } = require("../services/tickets/ticketService");
 const { normalizeTicketPriority } = require("../services/tickets/ticketRules");
 const {
@@ -79,7 +81,6 @@ function ticketListSql() {
 `;
 }
 
-const EMAIL_SUPPORT = getCountryConfig().supportEmail;
 const NOTIFICATION_COUNT_TTL_MS = 30 * 1000;
 
 function getNotificationCacheKey(user, esAgente) {
@@ -263,7 +264,7 @@ router.get("/tickets", async (req, res) => {
       canManageTickets: puedeGestionar,
       user: user,
       ok: req.query.ok,
-      extraCss: ["/css/apps.css", "/css/tickets.css"],
+      extraCss: ["/css/apps.css?v=20260916m", "/css/tickets.css?v=20260916g"],
       extraJs: ["/js/tickets-list.js"],
     });
   } catch (err) {
@@ -322,7 +323,11 @@ router.post('/tickets/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No se subió archivo' });
 
     // Las respuestas de Soporte adjuntan también planillas y texto: sin filtro de tipo.
-    const saved = await saveTicketAttachment(req.file, { anyType: true });
+    const saved = await saveTicketAttachment(req.file, {
+      anyType: true,
+      ticketId: req.body.ticket_id,
+      fileIndex: req.body.index,
+    });
     if (!saved.ok) return res.status(400).json({ error: saved.error });
 
     const tipo = req.file.mimetype.startsWith('video/') ? 'video' : req.file.mimetype.startsWith('image/') ? 'image' : 'raw';
@@ -397,7 +402,7 @@ router.post(
         [id],
       );
       if (ticket.length > 0) {
-        const asunto = `Actualización Ticket #${id}: ${ticket[0].title}`;
+        const asunto = `Actualización del ticket #${id} — ${ticket[0].title}`;
         let cuerpo = `Hola,\n\nSe ha actualizado tu ticket. Nuevo estado: ${ticketStatusFromDb(status).toUpperCase()}.\n`;
         if (asignacion.assignedTo) {
           cuerpo += `\nResponsable: ${asignacion.assignedTo}.`;
@@ -407,9 +412,11 @@ router.post(
         sendMail({
           to: ticket[0].requester_email,
           subject: asunto,
+          heading: "Actualización de tu ticket",
+          cta: { href: `/sistemas/tickets?ticket=${id}`, label: "Ver ticket" },
           text: generarTextoCorreo(cuerpo, adjuntos_data),
           html: generarHtmlCorreo(cuerpo, adjuntos_data),
-          bcc: EMAIL_SUPPORT,
+          senderName: MAIL_SENDERS.support,
         }).catch(console.error);
       }
 
@@ -470,18 +477,16 @@ router.post("/tickets/:id/rechazar", async (req, res) => {
       ],
     );
 
-    if (process.env.ADMIN_NOTIFY_EMAIL) {
-      sendMail({
-        to: process.env.ADMIN_NOTIFY_EMAIL,
-        subject: `Ticket Reabierto #${id}: ${rows[0].title}`,
-        text: `El usuario rechazó la solución y reabrió el ticket ${id}`,
-        html: generarHtmlCorreo(
-          `El usuario rechazó la solución y reabrió el ticket ${id}`,
-          null,
-        ),
-        bcc: EMAIL_SUPPORT,
-      }).catch(console.error);
-    }
+    notifyTicketTeam({
+      subject: `Ticket reabierto #${id} — ${rows[0].title}`,
+      heading: "Ticket reabierto",
+      cta: { href: ticketModalUrl(id), label: "Ver ticket" },
+      text: `El usuario rechazó la solución y reabrió el ticket ${id}`,
+      html: generarHtmlCorreo(
+        `El usuario rechazó la solución y reabrió el ticket ${id}`,
+        null,
+      ),
+    });
     res.redirect(ticketModalUrl(id));
   } catch (err) {
     console.error(err);
@@ -513,10 +518,7 @@ router.post("/tickets/:id/responder", async (req, res) => {
     let remitenteNombre = isAgent
       ? "Soporte"
       : user.nombre || user.username || user.first_name;
-    let emailDestino = isAgent
-      ? ticket.requester_email
-      : process.env.ADMIN_NOTIFY_EMAIL;
-    let asuntoEmail = `Nueva respuesta Ticket #${id}: ${ticket.title}`;
+    let asuntoEmail = `Nueva respuesta en el ticket #${id} — ${ticket.title}`;
 
     await db.query(
       `INSERT INTO ticket_replies (ticket_id, message, sender, attachments, created_at) VALUES ($1, $2, $3, $4, NOW())`,
@@ -533,15 +535,24 @@ router.post("/tickets/:id/responder", async (req, res) => {
       ]);
     }
 
-    if (emailDestino) {
-      let cuerpo = `Nueva respuesta de ${remitenteNombre}:\n\n${mensaje_respuesta}`;
-      sendMail({
-        to: emailDestino,
-        subject: asuntoEmail,
-        text: generarTextoCorreo(cuerpo, adjuntos_data),
-        html: generarHtmlCorreo(cuerpo, adjuntos_data),
-        bcc: EMAIL_SUPPORT,
-      }).catch(console.error);
+    const cuerpo = `Nueva respuesta de ${remitenteNombre}:\n\n${mensaje_respuesta}`;
+    const mailBody = {
+      subject: asuntoEmail,
+      heading: isAgent ? "Nueva respuesta de Soporte" : "Nueva respuesta del usuario",
+      cta: { href: ticketModalUrl(id), label: "Ver ticket" },
+      text: generarTextoCorreo(cuerpo, adjuntos_data),
+      html: generarHtmlCorreo(cuerpo, adjuntos_data),
+    };
+    if (isAgent) {
+      if (ticket.requester_email) {
+        sendMail({
+          ...mailBody,
+          to: ticket.requester_email,
+          senderName: MAIL_SENDERS.support,
+        }).catch(console.error);
+      }
+    } else {
+      notifyTicketTeam(mailBody);
     }
 
     invalidateNotificationCount(req);
@@ -627,7 +638,7 @@ router.get("/tickets/:id", async (req, res) => {
       backTo: safeTicketRedirect(req.query.volver, id),
       layout: isModal ? false : "layout",
       isModal: isModal,
-      extraCss: isModal ? [] : ["/css/tickets.css"],
+      extraCss: isModal ? [] : ["/css/tickets.css?v=20260916g"],
     });
   } catch (err) {
     console.error(err);

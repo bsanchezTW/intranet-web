@@ -7,10 +7,11 @@
 // convertido a HTML dentro del propio mensaje.
 
 const path = require("path");
-const fs = require("fs");
 const ejs = require("ejs");
 
-const { sendMail } = require("../mailer");
+const { sendMail, resolveMailFrom } = require("../mailer");
+const { MAIL_SENDERS } = require("../../constants/mailSenders");
+const { renderEmailLayout } = require("../emailLayout");
 const storage = require("../storage/storageService");
 const fileStorage = require("../fileStorage");
 const signedMedia = require("../media/signedMedia");
@@ -19,13 +20,11 @@ const documentCache = require("./documentCache");
 const emailStyles = require("./emailStyles");
 const pdfRenderer = require("./pdfRenderer");
 const repository = require("./noticiaRepository");
-const { getLocale, getCountryConfig } = require("../../config/country");
+const { getLocale } = require("../../config/country");
 const { sanitizeArticleHtml, htmlToText, excerptFrom } = require("../../utils/sanitizeContent");
 
+// Sólo el cuerpo (texto + adjuntos); el marco es el común de todos los correos.
 const TEMPLATE_PATH = path.join(__dirname, "..", "..", "views", "emails", "noticia.ejs");
-// Wordmark blanco sobre el header azul. PNG-LOGO-TW-2.png ya no existe.
-const LOGO_WHITE_FILE = "logotw_white.png";
-const LOGO_WHITE_PATH = path.join(__dirname, "..", "..", "public", "img", LOGO_WHITE_FILE);
 // Banner bajo para el correo (10:3). 16:9 a 600px serían 338px de alto; esto baja a 180.
 const COVER_EMAIL_WIDTH = 600;
 const COVER_EMAIL_HEIGHT = 180;
@@ -86,18 +85,6 @@ async function loadAsDataUri(relativePath) {
     );
     return null;
   }
-}
-
-function logoDataUri() {
-  try {
-    if (fs.existsSync(LOGO_WHITE_PATH)) {
-      const embedded = toDataUri(fs.readFileSync(LOGO_WHITE_PATH), "image/png");
-      if (embedded) return embedded;
-    }
-  } catch {
-    // Si falla el embed, el HTML usa el archivo estático de la intranet.
-  }
-  return `${baseUrl()}/img/${LOGO_WHITE_FILE}`;
 }
 
 /**
@@ -363,14 +350,20 @@ async function buildEmailHtml(noticia) {
     coverUrl = await loadCoverAsDataUri(coverPath);
   }
 
-  return ejs.renderFile(TEMPLATE_PATH, {
-    noticia,
+  const bodyHtml = await ejs.renderFile(TEMPLATE_PATH, {
     noticiaUrl,
     adjuntos,
     contenidoHtml: emailStyles.inlineStyles(contenidoLimpio),
-    coverUrl,
-    logoUrl: logoDataUri(),
-    fechaTexto: formatFecha(noticia.created_at),
+  });
+
+  return renderEmailLayout({
+    area: MAIL_SENDERS.news,
+    heading: noticia.title,
+    eyebrow: formatFecha(noticia.created_at),
+    subheading: noticia.subtitle || "",
+    cover: coverUrl ? { src: coverUrl, alt: noticia.title, href: noticiaUrl } : null,
+    bodyHtml,
+    cta: { href: noticiaUrl, label: "Leer en la Intranet →" },
     preheader:
       noticia.subtitle || excerptFrom(contenidoLimpio, 140) || "Nueva publicación en la Intranet",
   });
@@ -415,13 +408,14 @@ async function enviarNoticia(noticia, opciones = {}) {
   const html = await buildEmailHtml(noticia);
 
   await sendMail({
-    to: process.env.MAIL_FROM || getCountryConfig().noReplyEmail,
+    to: resolveMailFrom(),
     bcc: destinatarios,
-    subject: noticia.title,
+    subject: `Noticias: ${noticia.title}`,
     html,
     text: buildEmailText(noticia),
-    senderName: "Noticias Transworld",
+    senderName: MAIL_SENDERS.news,
     skipFooter: true,
+    skipLayout: true,
   });
   return { enviados: destinatarios.length };
 }

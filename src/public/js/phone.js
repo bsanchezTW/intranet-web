@@ -67,6 +67,40 @@
     return cfg.prefixLabel + " " + groupDigits(national);
   }
 
+  /**
+   * Teléfono de empresa (data-phone-kind="work"): acepta también fijos.
+   * El de registro, perfil y el personal siguen siendo sólo celulares.
+   */
+  function toLandlineDigits(value) {
+    if (!cfg.landline) return null;
+    const pattern = new RegExp(cfg.landline.pattern);
+    let digits = digitsOnly(value);
+    if (!pattern.test(digits) && digits.indexOf(cfg.callingCode) === 0) {
+      digits = digits.slice(cfg.callingCode.length);
+    }
+    return pattern.test(digits) ? digits : null;
+  }
+
+  function isWorkField(root) {
+    return Boolean(root && root.dataset && root.dataset.phoneKind === "work");
+  }
+
+  function fullPhoneFor(root, localPart) {
+    const full = toFullPhone(localPart);
+    if (full || !isWorkField(root)) return full;
+    const landline = toLandlineDigits(localPart);
+    if (!landline) return "";
+    return cfg.prefixLabel + " " + groupDigits(landline);
+  }
+
+  function hiddenInputOf(root) {
+    return (
+      root.querySelector('input[type="hidden"][name="phone"]') ||
+      root.querySelector('input[type="hidden"][name="telefono"]') ||
+      root.querySelector(".phone-field__full")
+    );
+  }
+
   /** Formato progresivo mientras se escribe (acepta entradas parciales). */
   function formatLocalInput(raw) {
     let digits = digitsOnly(raw);
@@ -86,10 +120,7 @@
     if (!root) return null;
 
     const localInput = root.querySelector(".phone-field__local");
-    const hiddenInput =
-      root.querySelector('input[type="hidden"][name="phone"]') ||
-      root.querySelector('input[type="hidden"][name="telefono"]') ||
-      root.querySelector(".phone-field__full");
+    const hiddenInput = hiddenInputOf(root);
 
     if (!localInput || !hiddenInput) return null;
 
@@ -102,13 +133,11 @@
         localInput.value = formatted;
       }
 
-      const full = toFullPhone(formatted);
+      const full = fullPhoneFor(root, formatted);
       hiddenInput.value = full;
 
       const hasPartial = formatted.length > 0;
-      localInput.setCustomValidity(
-        hasPartial && !isValidLocalPhone(formatted) ? ERROR_MSG : "",
-      );
+      localInput.setCustomValidity(hasPartial && !full ? ERROR_MSG : "");
 
       if (onChange) onChange(full, formatted);
     }
@@ -117,7 +146,8 @@
     localInput.addEventListener("blur", sync);
 
     if (!localInput.value.trim() && hiddenInput.value) {
-      localInput.value = toLocalPart(hiddenInput.value);
+      const landline = isWorkField(root) && toLandlineDigits(hiddenInput.value);
+      localInput.value = landline ? groupDigits(landline) : toLocalPart(hiddenInput.value);
     }
 
     sync();
@@ -133,10 +163,10 @@
 
   function isFieldValid(root) {
     if (!root) return false;
-    const hiddenInput =
-      root.querySelector('input[type="hidden"][name="phone"]') ||
-      root.querySelector('input[type="hidden"][name="telefono"]');
-    return hiddenInput ? isValidMobilePhone(hiddenInput.value) : false;
+    const hiddenInput = hiddenInputOf(root);
+    if (!hiddenInput) return false;
+    if (isValidMobilePhone(hiddenInput.value)) return true;
+    return isWorkField(root) && toLandlineDigits(hiddenInput.value) !== null;
   }
 
   function isFieldEmpty(root) {

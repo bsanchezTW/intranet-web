@@ -61,8 +61,8 @@ const FEATURE_MATRIX = {
     chileUfIndicator: false,
     // El casino / menú de almuerzo es de la oficina de Chile.
     lunchMenu: false,
-    // El asistente Claude no se ofrece en la intranet de Perú.
-    claudeAssistant: false,
+    // Asistente Claude (FAB + /claude). El catálogo oculta tickets si Soporte está apagado.
+    claudeAssistant: true,
     // Perú no opera ticketera ni mesa de ayuda en esta intranet.
     supportTickets: false,
     // Sin barra de accesos rápidos en el home de Perú.

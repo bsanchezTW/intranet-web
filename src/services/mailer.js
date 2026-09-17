@@ -1,98 +1,113 @@
 // src/services/mailer.js
-const Brevo = require('@getbrevo/brevo');
-const { getCountryConfig } = require('../config/country');
-const APP_BASE_URL = process.env.APP_BASE_URL || 'http://localhost:3000';
-
-// --- CONSTANTES DE FIRMA ---
-const EMAIL_FOOTER_HTML = `
-<br><hr style="border: 0; border-top: 1px solid #e0e0e0; margin-top: 20px; margin-bottom: 20px;">
-<p style="font-size: 0.9rem; color: #555;">
-  Para responder a este correo, por favor ingrese a la sección de tickets en la intranet.<br>
-  Saludos cordiales,
-</p>
-<p style="font-size: 0.9rem; color: #555; margin-bottom: 0;">
-  <strong>Area TI</strong>
-</p>
-<p style="font-size: 0.9rem; color: #555; margin-top: 5px;">
-  Transworld Power & Telcom SpA
-</p>
-<img src="${APP_BASE_URL}/img/piedefirma.png" alt="Firma Transworld" style="max-width: 300px; height: auto; margin-top: 10px; border: none; outline: none;">
-`;
+const Brevo = require("@getbrevo/brevo");
+const { getCountryConfig } = require("../config/country");
+const { MAIL_SENDERS } = require("../constants/mailSenders");
+const { wrapTransactionalHtml } = require("./emailLayout");
 
 const EMAIL_FOOTER_TEXT = `
 --------------------------------------------------
-Para responder a este correo, por favor ingrese a la sección de tickets en la intranet.
+Este mensaje se envió de forma automática. No respondas a esta dirección; ingresa a la intranet para continuar.
 
-Saludos cordiales,
-Area TI
-Transworld Power & Telcom SpA
+Intranet Transworld
+Transworld Power & Telcom
 `;
-// ----------------------------
 
-// Configuración de la API de Brevo
 const apiInstance = new Brevo.TransactionalEmailsApi();
-const brevoApiKey = process.env.BREVO_API_KEY || process.env.SMTP_PASS || '';
+const brevoApiKey = process.env.BREVO_API_KEY || process.env.SMTP_PASS || "";
 apiInstance.setApiKey(
   Brevo.TransactionalEmailsApiApiKeys.apiKey,
-  brevoApiKey
+  brevoApiKey,
 );
 
 function resolveMailFrom() {
-  return (
-    process.env.MAIL_FROM?.trim() ||
-    getCountryConfig().noReplyEmail ||
-    ""
-  );
+  return String(getCountryConfig().noReplyEmail || "").trim();
 }
 
-const sendMail = async ({ to, subject, text, html, bcc, skipFooter = false, senderName }) => {
+function normalizeEmailList(value) {
+  if (value == null || value === "") return [];
+  const items = Array.isArray(value) ? value : [value];
+  const emails = [];
+  const seen = new Set();
+  for (const item of items) {
+    const email = String(item || "").trim().toLowerCase();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    emails.push(email);
+  }
+  return emails;
+}
+
+const sendMail = async ({
+  to,
+  subject,
+  text,
+  html,
+  bcc,
+  skipFooter = false,
+  skipLayout = false,
+  senderName,
+  heading,
+  cta,
+  preheader,
+}) => {
   if (!brevoApiKey) {
-    throw new Error('Falta BREVO_API_KEY o SMTP_PASS (API key de Brevo) en las variables de entorno');
+    throw new Error(
+      "Falta BREVO_API_KEY o SMTP_PASS (API key de Brevo) en las variables de entorno",
+    );
   }
   const mailFrom = resolveMailFrom();
   if (!mailFrom) {
-    throw new Error('Falta MAIL_FROM (remitente verificado en Brevo) en las variables de entorno');
+    throw new Error(
+      "Falta noReplyEmail en la configuración de país (noreply@transworld.cl / .pe)",
+    );
   }
 
-  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  const toList = normalizeEmailList(to);
+  if (!toList.length) {
+    throw new Error("Falta destinatario para el correo");
+  }
 
+  const fromName = senderName || MAIL_SENDERS.intranet;
+  const htmlContent = wrapTransactionalHtml({
+    html,
+    text,
+    senderName: fromName,
+    heading,
+    cta,
+    preheader: preheader || heading || subject,
+    skipLayout,
+  });
+
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
   sendSmtpEmail.subject = subject;
-  
-  // Si hay texto plano, le adjuntamos la firma en texto plano
+
   if (text) {
     sendSmtpEmail.textContent = skipFooter ? text : text + "\n\n" + EMAIL_FOOTER_TEXT;
   }
-  
-  // Si hay HTML, le adjuntamos la firma en HTML
-  if (html) {
-    sendSmtpEmail.htmlContent = skipFooter ? html : html + EMAIL_FOOTER_HTML;
+
+  if (htmlContent) {
+    sendSmtpEmail.htmlContent = htmlContent;
   }
 
-  sendSmtpEmail.sender = { 
-    name: senderName || "Intranet Transworld", 
-    email: mailFrom 
+  sendSmtpEmail.sender = {
+    name: fromName,
+    email: mailFrom,
   };
-  
-  // Destinatario principal
-  sendSmtpEmail.to = [{ email: to }];
 
-  // Soporte para Copia Oculta (BCC) Múltiple
-  if (bcc) {
-    if (Array.isArray(bcc)) {
-      sendSmtpEmail.bcc = bcc.map(correo => ({ email: correo }));
-    } else {
-      sendSmtpEmail.bcc = [{ email: bcc }];
-    }
+  sendSmtpEmail.to = toList.map((email) => ({ email }));
+
+  const bccList = normalizeEmailList(bcc).filter((email) => !toList.includes(email));
+  if (bccList.length) {
+    sendSmtpEmail.bcc = bccList.map((email) => ({ email }));
   }
 
   try {
-    const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    return data;
+    return await apiInstance.sendTransacEmail(sendSmtpEmail);
   } catch (error) {
     const detail = error?.response?.data || error?.body || error?.message;
-    console.error('[Mailer] Error al enviar vía API de Brevo:', detail);
+    console.error("[Mailer] Error al enviar vía API de Brevo:", detail);
     throw error;
   }
 };
 
-module.exports = { sendMail };
+module.exports = { sendMail, resolveMailFrom, normalizeEmailList };

@@ -59,6 +59,8 @@ const COUNTRY_CONFIGS = {
       mobileLeadingDigit: "9",
       groups: [1, 4, 4],
       example: "9 1234 5678",
+      // Fijos (2 Santiago, 32–75 regiones): sólo en el teléfono de empresa.
+      landline: { pattern: "^[2-7]\\d{8}$", groups: [1, 4, 4] },
     },
     corporateSite: "https://www.transworld.cl/",
     weather: {
@@ -73,6 +75,12 @@ const COUNTRY_CONFIGS = {
     hrEmail: "rrhh@transworld.cl",
     noReplyEmail: "noreply@transworld.cl",
     contactEmail: "contacto@transworld.cl",
+    // Login y navbar: /img/brand/{cl|pe}/. Fondos en JPG; logos en PNG.
+    brand: {
+      loginLogo: "/img/brand/cl/login-logo.png",
+      loginBackground: "/img/brand/cl/login-background.jpg",
+      navbarLogo: "/img/brand/cl/navbar-logo.png",
+    },
   },
   PE: {
     code: "PE",
@@ -100,6 +108,8 @@ const COUNTRY_CONFIGS = {
       mobileLeadingDigit: "9",
       groups: [3, 3, 3],
       example: "987 654 321",
+      // Fijos (1 Lima, 41–84 provincias): sólo en el teléfono de empresa.
+      landline: { pattern: "^[1-8]\\d{7}$", groups: [1, 3, 4] },
     },
     corporateSite: "https://www.transworld.cl/",
     weather: {
@@ -115,6 +125,11 @@ const COUNTRY_CONFIGS = {
     hrEmail: "rrhh@transworld.pe",
     noReplyEmail: "noreply@transworld.pe",
     contactEmail: "contacto@transworld.pe",
+    brand: {
+      loginLogo: "/img/brand/pe/login-logo.png",
+      loginBackground: "/img/brand/pe/login-background.jpg",
+      navbarLogo: "/img/brand/pe/navbar-logo.png",
+    },
   },
 };
 

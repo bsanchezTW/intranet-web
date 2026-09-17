@@ -1,5 +1,7 @@
 const { sendMail } = require("../mailer");
-const { getCountryConfig, formatMoney } = require("../../config/country");
+const { MAIL_SENDERS } = require("../../constants/mailSenders");
+const { escapeHtml } = require("../emailLayout");
+const { formatMoney } = require("../../config/country");
 const {
   expenseKindLabel,
   expenseStageLabel,
@@ -44,11 +46,11 @@ function detailUrl(request) {
 function summary(request) {
   const parts = [
     `<p><strong>Tipo:</strong> ${expenseKindLabel(request.kind)}</p>`,
-    `<p><strong>Asunto:</strong> ${request.title}</p>`,
+    `<p><strong>Asunto:</strong> ${escapeHtml(request.title)}</p>`,
     `<p><strong>Monto:</strong> ${formatMoney(request.total_amount)}</p>`,
   ];
   if (request.area_name) {
-    parts.push(`<p><strong>Área:</strong> ${request.area_name}</p>`);
+    parts.push(`<p><strong>Área:</strong> ${escapeHtml(request.area_name)}</p>`);
   }
   if (request.kind === "rendicion") {
     parts.push(
@@ -71,11 +73,13 @@ async function notifyNewRequest({ request, user, manager }) {
     return safeSend({
       to: manager.email,
       subject: `Nueva ${expenseKindLabel(request.kind).toLowerCase()} por aprobar`,
+      senderName: MAIL_SENDERS.finance,
+      heading: `Nueva ${expenseKindLabel(request.kind).toLowerCase()} por aprobar`,
+      cta: { href: detailUrl(request), label: "Revisar solicitud" },
       html: `
-        <h3>Hola ${manager.name},</h3>
-        <p><strong>${fullName(user)}</strong> envió una solicitud que espera tu aprobación.</p>
+        <p style="margin:0 0 16px 0;">Hola ${escapeHtml(manager.name)},</p>
+        <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> envió una solicitud que espera tu aprobación.</p>
         ${summary(request)}
-        <p>Revísala en la intranet: ${detailUrl(request)}</p>
       `,
       text: `${fullName(user)} envió una solicitud por ${formatMoney(request.total_amount)} que espera tu aprobación.`,
     });
@@ -85,12 +89,13 @@ async function notifyNewRequest({ request, user, manager }) {
   return safeSend({
     to: emails,
     subject: "Solicitud de gastos de una jefatura por aprobar",
+    senderName: MAIL_SENDERS.finance,
+    heading: "Solicitud de jefatura por aprobar",
+    cta: { href: "/gastos/gestion", label: "Ir a gestión de gastos" },
     html: `
-      <h3>Solicitud pendiente de aprobación administrativa</h3>
-      <p><strong>${fullName(user)}</strong> es jefe de su área, así que su solicitud
+      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> es jefe de su área, así que su solicitud
          no puede autoaprobarse y requiere que la resuelva un administrador.</p>
       ${summary(request)}
-      <p>Revísala en la intranet: /gastos/gestion</p>
     `,
     text: `${fullName(user)} (jefe de área) envió una solicitud por ${formatMoney(request.total_amount)}.`,
   });
@@ -101,14 +106,15 @@ async function notifyManagerApproved({ request }) {
   const emails = await financeTeam.financeApproverEmails();
   return safeSend({
     to: emails,
-    subject: "Solicitud aprobada por jefatura, pendiente en Finanzas",
+    subject: "Solicitud aprobada por jefatura, pendiente de revisión",
+    senderName: MAIL_SENDERS.finance,
+    heading: "Aprobada por jefatura",
+    cta: { href: "/gastos/gestion", label: "Ir a gestión de gastos" },
     html: `
-      <h3>Solicitud aprobada por jefatura</h3>
-      <p><strong>${requesterName(request)}</strong> tiene una solicitud aprobada por su jefatura
+      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(requesterName(request))}</strong> tiene una solicitud aprobada por su jefatura
          y esperando revisión de Finanzas.</p>
       ${summary(request)}
-      ${request.manager_notes ? `<p><strong>Comentario de la jefatura:</strong> ${request.manager_notes}</p>` : ""}
-      <p>Revísala en la intranet: /gastos/gestion</p>
+      ${request.manager_notes ? `<p style="margin:16px 0 0 0;"><strong>Comentario de la jefatura:</strong> ${escapeHtml(request.manager_notes)}</p>` : ""}
     `,
     text: `Solicitud de ${requesterName(request)} por ${formatMoney(request.total_amount)} aprobada por jefatura.`,
   });
@@ -121,11 +127,14 @@ function notifyFinanceApproved({ request, user }) {
   return safeSend({
     to: user.email,
     subject: "Tu solicitud fue aprobada por Finanzas",
+    senderName: MAIL_SENDERS.finance,
+    heading: "Solicitud aprobada",
+    cta: { href: detailUrl(request), label: "Ver solicitud" },
     html: `
-      <h3>Hola ${fullName(user)},</h3>
-      <p>Tu solicitud fue <strong>aprobada por Finanzas</strong>.</p>
+      <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
+      <p style="margin:0 0 16px 0;">Tu solicitud fue <strong>aprobada por Finanzas</strong>.</p>
       ${summary(request)}
-      ${request.finance_notes ? `<p><strong>Comentario de Finanzas:</strong> ${request.finance_notes}</p>` : ""}
+      ${request.finance_notes ? `<p style="margin:16px 0 0 0;"><strong>Comentario de Finanzas:</strong> ${escapeHtml(request.finance_notes)}</p>` : ""}
     `,
     text: `Tu solicitud por ${formatMoney(request.total_amount)} fue aprobada por Finanzas.`,
   });
@@ -139,12 +148,15 @@ function notifyRejected({ request, user, stage }) {
   return safeSend({
     to: user.email,
     subject: "Tu solicitud fue rechazada",
+    senderName: MAIL_SENDERS.finance,
+    heading: "Solicitud rechazada",
+    cta: { href: detailUrl(request), label: "Ver solicitud" },
     html: `
-      <h3>Hola ${fullName(user)},</h3>
-      <p>Tu solicitud fue <strong>rechazada</strong> en la etapa de ${expenseStageLabel(stage)}.</p>
+      <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
+      <p style="margin:0 0 16px 0;">Tu solicitud fue <strong>rechazada</strong> en la etapa de ${expenseStageLabel(stage)}.</p>
       ${summary(request)}
-      ${notes ? `<p><strong>Motivo:</strong> ${notes}</p>` : ""}
-      <p>Puedes corregirla y volver a enviarla desde la intranet.</p>
+      ${notes ? `<p style="margin:16px 0 0 0;"><strong>Motivo:</strong> ${escapeHtml(notes)}</p>` : ""}
+      <p style="margin:16px 0 0 0;">Puedes corregirla y volver a enviarla desde la intranet.</p>
     `,
     text: `Tu solicitud por ${formatMoney(request.total_amount)} fue rechazada en ${expenseStageLabel(stage)}.`,
   });
@@ -161,11 +173,14 @@ function notifySettled({ request, user }) {
   return safeSend({
     to: user.email,
     subject: "Tu rendición fue liquidada",
+    senderName: MAIL_SENDERS.finance,
+    heading: "Rendición liquidada",
+    cta: { href: detailUrl(request), label: "Ver rendición" },
     html: `
-      <h3>Hola ${fullName(user)},</h3>
-      <p>Tu rendición <strong>#${request.id}</strong> quedó <strong>liquidada</strong>. ${detalle}</p>
+      <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
+      <p style="margin:0 0 16px 0;">Tu rendición <strong>#${request.id}</strong> quedó <strong>liquidada</strong>. ${detalle}</p>
       ${summary(request)}
-      ${request.settlement_notes ? `<p><strong>Comentario de Finanzas:</strong> ${request.settlement_notes}</p>` : ""}
+      ${request.settlement_notes ? `<p style="margin:16px 0 0 0;"><strong>Comentario de Finanzas:</strong> ${escapeHtml(request.settlement_notes)}</p>` : ""}
     `,
     text: `Tu rendición #${request.id} fue liquidada. ${detalle}`,
   });

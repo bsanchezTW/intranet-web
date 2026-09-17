@@ -66,6 +66,20 @@ function toNationalDigits(phone, cfg = phoneConfig()) {
   return digits;
 }
 
+/**
+ * Dígitos nacionales de un teléfono fijo, o null. Sólo el teléfono de empresa
+ * admite fijos: el personal y el del registro siguen siendo celulares.
+ */
+function toLandlineDigits(phone, cfg = phoneConfig()) {
+  if (!cfg.landline) return null;
+  const pattern = new RegExp(cfg.landline.pattern);
+  let digits = digitsOnly(phone);
+  if (!pattern.test(digits) && digits.startsWith(cfg.callingCode)) {
+    digits = digits.slice(cfg.callingCode.length);
+  }
+  return pattern.test(digits) ? digits : null;
+}
+
 /** Forma de almacenamiento: código de país + dígitos nacionales, sin separadores. */
 function toStoragePhone(phone, cfg = phoneConfig()) {
   const national = toNationalDigits(phone, cfg);
@@ -78,9 +92,12 @@ function formatPhoneForDisplay(phone, cfg = phoneConfig()) {
   if (!trimmed) return null;
 
   const national = toNationalDigits(trimmed, cfg);
-  if (!national) return trimmed;
+  if (national) return `+${cfg.callingCode} ${groupDigits(national, cfg.groups)}`;
 
-  return `+${cfg.callingCode} ${groupDigits(national, cfg.groups)}`;
+  const landline = toLandlineDigits(trimmed, cfg);
+  if (landline) return `+${cfg.callingCode} ${groupDigits(landline, cfg.landline.groups)}`;
+
+  return trimmed;
 }
 
 function isValidMobilePhone(phone, cfg = phoneConfig()) {
@@ -123,10 +140,45 @@ function validateMobilePhone(phone, { required = false } = {}, cfg = phoneConfig
   };
 }
 
+/**
+ * Teléfono de empresa: celular o fijo. Mismo contrato que validateMobilePhone.
+ * @returns {{ valid: boolean, value: string|null, storageValue: string|null, error: string|null }}
+ */
+function validateWorkPhone(phone, cfg = phoneConfig()) {
+  const value = String(phone || "").trim();
+  if (!value) return { valid: true, value: null, storageValue: null, error: null };
+
+  const national = toNationalDigits(value, cfg) || toLandlineDigits(value, cfg);
+  if (!national) {
+    return { valid: false, value: null, storageValue: null, error: mobileErrorMessage(cfg) };
+  }
+  return {
+    valid: true,
+    value: formatPhoneForDisplay(value, cfg),
+    storageValue: `${cfg.callingCode}${national}`,
+    error: null,
+  };
+}
+
 function toTelHref(phone, cfg = phoneConfig()) {
-  const national = toNationalDigits(phone, cfg);
+  const national = toNationalDigits(phone, cfg) || toLandlineDigits(phone, cfg);
   if (!national) return null;
   return `tel:+${cfg.callingCode}${national}`;
+}
+
+/**
+ * Teléfono personal enmascarado para listados: sólo los últimos 4 dígitos
+ * ("+56 * **** 1435"). El resto de los dígitos no sale del servidor.
+ */
+function maskPhone(phone, cfg = phoneConfig()) {
+  const display = formatPhoneForDisplay(phone, cfg);
+  if (!display) return null;
+  const prefix = `+${cfg.callingCode} `;
+  const hasPrefix = display.startsWith(prefix);
+  const national = hasPrefix ? display.slice(prefix.length) : display;
+  let toHide = digitsOnly(national).length - 4;
+  const masked = national.replace(/\d/g, (d) => (toHide-- > 0 ? "*" : d));
+  return hasPrefix ? prefix + masked : masked;
 }
 
 /** Datos que las vistas inyectan al script de cliente (public/js/phone.js). */
@@ -137,6 +189,7 @@ function phoneClientConfig(cfg = phoneConfig()) {
     nationalDigits: cfg.nationalDigits,
     mobileLeadingDigit: cfg.mobileLeadingDigit,
     groups: cfg.groups,
+    landline: cfg.landline || null,
     example: cfg.example,
     maxLength: localMaxLength(cfg),
     errorMessage: mobileErrorMessage(cfg),
@@ -150,10 +203,13 @@ module.exports = {
   mobileErrorMessage,
   mobileRequiredMessage,
   toNationalDigits,
+  toLandlineDigits,
   toStoragePhone,
   formatPhoneForDisplay,
   isValidMobilePhone,
   validateMobilePhone,
+  validateWorkPhone,
   toTelHref,
+  maskPhone,
   phoneClientConfig,
 };

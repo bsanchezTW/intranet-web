@@ -42,13 +42,29 @@ function isAllowedAttachment(mimeType = "", filename = "") {
   return DOCUMENT_EXTENSIONS.includes(path.extname(String(filename)).toLowerCase());
 }
 
+function withAttachmentExtension(baseName, originalName = "") {
+  const ext = path.extname(String(originalName)).toLowerCase();
+  return `${baseName}${/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ""}`;
+}
+
 /**
  * Nombre del adjunto en el bucket: <N° de ticket>_<n>.<ext>. El nombre
  * original se conserva aparte, para mostrarlo.
  */
 function attachmentFileName(ticketId, index, originalName = "") {
-  const ext = path.extname(String(originalName)).toLowerCase();
-  return `${ticketId}_${index}${/^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ""}`;
+  return withAttachmentExtension(`${ticketId}_${index}`, originalName);
+}
+
+/**
+ * Adjunto de una respuesta: <N° de ticket>_<id de respuesta>_<n>.<ext>.
+ * El id de la respuesta es el correlativo del hilo (1, 2, 3…), no un identity
+ * global de ticket_replies.
+ */
+function replyAttachmentFileName(ticketId, replyOrdinal, fileIndex, originalName = "") {
+  return withAttachmentExtension(
+    `${ticketId}_${replyOrdinal}_${fileIndex}`,
+    originalName,
+  );
 }
 
 /**
@@ -112,6 +128,7 @@ module.exports = {
   attachmentKind,
   isAllowedAttachment,
   attachmentFileName,
+  replyAttachmentFileName,
   validateAttachmentFiles,
   validateTicketInput,
 };

@@ -315,6 +315,29 @@ describe("supabaseStorageService", () => {
     );
   });
 
+  it("trata Object not found con HTTP 400 como 404", async () => {
+    const { service } = createHarness({}, {}, {
+      fetchImpl: async () => ({
+        ok: false,
+        status: 400,
+        statusText: "Bad Request",
+        body: null,
+        async text() {
+          return JSON.stringify({
+            statusCode: "404",
+            error: "not_found",
+            message: "Object not found",
+          });
+        },
+      }),
+    });
+    await assert.rejects(
+      service.downloadStream("apps_icons/icono.jpg"),
+      (error) =>
+        error instanceof StorageNotFoundError && error.statusCode === 404,
+    );
+  });
+
   it("mapea stat sin descargar bytes", async () => {
     const { service, calls } = createHarness();
     const stat = await service.statFile("docs/readme.txt");

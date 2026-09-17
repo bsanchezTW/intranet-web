@@ -45,12 +45,19 @@ function escapeHtml(text) {
  * que también se vea en el correo (donde data: URI no es fiable y /content
  * devolvería 401).
  */
-function buildImageConverter(folder) {
+function buildImageConverter(folder, imageFileName) {
+  let n = 0;
   return mammoth.images.imgElement(async (image) => {
     try {
+      n += 1;
       const extension = EXTENSION_BY_MIME[image.contentType] || ".png";
       const buffer = Buffer.from(await image.read("base64"), "base64");
-      const saved = await fileStorage.saveFile(buffer, folder, `word-image${extension}`);
+      const fileName = imageFileName
+        ? imageFileName(n, extension)
+        : `word-image-${n}${extension}`;
+      const saved = await fileStorage.saveFileAs(buffer, folder, fileName, {
+        contentType: image.contentType,
+      });
       const publicUrl = signedMedia.publicUrl(saved.public_id);
       return { src: publicUrl || saved.secure_url, alt: image.altText || "" };
     } catch (err) {
@@ -60,10 +67,10 @@ function buildImageConverter(folder) {
   });
 }
 
-async function renderDocx(buffer, folder) {
+async function renderDocx(buffer, folder, imageFileName) {
   const result = await mammoth.convertToHtml(
     { buffer },
-    { styleMap: STYLE_MAP, convertImage: buildImageConverter(folder) },
+    { styleMap: STYLE_MAP, convertImage: buildImageConverter(folder, imageFileName) },
   );
 
   result.messages
@@ -90,12 +97,17 @@ async function renderLegacyDoc(buffer) {
  * Convierte el documento a HTML saneado.
  * @returns {Promise<{html: string, excerpt: string, text: string}>}
  */
-async function render(buffer, { name, folder = "noticias_adjuntos/word_media" } = {}) {
+async function render(
+  buffer,
+  { name, folder = "noticias_adjuntos/word_media", imageFileName } = {},
+) {
   const isDocx = String(name || "").toLowerCase().endsWith(".docx");
 
   let rawHtml = "";
   try {
-    rawHtml = isDocx ? await renderDocx(buffer, folder) : await renderLegacyDoc(buffer);
+    rawHtml = isDocx
+      ? await renderDocx(buffer, folder, imageFileName)
+      : await renderLegacyDoc(buffer);
   } catch (err) {
     console.warn(`[Noticias] No se pudo convertir "${name}":`, err.message || err);
     // Último recurso para un .docx corrupto o protegido: al menos el texto.

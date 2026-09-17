@@ -54,9 +54,9 @@ function getSecret() {
 
 /**
  * Solo se exponen imágenes. Se acepta también una ruta SIN extensión porque
- * los adjuntos heredados de Cloudinary se guardaron como identificadores sin
- * sufijo; en ese caso quien sirve el archivo debe confirmar que el
- * Content-Type real es image/* antes de entregarlo.
+ * algunos adjuntos heredados se guardaron como identificadores sin sufijo; en
+ * ese caso quien sirve el archivo debe confirmar que el Content-Type real es
+ * image/* antes de entregarlo.
  */
 function isPubliclyServable(relativePathOrName) {
   const ext = path.extname(String(relativePathOrName || "")).toLowerCase();

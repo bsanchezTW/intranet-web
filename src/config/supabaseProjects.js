@@ -239,6 +239,10 @@ function applyCountryPoolerUser(env = process.env) {
   return env.DB_USER || extractDatabaseRole(env);
 }
 
+function countryStorageBuckets() {
+  return Object.values(COUNTRY_BINDINGS).map((binding) => binding.bucket);
+}
+
 function searchPathStatement(countryValue) {
   const { schema } = getCountryDbBinding(countryValue);
   return `SET search_path TO ${schema}`;
@@ -268,6 +272,7 @@ module.exports = {
   assertCountryDatabaseRole,
   assertCountryStorageBucket,
   defaultStorageBucketForCountry,
+  countryStorageBuckets,
   searchPathStatement,
   postgresStartupOptions,
 };
