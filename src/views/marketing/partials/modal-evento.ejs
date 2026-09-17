@@ -1,0 +1,145 @@
+<%
+/* Modal de evento de Galería: crea (lista) o edita (detalle). Los estilos
+   viven en /css/galeria.css y la lógica en /js/galeria.js.
+   Parámetros: modo ('crear' | 'editar'), evento (sólo editar), imagenes (sólo editar). */
+const esEditar = modo === 'editar';
+const ev = esEditar ? evento : { name: '', description: '', image: '', slug: '' };
+const fotosPortada = esEditar
+  ? (imagenes || []).filter((item) => item.resource_type === 'image')
+  : [];
+%>
+<link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+
+<div id="modalEvento" class="modal-overlay galeria-modal" role="dialog" aria-modal="true"
+     aria-labelledby="modalEventoTitulo" aria-hidden="true"
+     data-modo="<%= modo %>" data-slug="<%= ev.slug %>">
+  <div class="modal-content modal-content--md">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+
+    <form id="formEvento" novalidate
+          action="<%= esEditar ? `/marketing/eventos/${encodeURIComponent(ev.slug)}/editar` : '/marketing/eventos/nuevo' %>"
+          method="POST">
+      <div class="modal-head">
+        <p class="modal-head__eyebrow">Galería</p>
+        <h2 id="modalEventoTitulo" class="modal-title"><%= esEditar ? 'Editar evento' : 'Nuevo evento' %></h2>
+        <p class="modal-subtitle">
+          <%= esEditar
+            ? 'Actualiza el título, la descripción o la portada del evento.'
+            : 'Crea el evento y luego agrega sus fotos y videos desde la galería.' %>
+        </p>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-alert" id="eventoAlerta" role="alert" hidden></p>
+
+        <div class="galeria-modal__campos">
+          <div class="campo-form">
+            <label for="eventoNombre">Título <span class="required-mark">*</span></label>
+            <input type="text" id="eventoNombre" name="name" maxlength="200" required
+                   value="<%= ev.name %>" placeholder="Ej: Aniversario 2026" autocomplete="off">
+            <span class="campo-form__error" role="alert"></span>
+            <span class="modal-counter" data-contador-de="eventoNombre"></span>
+          </div>
+
+          <div class="campo-form">
+            <label for="eventoDescripcion">Descripción <span class="campo-form__opcional">(opcional)</span></label>
+            <textarea id="eventoDescripcion" name="description" rows="3" maxlength="500"
+                      placeholder="Cuenta en una o dos frases de qué se trató el evento"><%= ev.description || '' %></textarea>
+            <span class="modal-counter" data-contador-de="eventoDescripcion"></span>
+          </div>
+        </div>
+
+        <section class="modal-section galeria-modal__portada">
+          <h3 class="modal-section__title"><%- include('../../partials/icon', { name: 'image' }) %> Portada</h3>
+          <p class="modal-section__hint">Se muestra en la tarjeta del evento. Recorta a 16:9, máx. 10 MB.</p>
+
+          <div class="galeria-portada" id="eventoPortada" data-actual="<%= ev.image || '' %>">
+            <div class="galeria-portada__vacia" id="eventoPortadaVacia" <%= ev.image ? 'hidden' : '' %>>
+              <%- include('../../partials/icon', { name: 'camera' }) %>
+              <span>Sin portada</span>
+            </div>
+            <img id="eventoPortadaImg" alt="Vista previa de la portada"
+                 <% if (ev.image) { %>src="<%= ev.image %>"<% } else { %>hidden<% } %>>
+            <button type="button" class="galeria-portada__quitar" id="eventoPortadaQuitar"
+                    aria-label="Quitar la portada elegida" hidden>&times;</button>
+          </div>
+
+          <div class="galeria-portada__acciones">
+            <button type="button" class="btn-secundario" id="eventoPortadaSubir">
+              Subir imagen
+            </button>
+            <% if (esEditar && fotosPortada.length) { %>
+            <button type="button" class="btn-secundario" id="eventoPortadaElegir" aria-expanded="false"
+                    aria-controls="eventoPortadaGaleria">
+              <%- include('../../partials/icon', { name: 'layers' }) %> Elegir de la galería
+            </button>
+            <% } %>
+          </div>
+          <input type="file" id="eventoPortadaArchivo" accept="image/*" hidden>
+
+          <% if (esEditar && fotosPortada.length) { %>
+          <div class="galeria-portada__galeria" id="eventoPortadaGaleria" role="listbox"
+               aria-label="Fotos del evento" hidden>
+            <% fotosPortada.forEach(function (item) { %>
+              <button type="button" class="galeria-portada__opcion<%= item.url === ev.image ? ' is-actual' : '' %>"
+                      role="option" aria-selected="<%= item.url === ev.image ? 'true' : 'false' %>"
+                      data-url="<%= item.url %>">
+                <img data-src="<%= item.url %>" alt="" loading="lazy">
+              </button>
+            <% }) %>
+          </div>
+          <% } %>
+        </section>
+
+        <% if (esEditar) { %>
+        <section class="modal-section galeria-modal__peligro">
+          <h3 class="modal-section__title galeria-modal__peligro-titulo">
+            <%- include('../../partials/icon', { name: 'alert-triangle' }) %> Zona de peligro
+          </h3>
+          <div class="galeria-peligro">
+            <div class="galeria-peligro__texto">
+              <strong>Eliminar este evento</strong>
+              <span>Se borran todas sus fotos y videos. No se puede deshacer.</span>
+            </div>
+            <button type="button" class="btn-peligro-suave" id="eventoEliminar">
+              <%- include('../../partials/icon', { name: 'trash' }) %> Eliminar evento
+            </button>
+          </div>
+        </section>
+        <% } %>
+      </div>
+
+      <div class="modal-foot">
+        <p class="modal-foot__start" id="eventoEstado" aria-live="polite"></p>
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario" id="eventoGuardar">
+          <%= esEditar ? 'Guardar cambios' : 'Crear evento' %>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="foto-crop-overlay" id="eventoCropOverlay" role="dialog" aria-modal="true" aria-labelledby="eventoCropTitulo" hidden>
+  <div class="foto-crop-modal">
+    <div class="foto-crop-header">
+      <h3 id="eventoCropTitulo">Recortar portada</h3>
+      <button type="button" class="foto-crop-close" id="eventoCropCerrar" aria-label="Cerrar">&times;</button>
+    </div>
+    <p class="foto-crop-hint">Arrastra y ajusta el encuadre. La portada se mostrará en proporción 16:9.</p>
+    <div class="foto-crop-body">
+      <div class="foto-crop-stage">
+        <img id="eventoCropImagen" src="" alt="Vista previa para recortar">
+      </div>
+    </div>
+    <p id="eventoCropError" class="foto-crop-error" role="alert"></p>
+    <div class="foto-crop-footer">
+      <button type="button" class="btn-crop-cancel" id="eventoCropCancelar">Cancelar</button>
+      <button type="button" class="btn-crop-save" id="eventoCropAplicar">Aplicar recorte</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="/js/profile-photo-cropper.js?v=20260916m"></script>

@@ -1,561 +1,154 @@
-<div class="contenedor">
-  <div style="margin-bottom: 20px;">
-    <a href="/marketing/eventos" class="link-volver">← Volver a Eventos</a>
-  </div>
-
-  <div class="page-header page-header--toolbar">
-    <div class="page-header__text">
-      <h2 class="page-title">Evento: <%= evento.name %></h2>
-      <% if (evento.description) { %>
-        <p class="page-description" style="font-style: italic;"><%= evento.description %></p>
+<%
+/* Galería: detalle de un evento. Estilos en /css/galeria.css y lógica en
+   /js/galeria-evento.js (slider, mosaico, visor y subida). */
+const items = (imagenes || []).map((item) => ({
+  url: item.url,
+  public_id: item.public_id,
+  tipo: item.resource_type === 'video' ? 'video' : 'image',
+}));
+const totalFotos = items.filter((i) => i.tipo === 'image').length;
+const totalVideos = items.length - totalFotos;
+const fechaEvento = (() => {
+  const fecha = new Date(evento.created_at);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return fecha.toLocaleDateString(countryConfig.locale, {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: countryConfig.timezone,
+  });
+})();
+const fondoHero = evento.image || (items.find((i) => i.tipo === 'image') || {}).url || '';
+const datosGaleria = {
+  slug: evento.slug,
+  portada: evento.image || '',
+  puedeEditar: Boolean(can.eventos_write),
+  items,
+};
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+%>
+<div class="contenedor galeria galeria-evento">
+  <section class="galeria-hero<%= fondoHero ? '' : ' galeria-hero--sin-fotos' %>" id="galeriaHero"
+           aria-roledescription="carrusel" aria-label="Fotos destacadas de <%= evento.name %>">
+    <div class="galeria-hero__viewport" id="galeriaHeroViewport">
+      <% if (fondoHero) { %>
+        <div class="galeria-hero__slide is-active">
+          <img src="<%= fondoHero %>" alt="" decoding="async">
+        </div>
       <% } %>
     </div>
 
-    <% if (can.eventos_write) { %>
-    <div class="page-header-actions">
-      <a href="/marketing/eventos/<%= evento.slug %>/editar" title="Editar título y descripción"
-         style="text-decoration: none; font-size: 0.95rem; font-weight: 600; color: #003a70;">
-        Editar
-      </a>
+    <div class="galeria-hero__velo" aria-hidden="true"></div>
+
+    <a href="/marketing/eventos" class="galeria-hero__volver">
+      <%- include('../partials/icon', { name: 'arrow-left' }) %> Galería
+    </a>
+
+    <div class="galeria-hero__contenido">
+      <p class="galeria-hero__eyebrow">
+        <span>Galería</span>
+        <% if (fechaEvento) { %><span aria-hidden="true">·</span><span><%= fechaEvento %></span><% } %>
+      </p>
+      <div class="galeria-hero__titular">
+        <h1 class="galeria-hero__titulo" id="galeriaTitulo"><%= evento.name %></h1>
+        <% if (can.eventos_write) { %>
+          <button type="button" class="galeria-hero__editar" data-abrir-modal-evento
+                  aria-label="Editar evento" title="Editar evento">
+            <%- include('../partials/icon', { name: 'edit' }) %>
+          </button>
+        <% } %>
+      </div>
+      <% if (evento.description) { %>
+        <p class="galeria-hero__desc"><%= evento.description %></p>
+      <% } %>
+      <div class="galeria-hero__chips">
+        <span class="galeria-chip" data-contador="image">
+          <%- include('../partials/icon', { name: 'image' }) %> <span><%= plural(totalFotos, 'foto', 'fotos') %></span>
+        </span>
+        <% if (totalVideos) { %>
+          <span class="galeria-chip" data-contador="video">
+            <%- include('../partials/icon', { name: 'video' }) %> <span><%= plural(totalVideos, 'video', 'videos') %></span>
+          </span>
+        <% } %>
+      </div>
     </div>
-    <% } %>
-  </div>
+
+    <div class="galeria-hero__controles" id="galeriaHeroControles" hidden>
+      <button type="button" class="galeria-hero__nav" data-hero-mover="-1" aria-label="Foto anterior">
+        <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="galeria-hero__dots" id="galeriaHeroDots" role="tablist" aria-label="Elegir foto"></div>
+      <button type="button" class="galeria-hero__nav" data-hero-mover="1" aria-label="Foto siguiente">
+        <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <section class="galeria-seccion" aria-labelledby="galeriaFotosTitulo">
+    <div class="galeria-seccion__head">
+      <h2 class="galeria-seccion__titulo" id="galeriaFotosTitulo">Fotos y videos</h2>
+      <span class="galeria-seccion__meta" id="galeriaTotal"><%= plural(items.length, 'archivo', 'archivos') %></span>
+    </div>
+
+    <div class="galeria-mosaico" id="galeriaMosaico" <%= items.length ? '' : 'hidden' %>>
+      <% items.forEach(function (item, index) { %>
+        <button type="button" class="galeria-tile is-cargando<%= item.tipo === 'video' ? ' galeria-tile--video' : '' %>"
+                data-index="<%= index %>" data-public-id="<%= item.public_id %>"
+                aria-label="<%= item.tipo === 'video' ? 'Ver video' : 'Ver foto' %> <%= index + 1 %> de <%= items.length %>">
+          <% if (item.tipo === 'video') { %>
+            <video data-src="<%= item.url %>#t=0.5" muted playsinline preload="none" tabindex="-1"></video>
+            <span class="galeria-tile__play" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"/></svg>
+            </span>
+          <% } else { %>
+            <img data-src="<%= item.url %>" alt="" decoding="async">
+          <% } %>
+          <span class="galeria-tile__portada"<%= item.url === evento.image ? '' : ' hidden' %>>Portada</span>
+        </button>
+      <% }) %>
+    </div>
+
+    <div class="galeria-vacio galeria-vacio--compacto" id="galeriaVacio" <%= items.length ? 'hidden' : '' %>>
+      <span class="galeria-vacio__icono"><%- include('../partials/icon', { name: 'camera' }) %></span>
+      <h3 class="galeria-vacio__titulo">Todavía no hay fotos</h3>
+      <p class="galeria-vacio__texto">
+        <%= can.eventos_write
+          ? 'Agrega las primeras fotos o videos desde el recuadro de abajo.'
+          : 'Pronto se publicarán las fotos de este evento.' %>
+      </p>
+    </div>
+  </section>
 
   <% if (can.eventos_write) { %>
-    <div class="panel" style="margin-bottom: 30px;">
-      <h3 class="panel-title" style="margin-bottom: 15px;">Añadir contenido multimedia</h3>
-
-      <form
-        id="uploadFotosForm"
-        action="/marketing/eventos/<%= evento.slug %>/fotos"
-        method="POST"
-        enctype="multipart/form-data"
-        class="form-ticket"
-        data-slug="<%= evento.slug %>"
-      >
-        <div class="upload-zone" id="dropZone">
-            <label for="fotosInput" class="custom-file-upload">
-                <span class="upload-icon"><%- include('../partials/icon', { name: 'upload' }) %></span>
-                <span class="upload-text">Haz clic aquí para seleccionar fotos o videos</span>
-                <span class="upload-hint">Puedes seleccionar hasta 150 archivos a la vez</span>
-            </label>
-            <input
-              type="file"
-              id="fotosInput"
-              name="fotos"
-              multiple
-              accept="image/*,video/*"
-              required
-              style="display: none;"
-            >
-            <div id="fileSelectionInfo" style="margin-top: 15px; font-weight: bold; color: #003a70; display: none;"></div>
-        </div>
-
-        <div id="progressWrapper" style="display: none; margin-top: 20px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.9rem; font-weight: bold; color: #555;">
-                <span id="uploadStatusText">Preparando subida...</span>
-                <span id="uploadPercentage">0%</span>
-            </div>
-            <div class="progress-bar-container">
-                <div id="progressFill" class="progress-bar-fill"></div>
-            </div>
-        </div>
-
-        <button type="submit" id="btnSubirFotos" class="btn btn-primario" style="width: 100%; margin-top: 20px; display: none;">Subir archivos a la nube</button>
-      </form>
-
-      <small style="display:block; margin-top:15px; color:#888; text-align: center;">
-        Imágenes máx 10MB. Videos máx 100MB. (Formatos recomendados: JPG, PNG, MP4).
-      </small>
+  <section class="galeria-seccion galeria-subida" aria-labelledby="galeriaSubidaTitulo">
+    <div class="galeria-seccion__head">
+      <h2 class="galeria-seccion__titulo" id="galeriaSubidaTitulo">Agregar fotos y videos</h2>
     </div>
-  <% } %>
 
-  <h3 class="panel-title">Galería Multimedia</h3>
-
-  <% if (!imagenes || imagenes.length === 0) { %>
-    <p class="no-data">No hay contenido cargado para este evento aún.</p>
-  <% } else { %>
-    
-    <script>
-        const galleryItems = [];
-    </script>
-
-    <div class="galeria-evento-grid">
-      <% imagenes.forEach(function(item, index) { %>
-        
-        <% 
-           // Optimización de miniaturas local
-           let thumbUrl = item.url;
-           let isVideo = (item.resource_type === 'video');
-        %>
-
-        <script>
-            galleryItems.push({
-                url: "<%= item.url %>",
-                type: "<%= item.resource_type %>",
-                public_id: "<%= item.public_id %>"
-            });
-        </script>
-
-        <div class="galeria-item-grid">
-          <div class="media-container" style="position: relative; height: 180px;">
-            <img
-              src="<%= thumbUrl %>"      
-              alt="<%= evento.name %>"
-              class="galeria-thumb-grid"
-              data-index="<%= index %>" 
-              loading="lazy"
-            >
-            <% if (isVideo) { %>
-              <div class="play-icon-overlay">▶</div>
-            <% } %>
-          </div>
-
-          <% if (can.eventos_write) { %>
-            <form action="/marketing/eventos/<%= evento.slug %>/fotos/eliminar" method="POST" onsubmit="return confirm('¿Eliminar este archivo?');" style="margin-top: 8px;">
-              <input type="hidden" name="public_id" value="<%= item.public_id %>">
-              <input type="hidden" name="resource_type" value="<%= item.resource_type %>">
-              <button type="submit" class="btn-borrar-foto" style="width:100%">Eliminar</button>
-            </form>
-          <% } %>
-        </div>
-      <% }); %>
+    <div class="galeria-dropzone" id="galeriaDropzone" tabindex="0" role="button"
+         aria-label="Agregar fotos o videos: arrástralos aquí o pulsa para elegirlos">
+      <span class="galeria-dropzone__icono"><%- include('../partials/icon', { name: 'upload-cloud' }) %></span>
+      <strong class="galeria-dropzone__titulo">Arrastra fotos o videos aquí</strong>
+      <span class="galeria-dropzone__texto">o <span class="galeria-dropzone__link">haz clic para elegirlos</span></span>
+      <span class="galeria-dropzone__nota">Imágenes hasta 10 MB · videos hasta 100 MB · máx. 150 archivos por vez</span>
     </div>
+    <input type="file" id="galeriaArchivos" multiple accept="image/*,video/*" hidden>
+
+    <div class="galeria-cola" id="galeriaCola" hidden>
+      <div class="galeria-cola__head">
+        <span class="galeria-cola__estado" id="galeriaColaEstado" aria-live="polite"></span>
+        <span class="galeria-cola__porcentaje" id="galeriaColaPorcentaje">0%</span>
+      </div>
+      <div class="galeria-progreso" aria-hidden="true"><span id="galeriaProgreso"></span></div>
+      <ul class="galeria-cola__lista" id="galeriaColaLista"></ul>
+      <div class="galeria-cola__acciones">
+        <button type="button" class="galeria-btn galeria-btn--secundario" id="galeriaColaLimpiar">Quitar todo</button>
+        <button type="button" class="galeria-btn galeria-btn--primario" id="galeriaColaSubir">Subir archivos</button>
+      </div>
+    </div>
+  </section>
   <% } %>
 </div>
 
-<div id="modalImagen" class="modal-imagen">
-  <div class="modal-imagen-contenido">
-    <span class="modal-cerrar">&times;</span>
-    
-    <button class="modal-nav prev-btn" id="btnPrev">❮</button>
-    
-    <div id="modalMediaContainer" style="display: flex; justify-content: center; width: 100%;"></div>
+<script type="application/json" id="galeriaDatos"><%- JSON.stringify(datosGaleria).replace(/</g, '\\u003c') %></script>
 
-    <button class="modal-nav next-btn" id="btnNext">❯</button>
-
-    <% if (can.eventos_write) { %>
-      <form id="formPortada" action="/marketing/eventos/<%= evento.slug %>/portada" method="POST" class="form-portada" style="display:none;">
-        <input type="hidden" name="url_imagen" id="inputPortadaUrl" value="">
-        <button type="submit" class="btn-portada">Seleccionar como portada</button>
-      </form>
-    <% } %>
-
-  </div>
-</div>
-
-<style>
-  /* ====== NUEVOS ESTILOS DEL FRONTEND DE SUBIDA ====== */
-
-  
-  .panel { background: #fff; border: 1px solid #e0e6ed; border-radius: 8px; padding: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 25px; }
-  .panel-title { color: #003a70; font-size: 1.3rem; margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;}
-  
-  .btn-primario { background: #003a70; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 1rem; }
-  .btn-primario:hover { background: #002a52; }
-  
-  .no-data { text-align: center; padding: 40px; color: #718096; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e0; font-size: 1.1rem; }
-  
-  .upload-zone {
-    border: 2px dashed #0056b3;
-    border-radius: 12px;
-    padding: 40px 20px;
-    text-align: center;
-    background-color: #f8fbff;
-    transition: background-color 0.3s, border-color 0.3s;
-  }
-  .upload-zone:hover {
-    background-color: #eef5ff;
-    border-color: #003a70;
-  }
-  .custom-file-upload {
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-  }
-  .upload-icon {
-    font-size: 3.5rem;
-    line-height: 1;
-  }
-  .upload-text {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #003a70;
-  }
-  .upload-hint {
-    font-size: 0.9rem;
-    color: #6c757d;
-  }
-  .progress-bar-container {
-    width: 100%;
-    height: 12px;
-    background-color: #e9ecef;
-    border-radius: 10px;
-    overflow: hidden;
-  }
-  .progress-bar-fill {
-    height: 100%;
-    background-color: #28a745;
-    width: 0%;
-    transition: width 0.3s ease;
-  }
-
-  /* ====== GRID RESPONSIVE Y RESTO DE ESTILOS ====== */
-  .galeria-evento-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
-  }
-
-  .galeria-item-grid {
-    background: #fff;
-    padding: 8px;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    border: 1px solid #eee;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .media-container {
-    cursor: pointer;
-    overflow: hidden;
-    border-radius: 4px;
-    background-color: #000;
-  }
-
-  .galeria-thumb-grid {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.2s, opacity 0.2s;
-  }
-
-  .media-container:hover .galeria-thumb-grid {
-    transform: scale(1.02);
-    opacity: 0.8;
-  }
-
-  .play-icon-overlay {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 2.5rem;
-    text-shadow: 0 0 10px rgba(0,0,0,0.7);
-    pointer-events: none;
-  }
-
-  /* MODAL */
-  .modal-imagen {
-    position: fixed;
-    z-index: 2000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.9);
-    display: none;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .modal-imagen-contenido {
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    max-width: 100%;
-  }
-
-  .modal-cerrar {
-    position: absolute;
-    top: 20px;
-    right: 30px;
-    color: #fff;
-    font-size: 40px;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 2020;
-  }
-
-  .modal-nav {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    border: none;
-    color: white;
-    font-size: 3rem;
-    cursor: pointer;
-    padding: 20px;
-    user-select: none;
-    z-index: 2010;
-    transition: background 0.3s, transform 0.2s;
-    outline: none;
-  }
-  
-  .modal-nav:hover {
-    background: rgba(255,255,255,0.1);
-    transform: translateY(-50%) scale(1.1);
-  }
-
-  .prev-btn { left: 10px; }
-  .next-btn { right: 10px; }
-
-  /* BOTÓN PORTADA */
-  .form-portada {
-    position: absolute;
-    bottom: 30px;
-    z-index: 2010;
-  }
-  .btn-portada {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  }
-  .btn-portada:hover { background-color: #218838; }
-
-  .btn-borrar-foto {
-    background: #dc3545;
-    color: white; 
-    border: none; 
-    padding: 5px; 
-    border-radius: 4px; 
-    cursor: pointer;
-  }
-  
-  #modalMediaContainer video, #modalMediaContainer img {
-    max-width: 90%;
-    max-height: 85vh;
-    border-radius: 4px;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-  }
-</style>
-
-<script>
-  (function () {
-    // ====== LÓGICA DE NAVEGACIÓN (CARRUSEL) ======
-    let currentIndex = 0;
-    const modal = document.getElementById('modalImagen');
-    const container = document.getElementById('modalMediaContainer');
-    const inputUrl = document.getElementById('inputPortadaUrl');
-    const formPortada = document.getElementById('formPortada');
-    const thumbs = document.querySelectorAll('.galeria-thumb-grid');
-    const btnPrev = document.getElementById('btnPrev');
-    const btnNext = document.getElementById('btnNext');
-
-    function updateModalContent() {
-        const item = galleryItems[currentIndex];
-        
-        if (!item) return;
-
-        container.innerHTML = ''; 
-
-        if (item.type === 'video') {
-            const video = document.createElement('video');
-            video.src = item.url;
-            video.controls = true;
-            video.autoplay = true;
-            container.appendChild(video);
-      
-            if (formPortada) formPortada.style.display = 'none';
-        } else {
-            const img = document.createElement('img');
-            img.src = item.url;
-            container.appendChild(img);
-            if (inputUrl) inputUrl.value = item.url;
-            if (formPortada) formPortada.style.display = 'block';
-        }
-    }
-
-    function prevImage(e) {
-        if(e) e.stopPropagation();
-        currentIndex = (currentIndex > 0) ? currentIndex - 1 : galleryItems.length - 1;
-        updateModalContent();
-    }
-
-    function nextImage(e) {
-        if(e) e.stopPropagation();
-        currentIndex = (currentIndex < galleryItems.length - 1) ? currentIndex + 1 : 0;
-        updateModalContent();
-    }
-
-    if (btnPrev) btnPrev.addEventListener('click', prevImage);
-    if (btnNext) btnNext.addEventListener('click', nextImage);
-    
-    document.addEventListener('keydown', (e) => {
-        if (IntranetModal.isOpen(modal)) {
-            if (e.key === 'ArrowLeft') prevImage();
-            if (e.key === 'ArrowRight') nextImage();
-            if (e.key === 'Escape') closeModal();
-        }
-    });
-    
-    thumbs.forEach(thumb => {
-      thumb.addEventListener('click', function () {
-        currentIndex = parseInt(this.getAttribute('data-index'));
-        updateModalContent();
-        IntranetModal.open(modal);
-      });
-    });
-    
-    const cerrar = document.querySelector('.modal-cerrar');
-    function closeModal() {
-        IntranetModal.close(modal);
-        container.innerHTML = '';
-    }
-    if (cerrar) cerrar.addEventListener('click', closeModal);
-    window.addEventListener('click', (e) => {
-        // Sólo cuenta como clic en el fondo si el gesto empezó y terminó ahí.
-        if (!IntranetModal.gestoCompletoSobre(e.target)) return;
-        if (e.target === modal || e.target.classList.contains('modal-imagen-contenido')) closeModal();
-    });
-
-    // ====== LÓGICA DE SUBIDA DIRECTA LOCAL ======
-    const form = document.getElementById('uploadFotosForm');
-    if (!form) return;
-    
-    const input = document.getElementById('fotosInput');
-    const btn = document.getElementById('btnSubirFotos');
-    const fileSelectionInfo = document.getElementById('fileSelectionInfo');
-    
-    // UI Progreso
-    const progressWrapper = document.getElementById('progressWrapper');
-    const statusText = document.getElementById('uploadStatusText');
-    const statusPercentage = document.getElementById('uploadPercentage');
-    const progressFill = document.getElementById('progressFill');
-
-    const MAX_FILES = 150; 
-    const CONCURRENCY = 3;
-
-    input.addEventListener('change', () => {
-      if (input.files && input.files.length > 0) {
-        if (input.files.length > MAX_FILES) {
-            alert(`Has superado el límite de ${MAX_FILES} archivos a la vez.`);
-            input.value = '';
-            fileSelectionInfo.style.display = 'none';
-        
-            btn.style.display = 'none';
-            return;
-        }
-        fileSelectionInfo.textContent = `Has seleccionado ${input.files.length} archivo(s) listo(s) para subir.`;
-        fileSelectionInfo.style.display = 'block';
-        btn.style.display = 'block';
-      } else {
-        fileSelectionInfo.style.display = 'none';
-        btn.style.display = 'none';
-      }
-    });
-
-    function updateProgress(done, total, text = '') {
-      progressWrapper.style.display = 'block';
-      const percentage = Math.round((done / total) * 100) || 0;
-      
-      progressFill.style.width = percentage + '%';
-      statusPercentage.textContent = percentage + '%';
-      if (text) {
-        statusText.textContent = text;
-      } else {
-        statusText.textContent = `Subiendo archivos... (${done} de ${total})`;
-      }
-    }
-
-    function disableUI(disabled) {
-      if (btn) btn.disabled = disabled;
-      if (input) input.disabled = disabled;
-    }
-
-    async function uploadOneToLocal(file, slug) {
-      const fd = new FormData();
-      fd.append('archivo', file, file.name);
-      const res = await fetch(`/marketing/eventos/${encodeURIComponent(slug)}/fotos/upload`, {
-        method: 'POST',
-        body: fd
-      });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`Error subiendo ${file.name}. ${txt}`);
-      }
-      return res.json();
-    }
-
-    async function mapWithConcurrency(items, limit, mapper) {
-      const results = new Array(items.length);
-      let idx = 0;
-      async function worker() {
-        while (true) {
-          const current = idx++;
-          if (current >= items.length) return;
-          results[current] = await mapper(items[current], current);
-        }
-      }
-      const workers = [];
-      for (let i = 0; i < Math.min(limit, items.length); i++) workers.push(worker());
-      await Promise.all(workers);
-      return results;
-    }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const slug = form.getAttribute('data-slug');
-      const files = input && input.files ? Array.from(input.files) : [];
-
-      if (!files.length) { alert('Selecciona archivos.'); return; }
-
-      // Validar pesos
-      for (let f of files) {
-          const isVideo = f.type.startsWith('video/');
-          const limit = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
-          if (f.size > limit) {
-              alert(`El archivo "${f.name}" es muy pesado. (Máx: 10MB Img / 100MB Video)`);
-              return;
-          }
-      }
-
-      try {
-        disableUI(true);
-        btn.textContent = "Procesando...";
-        updateProgress(0, files.length, 'Generando conexión segura con el servidor...');
-        
-        let done = 0;
-        updateProgress(done, files.length, 'Iniciando subida...');
-
-        const uploaded = await mapWithConcurrency(files, CONCURRENCY, async (file) => {
-          const out = await uploadOneToLocal(file, slug);
-          done += 1;
-          updateProgress(done, files.length);
-          return out;
-        });
-
-        updateProgress(files.length, files.length, 'Finalizando guardado en base de datos...');
-        const res = await fetch(`/marketing/eventos/${encodeURIComponent(slug)}/fotos`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: uploaded }) 
-        });
-        if (!res.ok) throw new Error('Error guardando en base de datos.');
-
-        updateProgress(files.length, files.length, '¡Subida exitosa! Recargando...');
-        window.location.reload();
-      } catch (err) {
-        console.error(err);
-        alert(err.message || 'Error en la subida.');
-        disableUI(false);
-        btn.textContent = "Subir archivos";
-        progressWrapper.style.display = 'none';
-      }
-    });
-  })();
-</script>
+<% if (can.eventos_write) { %>
+  <%- include('partials/modal-evento', { modo: 'editar', evento, imagenes }) %>
+<% } %>

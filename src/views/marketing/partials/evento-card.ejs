@@ -1,0 +1,31 @@
+<%
+/* Tarjeta de evento de la lista de Galería. Parámetros: ev, fecha. */
+%>
+<a class="galeria-card" href="/marketing/eventos/<%= encodeURIComponent(ev.slug) %>"
+   aria-label="Ver galería de <%= ev.name %>">
+  <div class="galeria-card__media<%= ev.image ? ' is-cargando' : '' %>">
+    <span class="galeria-card__placeholder" aria-hidden="true">
+      <%- include('../../partials/icon', { name: 'image' }) %>
+    </span>
+    <% if (ev.image) { %>
+      <img src="<%= ev.image %>" alt="" loading="lazy" decoding="async" data-galeria-revelar>
+    <% } %>
+    <div class="galeria-card__velo" aria-hidden="true"></div>
+    <div class="galeria-card__encabezado">
+      <% if (fecha) { %>
+        <span class="galeria-card__fecha">
+          <%- include('../../partials/icon', { name: 'calendar' }) %> <%= fecha %>
+        </span>
+      <% } %>
+      <h3 class="galeria-card__titulo"><%= ev.name %></h3>
+    </div>
+  </div>
+  <div class="galeria-card__cuerpo">
+    <p class="galeria-card__desc<%= ev.description ? '' : ' is-vacia' %>">
+      <%= ev.description || 'Sin descripción' %>
+    </p>
+    <span class="galeria-card__cta">
+      Ver galería <%- include('../../partials/icon', { name: 'chevron-right' }) %>
+    </span>
+  </div>
+</a>

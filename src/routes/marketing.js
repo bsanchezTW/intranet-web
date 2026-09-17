@@ -13,6 +13,23 @@ const { EVENTO_VIEW_COLUMNS } = require('../utils/schemaMappers');
 const router = express.Router();
 const WRITE_ROLES = ['admin'];
 
+const ASSET_VERSION = '20260917a';
+const ASSETS_LISTA = {
+  extraCss: [`/css/galeria.css?v=${ASSET_VERSION}`],
+  extraJs: [`/js/galeria.js?v=${ASSET_VERSION}`],
+};
+const ASSETS_DETALLE = {
+  extraCss: ASSETS_LISTA.extraCss,
+  extraJs: [...ASSETS_LISTA.extraJs, `/js/galeria-evento.js?v=${ASSET_VERSION}`],
+};
+
+// Los modales de Galería envían con fetch y esperan JSON; un formulario
+// clásico (sin JS) sigue recibiendo redirects.
+function wantsJsonResponse(req) {
+  const accept = req.headers.accept || '';
+  return req.xhr || accept.includes('application/json');
+}
+
 const EVENT_UPLOAD_TEMP_DIR = path.join(os.tmpdir(), 'transworld-intranet-events');
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -74,7 +91,7 @@ router.get('/', (req, res) => res.redirect('/marketing/eventos'));
 router.get('/eventos', async (req, res) => {
   try {
     const { rows } = await db.query(`SELECT ${EVENTO_VIEW_COLUMNS} FROM events ORDER BY created_at DESC`);
-    res.render('marketing/eventos', { titulo: 'Galería de Eventos', eventos: rows });
+    res.render('marketing/eventos', { titulo: 'Galería', eventos: rows, ...ASSETS_LISTA });
   } catch (err) {
     console.error(err);
     res.status(500).send('Error cargando eventos');
@@ -82,37 +99,36 @@ router.get('/eventos', async (req, res) => {
 });
 
 router.get('/eventos/nuevo', requireRole(...WRITE_ROLES), (req, res) => {
-  res.render('marketing/eventos_nuevo', { titulo: 'Crear Nuevo Evento', error: null });
+  res.redirect('/marketing/eventos?modal=nuevo');
 });
 
 router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
   const { name, description } = eventFieldsFromBody(req.body);
+  const responderError = (status, error) => {
+    if (wantsJsonResponse(req)) return res.status(status).json({ error });
+    return res.redirect(`/marketing/eventos?modal=nuevo&error=${encodeURIComponent(error)}`);
+  };
 
   try {
     if (!name) {
-      return res.render('marketing/eventos_nuevo', {
-        titulo: 'Crear Nuevo Evento',
-        error: 'El nombre del evento es obligatorio.',
-      });
+      return responderError(400, 'El nombre del evento es obligatorio.');
     }
 
     const slug = createSlug(name);
     if (!slug) {
-      return res.render('marketing/eventos_nuevo', {
-        titulo: 'Crear Nuevo Evento',
-        error: 'El nombre no genera un identificador válido. Usa letras o números.',
-      });
+      return responderError(400, 'El nombre no genera un identificador válido. Usa letras o números.');
     }
 
     await db.queryRetryIdCollision(
       'INSERT INTO events (name, slug, description) VALUES ($1, $2, $3)',
       [name, slug, description],
     );
-    res.redirect('/marketing/eventos');
+    if (wantsJsonResponse(req)) return res.json({ ok: true, slug });
+    res.redirect(`/marketing/eventos/${encodeURIComponent(slug)}?ok=Evento creado`);
   } catch (err) {
     console.error(err);
-    const errorMsg = err.code === '23505' ? 'Ya existe un evento con ese nombre.' : 'Error al crear.';
-    res.render('marketing/eventos_nuevo', { titulo: 'Crear Nuevo Evento', error: errorMsg });
+    if (err.code === '23505') return responderError(409, 'Ya existe un evento con ese nombre.');
+    return responderError(500, 'No se pudo crear el evento.');
   }
 });
 
@@ -132,7 +148,8 @@ router.get('/eventos/:slug', async (req, res) => {
     res.render('marketing/evento_detalle', {
       titulo: rows[0].name,
       evento: rows[0],
-      imagenes: todos
+      imagenes: todos,
+      ...ASSETS_DETALLE,
     });
   } catch (err) {
     console.error(err);
@@ -242,9 +259,11 @@ router.post('/eventos/:slug/portada', requireRole(...WRITE_ROLES), async (req, r
   const { url_imagen } = req.body;
   try {
     await db.query('UPDATE events SET image = $1 WHERE slug = $2', [url_imagen, slug]);
+    if (wantsJsonResponse(req)) return res.json({ ok: true, image: url_imagen });
     res.redirect(`/marketing/eventos/${slug}`);
   } catch (err) {
     console.error(err);
+    if (wantsJsonResponse(req)) return res.status(500).json({ error: 'No se pudo definir la portada.' });
     res.status(500).send('Error al definir portada');
   }
 });
@@ -261,9 +280,11 @@ router.post('/eventos/:slug/fotos/eliminar', requireRole(...WRITE_ROLES), async 
     if (rows.length > 0 && rows[0].image && rows[0].image.includes(public_id)) {
         await db.query('UPDATE events SET image = NULL WHERE slug = $1', [slug]);
     }
+    if (wantsJsonResponse(req)) return res.json({ ok: true });
     res.redirect(`/marketing/eventos/${slug}`);
   } catch (err) {
     console.error(err);
+    if (wantsJsonResponse(req)) return res.status(500).json({ error: 'No se pudo eliminar el archivo.' });
     res.status(500).send('Error eliminando archivo');
   }
 });
@@ -275,24 +296,19 @@ router.post('/eventos/:slug/eliminar', requireRole(...WRITE_ROLES), async (req, 
     await fileStorage.deleteFolder(`eventos/${slug}`);
     
     await db.query('DELETE FROM events WHERE slug = $1', [slug]);
-    res.redirect('/marketing/eventos');
+    const redirect = '/marketing/eventos?ok=Evento eliminado';
+    if (wantsJsonResponse(req)) return res.json({ ok: true, redirect });
+    res.redirect(redirect);
   } catch (err) {
     console.error(err);
+    if (wantsJsonResponse(req)) return res.status(500).json({ error: 'No se pudo eliminar el evento.' });
     res.status(500).send('Error eliminando evento');
   }
 });
 
 // RUTAS EDITAR
-router.get('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, res) => {
-  const { slug } = req.params;
-  try {
-    const { rows } = await db.query(`SELECT ${EVENTO_VIEW_COLUMNS} FROM events WHERE slug = $1`, [slug]);
-    if (rows.length === 0) return res.status(404).send('Evento no encontrado');
-    res.render('marketing/eventos_editar', { titulo: 'Editar Evento', evento: rows[0] });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Error al cargar formulario de edición');
-  }
+router.get('/eventos/:slug/editar', requireRole(...WRITE_ROLES), (req, res) => {
+  res.redirect(`/marketing/eventos/${encodeURIComponent(req.params.slug)}?modal=editar`);
 });
 
 router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, res) => {
@@ -300,6 +316,9 @@ router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, re
   const { name, description } = eventFieldsFromBody(req.body);
   try {
     if (!name) {
+      if (wantsJsonResponse(req)) {
+        return res.status(400).json({ error: 'El nombre del evento es obligatorio.' });
+      }
       return res.status(400).send('El nombre del evento es obligatorio');
     }
     await db.query('UPDATE events SET name = $1, description = $2 WHERE slug = $3', [name, description, slug]);
@@ -307,9 +326,11 @@ router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, re
       await db.query('INSERT INTO change_log (user_id, action, section, link_path) VALUES ($1, $2, $3, $4)',
         [req.session.user.id, 'editó información del evento', 'Galería de Eventos', `/marketing/eventos/${slug}`]);
     }
+    if (wantsJsonResponse(req)) return res.json({ ok: true });
     res.redirect(`/marketing/eventos/${slug}?ok=Evento actualizado correctamente`);
   } catch (err) {
     console.error(err);
+    if (wantsJsonResponse(req)) return res.status(500).json({ error: 'No se pudo actualizar el evento.' });
     res.status(500).send('Error al actualizar el evento');
   }
 });

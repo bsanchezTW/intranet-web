@@ -1,97 +1,50 @@
-<style>
-
-  .no-data { text-align: center; padding: 40px; color: #718096; background: #f8fafc; border-radius: 8px; border: 1px dashed #cbd5e0; }
-  .boton-opcion {
-    background-color: var(--color-surface, #ffffff);
-    border: 1px solid var(--color-border, #e2e8f0);
-    border-radius: 10px;
-    padding: 15px 20px;
-    text-decoration: none;
-    color: var(--color-heading, #003a70);
-    font-size: 1.1rem;
-    font-weight: 800;
-    display: inline-flex;
-    flex-direction: column;
-    transition: all 0.2s;
-    box-shadow: var(--shadow-card, 0 2px 4px rgba(0,0,0,0.02));
-  }
-  .boton-opcion:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-card-lg, 0 8px 15px rgba(0,0,0,0.06));
-    border-color: var(--color-border-strong, #cbd5e0);
-    background: var(--color-surface-muted, #f8fafc);
-  }
-  .boton-opcion span { margin-top: 6px; font-size: 0.85rem; color: var(--color-text-muted, #718096); font-weight: 600; }
-  .eventos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; margin-top: 25px; }
-  .card-evento-modern { background: var(--color-surface, #fff); border-radius: 8px; overflow: hidden; box-shadow: var(--shadow-card, 0 2px 5px rgba(0,0,0,0.04)); transition: transform 0.2s, box-shadow 0.2s; border: 1px solid var(--color-border, #e0e6ed); display: flex; flex-direction: column; position: relative; }
-  .card-evento-modern:hover { transform: translateY(-5px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
-  .evento-link { text-decoration: none; color: inherit; display: flex; flex-direction: column; flex-grow: 1; }
-  .evento-img-container { width: 100%; height: 180px; background-color: var(--color-surface-muted, #f8fafc); overflow: hidden; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--color-border, #e0e6ed); }
-  .evento-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
-  .card-evento-modern:hover .evento-img { transform: scale(1.05); }
-  .folder-icon-placeholder { font-size: 3.5rem; color: #cbd5e0; }
-  .evento-info { padding: 15px; background: var(--color-surface, #fff); }
-  .evento-titulo { font-size: 1.1rem; font-weight: 800; color: var(--color-heading, #003a70); margin-bottom: 5px; line-height: 1.3; }
-  .evento-desc { font-size: 0.85rem; color: var(--color-text-muted, #4a5568); margin-top: 5px; }
-  .evento-actions { padding: 10px 15px; background-color: var(--color-surface-muted, #f8fafc); border-top: 1px solid var(--color-border, #e0e6ed); text-align: right; }
-  .btn-delete { background: none; border: none; color: #e53e3e; font-size: 0.85rem; font-weight: 700; cursor: pointer; padding: 0; }
-  .btn-delete:hover { text-decoration: underline; color: #c53030; }
-</style>
-
-<div class="contenedor">
+<%
+/* Galería: lista de eventos. Estilos en /css/galeria.css. */
+const formatoFecha = (valor) => {
+  if (!valor) return '';
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return fecha.toLocaleDateString(countryConfig.locale, {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: countryConfig.timezone,
+  });
+};
+%>
+<div class="contenedor galeria">
   <div class="page-header page-header--toolbar">
     <div class="page-header__text">
-      <h2 class="page-title">Eventos y Galerías</h2>
-      <p class="page-description">Selecciona un evento para ver su galería de fotos.</p>
+      <h2 class="page-title">Galería</h2>
+      <p class="page-description">Revive los eventos de Transworld: fotos y videos de cada celebración.</p>
     </div>
 
     <% if (can.eventos_write) { %>
     <div class="page-header-actions">
-      <a href="/marketing/eventos/nuevo" class="page-header-btn">
-        <span aria-hidden="true">+</span> Crear nuevo evento
-      </a>
+      <button type="button" class="page-header-btn" data-abrir-modal-evento>
+        <span aria-hidden="true">+</span> Nuevo evento
+      </button>
     </div>
     <% } %>
   </div>
 
   <% if (!eventos || eventos.length === 0) { %>
-    <p class="no-data">No hay eventos creados por el momento.</p>
+    <div class="galeria-vacio">
+      <span class="galeria-vacio__icono"><%- include('../partials/icon', { name: 'camera' }) %></span>
+      <h3 class="galeria-vacio__titulo">Aún no hay eventos</h3>
+      <p class="galeria-vacio__texto">Cuando se publique un evento, sus fotos aparecerán aquí.</p>
+      <% if (can.eventos_write) { %>
+        <button type="button" class="page-header-btn" data-abrir-modal-evento>
+          <span aria-hidden="true">+</span> Crear el primer evento
+        </button>
+      <% } %>
+    </div>
   <% } else { %>
-    
-    <div class="eventos-grid">
-      <% eventos.forEach(function(ev) { %>
-        <div class="card-evento-modern">
-          
-          <a href="/marketing/eventos/<%= ev.slug %>" class="evento-link" title="Ver galería de <%= ev.name %>">
-            <div class="evento-img-container">
-              <% if (ev.image) { %>
-                <img src="<%= ev.image %>" alt="<%= ev.name %>" class="evento-img">
-              <% } else { %>
-                <div class="folder-icon-placeholder"><%- include('../partials/icon', { name: 'image' }) %></div>
-              <% } %>
-            </div>
-            
-            <div class="evento-info">
-              <div class="evento-titulo"><%= ev.name %></div>
-              <% if (ev.description) { %>
-                <div class="evento-desc">
-                  <%= ev.description.length > 60 ? ev.description.substring(0, 60) + '...' : ev.description %>
-                </div>
-              <% } %>
-            </div>
-          </a>
-
-          <% if (can.eventos_write) { %>
-            <div class="evento-actions">
-              <form action="/marketing/eventos/<%= ev.slug %>/eliminar" method="POST" onsubmit="return confirm('¿Estás seguro? Se eliminará el evento y TODAS sus fotos.');" style="margin:0;">
-                <button type="submit" class="btn-delete">Eliminar evento</button>
-              </form>
-            </div>
-          <% } %>
-
-        </div>
+    <div class="galeria-grid">
+      <% eventos.forEach(function (ev) { %>
+        <%- include('partials/evento-card', { ev, fecha: formatoFecha(ev.created_at) }) %>
       <% }) %>
     </div>
-
   <% } %>
 </div>
+
+<% if (can.eventos_write) { %>
+  <%- include('partials/modal-evento', { modo: 'crear' }) %>
+<% } %>
