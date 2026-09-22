@@ -1,9 +1,11 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260916g">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260922a">
 <%
   const isPeru = country === 'PE';
+  // El período del que se van a descontar los próximos días: el más antiguo
+  // con saldo. El año en curso no cuenta, todavía se está devengando.
   const peBlockPeriod = isPeru && Array.isArray(periods)
     ? periods
-        .filter((p) => !p.expired && p.recordMet !== false && Number(p.available) > 0)
+        .filter((p) => !p.inProgress && p.recordMet !== false && Number(p.available) > 0)
         .slice()
         .sort((a, b) => String(a.period_start).localeCompare(String(b.period_start)))[0]
     : null;
@@ -40,38 +42,60 @@
     </div>
   <% } %>
 
+  <%# El colaborador ve totales, no el detalle del historial de RR.HH.: los
+      días que se tomó antes de la intranet ya están dentro de "Usado". %>
   <div class="vac-balance-grid">
     <div class="vac-stat">
-      <div class="vac-stat-label">Disponible</div>
-      <div class="vac-stat-value"><%= summary.available %> <span class="vac-stat-unit"><%= dayUnit === 'business' ? 'háb.' : 'cal.' %></span></div>
+      <div class="vac-stat-label">Saldo disponible</div>
+      <div class="vac-stat-value"><%= summary.availableDays %> <span class="vac-stat-unit"><%= dayUnit === 'business' ? 'háb.' : 'cal.' %></span></div>
+      <% if (locals.nextAccrualFmt) { %>
+        <p class="vac-stat-note">Próximo derecho: <%= nextAccrualFmt %></p>
+      <% } %>
     </div>
-    <div class="vac-stat">
-      <div class="vac-stat-label">Devengado</div>
-      <div class="vac-stat-value"><%= summary.entitled %></div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Días generados</div>
+      <div class="vac-stat-value"><%= summary.generatedDays %></div>
+      <p class="vac-stat-note">Por tus años de servicio cumplidos.</p>
     </div>
-    <div class="vac-stat">
-      <div class="vac-stat-label">Usado</div>
-      <div class="vac-stat-value"><%= summary.used %></div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Días usados</div>
+      <div class="vac-stat-value"><%= summary.totalUsedDays %></div>
+      <% if (summary.historicalUsedDays > 0) { %>
+        <p class="vac-stat-note">Incluye <%= summary.historicalUsedDays %> día(s) tomados antes de la intranet.</p>
+      <% } %>
     </div>
     <% if (peBlockPeriod) { %>
-      <div class="vac-stat">
+      <div class="vac-stat vac-stat--quiet">
         <div class="vac-stat-label">Días seguidos (de 15)</div>
         <div class="vac-stat-value"><%= peBlockPeriod.protectedBlockRemaining %></div>
       </div>
-      <div class="vac-stat">
+      <div class="vac-stat vac-stat--quiet">
         <div class="vac-stat-label">Días sueltos (de 15)</div>
         <div class="vac-stat-value"><%= peBlockPeriod.flexibleBlockRemaining %></div>
       </div>
     <% } %>
-    <% if (summary.expiringSoon > 0) { %>
-      <div class="vac-stat">
-        <div class="vac-stat-label">Por vencer (90 días)</div>
-        <div class="vac-stat-value warn"><%= summary.expiringSoon %></div>
-      </div>
-    <% } %>
   </div>
 
-  <% if (hasHireDate) { %>
+  <% if (isPeru && summary.truncoDays > 0) { %>
+    <div class="flash-msg flash-msg--info" role="status">
+      Llevas <%= summary.truncoDays %> día(s) acumulados del año en curso.
+      Se suman a tu saldo cuando cumplas el año<% if (locals.nextAccrualFmt) { %>, el <%= nextAccrualFmt %><% } %>.
+    </div>
+  <% } %>
+
+  <%# Sin un año de servicio cumplido no hay días que pedir (art. 10 D.L. 713):
+      mejor explicarlo que dejar un formulario que siempre va a rechazar. %>
+  <% if (hasHireDate && isPeru && summary.generatedDays === 0) { %>
+    <div class="vac-panel">
+      <div class="vac-panel-head">Solicitar vacaciones</div>
+      <p class="vac-empty">
+        Todavía no cumples un año de servicio, así que aún no tienes días para
+        pedir.<% if (locals.nextAccrualFmt) { %> Tu primer derecho de 30 días llega el <%= nextAccrualFmt %>.<% } %>
+      </p>
+    </div>
+  <% } %>
+
+  <% if (hasHireDate && !(isPeru && summary.generatedDays === 0)) { %>
   <div class="vac-panel">
     <div class="vac-panel-head">Solicitar vacaciones</div>
     <form class="vac-form" action="/RRHH/vacaciones/mis-vacaciones/solicitar" method="POST" id="vacForm">
@@ -119,31 +143,43 @@
     <% if (!periods || periods.length === 0) { %>
       <p class="vac-empty">Aún no tienes períodos calculados.</p>
     <% } else { %>
-      <table class="vac-table">
+      <table class="vac-table vac-table--stack">
         <thead>
           <tr>
             <th>Período</th><th>Devengado</th><th>Ajuste</th><th>Usado</th><th>Disponible</th>
             <% if (isPeru) { %><th>Seguidos rest.</th><th>Sueltos rest.</th><% } %>
-            <th>Vence</th>
           </tr>
         </thead>
         <tbody>
           <% periods.forEach(p => { %>
             <tr>
-              <td><%= p.periodStartFmt %> → <%= p.periodEndFmt %></td>
-              <td><%= p.recordMet === false ? '0 (récord)' : p.entitled %></td>
-              <td><%= p.adjusted %></td>
-              <td><%= p.used %></td>
-              <td><strong><%= p.available %></strong></td>
+              <td data-label="Período">
+                <%= p.periodStartFmt %> → <%= p.periodEndFmt %>
+                <% if (p.inProgress) { %><br><span class="vac-stat-unit">En curso</span><% } %>
+              </td>
+              <td data-label="Devengado"><%= p.recordMet === false ? '0 (récord)' : p.entitled %></td>
+              <td data-label="Ajuste"><%= p.adjusted %></td>
+              <td data-label="Usado"><%= p.totalUsed %></td>
+              <td data-label="Disponible">
+                <% if (p.inProgress) { %>
+                  <span class="vac-nodata">—</span>
+                <% } else { %>
+                  <strong><%= p.available %></strong>
+                <% } %>
+              </td>
               <% if (isPeru) { %>
-                <td><%= p.protectedBlockRemaining %></td>
-                <td><%= p.flexibleBlockRemaining %></td>
+                <td data-label="Seguidos rest."><%= p.protectedBlockRemaining %></td>
+                <td data-label="Sueltos rest."><%= p.flexibleBlockRemaining %></td>
               <% } %>
-              <td><%= p.noExpiry ? 'No caduca' : (p.expired ? 'Vencido' : (p.expiresAtFmt || '-')) %></td>
             </tr>
           <% }) %>
         </tbody>
       </table>
+      <p class="vac-panel-note">
+        Tus días no caducan: si no los usas, se acumulan.
+        El período en curso todavía se está ganando, por eso no suma al saldo
+        disponible hasta que cumplas el año.
+      </p>
     <% } %>
   </div>
 
@@ -152,19 +188,19 @@
     <% if (!requests || requests.length === 0) { %>
       <p class="vac-empty">No tienes solicitudes registradas.</p>
     <% } else { %>
-      <table class="vac-table">
+      <table class="vac-table vac-table--stack">
         <thead>
           <tr><th>Período</th><th>Días</th><th>Estado</th><th>Revisor</th><th>Notas</th><th></th></tr>
         </thead>
         <tbody>
           <% requests.forEach(r => { %>
             <tr>
-              <td><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
-              <td><%= r.days %> <%= r.dayUnit %></td>
-              <td><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
-              <td><%= r.reviewerName || '-' %></td>
-              <td><%= r.reviewer_notes || r.requester_notes || '-' %></td>
-              <td>
+              <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
+              <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
+              <td data-label="Estado"><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
+              <td data-label="Revisor"><%= r.reviewerName || '-' %></td>
+              <td data-label="Notas"><%= r.reviewer_notes || r.requester_notes || '-' %></td>
+              <td data-label="">
                 <% if (r.status === 'pending' || r.status === 'approved') { %>
                   <form class="vac-inline-form" action="/RRHH/vacaciones/mis-vacaciones/cancelar/<%= r.id %>" method="POST"
                         data-confirm="La solicitud quedará cancelada."

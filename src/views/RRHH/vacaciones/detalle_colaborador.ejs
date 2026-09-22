@@ -1,8 +1,11 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260916g">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260922a">
 
 <%
   const nombre = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || ('#' + profile.id);
   const isPeru = employmentCountry === 'PE';
+  const ingresoFmt = profile.hire_date
+    ? new Date(profile.hire_date).toISOString().split('T')[0].split('-').reverse().join('-')
+    : null;
 %>
 
 <div class="vac-wrap">
@@ -17,9 +20,9 @@
       </nav>
       <h2 class="page-title"><%= nombre %></h2>
       <p class="page-description">
-        Ingreso: <%= profile.hire_date ? new Date(profile.hire_date).toISOString().split('T')[0] : 'no registrado' %>
-        · Jornada: <%= profile.work_days_per_week || 5 %> días/semana
-        · Disponible: <strong><%= summary.available %></strong>
+        Ingreso: <%= ingresoFmt || 'no registrado' %>
+        <% if (serviceTime && profile.hire_date) { %> · <%= serviceTime %> de servicio<% } %>
+        <% if (profile.national_id) { %> · <%= profile.national_id %><% } %>
       </p>
     </div>
   </div>
@@ -42,44 +45,209 @@
     </div>
   <% } %>
 
+  <% if (summary.availableDays < 0) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      El historial cargado supera los días que este colaborador ha generado.
+      Revisa su fecha de ingreso y que no haya períodos repetidos en el historial.
+    </div>
+  <% } %>
+
+  <%# Las cuatro cifras de la hoja "resumen" de RR.HH., en el mismo orden. %>
   <div class="vac-balance-grid">
-    <div class="vac-stat"><div class="vac-stat-label">Disponible</div><div class="vac-stat-value"><%= summary.available %></div></div>
-    <div class="vac-stat"><div class="vac-stat-label">Devengado</div><div class="vac-stat-value"><%= summary.entitled %></div></div>
-    <div class="vac-stat"><div class="vac-stat-label">Usado</div><div class="vac-stat-value"><%= summary.used %></div></div>
-    <div class="vac-stat"><div class="vac-stat-label">Ajustes</div><div class="vac-stat-value"><%= summary.adjusted %></div></div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Días generados</div>
+      <div class="vac-stat-value"><%= summary.generatedDays %></div>
+      <p class="vac-stat-note">Por años de servicio cumplidos.</p>
+    </div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Gozados antes de la intranet</div>
+      <div class="vac-stat-value"><%= summary.historicalUsedDays %></div>
+      <p class="vac-stat-note"><%= history.length %> registro(s) históricos.</p>
+    </div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Gozados por la intranet</div>
+      <div class="vac-stat-value"><%= summary.approvedUsedDays %></div>
+      <p class="vac-stat-note">Solicitudes aprobadas aquí.</p>
+    </div>
+    <div class="vac-stat">
+      <div class="vac-stat-label">Saldo disponible</div>
+      <div class="vac-stat-value"><%= summary.availableDays %></div>
+      <p class="vac-stat-note">
+        <% if (nextAccrualFmt) { %>Próximo derecho: <%= nextAccrualFmt %><% } else { %>Días calendario<% } %>
+      </p>
+    </div>
   </div>
 
+  <%# Trunco y liquidación: lo que Patricia necesita mandarle al abogado. %>
+  <% if (isPeru) { %>
+    <div class="vac-panel">
+      <div class="vac-panel-head">
+        Liquidación
+        <span class="vac-stat-unit">Cálculo a hoy</span>
+      </div>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Saldo pendiente</th>
+            <th>Trunco del año en curso</th>
+            <th>Total a liquidar</th>
+            <th>Ajustes aplicados</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-label="Saldo pendiente"><%= summary.availableDays %></td>
+            <td data-label="Trunco del año en curso"><%= summary.truncoDays %></td>
+            <td data-label="Total a liquidar"><strong><%= summary.severanceDays %></strong></td>
+            <td data-label="Ajustes aplicados"><%= summary.adjustedDays %></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="vac-panel-note">
+        El saldo pendiente son los días de años ya cumplidos. El trunco es el
+        proporcional del año en curso: se paga en una liquidación, pero todavía
+        no se puede pedir como vacaciones.
+      </p>
+    </div>
+  <% } %>
+
+  <%# ===================== Historial previo a la intranet ===================== %>
   <div class="vac-panel">
-    <div class="vac-panel-head">Períodos y ajuste manual de saldo</div>
+    <div class="vac-panel-head">
+      Vacaciones anteriores a la intranet
+      <div class="vac-panel-actions">
+        <button type="button" class="vac-btn vac-btn-primary vac-btn-sm" id="btnNuevoHistorial">
+          Registrar período
+        </button>
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/importar">
+          Importar Excel
+        </a>
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/exportar">
+          Exportar
+        </a>
+      </div>
+    </div>
+
+    <% if (!history || history.length === 0) { %>
+      <p class="vac-empty">
+        Este colaborador todavía no tiene períodos históricos registrados.<br>
+        Cárgalos con «Registrar período» o importando el Excel de RR.HH.
+      </p>
+    <% } else { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Período</th><th>Desde</th><th>Hasta</th><th>Días</th>
+            <th>Origen</th><th>Observación</th><th>Registrado</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% history.forEach(h => { %>
+            <tr>
+              <td data-label="Período"><%= h.periodLabel %></td>
+              <%# Sin fechas exactas se muestra un guion: no se inventan rangos. %>
+              <td data-label="Desde" class="<%= h.hasDates ? '' : 'vac-nodata' %>"><%= h.startDateFmt %></td>
+              <td data-label="Hasta" class="<%= h.hasDates ? '' : 'vac-nodata' %>"><%= h.endDateFmt %></td>
+              <td data-label="Días"><strong><%= h.days %></strong></td>
+              <td data-label="Origen"><span class="<%= h.originBadge %>"><%= h.originLabel %></span></td>
+              <td data-label="Observación"><%= h.observation || '—' %></td>
+              <td data-label="Registrado">
+                <%= h.createdByName || '—' %><br>
+                <span class="vac-stat-unit"><%= h.createdAtFmt %></span>
+              </td>
+              <td data-label="">
+                <button
+                  type="button"
+                  class="vac-btn vac-btn-cancel vac-btn-sm js-editar-historial"
+                  data-id="<%= h.id %>"
+                  data-year="<%= h.period_year %>"
+                  data-month="<%= h.period_month || '' %>"
+                  data-start="<%= h.start_date ? String(h.start_date).slice(0, 10) : '' %>"
+                  data-end="<%= h.end_date ? String(h.end_date).slice(0, 10) : '' %>"
+                  data-days="<%= h.days %>"
+                  data-observation="<%= h.observation || '' %>"
+                  data-period="<%= h.periodLabel %>"
+                >Editar</button>
+                <form
+                  class="vac-inline-form"
+                  method="POST"
+                  action="/RRHH/vacaciones/gestion/<%= profile.id %>/historial/<%= h.id %>/eliminar"
+                  data-confirm="Se quitarán <%= h.days %> día(s) de <%= h.periodLabel %> del historial y el saldo se recalculará."
+                  data-confirm-title="¿Eliminar el período histórico?"
+                  data-confirm-accept="Eliminar"
+                  data-confirm-tone="peligro"
+                >
+                  <button type="submit" class="vac-btn vac-btn-cancel vac-btn-sm">Eliminar</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="vac-panel-note">
+        Estos días se descuentan del saldo igual que una solicitud aprobada,
+        pero no son solicitudes: ocurrieron antes de que la intranet
+        administrara las vacaciones<% if (cutoffDateFmt) { %>, hasta el <%= cutoffDateFmt %><% } %>.
+      </p>
+    <% } %>
+  </div>
+
+  <%# ============================ Períodos ============================== %>
+  <div class="vac-panel">
+    <div class="vac-panel-head">
+      Períodos de devengo
+      <div class="vac-panel-actions">
+        <form class="vac-inline-form" method="POST" action="/RRHH/vacaciones/gestion/<%= profile.id %>/recalcular">
+          <button type="submit" class="vac-btn vac-btn-ghost vac-btn-sm">Recalcular saldo</button>
+        </form>
+      </div>
+    </div>
     <% if (!periods || periods.length === 0) { %>
       <p class="vac-empty">Sin períodos calculados.</p>
     <% } else { %>
-      <table class="vac-table">
+      <table class="vac-table vac-table--stack">
         <thead>
           <tr>
-            <th>Período</th><th>Devengado</th><th>Ajuste</th><th>Usado</th><th>Disponible</th>
+            <th>Período</th><th>Devengado</th><th>Ajuste</th>
+            <th>Histórico</th><th>Intranet</th><th>Disponible</th>
             <% if (isPeru) { %><th>Seguidos rest.</th><th>Sueltos rest.</th><% } %>
-            <th>Récord</th><th>Vence</th>
+            <th>Récord</th>
           </tr>
         </thead>
         <tbody>
           <% periods.forEach(p => { %>
             <tr>
-              <td><%= p.periodStartFmt %> → <%= p.periodEndFmt %></td>
-              <td><%= p.recordMet === false ? '0 (no cumplido)' : p.entitled %></td>
-              <td><%= p.adjusted %></td>
-              <td><%= p.used %></td>
-              <td><strong><%= p.available %></strong></td>
+              <td data-label="Período">
+                <%= p.periodStartFmt %> → <%= p.periodEndFmt %>
+                <% if (p.inProgress) { %><br><span class="vac-stat-unit">En curso (trunco)</span><% } %>
+              </td>
+              <td data-label="Devengado"><%= p.recordMet === false ? '0 (no cumplido)' : p.entitled %></td>
+              <td data-label="Ajuste"><%= p.adjusted %></td>
+              <td data-label="Histórico"><%= p.historicalUsed %></td>
+              <td data-label="Intranet"><%= p.used %></td>
+              <%# El período en curso no suma al saldo: sus días son trunco.
+                  Se muestran, pero sin el énfasis de los que sí se pueden pedir. %>
+              <td data-label="Disponible">
+                <% if (p.inProgress) { %>
+                  <span class="vac-nodata"><%= p.available %> trunco</span>
+                <% } else { %>
+                  <strong><%= p.available %></strong>
+                <% } %>
+              </td>
               <% if (isPeru) { %>
-                <td><%= p.protectedBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.protectedBlockUsed %>)</span></td>
-                <td><%= p.flexibleBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.flexibleBlockUsed %>)</span></td>
+                <td data-label="Seguidos rest."><%= p.protectedBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.protectedBlockUsed %>)</span></td>
+                <td data-label="Sueltos rest."><%= p.flexibleBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.flexibleBlockUsed %>)</span></td>
               <% } %>
-              <td><%= p.recordMet === false ? ('No — ' + (p.record_notes || '')) : 'Cumplido' %></td>
-              <td><%= p.noExpiry ? 'No caduca' : (p.expired ? 'Vencido' : (p.expiresAtFmt || '-')) %></td>
+              <td data-label="Récord"><%= p.recordMet === false ? ('No — ' + (p.record_notes || '')) : 'Cumplido' %></td>
             </tr>
           <% }) %>
         </tbody>
       </table>
+      <p class="vac-panel-note">
+        Los días no gozados no caducan: se acumulan hasta que el colaborador los
+        tome o se le liquiden. Solo suman al saldo disponible los períodos de
+        años ya cumplidos.
+      </p>
 
       <% if (isPeru) { %>
       <form class="vac-form" action="/RRHH/vacaciones/gestion/<%= profile.id %>/periodo/<%= periods[0].id %>/record" method="POST" id="recordForm">
@@ -117,6 +285,7 @@
       <% } %>
 
       <form class="vac-form" action="/RRHH/vacaciones/gestion/<%= profile.id %>/ajustar" method="POST">
+        <div class="vac-panel-head" style="margin-top:1rem;">Ajuste manual de saldo</div>
         <div class="vac-form-grid-2">
           <div class="campo">
             <label for="period_id">Período</label>
@@ -140,27 +309,67 @@
     <% } %>
   </div>
 
+  <%# ====================== Solicitudes de la intranet ====================== %>
   <div class="vac-panel">
-    <div class="vac-panel-head">Historial de solicitudes</div>
+    <div class="vac-panel-head">Solicitudes gestionadas por la intranet</div>
     <% if (!requests || requests.length === 0) { %>
       <p class="vac-empty">Sin solicitudes.</p>
     <% } else { %>
-      <table class="vac-table">
+      <table class="vac-table vac-table--stack">
         <thead>
           <tr><th>Período</th><th>Días</th><th>Estado</th><th>Revisor</th><th>Notas</th></tr>
         </thead>
         <tbody>
           <% requests.forEach(r => { %>
             <tr>
-              <td><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
-              <td><%= r.days %> <%= r.dayUnit %></td>
-              <td><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
-              <td><%= r.reviewerName || '-' %></td>
-              <td><%= r.reviewer_notes || r.requester_notes || '-' %></td>
+              <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
+              <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
+              <td data-label="Estado"><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
+              <td data-label="Revisor"><%= r.reviewerName || '-' %></td>
+              <td data-label="Notas"><%= r.reviewer_notes || r.requester_notes || '-' %></td>
             </tr>
           <% }) %>
         </tbody>
       </table>
     <% } %>
   </div>
+
+  <%# ============================== Auditoría ============================== %>
+  <% if (historyAudit && historyAudit.length) { %>
+  <div class="vac-panel">
+    <div class="vac-panel-head">Bitácora del historial</div>
+    <ul class="vac-rows">
+      <details>
+        <summary>Ver los últimos <%= historyAudit.length %> cambios</summary>
+        <% historyAudit.forEach(a => {
+             const actor = [a.actor_first_name, a.actor_last_name].filter(Boolean).join(' ') || 'Sistema';
+             const cuando = a.created_at ? new Date(a.created_at).toLocaleString('es-PE') : '';
+             const antes = a.old_value ? (typeof a.old_value === 'string' ? JSON.parse(a.old_value) : a.old_value) : null;
+             const despues = a.new_value ? (typeof a.new_value === 'string' ? JSON.parse(a.new_value) : a.new_value) : null;
+        %>
+          <li class="vac-row-issue">
+            <strong><%= a.action %></strong> · <%= actor %> · <%= cuando %>
+            <% if (antes && antes.days_used != null) { %>
+              <span>Antes: <%= antes.period_year %><%= antes.period_month ? '/' + antes.period_month : '' %> · <%= antes.days_used %> día(s)</span>
+            <% } %>
+            <% if (despues && despues.days_used != null) { %>
+              <span>Después: <%= despues.period_year %><%= despues.period_month ? '/' + despues.period_month : '' %> · <%= despues.days_used %> día(s)</span>
+            <% } %>
+            <% if (a.source) { %><span>Origen: <%= a.source %></span><% } %>
+          </li>
+        <% }) %>
+      </details>
+    </ul>
+  </div>
+  <% } %>
 </div>
+
+<%- include('../../partials/modal', {
+  id: 'modalHistorial',
+  titleId: 'modalHistorialTitulo',
+  panelClass: 'vac-modal-panel',
+  closeLabel: 'Cerrar el registro de vacaciones históricas',
+  body: include('partials/modal_historial')
+}) %>
+
+<script src="/js/vacaciones-historial.js?v=20260922a" defer></script>

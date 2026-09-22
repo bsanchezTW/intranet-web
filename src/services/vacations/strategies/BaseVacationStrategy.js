@@ -45,6 +45,17 @@ class BaseVacationStrategy {
   getExpirationDate(/* { periodEnd } */) {
     throw new Error("getExpirationDate no implementado");
   }
+
+  /**
+   * ¿El saldo de este período se puede pedir hoy?
+   *
+   * Separa "derecho generado" de "saldo disponible" (el período en curso
+   * devenga proporcional, pero eso es trunco de liquidación, no días
+   * pedibles). Por defecto todo período cuenta; cada país afina.
+   */
+  isPeriodClaimable(/* { period, referenceDate } */) {
+    return true;
+  }
 }
 
 module.exports = BaseVacationStrategy;

@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 const router = express.Router();
 const db = require("../db");
 const requireRole = require("../middlewares/requireRole");
@@ -9,18 +10,38 @@ const {
 } = require("../services/vacations/VacationEngine");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const requestService = require("../services/vacations/vacationRequestService");
+const historyService = require("../services/vacations/vacationHistoryService");
+const importService = require("../services/vacations/vacationHistoryImportService");
+const settingsService = require("../services/vacations/vacationSettingsService");
+const reportService = require("../services/vacations/vacationReportService");
 const notificationService = require("../services/vacations/vacationNotificationService");
+const { excelFileName, sendWorkbook } = require("../services/exports/excelWorkbook");
 const {
   mapVacationRequestForView,
   mapVacationPeriodForView,
+  mapVacationHistoryForView,
 } = require("../utils/schemaMappers");
 const { countryLabel } = require("../constants/vacationStatuses");
 const { VACATION_MESSAGES } = require("../constants/vacationMessages");
 const {
+  MONTH_NAMES,
+  HISTORY_DETAIL,
+  MIN_HISTORY_YEAR,
+} = require("../constants/vacationHistory");
+const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
+const {
   toDateOnly,
   addDays,
+  formatDisplay,
   todayInCountry,
 } = require("../utils/vacationDateUtils");
+
+// El Excel de RR.HH. se procesa en memoria: se valida, se muestra la vista
+// previa y solo entonces se inserta. Nunca se guarda el archivo en disco.
+const uploadExcel = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: UPLOAD_LIMITS_BYTES.PROCESS_DOCUMENT },
+});
 
 // ---------- helpers de redirect con flash ----------
 function redirectOk(res, path, msg) {
@@ -75,6 +96,9 @@ router.get("/mis-vacaciones", requireRole.intranetActivo(), async (req, res) => 
     const profile = await balanceService.getUserVacationProfile(userId);
     if (profile && profile.hire_date) {
       await balanceService.recalculatePeriods(userId);
+      // Mantiene al día el historial previo a la intranet (dos SUM; solo
+      // reimputa cuando dejó de cuadrar, p. ej. tras un aniversario).
+      await balanceService.ensureHistoryImputed(userId);
     }
 
     const [summary, periods, requests] = await Promise.all([
@@ -98,6 +122,9 @@ router.get("/mis-vacaciones", requireRole.intranetActivo(), async (req, res) => 
       dayUnit: strategy.getDayUnit(),
       dayUnitLabel: strategy.getDayUnit() === "business" ? "días hábiles" : "días calendario",
       hasHireDate: Boolean(profile?.hire_date),
+      nextAccrualFmt: summary.nextAccrualDate
+        ? formatDisplay(summary.nextAccrualDate)
+        : null,
       ...readFlash(req),
     });
   } catch (err) {
@@ -192,20 +219,231 @@ router.get("/gestion", requireRrhhManager(), async (req, res) => {
   }
 });
 
+// ==========================================================
+// RESUMEN CONSOLIDADO Y EXPORTACIONES (ADMIN)
+// ==========================================================
+// Ojo con el orden: estas rutas tienen que declararse ANTES de
+// /gestion/:userId, si no "resumen" y "historial" se interpretan como el id
+// de un colaborador.
+
+router.get("/gestion/resumen", requireRrhhManager(), async (req, res) => {
+  try {
+    const search = req.query.q || "";
+    const [report, settings] = await Promise.all([
+      reportService.buildTeamReport({ search }),
+      settingsService.getSettings(),
+    ]);
+
+    res.render("RRHH/vacaciones/resumen", {
+      titulo: "Resumen de vacaciones",
+      user: req.session.user,
+      rows: report.rows,
+      totals: report.totals,
+      referenceDateFmt: formatDisplay(report.referenceDate),
+      cutoffDate: settings.historyCutoffDate,
+      cutoffDateFmt: settings.historyCutoffDate
+        ? formatDisplay(settings.historyCutoffDate)
+        : null,
+      search,
+      ...readFlash(req),
+    });
+  } catch (err) {
+    console.error("Error en resumen de vacaciones:", err);
+    res.status(500).send(VACATION_MESSAGES.loadReportFailed);
+  }
+});
+
+router.get("/gestion/resumen/exportar", requireRrhhManager(), async (req, res) => {
+  try {
+    const buffer = await reportService.exportTeamReport();
+    await logChange(req, "exportó el resumen de vacaciones", "/RRHH/vacaciones/gestion/resumen");
+    return sendWorkbook(res, buffer, excelFileName("vacaciones-resumen"));
+  } catch (err) {
+    console.error("Error exportando resumen:", err);
+    return redirectErr(res, "/RRHH/vacaciones/gestion/resumen", VACATION_MESSAGES.exportFailed);
+  }
+});
+
+router.get("/gestion/exportar", requireRrhhManager(), async (req, res) => {
+  try {
+    const buffer = await reportService.exportRequests({
+      workAreaId: req.query.area || null,
+      status: req.query.status || null,
+    });
+    await logChange(req, "exportó el historial de solicitudes", "/RRHH/vacaciones/gestion");
+    return sendWorkbook(res, buffer, excelFileName("vacaciones-solicitudes"));
+  } catch (err) {
+    console.error("Error exportando solicitudes:", err);
+    return redirectErr(res, "/RRHH/vacaciones/gestion", VACATION_MESSAGES.exportFailed);
+  }
+});
+
+router.post("/gestion/corte", requireRrhhManager(), async (req, res) => {
+  const backTo = "/RRHH/vacaciones/gestion/historial/importar";
+  try {
+    const result = await settingsService.setCutoffDate({
+      cutoffDate: req.body.cutoff_date,
+      updatedBy: req.session.user.id,
+    });
+    if (!result.ok) return redirectErr(res, backTo, VACATION_MESSAGES.cutoffInvalid);
+    await logChange(req, "actualizó la fecha de corte del historial", backTo);
+    return redirectOk(res, backTo, VACATION_MESSAGES.cutoffSaved);
+  } catch (err) {
+    console.error("Error guardando fecha de corte:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.cutoffFailed);
+  }
+});
+
+// ==========================================================
+// IMPORTACIÓN DEL HISTORIAL (ADMIN)
+// ==========================================================
+
+const IMPORT_PATH = "/RRHH/vacaciones/gestion/historial/importar";
+
+router.get("/gestion/historial/importar", requireRrhhManager(), async (req, res) => {
+  try {
+    const [settings, batches] = await Promise.all([
+      settingsService.getSettings(),
+      importService.listImports(),
+    ]);
+    const preview = req.session.vacationImportPreview || null;
+
+    res.render("RRHH/vacaciones/importar_historial", {
+      titulo: "Importar vacaciones históricas",
+      user: req.session.user,
+      preview,
+      batches,
+      months: MONTH_NAMES,
+      cutoffDate: settings.historyCutoffDate,
+      cutoffDateFmt: settings.historyCutoffDate
+        ? formatDisplay(settings.historyCutoffDate)
+        : null,
+      ...readFlash(req),
+    });
+  } catch (err) {
+    console.error("Error en importación de historial:", err);
+    res.status(500).send(VACATION_MESSAGES.historyLoadFailed);
+  }
+});
+
+router.get("/gestion/historial/plantilla", requireRrhhManager(), async (req, res) => {
+  try {
+    const buffer = await importService.buildTemplate();
+    return sendWorkbook(res, buffer, "plantilla-vacaciones-historicas.xlsx");
+  } catch (err) {
+    console.error("Error generando plantilla:", err);
+    return redirectErr(res, IMPORT_PATH, VACATION_MESSAGES.exportFailed);
+  }
+});
+
+router.get("/gestion/historial/exportar", requireRrhhManager(), async (req, res) => {
+  try {
+    const buffer = await reportService.exportHistory();
+    await logChange(req, "exportó el historial de vacaciones", IMPORT_PATH);
+    return sendWorkbook(res, buffer, excelFileName("vacaciones-historial"));
+  } catch (err) {
+    console.error("Error exportando historial:", err);
+    return redirectErr(res, IMPORT_PATH, VACATION_MESSAGES.exportFailed);
+  }
+});
+
+router.post(
+  "/gestion/historial/importar/validar",
+  requireRrhhManager(),
+  uploadExcel.single("archivo"),
+  async (req, res) => {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return redirectErr(res, IMPORT_PATH, VACATION_MESSAGES.importNoFile);
+      }
+      const cutoffDate = await settingsService.getCutoffDate();
+      const result = await importService.validateFile(req.file.buffer, {
+        fileName: req.file.originalname,
+        cutoffDate,
+      });
+      if (!result.ok) {
+        return redirectErr(res, IMPORT_PATH, result.error);
+      }
+      // La vista previa vive en la sesión hasta que RR.HH. confirme o cancele:
+      // nada toca la base antes de la confirmación.
+      req.session.vacationImportPreview = result.preview;
+      return res.redirect(IMPORT_PATH);
+    } catch (err) {
+      console.error("Error validando importación:", err);
+      return redirectErr(res, IMPORT_PATH, VACATION_MESSAGES.importFailed);
+    }
+  },
+);
+
+router.post("/gestion/historial/importar/cancelar", requireRrhhManager(), (req, res) => {
+  delete req.session.vacationImportPreview;
+  return res.redirect(IMPORT_PATH);
+});
+
+router.post("/gestion/historial/importar/confirmar", requireRrhhManager(), async (req, res) => {
+  const preview = req.session.vacationImportPreview;
+  if (!preview) {
+    return redirectErr(res, IMPORT_PATH, VACATION_MESSAGES.importExpired);
+  }
+  try {
+    const result = await importService.confirmImport({
+      preview,
+      actorId: req.session.user.id,
+      skipDuplicates: req.body.incluir_duplicados !== "1",
+    });
+    if (!result.ok) {
+      return redirectErr(res, IMPORT_PATH, result.error);
+    }
+    delete req.session.vacationImportPreview;
+    await logChange(req, "importó vacaciones históricas", IMPORT_PATH);
+    return redirectOk(res, IMPORT_PATH, VACATION_MESSAGES.importConfirmed(result.imported));
+  } catch (err) {
+    console.error("Error confirmando importación:", err);
+    return redirectErr(res, IMPORT_PATH, VACATION_MESSAGES.importFailed);
+  }
+});
+
+router.post(
+  "/gestion/historial/importar/:batchId/revertir",
+  requireRrhhManager(),
+  async (req, res) => {
+    try {
+      const result = await importService.revertImport({
+        batchId: req.params.batchId,
+        actorId: req.session.user.id,
+      });
+      if (!result.ok) return redirectErr(res, IMPORT_PATH, result.error);
+      await logChange(req, "revirtió una importación de vacaciones", IMPORT_PATH);
+      return redirectOk(res, IMPORT_PATH, VACATION_MESSAGES.importReverted(result.reverted));
+    } catch (err) {
+      console.error("Error revirtiendo importación:", err);
+      return redirectErr(res, IMPORT_PATH, VACATION_MESSAGES.importFailed);
+    }
+  },
+);
+
 router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
   const { userId } = req.params;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
     if (!profile) return res.status(404).send(VACATION_MESSAGES.collaboratorNotFound);
-    if (profile.hire_date) await balanceService.recalculatePeriods(userId);
+    if (profile.hire_date) {
+      await balanceService.recalculatePeriods(userId);
+      await balanceService.ensureHistoryImputed(userId);
+    }
 
-    const [summary, periods, requests] = await Promise.all([
-      balanceService.getBalanceSummary(userId),
-      balanceService.listPeriods(userId),
-      requestService.listForUser(userId),
-    ]);
+    const [summary, periods, requests, history, historyAudit, settings] =
+      await Promise.all([
+        balanceService.getBalanceSummary(userId),
+        balanceService.listPeriods(userId),
+        requestService.listForUser(userId),
+        historyService.listForUser(userId),
+        historyService.listAudit(userId, 25),
+        settingsService.getSettings(),
+      ]);
 
     const country = resolveCountryForUser(profile);
+    const currentYear = Number((todayInCountry() || "").slice(0, 4));
 
     res.render("RRHH/vacaciones/detalle_colaborador", {
       titulo: "Detalle de vacaciones",
@@ -214,6 +452,19 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
       summary,
       periods: periods.map(mapVacationPeriodForView),
       requests: requests.map(mapVacationRequestForView),
+      history: history.map(mapVacationHistoryForView),
+      historyAudit,
+      serviceTime: reportService.serviceTimeLabel(profile.hire_date, todayInCountry()),
+      nextAccrualFmt: summary.nextAccrualDate
+        ? formatDisplay(summary.nextAccrualDate)
+        : null,
+      cutoffDateFmt: settings.historyCutoffDate
+        ? formatDisplay(settings.historyCutoffDate)
+        : null,
+      months: MONTH_NAMES,
+      historyDetailModes: HISTORY_DETAIL,
+      minHistoryYear: MIN_HISTORY_YEAR,
+      currentYear,
       employmentCountry: country,
       countryLabel: countryLabel(country),
       ...readFlash(req),
@@ -221,6 +472,109 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
   } catch (err) {
     console.error("Error en detalle colaborador:", err);
     res.status(500).send(VACATION_MESSAGES.loadDetailFailed);
+  }
+});
+
+// ---------- historial previo a la intranet, por colaborador ----------
+
+/** Campos del formulario → entrada del servicio (resumido vs detallado). */
+function historyInputFromBody(body) {
+  const detailed = body.detail_mode === HISTORY_DETAIL.DETAILED;
+  return {
+    periodYear: body.period_year,
+    periodMonth: body.period_month,
+    startDate: detailed ? body.start_date : null,
+    endDate: detailed ? body.end_date : null,
+    daysUsed: body.days_used,
+    observation: body.observation,
+  };
+}
+
+router.post("/gestion/:userId/historial", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  try {
+    const cutoffDate = await settingsService.getCutoffDate();
+    const result = await historyService.createHistory({
+      userId,
+      input: historyInputFromBody(req.body),
+      actorId: req.session.user.id,
+      cutoffDate,
+    });
+    if (!result.ok) {
+      return redirectErr(res, backTo, result.errors.join(" "));
+    }
+    await logChange(req, "registró vacaciones históricas", backTo);
+    return redirectOk(res, backTo, VACATION_MESSAGES.historyCreated);
+  } catch (err) {
+    console.error("Error registrando historial:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.historyCreateFailed);
+  }
+});
+
+router.post(
+  "/gestion/:userId/historial/:historyId/editar",
+  requireRrhhManager(),
+  async (req, res) => {
+    const { userId, historyId } = req.params;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    try {
+      const cutoffDate = await settingsService.getCutoffDate();
+      const result = await historyService.updateHistory({
+        historyId,
+        input: historyInputFromBody(req.body),
+        actorId: req.session.user.id,
+        cutoffDate,
+      });
+      if (!result.ok) {
+        return redirectErr(res, backTo, result.errors.join(" "));
+      }
+      await logChange(req, "editó un período histórico de vacaciones", backTo);
+      return redirectOk(res, backTo, VACATION_MESSAGES.historyUpdated);
+    } catch (err) {
+      console.error("Error editando historial:", err);
+      return redirectErr(res, backTo, VACATION_MESSAGES.historyUpdateFailed);
+    }
+  },
+);
+
+router.post(
+  "/gestion/:userId/historial/:historyId/eliminar",
+  requireRrhhManager(),
+  async (req, res) => {
+    const { userId, historyId } = req.params;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    try {
+      const result = await historyService.deleteHistory({
+        historyId,
+        actorId: req.session.user.id,
+      });
+      if (!result.ok) return redirectErr(res, backTo, result.error);
+      await logChange(req, "eliminó un período histórico de vacaciones", backTo);
+      return redirectOk(res, backTo, VACATION_MESSAGES.historyDeleted);
+    } catch (err) {
+      console.error("Error eliminando historial:", err);
+      return redirectErr(res, backTo, VACATION_MESSAGES.historyDeleteFailed);
+    }
+  },
+);
+
+/** Rehace períodos e imputación del historial desde cero. */
+router.post("/gestion/:userId/recalcular", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  try {
+    await balanceService.recalculatePeriods(userId);
+    const result = await balanceService.reimputeHistoricalDays(userId);
+    await logChange(req, "recalculó el saldo de vacaciones", backTo);
+    const extra =
+      result.overflow > 0
+        ? ` Quedaron ${result.overflow} día(s) del historial sin período que los respalde: revisa la fecha de ingreso.`
+        : "";
+    return redirectOk(res, backTo, `Saldo recalculado.${extra}`);
+  } catch (err) {
+    console.error("Error recalculando saldo:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.adjustFailed);
   }
 });
 
@@ -294,7 +648,10 @@ router.post("/gestion/solicitud/:id/aprobar", requireRrhhManager(), async (req, 
     if (!result.ok) return redirectErr(res, backTo, result.error);
 
     const profile = await balanceService.getUserVacationProfile(result.request.user_id);
-    notificationService.notifyApproved({ request: result.request, user: profile });
+    // El saldo ya descontado va en la constancia: es lo primero que pregunta
+    // el colaborador al recibirla.
+    const balance = await balanceService.getBalanceSummary(result.request.user_id);
+    notificationService.notifyApproved({ request: result.request, user: profile, balance });
     await logChange(req, "aprobó una solicitud de vacaciones", backTo);
 
     return redirectOk(res, backTo, VACATION_MESSAGES.requestApproved);

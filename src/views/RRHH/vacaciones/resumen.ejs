@@ -1,0 +1,136 @@
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260922a">
+
+<div class="vac-wrap">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'chart' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <a href="/RRHH/vacaciones">Vacaciones</a> <span aria-hidden="true">/</span>
+        <a href="/RRHH/vacaciones/gestion">Gestión</a> <span aria-hidden="true">/</span>
+        <span>Resumen</span>
+      </nav>
+      <h2 class="page-title">Resumen de vacaciones</h2>
+      <p class="page-description">
+        Saldo de cada colaborador al <%= referenceDateFmt %>, en días calendario.
+        <% if (cutoffDateFmt) { %>Historial migrado hasta el <%= cutoffDateFmt %>.<% } %>
+      </p>
+    </div>
+  </div>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="flash-msg flash-msg--error" role="alert"><%= error %></div>
+  <% } %>
+
+  <% if (totals.overDrawn > 0) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <%= totals.overDrawn %> colaborador(es) tienen más días cargados en el
+      historial de los que han generado. Revisa su fecha de ingreso y que no
+      haya períodos repetidos: aparecen marcados en la tabla.
+    </div>
+  <% } %>
+
+  <div class="vac-balance-grid">
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Colaboradores</div>
+      <div class="vac-stat-value"><%= totals.people %></div>
+      <p class="vac-stat-note"><%= totals.withHireDate %> con fecha de ingreso.</p>
+    </div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Días generados</div>
+      <div class="vac-stat-value"><%= totals.generatedDays %></div>
+    </div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">Gozados</div>
+      <div class="vac-stat-value"><%= totals.historicalUsedDays + totals.approvedUsedDays %></div>
+      <p class="vac-stat-note">
+        <%= totals.historicalUsedDays %> antes de la intranet ·
+        <%= totals.approvedUsedDays %> aquí.
+      </p>
+    </div>
+    <div class="vac-stat">
+      <div class="vac-stat-label">Saldo pendiente</div>
+      <div class="vac-stat-value"><%= totals.availableDays %></div>
+      <p class="vac-stat-note">Con trunco: <%= totals.severanceDays %> a liquidar.</p>
+    </div>
+  </div>
+
+  <div class="vac-panel">
+    <div class="vac-panel-head">
+      Detalle por colaborador
+      <div class="vac-panel-actions">
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/resumen/exportar">
+          Exportar a Excel
+        </a>
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/importar">
+          Importar historial
+        </a>
+      </div>
+    </div>
+
+    <form class="vac-filters" method="GET" action="/RRHH/vacaciones/gestion/resumen">
+      <input
+        type="search"
+        name="q"
+        value="<%= search %>"
+        placeholder="Buscar por nombre, documento o correo"
+        aria-label="Buscar colaborador"
+      >
+      <button type="submit" class="vac-btn vac-btn-primary vac-btn-sm">Buscar</button>
+      <% if (search) { %>
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/resumen">Limpiar</a>
+      <% } %>
+    </form>
+
+    <% if (!rows || rows.length === 0) { %>
+      <p class="vac-empty">
+        <% if (search) { %>
+          Ningún colaborador coincide con «<%= search %>».
+        <% } else { %>
+          Todavía no hay colaboradores registrados.
+        <% } %>
+      </p>
+    <% } else { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Colaborador</th><th>Ingreso</th><th>Servicio</th>
+            <th>Generados</th><th>Histórico</th><th>Intranet</th>
+            <th>Saldo</th><th>Trunco</th><th>A liquidar</th><th>Próximo derecho</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach(r => { %>
+            <tr class="<%= r.overDrawn ? 'is-alerta' : '' %>">
+              <td data-label="Colaborador">
+                <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.id %>"><%= r.name %></a>
+                <br><span class="vac-stat-unit"><%= r.nationalId %> · <%= r.area %></span>
+              </td>
+              <td data-label="Ingreso" class="<%= r.hasHireDate ? '' : 'vac-nodata' %>"><%= r.hireDateFmt %></td>
+              <td data-label="Servicio"><%= r.serviceTime %></td>
+              <td data-label="Generados"><%= r.generatedDays %></td>
+              <td data-label="Histórico">
+                <%= r.historicalUsedDays %>
+                <% if (r.historyRecords) { %><span class="vac-stat-unit">(<%= r.historyRecords %>)</span><% } %>
+              </td>
+              <td data-label="Intranet"><%= r.approvedUsedDays %></td>
+              <td data-label="Saldo"><strong><%= r.availableDays %></strong></td>
+              <td data-label="Trunco"><%= r.truncoDays %></td>
+              <td data-label="A liquidar"><%= r.severanceDays %></td>
+              <td data-label="Próximo derecho" class="<%= r.nextAccrualFmt === '—' ? 'vac-nodata' : '' %>"><%= r.nextAccrualFmt %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="vac-panel-note">
+        «Generados» son los días de años de servicio ya cumplidos.
+        «Trunco» es el proporcional del año en curso: se paga en una
+        liquidación, pero todavía no se puede pedir como vacaciones.
+        La columna «A liquidar» es la suma de saldo y trunco.
+      </p>
+    <% } %>
+  </div>
+</div>

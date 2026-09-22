@@ -46,8 +46,59 @@ class PeruVacationStrategy extends BaseVacationStrategy {
     return countCalendarDays(startDate, endDate);
   }
 
-  getExpirationDate({ periodEnd }) {
-    return addDays(periodEnd, 365);
+  /**
+   * Los días no gozados NO caducan.
+   *
+   * El módulo nació con `fin de período + 365`, que es el plazo del art. 23
+   * para *gozarlas*, no un plazo para *perderlas*: vencido el año el derecho
+   * sigue vivo y lo que se gatilla es la indemnización. RRHH lleva el saldo
+   * acumulado (una persona con 7 años y 196 días tomados tiene 14 pendientes,
+   * no 14 "de los períodos que todavía no vencen") y es ese número el que se
+   * usa en una liquidación. Devolver null mantiene todos los períodos vigentes.
+   */
+  getExpirationDate() {
+    return null;
+  }
+
+  /**
+   * Solo cuentan los períodos ya cerrados: 30 días por cada año de servicios
+   * CUMPLIDO (art. 10 D.L. 713). El año en curso devenga trunco, que sirve
+   * para una liquidación pero no habilita a pedir días.
+   *
+   * Es la misma cuenta que lleva RR.HH. a mano: "2 años y 3 meses → 60 días
+   * acumulados", no 67,5.
+   */
+  isPeriodClaimable({ period, referenceDate }) {
+    const end = toDateOnly(period?.period_end);
+    const today = toDateOnly(referenceDate);
+    if (!end || !today) return false;
+    return end < today;
+  }
+
+  /**
+   * Imputa días YA GOZADOS (historial previo a la intranet) a los bloques del
+   * período, sin validar el art. 17.
+   *
+   * Un registro histórico es un hecho ocurrido, no una solicitud: buena parte
+   * viene de antes del D. Leg. 1405 (2018), cuando el fraccionamiento 15+15 ni
+   * existía. Por eso satura protegido y luego flexible, y nunca lanza: si el
+   * período no alcanza, devuelve lo que cupo y el resto se imputa al siguiente.
+   * Las solicitudes nuevas siguen pasando por allocateBlockDays().
+   */
+  allocateHistoricalBlockDays(period, days) {
+    const N = Math.max(0, Number(days) || 0);
+    const protectedRemaining = Math.max(
+      0,
+      PROTECTED_BLOCK_SIZE - Number(period.protected_block_days_used || 0),
+    );
+    const flexibleRemaining = Math.max(
+      0,
+      FLEXIBLE_BLOCK_SIZE - Number(period.flexible_block_days_used || 0),
+    );
+
+    const protectedDelta = Math.min(N, protectedRemaining);
+    const flexibleDelta = Math.min(N - protectedDelta, flexibleRemaining);
+    return { protectedDelta, flexibleDelta };
   }
 
   /** Vacaciones truncas al cese: proporcional a la fecha de término. */
@@ -260,6 +311,7 @@ class PeruVacationStrategy extends BaseVacationStrategy {
   }
 
   validateRequest({
+    user = null,
     request,
     availableBalance = 0,
     existingActiveRequests = [],
@@ -276,6 +328,22 @@ class PeruVacationStrategy extends BaseVacationStrategy {
     const start = toDateOnly(request.startDate);
     const end = toDateOnly(request.endDate);
     const days = this.countRequestDays({ startDate: start, endDate: end });
+
+    // Art. 10 D.L. 713: el descanso se gana al cumplir un año de servicios.
+    // El proporcional del año en curso es trunco (liquidación), no días
+    // pedibles, así que sin el año cumplido no hay solicitud posible.
+    if (user && user.hire_date && !this.isEligible({
+      hireDate: user.hire_date,
+      referenceDate: today,
+    })) {
+      return {
+        valid: false,
+        errors: [VACATION_MESSAGES.notEligibleYet],
+        warnings,
+        days,
+        requiresFractionAck: false,
+      };
+    }
 
     if (!start || !end) {
       errors.push(VACATION_MESSAGES.invalidDates);

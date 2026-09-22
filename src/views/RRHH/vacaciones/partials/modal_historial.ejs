@@ -1,0 +1,105 @@
+<%#
+  Registrar o editar un período histórico. Un solo modal para las dos cosas:
+  vacaciones-historial.js cambia la acción del formulario y rellena los campos.
+
+  "Resumido" es el caso normal del Excel de RR.HH. (año, mes y días, sin
+  fechas). "Detallado" es para cuando las fechas exactas existen de verdad;
+  nunca se inventan para rellenar el formulario.
+%>
+<form
+  class="vac-modal-form"
+  id="formHistorial"
+  method="POST"
+  action="/RRHH/vacaciones/gestion/<%= profile.id %>/historial"
+>
+  <header class="modal-head">
+    <h2 class="modal-title" id="modalHistorialTitulo">Registrar vacaciones históricas</h2>
+    <p class="modal-subtitle" id="modalHistorialSubtitulo">
+      Días que <%= [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'el colaborador' %>
+      ya se tomó antes de usar la intranet.
+    </p>
+  </header>
+
+  <div class="modal-body">
+    <div class="campo-form">
+      <label for="detail_mode">Tipo de registro</label>
+      <select id="detail_mode" name="detail_mode">
+        <option value="<%= historyDetailModes.SUMMARY %>">Histórico resumido — año y mes</option>
+        <option value="<%= historyDetailModes.DETAILED %>">Histórico detallado — con fechas exactas</option>
+      </select>
+      <span class="vac-hint">
+        Si en el Excel solo tienes el mes y la cantidad de días, deja «resumido».
+      </span>
+    </div>
+
+    <div class="campos-grid">
+      <div class="campo-form">
+        <label for="period_year">Año *</label>
+        <input
+          type="number"
+          id="period_year"
+          name="period_year"
+          min="<%= minHistoryYear %>"
+          max="<%= currentYear %>"
+          step="1"
+          required
+          placeholder="<%= currentYear - 1 %>"
+        >
+      </div>
+
+      <div class="campo-form">
+        <label for="period_month">Mes</label>
+        <select id="period_month" name="period_month">
+          <option value="">No lo sé</option>
+          <% months.forEach((nombre, i) => { %>
+            <option value="<%= i + 1 %>"><%= nombre %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+
+    <div class="campos-grid" id="historialFechas" hidden>
+      <div class="campo-form">
+        <label for="hist_start_date">Desde</label>
+        <input type="date" id="hist_start_date" name="start_date">
+      </div>
+      <div class="campo-form">
+        <label for="hist_end_date">Hasta</label>
+        <input type="date" id="hist_end_date" name="end_date">
+      </div>
+    </div>
+
+    <div class="campo-form">
+      <label for="days_used">Días utilizados *</label>
+      <input
+        type="number"
+        id="days_used"
+        name="days_used"
+        min="0.5"
+        step="0.5"
+        required
+        inputmode="decimal"
+        placeholder="15"
+      >
+      <span class="vac-hint" id="historialDiasHint">
+        Días calendario, como los cuenta la ley peruana.
+      </span>
+    </div>
+
+    <div class="campo-form">
+      <label for="observation">Observación</label>
+      <textarea
+        id="observation"
+        name="observation"
+        rows="2"
+        placeholder="Ej: vacaciones registradas en el Excel de RR.HH."
+      ></textarea>
+      <span class="vac-hint">Nota interna. El colaborador no la ve.</span>
+    </div>
+  </div>
+
+  <footer class="modal-foot">
+    <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+    <button type="submit" class="btn-primario" id="historialSubmit">Guardar período</button>
+  </footer>
+</form>

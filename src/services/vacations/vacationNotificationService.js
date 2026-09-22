@@ -50,23 +50,65 @@ function notifyNewRequest({ request, user, accumulationAlert = false }) {
   });
 }
 
-/** Solicitud aprobada → colaborador. */
-function notifyApproved({ request, user }) {
+/**
+ * Constancia de vacaciones aprobadas → colaborador.
+ *
+ * Reemplaza el formato en papel que RR.HH. imprimía y hacía firmar: la
+ * aceptación es la propia solicitud enviada desde la intranet, y el correo
+ * queda como respaldo con el detalle y el saldo que le queda. Por eso lleva
+ * número de solicitud y fechas completas, no solo un aviso.
+ */
+function approvalDetailTable({ request, balance }) {
+  const filas = [
+    ["N° de solicitud", `#${request.id}`],
+    ["Desde", formatDisplay(request.start_date)],
+    ["Hasta", formatDisplay(request.end_date)],
+    ["Días de descanso", `${requestDays(request)} día(s) calendario`],
+  ];
+  if (balance && Number.isFinite(Number(balance.availableDays))) {
+    filas.push(["Saldo restante", `${balance.availableDays} día(s)`]);
+  }
+
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 16px 0;">
+      ${filas
+        .map(
+          ([etiqueta, valor], i) => `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#64748b;font-size:13px;${i === 0 ? "border-top:1px solid #e5e7eb;" : ""}">${escapeHtml(etiqueta)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#0f172a;font-size:13px;font-weight:700;text-align:right;${i === 0 ? "border-top:1px solid #e5e7eb;" : ""}">${escapeHtml(valor)}</td>
+        </tr>`,
+        )
+        .join("")}
+    </table>`;
+}
+
+function notifyApproved({ request, user, balance = null }) {
   // Sin usuario (colaborador eliminado) no hay a quién avisar.
   if (!user || !user.email) return Promise.resolve();
   return safeSend({
     to: user.email,
-    subject: "Tu solicitud de vacaciones fue aprobada",
+    subject: `Vacaciones aprobadas — solicitud #${request.id}`,
     senderName: MAIL_SENDERS.hr,
-    heading: "Solicitud aprobada",
-    cta: { href: "/RRHH/vacaciones/mis_vacaciones", label: "Ver mis vacaciones" },
+    heading: "Constancia de vacaciones aprobadas",
+    cta: { href: "/RRHH/vacaciones/mis-vacaciones", label: "Ver mis vacaciones" },
     html: `
       <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
-      <p style="margin:0 0 16px 0;">Tu solicitud de vacaciones fue <strong>aprobada</strong>.</p>
-      <p style="margin:0 0 16px 0;">Período: ${rangeText(request)}</p>
-      ${request.reviewer_notes ? `<p style="margin:0;">Comentario de RRHH: ${escapeHtml(request.reviewer_notes)}</p>` : ""}
+      <p style="margin:0 0 16px 0;">
+        Recursos Humanos <strong>aprobó</strong> tu solicitud de vacaciones. Este correo
+        es tu constancia: guárdalo.
+      </p>
+      ${approvalDetailTable({ request, balance })}
+      ${request.reviewer_notes ? `<p style="margin:0 0 16px 0;">Comentario de RR.HH.: ${escapeHtml(request.reviewer_notes)}</p>` : ""}
+      <p style="margin:0;color:#64748b;font-size:13px;">
+        Si necesitas cambiar estas fechas, cancela la solicitud en la intranet
+        antes del día de inicio y crea una nueva.
+      </p>
     `,
-    text: `Tu solicitud de vacaciones (${rangeText(request)}) fue aprobada.`,
+    text:
+      `Tu solicitud de vacaciones #${request.id} fue aprobada. ` +
+      `Del ${formatDisplay(request.start_date)} al ${formatDisplay(request.end_date)}, ` +
+      `${requestDays(request)} día(s) calendario.`,
   });
 }
 

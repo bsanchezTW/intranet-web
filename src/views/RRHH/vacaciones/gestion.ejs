@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260916g">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260922a">
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -22,6 +22,20 @@
   <% } %>
 
   <div class="vac-panel">
+    <div class="vac-panel-head">
+      Solicitudes
+      <div class="vac-panel-actions">
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/resumen">
+          Resumen y saldos
+        </a>
+        <%# La exportación respeta los filtros aplicados arriba. %>
+        <a
+          class="vac-btn vac-btn-cancel vac-btn-sm"
+          href="/RRHH/vacaciones/gestion/exportar?area=<%= encodeURIComponent(filtros.area || '') %>&status=<%= encodeURIComponent(filtros.status || '') %>"
+        >Exportar a Excel</a>
+      </div>
+    </div>
+
     <form class="vac-filters" method="GET" action="/RRHH/vacaciones/gestion">
       <select name="area">
         <option value="">Todas las áreas</option>
@@ -44,7 +58,7 @@
     <% if (!requests || requests.length === 0) { %>
       <p class="vac-empty">No hay solicitudes con los filtros aplicados.</p>
     <% } else { %>
-      <table class="vac-table">
+      <table class="vac-table vac-table--stack">
         <thead>
           <tr>
             <th>Colaborador</th><th>Período</th><th>Días</th>
@@ -54,7 +68,7 @@
         <tbody>
           <% requests.forEach(r => { %>
             <tr>
-              <td>
+              <td data-label="Colaborador">
                 <% if (r.requester_deleted) { %>
                   <%# Colaborador eliminado: se conserva el nombre, pero ya no hay ficha a la que enlazar. %>
                   <span class="vac-link-colaborador"><%= r.collaboratorName || 'Colaborador' %> <small>(usuario eliminado)</small></span>
@@ -62,11 +76,11 @@
                   <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
                 <% } %>
               </td>
-              <td><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
-              <td><%= r.days %> <%= r.dayUnit %></td>
-              <td><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
-              <td><%= r.reviewer_notes || r.requester_notes || '-' %></td>
-              <td>
+              <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
+              <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
+              <td data-label="Estado"><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
+              <td data-label="Comentario"><%= r.reviewer_notes || r.requester_notes || '-' %></td>
+              <td data-label="">
                 <% if (r.status === 'pending') { %>
                   <form class="vac-inline-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/aprobar" method="POST"
                         data-confirm="Se aprobarán <%= r.days %> <%= r.dayUnit %> (<%= r.startDateFmt %> → <%= r.endDateFmt %>)."

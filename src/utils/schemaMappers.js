@@ -4,6 +4,11 @@ const {
   countryLabel,
 } = require("../constants/vacationStatuses");
 const {
+  historyOriginLabel,
+  historyOriginBadge,
+  monthLabel,
+} = require("../constants/vacationHistory");
+const {
   formatDisplay,
   toDateOnly,
   todayInCountry,
@@ -181,34 +186,71 @@ function mapVacationPeriodForView(row) {
   if (!row) return row;
   const recordMet = row.record_met !== false;
   const entitledEffective = recordMet ? Number(row.entitled_days) : 0;
+  const historicalUsed = Number(row.historical_used_days || 0);
   const available =
     entitledEffective +
     Number(row.adjusted_days) -
-    Number(row.used_days);
+    Number(row.used_days) -
+    historicalUsed;
   const today = todayInCountry();
   const isChile = row.country_code === "CL";
-  const expired =
-    !isChile && row.expires_at ? toDateOnly(row.expires_at) < today : false;
+  // Ni Chile ni Perú caducan: el derecho no se extingue por no gozarlo.
   const protectedBlockUsed = Number(row.protected_block_days_used || 0);
   const flexibleBlockUsed = Number(row.flexible_block_days_used || 0);
   const round2 = (n) => Math.round(n * 100) / 100;
+  // Un período "en curso" (todavía no termina) devenga proporcional: eso es
+  // trunco de liquidación, no días que el colaborador pueda pedir.
+  const periodEnd = toDateOnly(row.period_end);
+  const inProgress = !isChile && Boolean(periodEnd) && periodEnd >= today;
   return {
     ...row,
     periodStartFmt: formatDisplay(row.period_start),
     periodEndFmt: formatDisplay(row.period_end),
-    expiresAtFmt: isChile ? null : row.expires_at ? formatDisplay(row.expires_at) : null,
+    expiresAtFmt: null,
     available: round2(available),
     entitled: Number(row.entitled_days),
     entitledEffective,
     used: Number(row.used_days),
+    historicalUsed: round2(historicalUsed),
+    totalUsed: round2(historicalUsed + Number(row.used_days)),
     adjusted: Number(row.adjusted_days),
     protectedBlockUsed,
     flexibleBlockUsed,
     protectedBlockRemaining: Math.max(0, round2(15 - protectedBlockUsed)),
     flexibleBlockRemaining: Math.max(0, round2(15 - flexibleBlockUsed)),
     recordMet,
-    expired,
-    noExpiry: isChile,
+    inProgress,
+    expired: false,
+    noExpiry: true,
+  };
+}
+
+/**
+ * Registro del historial previo a la intranet para la tabla de RR.HH.
+ *
+ * Cuando no hay fechas exactas se muestra "—": el Excel de RR.HH. guarda mes y
+ * cantidad de días, y rellenarlo con un rango inventado sería inventar datos.
+ */
+function mapVacationHistoryForView(row) {
+  if (!row) return row;
+  const employeeName =
+    [row.first_name, row.last_name].filter(Boolean).join(" ") || null;
+  const month = monthLabel(row.period_month);
+  return {
+    ...row,
+    employeeName,
+    periodLabel: month ? `${month} ${row.period_year}` : String(row.period_year),
+    monthLabel: month || "—",
+    startDateFmt: row.start_date ? formatDisplay(row.start_date) : "—",
+    endDateFmt: row.end_date ? formatDisplay(row.end_date) : "—",
+    hasDates: Boolean(row.start_date),
+    days: Number(row.days_used),
+    originLabel: historyOriginLabel(row.origin),
+    originBadge: historyOriginBadge(row.origin),
+    createdByName:
+      [row.created_by_first_name, row.created_by_last_name].filter(Boolean).join(" ") ||
+      null,
+    createdAtFmt: row.created_at ? formatDisplay(row.created_at) : "—",
   };
 }
 
@@ -397,6 +439,7 @@ module.exports = {
   mapPersonaForView,
   mapVacationRequestForView,
   mapVacationPeriodForView,
+  mapVacationHistoryForView,
   mapCourseListRow,
   mapCourseProgressForView,
   mapCourseForView,

@@ -74,11 +74,14 @@ async function createRequest({
   const strategy = getStrategy(country);
 
   await balanceService.recalculatePeriods(userId);
+  // El historial previo a la intranet se reimputa solo si dejó de cuadrar
+  // (p. ej. tras un aniversario que amplía el derecho). Cuesta dos SUM.
+  await balanceService.ensureHistoryImputed(userId);
   const availableBalance = await balanceService.getAvailableBalance(userId);
   const existingActiveRequests = await getActiveRequests(userId);
   const fifoPeriods =
     country === "PE"
-      ? (await balanceService.listActivePeriodsFifo(userId)).map((p) => ({
+      ? (await balanceService.listClaimablePeriodsFifo(userId)).map((p) => ({
           ...p,
           available: balanceService.periodAvailable(p),
         }))
@@ -373,7 +376,7 @@ async function previewRequest({
   const existingActiveRequests = await getActiveRequests(userId);
   const fifoPeriods =
     country === "PE"
-      ? (await balanceService.listActivePeriodsFifo(userId)).map((p) => ({
+      ? (await balanceService.listClaimablePeriodsFifo(userId)).map((p) => ({
           ...p,
           available: balanceService.periodAvailable(p),
         }))

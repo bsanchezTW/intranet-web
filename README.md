@@ -92,6 +92,68 @@ El trigger `BEFORE INSERT` `trg_six_digit_id` asigna el número en `users` y `va
 
 Las noticias también se pueden abrir por slug. Tras aplicar el SQL, conviene comprobar: `users`/`vacation_requests` con `MIN(id) >= 100000`; `work_areas` y `support_tickets` en 1111–9999 con `trg_four_digit_id`; catálogo e hijas con IDENTITY (bigint en quiz/logs); `ticket_replies` con PK `(ticket_id, id)` y correlativo por ticket; FKs (`work_area_id`, `ticket_id`, `course_id`, `question_id`, `vacation_period_id`) coherentes en ambos schemas.
 
+## Vacaciones (Perú)
+
+Perú cuenta en **días calendario**: 30 por cada año de servicio **cumplido**
+(D.L. 713). El año en curso devenga proporcional, pero eso es **trunco** —sirve
+para una liquidación, no habilita a pedir días— y por eso no suma al saldo
+disponible. Los días no gozados **no caducan**: se acumulan hasta que el
+colaborador los tome o se le liquiden.
+
+El saldo no se guarda en ninguna columna: se deriva.
+
+```text
+saldo = derecho de años cumplidos
+      + ajustes de RR.HH.
+      − días gozados antes de la intranet   (vacation_history)
+      − solicitudes aprobadas aquí          (vacation_requests)
+```
+
+Sólo `approved`, `in_progress` y `completed` descuentan. `pending`, `rejected`
+y `cancelled` no tocan el saldo.
+
+### Historial anterior a la intranet
+
+RR.HH. llevaba las vacaciones en Excel. Ese pasado entra como **historial**, no
+como solicitudes inventadas: una fila por salida en `vacation_history`, con año,
+mes y días. Las fechas exactas son opcionales —el Excel casi nunca las tiene— y
+nunca se rellenan con un rango ficticio.
+
+| Tabla | Qué guarda |
+|-------|------------|
+| `vacation_history` | Una fila por salida previa. Borrado lógico (`deleted_at`). |
+| `vacation_history_imports` | Lote de importación, reversible completo. |
+| `vacation_history_audit` | Quién, cuándo, qué cambió y el valor anterior. |
+| `vacation_settings` | Fecha de corte: hasta cuándo mandó el Excel. |
+
+`vacation_periods.historical_used_days` guarda cuántos de esos días cayeron en
+cada período. Se calcula **imputando FIFO** (del período más antiguo al más
+nuevo) y se reconstruye entero con
+`vacationBalanceService.reimputeHistoricalDays(userId)`: el mismo historial
+siempre da el mismo saldo, sin importar en qué orden se cargó ni cuántas veces
+se corrigió. `ensureHistoryImputed(userId)` lo comprueba con dos `SUM` al abrir
+la ficha y sólo reimputa si dejó de cuadrar.
+
+Los registros históricos no validan el fraccionamiento del art. 17: son hechos
+ya ocurridos, muchos anteriores al D. Leg. 1405. Las solicitudes nuevas sí.
+
+### Rutas de RR.HH.
+
+| Ruta | Qué hace |
+|------|----------|
+| `/RRHH/vacaciones/gestion/resumen` | Saldo de cada colaborador y liquidación |
+| `/RRHH/vacaciones/gestion/:userId` | Ficha: historial, períodos, ajustes |
+| `/RRHH/vacaciones/gestion/historial/importar` | Plantilla → archivo → vista previa → confirmar |
+
+La importación **nunca inserta al subir**: valida, muestra cuántas filas están
+bien, cuáles no y por qué, y espera la confirmación. El trabajador se busca por
+documento (`users.national_id`), no por nombre. Los duplicados se avisan, no se
+descartan en silencio. Un lote se puede revertir completo.
+
+Las exportaciones usan `services/exports/excelWorkbook.js` (exceljs). Es el
+primer exportador del proyecto y vive fuera de vacaciones a propósito: el
+siguiente módulo que necesite «descargar en Excel» debe reutilizarlo.
+
 ## Roles
 
 | Rol | Acceso |

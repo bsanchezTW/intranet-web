@@ -303,3 +303,282 @@
   .vac-btn { width: 100%; }
   .vac-btn-sm { width: auto; }
 }
+
+/* ==========================================================================
+   Historial previo a la intranet: tablas que se vuelven tarjetas, asistente
+   de importación y resumen consolidado.
+   Todo el color sigue saliendo de los tokens de theme.css: aquí no hay ni un
+   valor nuevo de marca.
+   ========================================================================== */
+
+/* Acciones en la cabecera de un panel (la cabecera ya es flex). */
+.vac-panel-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Cifra secundaria bajo el valor de una tarjeta de saldo. */
+.vac-stat-note {
+  color: var(--subtle);
+  font-size: 0.78rem;
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+.vac-stat--quiet .vac-stat-value { color: var(--color-heading); }
+
+/* Dato sin valor conocido: el guion es información, no un hueco. */
+.vac-nodata { color: var(--subtle); }
+
+/* Texto de apoyo dentro de un panel. */
+.vac-panel-note {
+  padding: 0 18px 16px;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Tabla que se convierte en tarjetas bajo 720px.
+   Cada td lleva data-label con el nombre de su columna.
+   -------------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .vac-table--stack thead { display: none; }
+
+  .vac-table--stack,
+  .vac-table--stack tbody { display: block; }
+
+  .vac-table--stack tr {
+    display: block;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    margin: 12px;
+    padding: 4px 0;
+    background: var(--color-surface);
+  }
+
+  .vac-table--stack tbody tr:hover td { background: transparent; }
+
+  .vac-table--stack td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 14px;
+    border-bottom: none;
+    padding: 7px 14px;
+    text-align: right;
+  }
+
+  .vac-table--stack td::before {
+    content: attr(data-label);
+    color: var(--subtle);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+    flex: 0 0 auto;
+  }
+
+  /* Celda de acciones: sin etiqueta y a lo ancho. */
+  .vac-table--stack td[data-label=""] { justify-content: flex-end; }
+  .vac-table--stack td[data-label=""]::before { content: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Asistente de importación
+   -------------------------------------------------------------------------- */
+.vac-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 18px;
+  margin: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--surface2);
+}
+
+.vac-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--subtle);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.vac-step + .vac-step::before {
+  content: "›";
+  color: var(--color-border);
+  margin-right: 4px;
+}
+
+.vac-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.vac-step.is-actual { color: var(--brand); }
+
+.vac-step.is-actual .vac-step__num {
+  background: var(--corp-blue);
+  border-color: var(--corp-blue);
+  color: #fff;
+}
+
+.vac-step.is-lista .vac-step__num {
+  background: var(--brand-soft);
+  border-color: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* Zona de selección de archivo. */
+.vac-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.vac-file input[type="file"] {
+  flex: 1 1 260px;
+  padding: 9px 12px;
+  border: 1px dashed var(--border2);
+  border-radius: 10px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.vac-file input[type="file"]:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+/* Resumen numérico de la vista previa. */
+.vac-preview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.vac-preview-stat {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--surface2);
+}
+
+.vac-preview-stat__label {
+  color: var(--subtle);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vac-preview-stat__value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-heading);
+  margin-top: 2px;
+}
+
+.vac-preview-stat--ok .vac-preview-stat__value { color: var(--corp-green-dark); }
+.vac-preview-stat--error .vac-preview-stat__value { color: var(--down); }
+.vac-preview-stat--warn .vac-preview-stat__value { color: #b4700a; }
+
+/* Detalle de filas con problemas: una lista, no una tabla más. */
+.vac-rows {
+  margin: 0;
+  padding: 0 18px 18px;
+  list-style: none;
+}
+
+.vac-row-issue {
+  border-left: 3px solid var(--color-border);
+  padding: 8px 0 8px 12px;
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.vac-row-issue--error { border-left-color: var(--down); }
+.vac-row-issue--warn { border-left-color: #b4700a; }
+
+.vac-row-issue strong { color: var(--color-heading); }
+
+.vac-row-issue span {
+  display: block;
+  color: var(--color-text-muted);
+}
+
+.vac-rows details > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--brand);
+  padding: 6px 0;
+}
+
+.vac-rows details > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Botón de acción dentro de un panel, sin fondo. */
+.vac-btn-ghost {
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--brand);
+}
+
+.vac-btn-danger { background: var(--down); color: #fff; }
+
+/* Fila del resumen con el historial pasado del derecho generado. */
+.vac-table tbody tr.is-alerta td { background: rgba(208, 92, 92, 0.08); }
+
+/* Buscador del resumen consolidado. */
+.vac-filters input[type="search"],
+.vac-filters input[type="date"] {
+  padding: 9px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: var(--color-input-text);
+  background: var(--color-input-bg);
+  min-width: 200px;
+}
+
+.vac-filters input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.vac-filters__sep { flex: 1 1 auto; }
+
+/* Modal del historial: hereda de modal.css, solo ajusta el ancho. */
+.vac-modal-panel { max-width: 560px; }
+
+@media (max-width: 640px) {
+  .vac-panel-actions { width: 100%; }
+  .vac-panel-actions .vac-btn { flex: 1 1 auto; }
+  .vac-filters input[type="search"] { min-width: 0; width: 100%; }
+}

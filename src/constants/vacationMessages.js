@@ -48,6 +48,9 @@ const VACATION_MESSAGES = {
   policyAckLabel:
     "Entiendo la recomendación y quiero continuar con este tramo corto.",
 
+  notEligibleYet:
+    "Todavía no cumples un año de servicio, así que aún no tienes días para pedir. Al cumplir el año se te habilitan 30 días.",
+
   collaboratorNotFound: "No encontramos a ese colaborador.",
   collaboratorDeleted:
     "El colaborador fue eliminado: esta solicitud ya no se puede aprobar, sólo rechazar.",
@@ -107,6 +110,77 @@ const VACATION_MESSAGES = {
   saldoApiFailed: "No se pudo obtener el saldo.",
   previewFailed: "No se pudieron calcular los días. Inténtalo de nuevo.",
   previewValidateFailed: "No se pudo revisar la solicitud.",
+
+  // --- Historial de vacaciones anteriores a la intranet --------------------
+  historyNeedDays: "Indica cuántos días se tomó el colaborador (mayor que 0).",
+  historyNeedYear: "Indica el año del período.",
+  historyInvalidYear(min) {
+    return `El año debe estar entre ${min} y el año en curso.`;
+  },
+  historyInvalidMonth: "El mes no es válido.",
+  historyNeedMonthOrDates:
+    "Indica al menos el mes del período, o las fechas exactas si las tienes.",
+  historyEndBeforeStart:
+    "La fecha de término del período no puede ser anterior a la de inicio.",
+  historyDaysMismatch(dateDays, declaredDays) {
+    return `Las fechas cubren ${formatDays(dateDays)} día(s) y declaraste ${formatDays(declaredDays)}. Corrige una de las dos.`;
+  },
+  historyBeforeHire:
+    "El período es anterior a la fecha de ingreso del colaborador.",
+  historyAfterCutoff(cutoff) {
+    return `El período es posterior a la fecha de corte (${cutoff}). A partir del corte las vacaciones se registran como solicitud, no como historial.`;
+  },
+  historyDuplicateWarning:
+    "Ya existe un registro con el mismo trabajador, año, mes y cantidad de días.",
+  historyNotFound: "No encontramos ese registro histórico.",
+  historyCreated: "Período histórico registrado.",
+  historyUpdated: "Período histórico actualizado.",
+  historyDeleted: "Período histórico eliminado.",
+  historyCreateFailed:
+    "No fue posible guardar el período de vacaciones. Inténtalo nuevamente.",
+  historyUpdateFailed:
+    "No fue posible actualizar el período de vacaciones. Inténtalo nuevamente.",
+  historyDeleteFailed:
+    "No fue posible eliminar el período de vacaciones. Inténtalo nuevamente.",
+  historyLoadFailed:
+    "No pudimos cargar el historial de vacaciones. Inténtalo de nuevo.",
+
+  // --- Importación desde Excel ---------------------------------------------
+  importNoFile: "Selecciona un archivo Excel para continuar.",
+  importBadFormat:
+    "No fue posible leer el archivo. Debe ser un Excel (.xlsx) con la plantilla del módulo.",
+  importEmpty: "El archivo no tiene filas para importar.",
+  importNoValidRows:
+    "No fue posible importar el archivo porque no contiene ningún registro válido. Revisa los errores indicados.",
+  importExpired:
+    "La revisión del archivo expiró. Vuelve a cargarlo para continuar.",
+  importConfirmed(count) {
+    return `Se importaron ${count} registro(s) históricos.`;
+  },
+  importReverted(count) {
+    return `Se revirtió la importación: ${count} registro(s) eliminados.`;
+  },
+  importFailed: "No se pudo importar el archivo. Inténtalo de nuevo.",
+  importBatchNotFound: "No encontramos esa importación.",
+  importAlreadyReverted: "Esta importación ya fue revertida.",
+
+  // Errores por fila del archivo
+  rowEmployeeNotFound: "Trabajador no encontrado",
+  rowEmployeeIdMissing: "Falta el documento del trabajador",
+  rowYearInvalid: "Año inválido",
+  rowMonthInvalid: "Mes inválido",
+  rowDaysInvalid: "Días inválidos",
+  rowDuplicateInFile: "Fila duplicada dentro del archivo",
+  rowDuplicateInDb: "Ya existe un registro igual en la intranet",
+  rowBeforeHire: "Período anterior al ingreso del trabajador",
+  rowNoHireDate: "El trabajador no tiene fecha de ingreso en la intranet",
+
+  // --- Fecha de corte y exportación ----------------------------------------
+  cutoffSaved: "Fecha de corte actualizada.",
+  cutoffInvalid: "Indica una fecha de corte válida.",
+  cutoffFailed: "No se pudo guardar la fecha de corte. Inténtalo de nuevo.",
+  exportFailed: "No se pudo generar el archivo. Inténtalo de nuevo.",
+  loadReportFailed: "No pudimos cargar el resumen. Inténtalo de nuevo.",
 };
 
 module.exports = { VACATION_MESSAGES, formatDays };
