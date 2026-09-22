@@ -20,7 +20,11 @@
     <div class="page-header__text">
       <h2 class="page-title">Procesos y documentos</h2>
       <p class="page-description">
-        Rinde tus gastos, consulta la normativa de la empresa y revisa los documentos de tu área.
+        <% if (hayGastos) { %>
+          Rinde tus gastos, consulta la normativa de la empresa y revisa los documentos de tu área.
+        <% } else { %>
+          Consulta la normativa de la empresa y revisa los documentos de tu área.
+        <% } %>
       </p>
     </div>
   </div>

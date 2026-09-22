@@ -198,7 +198,7 @@ Los roles viejos por área (`rrhh`, `marketing`, …) se tratan como administrad
 | `/` | Auth, home, Academy, apps, perfil |
 | `/procesos` | Documentos internos |
 | `/RRHH` | Personal, organigrama, vacaciones |
-| `/sistemas` | Tickets (Chile) |
+| `/soporte` | Tickets (Chile) |
 | `/marketing` | Eventos |
 | `/noticias` | Noticias |
 | `/claude` | Asistente (Chile) |

@@ -53,8 +53,11 @@ const GUIDE_ENTRIES = Object.freeze([
     href: "/procesos",
     paths: [/^\/procesos\/?$/],
     summary:
-      "Portada con la sección Finanzas (rendir gastos, solicitar fondos, mis solicitudes), " +
-      "los documentos generales (reglamento interno y otros) y los procedimientos y protocolos por área.",
+      "Portada con los documentos generales (reglamento interno y otros) y los procedimientos y protocolos por área.",
+    featureNotes: {
+      expenseRequests:
+        "Incluye la sección Finanzas: rendir gastos, solicitar fondos y mis solicitudes.",
+    },
   },
   {
     id: "reglamento",
@@ -200,7 +203,7 @@ const GUIDE_ENTRIES = Object.freeze([
     href: "/RRHH/vacaciones/calendario",
     feature: "vacations",
     paths: [/^\/RRHH\/vacaciones\/calendario(\/|$)/],
-    summary: "Calendario con las vacaciones del equipo.",
+    summary: "Calendario mensual con las vacaciones aprobadas de todo el equipo.",
   },
   {
     id: "vacaciones-gestion",
@@ -250,9 +253,9 @@ const GUIDE_ENTRIES = Object.freeze([
   {
     id: "soporte",
     title: "Soporte",
-    href: "/sistemas/tickets",
+    href: "/soporte",
     feature: "supportTickets",
-    paths: [/^\/sistemas\/?$/, /^\/sistemas\/tickets\/?$/, /^\/sistemas\/tickets\/\d+(\/|$)/],
+    paths: [/^\/soporte\/?$/, /^\/soporte\/tickets\/?$/, /^\/soporte\/tickets\/\d+(\/|$)/],
     summary: "Autoayuda para problemas comunes y tus tickets con el equipo de TI (abiertos, en curso y cerrados). Un ticket nuevo se abre con «Abrir ticket» en la barra superior o pidiéndoselo al asistente.",
     steps: [
       "Entra a Soporte desde la barra superior.",

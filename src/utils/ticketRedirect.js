@@ -2,13 +2,22 @@
  * Direcciones de un ticket.
  *
  * Un ticket se ve sólo en el modal de la lista de Soporte: su dirección es
- * /sistemas/tickets?ticket=<id>, que abre ese modal. /sistemas/tickets/<id>
- * sólo entrega el contenido del modal (?modal=true) y, abierta directamente,
+ * /soporte?ticket=<id>, que abre ese modal. /soporte/tickets/<id> sólo
+ * entrega el contenido del modal (?modal=true) y, abierta directamente,
  * redirige aquí.
  */
 
 function ticketModalUrl(id) {
-  return `/sistemas/tickets?ticket=${encodeURIComponent(id)}`;
+  return `/soporte?ticket=${encodeURIComponent(id)}`;
+}
+
+/** Listado canónico (/soporte) o una ruta operativa bajo /soporte/tickets. */
+function isHelpdeskPath(destino) {
+  if (/^\/soporte\/?(?:\?|$)/.test(destino)) return true;
+  if (/^\/soporte\/tickets(\/|\?|$)/.test(destino)) return true;
+  // Formularios abiertos antes del cambio de nombre.
+  if (/^\/sistemas\/?(?:\?|$)/.test(destino)) return true;
+  return /^\/sistemas\/tickets(\/|\?|$)/.test(destino);
 }
 
 /**
@@ -26,7 +35,7 @@ function safeTicketRedirect(target, id) {
   if (/^\/[/\\]/.test(destino)) return ticketModalUrl(id);
   // Ni saltos de línea (inyección de cabeceras) ni rutas fuera del módulo.
   if (/[\r\n]/.test(destino)) return ticketModalUrl(id);
-  if (!/^\/sistemas\/tickets(\/|\?|$)/.test(destino)) return ticketModalUrl(id);
+  if (!isHelpdeskPath(destino)) return ticketModalUrl(id);
 
   return destino;
 }

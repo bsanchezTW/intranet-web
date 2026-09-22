@@ -46,7 +46,7 @@ function toSelfHelpTool(app = {}) {
     descripcion: app.description || app.descripcion || "",
     descargas,
     donde: "Soporte › Autoayuda",
-    enlace: "/sistemas/tickets",
+    enlace: "/soporte",
   };
 }
 

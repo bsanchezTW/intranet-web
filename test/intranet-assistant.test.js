@@ -165,7 +165,7 @@ describe("assistantTools — ejecución en el servidor", () => {
     const result = JSON.parse((await executor.execute("list_self_help_tools")).content);
     assert.equal(result.total, 1);
     assert.deepEqual(result.herramientas[0].descargas, { windows: "/content/apps/impresora.exe" });
-    assert.equal(result.herramientas[0].enlace, "/sistemas/tickets");
+    assert.equal(result.herramientas[0].enlace, "/soporte");
 
     const sinSoporte = createToolExecutor({ entries, currentPath: "/", selfHelp: async () => apps });
     assert.equal((await sinSoporte.execute("list_self_help_tools")).isError, true);

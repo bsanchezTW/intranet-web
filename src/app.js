@@ -18,6 +18,7 @@ const { pipeline } = require("stream/promises");
 const session = require("express-session");
 const expressLayouts = require("express-ejs-layouts");
 const db = require("./db");
+const { eventSlugFromContentPath } = require("./utils/eventAccess");
 // Handshake TLS+SCRAM al pooler lo antes posible, en paralelo con el setup.
 db.warmPool();
 // ================================
@@ -281,6 +282,16 @@ app.use("/content", async (req, res, next) => {
 
   let requestContext;
   try {
+    // La vista `events` esconde el privado del otro país. Si no hay fila,
+    // no se sirve la foto aunque alguien adivine la ruta.
+    const eventSlug = eventSlugFromContentPath(relativePath);
+    if (eventSlug) {
+      const { rows } = await db.query("SELECT 1 FROM events WHERE slug = $1", [
+        eventSlug,
+      ]);
+      if (!rows.length) return res.status(404).send("Archivo no encontrado");
+    }
+
     if (req.method === "HEAD") {
       const metadata = await fileStorage.statStoredObject(relativePath);
       setStorageHeaders(res, metadata);
@@ -430,7 +441,13 @@ if (gastosRoutes) {
   app.use("/gastos", requireAuth, requireFeature("expenseRequests"), gastosRoutes);
 }
 if (ticketsRoutes) {
-  app.use("/sistemas", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
+  app.use("/soporte", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
+  // La página se llamó /sistemas. Los enlaces y correos viejos conservan el camino.
+  app.use("/sistemas", requireAuth, requireFeature("supportTickets"), (req, res) => {
+    const suffix = req.url && req.url !== "/" ? req.url : "";
+    const target = suffix.startsWith("/?") ? `/soporte${suffix.slice(1)}` : `/soporte${suffix}`;
+    res.redirect(308, target);
+  });
 }
 app.use("/marketing", requireAuth, marketingRoutes);
 app.use("/docs", requireAuth, docsRoutes);

@@ -59,6 +59,9 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
         <p class="galeria-hero__desc"><%= evento.description %></p>
       <% } %>
       <div class="galeria-hero__chips">
+        <% if (evento.is_private) { %>
+          <span class="galeria-chip">Privado</span>
+        <% } %>
         <span class="galeria-chip" data-contador="image">
           <%- include('../partials/icon', { name: 'image' }) %> <span><%= plural(totalFotos, 'foto', 'fotos') %></span>
         </span>

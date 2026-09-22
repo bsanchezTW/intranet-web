@@ -83,7 +83,7 @@
   }
 
   /**
-   * /sistemas/tickets?ticket=ID es la dirección de un ticket (crear, confirmar
+   * /soporte?ticket=ID es la dirección de un ticket (crear, confirmar
    * o el asistente llevan aquí): se abre en el modal y se limpia la URL.
    */
   function abrirDesdeUrl(modalBody, modalId) {
@@ -94,7 +94,7 @@
     params.delete('ticket');
     const qs = params.toString();
     window.history.replaceState({}, document.title, window.location.pathname + (qs ? `?${qs}` : ''));
-    abrirDetalle(`/sistemas/tickets/${ticketId}`, modalBody, modalId);
+    abrirDetalle(`/soporte/tickets/${ticketId}`, modalBody, modalId);
   }
 
   function init() {

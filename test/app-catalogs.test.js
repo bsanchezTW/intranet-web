@@ -33,7 +33,7 @@ describe("catálogos de aplicaciones", () => {
 
   it("cada catálogo redirige a la vista que lo lista", () => {
     assert.equal(appCatalogPath(APP_CATALOGS.CORPORATE), "/apps");
-    assert.equal(appCatalogPath(APP_CATALOGS.SUPPORT), "/sistemas/tickets");
+    assert.equal(appCatalogPath(APP_CATALOGS.SUPPORT), "/soporte");
     assert.equal(appCatalogPath("desconocido"), "/apps");
   });
 });

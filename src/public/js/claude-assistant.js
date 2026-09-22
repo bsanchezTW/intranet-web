@@ -57,10 +57,12 @@
   }
 
   // ── Botón: íconos que rotan y burbuja con preguntas ────────────────────
-  // Un solo ciclo, en orden, para que nada se pise: entra un ícono, al rato
-  // aparece su pregunta, se lee con calma, se va la burbuja y recién entonces
-  // cambia al siguiente. El texto sólo se reemplaza con la burbuja oculta.
-  // Se detiene con el panel abierto, un modal, la pestaña oculta o el mouse encima.
+  // Un solo ciclo, para que nada se pise: entra un ícono al azar (nunca el que
+  // ya está), al rato aparece su pregunta, se lee con calma, se va la burbuja
+  // y recién entonces cambia. El texto sólo se reemplaza con la burbuja oculta.
+  // Se detiene con el panel abierto, un modal o el mouse encima. Si la pestaña
+  // o la ventana pasan a segundo plano, el ciclo se congela donde está: la
+  // burbuja no se cierra ni vuelve a empezar al regresar.
   const FabRotacion = (() => {
     const PRIMERA_PAUSA_MS = 2500;  // tras cargar, antes de la primera burbuja
     const ANTES_BURBUJA_MS = 900;   // el ícono nuevo termina de girar
@@ -74,20 +76,47 @@
     let timer = null;
     let encima = false;
     let activo = false;
+    let congelado = false;
+    let pasoPendiente = null;
+    let venceEn = 0;
+    let restanteCongelado = 0;
 
     function puedeMoverse() {
       // Con un modal abierto el botón se oculta (claude-assistant.css): no habla.
       return !isOpen() && !document.hidden && !encima && !document.body.classList.contains("modal-open");
     }
 
+    function cumplir() {
+      if (!activo || congelado) return;
+      // Si algo lo interrumpe, reintenta el mismo paso un poco después.
+      if (!puedeMoverse()) return esperar(1000, pasoPendiente);
+      const paso = pasoPendiente;
+      pasoPendiente = null;
+      paso();
+    }
+
     function esperar(ms, paso) {
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (!activo) return;
-        // Si algo lo interrumpe, reintenta el mismo paso un poco después.
-        if (!puedeMoverse()) return esperar(1000, paso);
-        paso();
-      }, ms);
+      pasoPendiente = paso;
+      venceEn = Date.now() + ms;
+      if (congelado) return;
+      timer = setTimeout(cumplir, ms);
+    }
+
+    // Segundo plano: se guarda el paso y lo que faltaba de lectura. El reloj
+    // no corre ahí, así la burbuja no se apaga ni vuelve a empezar al regresar.
+    function congelar() {
+      if (!activo || congelado) return;
+      congelado = true;
+      clearTimeout(timer);
+      restanteCongelado = pasoPendiente ? Math.max(0, venceEn - Date.now()) : 0;
+    }
+
+    function descongelar() {
+      if (!congelado) return;
+      congelado = false;
+      if (!activo || isOpen() || !pasoPendiente) return;
+      esperar(restanteCongelado, pasoPendiente);
     }
 
     function cambiarIcono() {
@@ -96,7 +125,8 @@
       saliente.classList.remove("is-visible");
       saliente.classList.add("is-saliendo");
       setTimeout(() => saliente.classList.remove("is-saliendo"), 600);
-      actual = (actual + 1) % iconos.length;
+      const salto = 1 + Math.floor(Math.random() * (iconos.length - 1));
+      actual = (actual + salto) % iconos.length;
       iconos[actual].classList.add("is-visible");
       if (tooltip) tooltip.textContent = iconos[actual].dataset.mensaje || "";
     }
@@ -123,20 +153,32 @@
 
     function pausar() {
       activo = false;
+      congelado = false;
+      pasoPendiente = null;
       clearTimeout(timer);
       fab.classList.remove("is-hablando");
     }
 
     // Con el mouse encima la burbuja queda fija (CSS :hover) y el ciclo espera.
+    // El cierre se difiere un instante: al cambiar de ventana el navegador
+    // también dispara mouseleave, y eso no debe apagar el mensaje.
     fab.addEventListener("mouseenter", () => { encima = true; });
     fab.addEventListener("mouseleave", () => {
       encima = false;
-      if (activo) { fab.classList.remove("is-hablando"); esperar(DESPUES_BURBUJA_MS, callarYSeguir); }
+      setTimeout(() => {
+        if (encima || document.hidden || !document.hasFocus()) return;
+        if (activo) {
+          fab.classList.remove("is-hablando");
+          esperar(DESPUES_BURBUJA_MS, callarYSeguir);
+        }
+      }, 0);
     });
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) pausar();
-      else if (!isOpen()) reanudar();
+      if (document.hidden) congelar();
+      else descongelar();
     });
+    window.addEventListener("blur", congelar);
+    window.addEventListener("focus", descongelar);
 
     return { reanudar, pausar };
   })();

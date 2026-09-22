@@ -136,8 +136,21 @@ async function resolveAssignment(req) {
 // RUTAS DEL MÓDULO
 // ==========================================
 
-router.get("/", (req, res) => {
-  res.render("sistemas/index", { titulo: "Sistemas", user: req.session.user });
+router.get("/", renderSupportHome);
+
+// El listado vive en /soporte. /soporte/tickets queda para enlaces anteriores
+// y conserva ?ticket= y ?ok=.
+router.get("/tickets", (req, res) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(req.query || {})) {
+    if (Array.isArray(value)) {
+      value.forEach((item) => params.append(key, String(item)));
+    } else if (value != null) {
+      params.append(key, String(value));
+    }
+  }
+  const qs = params.toString();
+  res.redirect(301, qs ? `/soporte?${qs}` : "/soporte");
 });
 
 router.get("/tickets/notificaciones/count", async (req, res) => {
@@ -191,7 +204,7 @@ router.get("/tickets/notificaciones/count", async (req, res) => {
   }
 });
 
-router.get("/tickets", async (req, res) => {
+async function renderSupportHome(req, res) {
   const user = req.session.user;
   if (!user) return res.redirect("/login");
 
@@ -271,7 +284,7 @@ router.get("/tickets", async (req, res) => {
     console.error(err);
     res.status(500).send("Error consultando tickets");
   }
-});
+}
 
 // El alta de tickets es sólo en modal: no hay página propia. La ruta existe
 // para que /tickets/nuevo no caiga en el detalle (/tickets/:id).
@@ -413,7 +426,7 @@ router.post(
           to: ticket[0].requester_email,
           subject: asunto,
           heading: "Actualización de tu ticket",
-          cta: { href: `/sistemas/tickets?ticket=${id}`, label: "Ver ticket" },
+          cta: { href: ticketModalUrl(id), label: "Ver ticket" },
           text: generarTextoCorreo(cuerpo, adjuntos_data),
           html: generarHtmlCorreo(cuerpo, adjuntos_data),
           senderName: MAIL_SENDERS.support,

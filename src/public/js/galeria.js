@@ -269,6 +269,8 @@
       }
 
       var datos = { name: titulo, description: descripcion.value.trim() };
+      var privado = document.getElementById("eventoPrivado");
+      if (privado) datos.is_private = privado.checked ? "1" : "0";
 
       if (!esEditar) {
         ocupado(true, "Creando evento…");
@@ -342,9 +344,51 @@
 
   /* ====================================================================== */
 
+  function iniciarFiltros() {
+    var raiz = document.querySelector(".galeria");
+    if (!raiz || !raiz.querySelector("[data-filtro-pais]")) return;
+
+    var pais = "";
+    var visibilidad = "";
+
+    function aplicar() {
+      var visibles = 0;
+      Array.prototype.forEach.call(raiz.querySelectorAll("[data-seccion-pais]"), function (seccion) {
+        var enSeccion = 0;
+        Array.prototype.forEach.call(seccion.querySelectorAll(".galeria-card"), function (card) {
+          var okPais = !pais || card.getAttribute("data-pais") === pais;
+          var okVis = !visibilidad || card.getAttribute("data-visibilidad") === visibilidad;
+          var mostrar = okPais && okVis;
+          card.hidden = !mostrar;
+          if (mostrar) enSeccion += 1;
+        });
+        seccion.hidden = enSeccion === 0;
+        visibles += enSeccion;
+      });
+      var vacio = document.getElementById("galeriaFiltroVacio");
+      if (vacio) vacio.hidden = visibles !== 0;
+    }
+
+    raiz.addEventListener("click", function (evento) {
+      var chip = evento.target.closest("[data-filtro-pais], [data-filtro-visibilidad]");
+      if (!chip || !raiz.contains(chip)) return;
+      var grupo = chip.closest("[role='group']");
+      if (!grupo) return;
+      Array.prototype.forEach.call(grupo.querySelectorAll(".personal-chip"), function (otro) {
+        var activo = otro === chip;
+        otro.classList.toggle("is-activo", activo);
+        otro.setAttribute("aria-pressed", activo ? "true" : "false");
+      });
+      if (chip.hasAttribute("data-filtro-pais")) pais = chip.getAttribute("data-filtro-pais") || "";
+      else visibilidad = chip.getAttribute("data-filtro-visibilidad") || "";
+      aplicar();
+    });
+  }
+
   function iniciar() {
     iniciarRevelado(document);
     iniciarModal();
+    iniciarFiltros();
   }
 
   if (document.readyState === "loading") {

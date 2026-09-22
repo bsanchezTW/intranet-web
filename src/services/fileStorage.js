@@ -16,6 +16,10 @@ const SHARED_APP_OBJECT_PREFIXES = Object.freeze([
   "apps_qr/",
 ]);
 
+// Fotos y videos de la galería compartida. El archivo queda en el bucket del
+// país que lo subió; la otra intranet lo lee desde ahí.
+const SHARED_EVENT_OBJECT_PREFIX = "eventos/";
+
 function getPublicUrl(relativePath) {
   const clean = storage.normalizeRelativePath(relativePath);
   const encoded = clean
@@ -78,6 +82,15 @@ function isSharedAppObjectPath(relativePath) {
   return SHARED_APP_OBJECT_PREFIXES.some((prefix) => clean.startsWith(prefix));
 }
 
+function isSharedEventObjectPath(relativePath) {
+  const clean = String(relativePath || "");
+  return clean === "eventos" || clean.startsWith(SHARED_EVENT_OBJECT_PREFIX);
+}
+
+function usesAllCountryBuckets(relativePath) {
+  return isSharedAppObjectPath(relativePath) || isSharedEventObjectPath(relativePath);
+}
+
 function orderedCountryBuckets(deps = {}) {
   const buckets = countryStorageBuckets();
   const current =
@@ -98,7 +111,7 @@ function isMissingObjectError(err) {
 
 async function withSharedAppBuckets(relativePath, deps = {}, operation) {
   const clean = storage.normalizeRelativePath(relativePath);
-  if (!isSharedAppObjectPath(clean)) {
+  if (!usesAllCountryBuckets(clean)) {
     const buckets = orderedCountryBuckets(deps);
     const svc =
       deps.createService || deps.storageConfig
@@ -295,10 +308,23 @@ function resolveStoredPath(publicIdOrUrl) {
   }
 }
 
-async function deleteFile(publicIdOrUrl) {
+async function deleteFile(publicIdOrUrl, deps = {}) {
   const relativePath = resolveStoredPath(publicIdOrUrl);
   if (!relativePath) return false;
-  return storage.deleteFile(relativePath);
+  if (!isSharedEventObjectPath(relativePath)) {
+    return storage.deleteFile(relativePath);
+  }
+
+  let deleted = false;
+  for (const bucket of orderedCountryBuckets(deps)) {
+    try {
+      const ok = await storageServiceForBucket(bucket, deps).deleteFile(relativePath);
+      if (ok) deleted = true;
+    } catch (err) {
+      if (!isMissingObjectError(err)) throw err;
+    }
+  }
+  return deleted;
 }
 
 /**
@@ -348,15 +374,26 @@ async function moveFile(fromPublicIdOrUrl, toRelativePath) {
   return { secure_url: getPublicUrl(to), url: getPublicUrl(to), public_id: to };
 }
 
-async function deleteFolder(folder) {
-  return storage.deleteFolder(folder);
+async function deleteFolder(folder, deps = {}) {
+  const folderClean = storage.normalizeRelativePath(folder);
+  if (!isSharedEventObjectPath(folderClean)) {
+    return storage.deleteFolder(folderClean);
+  }
+
+  let deleted = false;
+  for (const bucket of orderedCountryBuckets(deps)) {
+    try {
+      const ok = await storageServiceForBucket(bucket, deps).deleteFolder(folderClean);
+      if (ok) deleted = true;
+    } catch (err) {
+      if (!isMissingObjectError(err)) throw err;
+    }
+  }
+  return deleted;
 }
 
-async function listFiles(folder, { limit } = {}) {
-  const folderClean = storage.normalizeRelativePath(folder);
-  const items = await storage.listFilesInFolder(folderClean, { limit });
-
-  return items.map((item) => ({
+function mapListedFile(item) {
+  return {
     public_id: item.relativePath,
     secure_url: getPublicUrl(item.relativePath),
     url: getPublicUrl(item.relativePath),
@@ -366,7 +403,41 @@ async function listFiles(folder, { limit } = {}) {
     contentType: item.contentType,
     resource_type: getResourceType(item.name),
     storageId: item.storageId || item.relativePath,
-  }));
+  };
+}
+
+async function listFiles(folder, { limit } = {}, deps = {}) {
+  const folderClean = storage.normalizeRelativePath(folder);
+  if (!isSharedEventObjectPath(folderClean)) {
+    const items = await storage.listFilesInFolder(folderClean, { limit });
+    return items.map(mapListedFile);
+  }
+
+  const seen = new Set();
+  const merged = [];
+  for (const bucket of orderedCountryBuckets(deps)) {
+    let items = [];
+    try {
+      items = await storageServiceForBucket(bucket, deps).listFilesInFolder(folderClean, {
+        limit,
+      });
+    } catch (err) {
+      if (!isMissingObjectError(err)) throw err;
+    }
+    for (const item of items) {
+      if (!item?.relativePath || seen.has(item.relativePath)) continue;
+      seen.add(item.relativePath);
+      merged.push(item);
+    }
+  }
+
+  merged.sort((left, right) => {
+    const leftTime = new Date(left.created_at).getTime() || 0;
+    const rightTime = new Date(right.created_at).getTime() || 0;
+    return rightTime - leftTime;
+  });
+  const sliced = limit ? merged.slice(0, limit) : merged;
+  return sliced.map(mapListedFile);
 }
 
 function validateFileSize(buffer, maxSizeMB = 100) {
@@ -385,6 +456,7 @@ module.exports = {
   streamStoredObject,
   statStoredObject,
   isSharedAppObjectPath,
+  isSharedEventObjectPath,
   moveFile,
   deleteFolder,
   listFiles,

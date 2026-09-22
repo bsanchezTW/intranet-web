@@ -28,6 +28,7 @@ const { isAreaManager } = require("../services/expenses/areaManager");
 const { isFinanceApprover } = require("../services/expenses/financeTeam");
 const { canManageRrhh } = require("../services/access/staffAccess");
 const { listAppsByCatalog } = require("../services/appCatalogService");
+const { ticketModalUrl } = require("../utils/ticketRedirect");
 
 const router = express.Router();
 
@@ -98,13 +99,13 @@ router.post(
       assistantTickets.clearTicketDraft(req.session);
       appendToLastAssistantMessage(
         req.session,
-        `Ticket #${result.id} creado: [ver ticket](/sistemas/tickets?ticket=${result.id}).`,
+        `Ticket #${result.id} creado: [ver ticket](${ticketModalUrl(result.id)}).`,
       );
       // El contador de tickets de la barra se recalcula en la próxima consulta.
       delete req.session.ticketNotifications;
       res.json({
         id: result.id,
-        url: `/sistemas/tickets?ticket=${result.id}`,
+        url: ticketModalUrl(result.id),
         failedAttachments: result.failedAttachments,
       });
     } catch (error) {

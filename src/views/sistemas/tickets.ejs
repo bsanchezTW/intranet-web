@@ -135,7 +135,7 @@
                .filter(Boolean).join(' ').toLowerCase();
         %>
           <li class="ticket-item<%= esNoLeido ? ' ticket-item--nuevo' : '' %>"
-              data-href="/sistemas/tickets/<%= t.id %>"
+              data-href="/soporte/tickets/<%= t.id %>"
               data-estado="<%= t.status %>"
               data-prioridad="<%= t.priority %>"
               data-creado="<%= t.created_at ? new Date(t.created_at).getTime() : 0 %>"

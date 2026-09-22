@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260922a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260922b">
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -10,46 +10,48 @@
         <span>Calendario</span>
       </nav>
       <h2 class="page-title">Calendario de vacaciones</h2>
-      <p class="page-description">
-        <% if (isAdmin) { %>Vacaciones del equipo<% } else { %>Tus vacaciones programadas<% } %>
-        · <%= range.from %> → <%= range.to %>
-      </p>
+      <p class="page-description">Vacaciones aprobadas de todo el equipo.</p>
     </div>
   </div>
 
   <div class="vac-panel">
-    <form class="vac-filters" method="GET" action="/RRHH/vacaciones/calendario">
-      <label style="font-size:0.85rem;color:#475569;">Desde
-        <input type="date" name="from" value="<%= range.from %>" style="margin-left:6px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
-      </label>
-      <label style="font-size:0.85rem;color:#475569;">Hasta
-        <input type="date" name="to" value="<%= range.to %>" style="margin-left:6px;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
-      </label>
-      <button type="submit" class="vac-btn vac-btn-primary vac-btn-sm">Ver</button>
-    </form>
+    <div class="vac-panel-head">
+      <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/calendario?mes=<%= prevMes %>" aria-label="Mes anterior">←</a>
+      <h3 class="vac-cal__title"><%= monthLabel %></h3>
+      <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/calendario?mes=<%= nextMes %>" aria-label="Mes siguiente">→</a>
+    </div>
 
-    <% if (!events || events.length === 0) { %>
-      <p class="vac-empty">No hay vacaciones programadas en este rango.</p>
-    <% } else { %>
-      <table class="vac-table">
+    <div class="vac-cal-scroll">
+      <table class="vac-cal">
         <thead>
           <tr>
-            <% if (isAdmin) { %><th>Colaborador</th><% } %>
-            <th>Desde</th><th>Hasta</th><th>Días</th><th>Estado</th>
+            <% weekdays.forEach(function (day) { %>
+              <th scope="col"><%= day %></th>
+            <% }) %>
           </tr>
         </thead>
         <tbody>
-          <% events.forEach(e => { %>
+          <% weeks.forEach(function (week) { %>
             <tr>
-              <% if (isAdmin) { %><td><%= e.collaboratorName || 'Colaborador' %><% if (e.requester_deleted) { %> <small>(usuario eliminado)</small><% } %></td><% } %>
-              <td><%= e.startDateFmt %></td>
-              <td><%= e.endDateFmt %></td>
-              <td><%= e.days %> <%= e.dayUnit %></td>
-              <td><span class="<%= e.statusBadge %>"><%= e.statusLabel %></span></td>
+              <% week.forEach(function (day) { %>
+                <td class="vac-cal__day<%= day.inMonth ? '' : ' is-out' %><%= day.isToday ? ' is-today' : '' %>">
+                  <span class="vac-cal__num"><%= day.number %></span>
+                  <% if (day.people.length) { %>
+                    <ul class="vac-cal__people">
+                      <% day.people.forEach(function (person) { %>
+                        <li class="vac-cal__person" title="<%= person.title %>"><%= person.label %></li>
+                      <% }) %>
+                      <% if (day.extra) { %>
+                        <li class="vac-cal__more" title="<%= day.extraTitle %>">+<%= day.extra %></li>
+                      <% } %>
+                    </ul>
+                  <% } %>
+                </td>
+              <% }) %>
             </tr>
           <% }) %>
         </tbody>
       </table>
-    <% } %>
+    </div>
   </div>
 </div>

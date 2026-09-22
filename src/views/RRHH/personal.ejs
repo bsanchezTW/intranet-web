@@ -21,7 +21,7 @@
   const errorMsg   = (typeof error   !== 'undefined' && error)   ? error   : null;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260916m">
+<link rel="stylesheet" href="/css/personal.css?v=20260922a">
 <link rel="stylesheet" href="/css/phone.css?v=20260902">
 <% if (puedeEditar) { %>
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
@@ -58,25 +58,26 @@
     </div>
   <% } else { %>
 
-    <div class="personal-toolbar">
-      <label class="personal-search" for="buscarColaborador">
-        <span class="personal-search-icon" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
-        <input type="search" id="buscarColaborador"
-               placeholder="Buscar por nombre, correo o teléfono…"
-               autocomplete="off" aria-label="Buscar colaboradores">
-      </label>
-
-      <% if (areasConGente.length) { %>
-        <div class="personal-chips" role="group" aria-label="Filtrar por área">
-          <button type="button" class="personal-chip is-activo" data-filtro-area="" aria-pressed="true">Todas</button>
-          <% areasConGente.forEach(area => { %>
-            <button type="button" class="personal-chip" data-filtro-area="<%= area.area_name %>" aria-pressed="false"><%= area.area_name %></button>
-          <% }) %>
-        </div>
-      <% } %>
-    </div>
-
     <div class="panel">
+      <div class="personal-toolbar">
+        <label class="personal-search" for="buscarColaborador">
+          <span class="personal-search-icon" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
+          <input type="search" id="buscarColaborador"
+                 placeholder="Buscar por nombre, correo o teléfono…"
+                 autocomplete="off" aria-label="Buscar colaboradores">
+        </label>
+
+        <% if (areasConGente.length) { %>
+          <div class="personal-chips" role="group" aria-label="Filtrar por área">
+            <button type="button" class="personal-chip is-activo" data-filtro-area="" aria-pressed="true">Todas</button>
+            <% areasConGente.forEach(area => { %>
+              <button type="button" class="personal-chip" data-filtro-area="<%= area.area_name %>" aria-pressed="false"><%= area.area_name %></button>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+
+      <div class="personal-tabla-scroll">
       <table class="tabla-personal" id="tablaPersonal">
         <thead>
           <tr>
@@ -209,6 +210,7 @@
           <% }) %>
         </tbody>
       </table>
+      </div>
 
       <p id="personalSinResultados" class="personal-sin-resultados" role="status" hidden>
         No se encontraron colaboradores con los filtros aplicados.
@@ -259,4 +261,4 @@
 <script src="/js/persona-editar-form.js?v=20260917a"></script>
 <script src="/js/centros-picker.js?v=20260911a"></script>
 <% } %>
-<script src="/js/personal-tabla.js?v=20260917b" defer></script>
+<script src="/js/personal-tabla.js?v=20260922a" defer></script>

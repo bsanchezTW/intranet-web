@@ -3,7 +3,10 @@
    viven en /css/galeria.css y la lógica en /js/galeria.js.
    Parámetros: modo ('crear' | 'editar'), evento (sólo editar), imagenes (sólo editar). */
 const esEditar = modo === 'editar';
-const ev = esEditar ? evento : { name: '', description: '', image: '', slug: '' };
+const ev = esEditar ? evento : { name: '', description: '', image: '', slug: '', is_private: false, country_code: '' };
+const paisActual = (typeof country !== 'undefined' && country) ? country : '';
+const puedePrivatizar = !esEditar || ev.country_code === paisActual;
+const nombrePais = (typeof countryConfig !== 'undefined' && countryConfig.name) ? countryConfig.name : 'este país';
 const fotosPortada = esEditar
   ? (imagenes || []).filter((item) => item.resource_type === 'image')
   : [];
@@ -48,6 +51,21 @@ const fotosPortada = esEditar
                       placeholder="Cuenta en una o dos frases de qué se trató el evento"><%= ev.description || '' %></textarea>
             <span class="modal-counter" data-contador-de="eventoDescripcion"></span>
           </div>
+
+          <% if (puedePrivatizar) { %>
+          <div class="galeria-privado">
+            <input type="hidden" name="is_private" value="0">
+            <label class="galeria-privado__label" for="eventoPrivado">
+              <input type="checkbox" id="eventoPrivado" name="is_private" value="1"
+                     <%= ev.is_private ? 'checked' : '' %>>
+              <span class="galeria-privado__pista" aria-hidden="true"></span>
+              <span class="galeria-privado__texto">
+                <strong>Evento privado</strong>
+                <span>Si está activo, solo lo ve <%= nombrePais %>. Si no, lo ven Chile y Perú.</span>
+              </span>
+            </label>
+          </div>
+          <% } %>
         </div>
 
         <section class="modal-section galeria-modal__portada">

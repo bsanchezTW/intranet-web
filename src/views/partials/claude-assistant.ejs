@@ -11,8 +11,8 @@
   const headsetPath = '<path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5Zm0 0a9 9 0 1 1 18 0m0 0v5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3Z"/><path d="M21 16v2a4 4 0 0 1-4 4h-5"/>';
   const assistantIcon = '<svg class="claude-assistant-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + headsetPath + '</svg>';
 
-  // El botón va rotando entre temas de soporte; cada ícono trae la pregunta
-  // que muestra la burbuja mientras está a la vista. El primero es el de reposo.
+  // El botón va cambiando de tema al azar; cada ícono trae la pregunta que
+  // muestra la burbuja mientras está a la vista. El primero es el de reposo.
   const fabTopics = [
     { key: 'ayuda', path: headsetPath, message: '¿Te ayudo a encontrar algo?' },
     { key: 'impresora', path: '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>', message: '¿Tienes problemas para imprimir?', soporte: true },

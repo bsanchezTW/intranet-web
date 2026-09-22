@@ -40,7 +40,7 @@ const FEATURE_MATRIX = {
     lunchMenu: true,
     // Asistente Claude (FAB + /claude).
     claudeAssistant: true,
-    // Ticketera de Soporte (/sistemas).
+    // Ticketera de Soporte (/soporte).
     supportTickets: true,
     // Barra de accesos rápidos del home (sitio, Academy, Rex+, ACHS, Caja).
     homeQuickAccess: true,
@@ -65,14 +65,15 @@ const FEATURE_MATRIX = {
     claudeAssistant: true,
     // Perú no opera ticketera ni mesa de ayuda en esta intranet.
     supportTickets: false,
-    // Sin barra de accesos rápidos en el home de Perú.
-    homeQuickAccess: false,
+    // Barra de accesos rápidos del home: sitio y Academy. Rex+, ACHS y Caja
+    // siguen apagados con chileHrPortals; Tickets, con supportTickets.
+    homeQuickAccess: true,
     // Rex+, ACHS y Caja Los Andes son portales chilenos; no se ofrecen en Perú.
     chileHrPortals: false,
-    // El proceso de rendiciones es corporativo, no chileno.
+    // Centros de costo en RRHH. No es la sección Finanzas de Procesos.
     expenseCenter: true,
-    // Igual que Chile.
-    expenseRequests: true,
+    // Rendiciones y la sección Finanzas de Procesos son sólo de Chile.
+    expenseRequests: false,
     // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú.
     vacations: true,
   },

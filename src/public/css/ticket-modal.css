@@ -46,7 +46,7 @@
 /*
  * Vive aquí y no en tickets.css porque el modal de "abrir ticket" se renderiza
  * en layout.ejs y se abre desde cualquier página; tickets.css sólo se carga en
- * /sistemas/tickets. El detalle y el alta comparten esta misma estructura.
+ * /soporte. El detalle y el alta comparten esta misma estructura.
  */
 
 /* ── Estado del ticket (píldora; la usan el listado y la cabecera) ── */

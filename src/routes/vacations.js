@@ -32,6 +32,8 @@ const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const {
   toDateOnly,
   addDays,
+  parseDateOnly,
+  eachDay,
   formatDisplay,
   todayInCountry,
 } = require("../utils/vacationDateUtils");
@@ -695,25 +697,106 @@ router.post("/gestion/solicitud/:id/rechazar", requireRrhhManager(), async (req,
 // ==========================================================
 // CALENDARIO
 // ==========================================================
+
+const CALENDAR_VISIBLE = 3;
+const CALENDAR_WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function monthParam(year, month) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function shiftMonth(year, month, delta) {
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1, 12));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
+}
+
+function parseCalendarMonth(value, today) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value || ""));
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
+      return { year, month };
+    }
+  }
+  const iso = toDateOnly(today);
+  return { year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) };
+}
+
+function calendarMonthLabel(year, month) {
+  return `${MONTH_NAMES[month - 1]} ${year}`;
+}
+
+function personChip(event) {
+  const full = event.collaboratorName || "Colaborador";
+  return {
+    label: full.split(/\s+/)[0] || full,
+    title: `${full} · ${event.startDateFmt} → ${event.endDateFmt}`,
+    sort: full,
+  };
+}
+
+function eventCoversDay(event, iso) {
+  const start = toDateOnly(event.start_date);
+  const end = toDateOnly(event.end_date);
+  return Boolean(start && end && start <= iso && end >= iso);
+}
+
+/** Semanas lun–dom del mes, con los días del mes anterior y siguiente que cierran la grilla. */
+function buildCalendarWeeks({ year, month, today, events }) {
+  const start = `${monthParam(year, month)}-01`;
+  const lead = (parseDateOnly(start).getUTCDay() + 6) % 7;
+  const next = shiftMonth(year, month, 1);
+  const end = addDays(`${monthParam(next.year, next.month)}-01`, -1);
+  const trail = (7 - ((parseDateOnly(end).getUTCDay() + 6) % 7) - 1) % 7;
+  const prefix = monthParam(year, month);
+  const days = eachDay(addDays(start, -lead), addDays(end, trail)).map((iso) => {
+    const people = events
+      .filter((event) => eventCoversDay(event, iso))
+      .map(personChip)
+      .sort((a, b) => a.sort.localeCompare(b.sort, "es"));
+    const hidden = people.slice(CALENDAR_VISIBLE);
+    return {
+      iso,
+      number: Number(iso.slice(8)),
+      inMonth: iso.startsWith(prefix),
+      isToday: iso === today,
+      people: people.slice(0, CALENDAR_VISIBLE),
+      extra: hidden.length,
+      extraTitle: hidden.map((person) => person.title).join(" · "),
+    };
+  });
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  return weeks;
+}
+
 router.get("/calendario", requireRole.intranetActivo(), async (req, res) => {
   try {
-    const isAdmin = Boolean(res.locals.isAdministrador);
     const today = todayInCountry();
-    const start = req.query.from ? toDateOnly(req.query.from) : addDays(today, -30);
-    const end = req.query.to ? toDateOnly(req.query.to) : addDays(today, 90);
+    const { year, month } = parseCalendarMonth(req.query.mes, today);
+    const next = shiftMonth(year, month, 1);
+    const rangeEnd = addDays(`${monthParam(next.year, next.month)}-01`, -1);
 
     const events = await requestService.listApprovedInRange({
-      startDate: start,
-      endDate: end,
-      userId: isAdmin ? null : req.session.user.id,
+      startDate: `${monthParam(year, month)}-01`,
+      endDate: rangeEnd,
     });
 
+    const prev = shiftMonth(year, month, -1);
     res.render("RRHH/vacaciones/calendario", {
       titulo: "Calendario de vacaciones",
       user: req.session.user,
-      isAdmin,
-      events: events.map(mapVacationRequestForView),
-      range: { from: start, to: end },
+      monthLabel: calendarMonthLabel(year, month),
+      prevMes: monthParam(prev.year, prev.month),
+      nextMes: monthParam(next.year, next.month),
+      weekdays: CALENDAR_WEEKDAYS,
+      weeks: buildCalendarWeeks({
+        year,
+        month,
+        today,
+        events: events.map(mapVacationRequestForView),
+      }),
       ...readFlash(req),
     });
   } catch (err) {

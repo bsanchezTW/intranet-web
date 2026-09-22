@@ -19,13 +19,13 @@ describe("plantilla transaccional de correo", () => {
       html: "<p>Hola</p>",
       senderName: MAIL_SENDERS.support,
       heading: "Nuevo ticket",
-      cta: { href: "/sistemas/tickets?ticket=12", label: "Ver ticket" },
+      cta: { href: "/soporte?ticket=12", label: "Ver ticket" },
       preheader: "Hay un ticket nuevo",
     });
     assert.match(html, /Soporte/);
     assert.match(html, /Nuevo ticket/);
     assert.match(html, /Ver ticket/);
-    assert.match(html, /sistemas\/tickets\?ticket=12/);
+    assert.match(html, /soporte\?ticket=12/);
     assert.match(html, /No respondas a este correo/);
     assert.doesNotMatch(html, /<!DOCTYPE html>/i);
   });

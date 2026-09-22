@@ -7,6 +7,7 @@ const { UPLOAD_LIMITS_BYTES } = require("../../config/uploadLimits");
 const { ticketCategoryLabel } = require("../../constants/ticketCategories");
 const { supportAgentEmails } = require("./supportTeam");
 const { ticketStatusFromDb } = require("../../utils/schemaMappers");
+const { ticketModalUrl } = require("../../utils/ticketRedirect");
 const {
   attachmentKind,
   attachmentFileName,
@@ -136,7 +137,7 @@ function notifyNewTicket({ id, ticket, requester, adjuntosJSON }) {
   notifyTicketTeam({
     subject: `Nuevo ticket #${id} — ${ticket.title}`,
     heading: "Nuevo ticket",
-    cta: { href: `/sistemas/tickets?ticket=${id}`, label: "Ver ticket" },
+    cta: { href: ticketModalUrl(id), label: "Ver ticket" },
     text: ticketMailText(mensaje, adjuntosJSON),
     html: ticketMailHtml(mensaje, adjuntosJSON),
   });
@@ -267,7 +268,7 @@ async function listOpenTicketsForUser(user, { limit = 5 } = {}) {
     titulo: row.title,
     categoria: ticketCategoryLabel(row.category),
     estado: ticketStatusFromDb(row.status),
-    enlace: `/sistemas/tickets?ticket=${row.id}`,
+    enlace: ticketModalUrl(row.id),
   }));
 }
 
