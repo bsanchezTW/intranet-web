@@ -132,6 +132,24 @@ class PeruVacationStrategy extends BaseVacationStrategy {
       return { valid: false, error: VACATION_MESSAGES.noDays };
     }
 
+    /**
+     * Período tocado por el historial previo a la intranet: el art. 17 no se
+     * le aplica al resto.
+     *
+     * El art. 17 dice cómo se PARTEN los 30 días de un período. Si 22 de esos
+     * 30 ya se gozaron antes —y no sabemos en qué tramos, porque el Excel de
+     * RR.HH. guarda "marzo, 15 días" y buena parte es anterior al D. Leg. 1405
+     * de 2018— los 8 que quedan son el resto del período, no un bloque flexible
+     * con su regla de 1 a 6 días. Exigírsela dejaría ese saldo imposible de
+     * pedir: ni cabe en un tramo corto ni alcanza para uno de 7 a 14.
+     *
+     * Los períodos que la intranet administró desde el principio no tienen
+     * historial y siguen validando el art. 17 completo.
+     */
+    if (Number(period.historical_used_days || 0) > 0) {
+      return { valid: true, requiresFractionAck: N < ANNUAL_ENTITLEMENT };
+    }
+
     // Completar bloque protegido con tramo pequeño (ej. 7+6 inválido)
     if (
       protectedUsed > 0 &&
@@ -232,6 +250,13 @@ class PeruVacationStrategy extends BaseVacationStrategy {
 
     if (N <= 0) {
       throw new Error("Saldo insuficiente en bloques del período.");
+    }
+
+    // Período tocado por el historial: el art. 17 ya no lo gobierna (ver
+    // validateFractionAgainstPeriod). Se imputa saturando, igual que el
+    // historial, para que lo que la validación dejó pasar se pueda consumir.
+    if (Number(period.historical_used_days || 0) > 0) {
+      return this.allocateHistoricalBlockDays(period, N);
     }
 
     // Art. 17.ii: tramos 1–6 solo contra bloque flexible

@@ -99,6 +99,10 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
       referenceDate: today,
     });
     const history = historyByUser.get(user.id) || { days: 0, records: 0 };
+    // Días del historial que no cupieron en ningún período: la imputación FIFO
+    // llena hasta donde hay derecho y el resto queda fuera. Sin esto el saldo
+    // dice 0 y nadie se entera de que sobran días cargados.
+    const unimputed = Math.round((history.days - summary.historicalUsedDays) * 100) / 100;
 
     return {
       id: user.id,
@@ -112,6 +116,8 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
       hasHireDate: Boolean(user.hire_date),
       generatedDays: summary.generatedDays,
       historicalUsedDays: summary.historicalUsedDays,
+      historyTotalDays: Math.round(history.days * 100) / 100,
+      unimputedDays: unimputed > 0.001 ? unimputed : 0,
       historyRecords: history.records,
       approvedUsedDays: summary.approvedUsedDays,
       totalUsedDays: summary.totalUsedDays,
@@ -123,7 +129,7 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
       nextAccrualFmt: summary.nextAccrualDate ? formatDisplay(summary.nextAccrualDate) : "—",
       // El historial cargado supera el derecho generado: casi siempre es una
       // fecha de ingreso mal puesta o una fila duplicada. RR.HH. lo ve marcado.
-      overDrawn: summary.availableDays < -0.001,
+      overDrawn: summary.availableDays < -0.001 || unimputed > 0.001,
     };
   });
 
@@ -139,6 +145,7 @@ function emptyTotals() {
     approvedUsedDays: 0,
     availableDays: 0,
     severanceDays: 0,
+    unimputedDays: 0,
     overDrawn: 0,
   };
 }
@@ -153,6 +160,7 @@ function sumTotals(rows) {
     approvedUsedDays: round2(rows.reduce((s, r) => s + r.approvedUsedDays, 0)),
     availableDays: round2(rows.reduce((s, r) => s + r.availableDays, 0)),
     severanceDays: round2(rows.reduce((s, r) => s + r.severanceDays, 0)),
+    unimputedDays: round2(rows.reduce((s, r) => s + r.unimputedDays, 0)),
     overDrawn: rows.filter((r) => r.overDrawn).length,
   };
 }

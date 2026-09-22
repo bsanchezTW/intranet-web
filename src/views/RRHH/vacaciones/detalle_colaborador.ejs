@@ -45,9 +45,14 @@
     </div>
   <% } %>
 
-  <% if (summary.availableDays < 0) { %>
+  <% if (summary.availableDays < 0 || unimputedDays > 0) { %>
     <div class="flash-msg flash-msg--error" role="alert">
-      El historial cargado supera los días que este colaborador ha generado.
+      El historial cargado (<%= historyTotalDays %> días) supera los
+      <%= summary.generatedDays %> días que este colaborador ha generado.
+      <% if (unimputedDays > 0) { %>
+        Hay <strong><%= unimputedDays %> día(s)</strong> que no se descuentan de
+        ningún período.
+      <% } %>
       Revisa su fecha de ingreso y que no haya períodos repetidos en el historial.
     </div>
   <% } %>
@@ -62,7 +67,12 @@
     <div class="vac-stat vac-stat--quiet">
       <div class="vac-stat-label">Gozados antes de la intranet</div>
       <div class="vac-stat-value"><%= summary.historicalUsedDays %></div>
-      <p class="vac-stat-note"><%= history.length %> registro(s) históricos.</p>
+      <p class="vac-stat-note">
+        <%= history.length %> registro(s) históricos.
+        <% if (unimputedDays > 0) { %>
+          <br>Otros <%= unimputedDays %> día(s) cargados no caben en ningún período.
+        <% } %>
+      </p>
     </div>
     <div class="vac-stat vac-stat--quiet">
       <div class="vac-stat-label">Gozados por la intranet</div>

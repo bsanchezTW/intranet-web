@@ -28,8 +28,10 @@
   <% if (totals.overDrawn > 0) { %>
     <div class="flash-msg flash-msg--error" role="alert">
       <%= totals.overDrawn %> colaborador(es) tienen más días cargados en el
-      historial de los que han generado. Revisa su fecha de ingreso y que no
-      haya períodos repetidos: aparecen marcados en la tabla.
+      historial de los que han generado<% if (totals.unimputedDays > 0) { %>
+      (<%= totals.unimputedDays %> día(s) en total no alcanzan a descontarse de
+      ningún período)<% } %>. Revisa su fecha de ingreso y que no haya períodos
+      repetidos: aparecen marcados en la tabla.
     </div>
   <% } %>
 
@@ -115,6 +117,10 @@
               <td data-label="Histórico">
                 <%= r.historicalUsedDays %>
                 <% if (r.historyRecords) { %><span class="vac-stat-unit">(<%= r.historyRecords %>)</span><% } %>
+                <%# Días cargados que no caben en ningún período devengado. %>
+                <% if (r.unimputedDays > 0) { %>
+                  <br><span class="vac-stat-unit">+<%= r.unimputedDays %> sin período</span>
+                <% } %>
               </td>
               <td data-label="Intranet"><%= r.approvedUsedDays %></td>
               <td data-label="Saldo"><strong><%= r.availableDays %></strong></td>

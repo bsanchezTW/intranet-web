@@ -137,6 +137,33 @@ la ficha y sólo reimputa si dejó de cuadrar.
 Los registros históricos no validan el fraccionamiento del art. 17: son hechos
 ya ocurridos, muchos anteriores al D. Leg. 1405. Las solicitudes nuevas sí.
 
+### Probar el flujo completo
+
+`scripts/demo-vacaciones.js` siembra un elenco ficticio elegido para que cada
+caso del módulo se vea en pantalla, y genera el Excel que calza con él.
+
+```bash
+npm run demo:pe            # crea 5 colaboradores de prueba
+npm run demo:pe:excel      # genera DEMO-vacaciones-historicas.xlsx
+npm run demo:pe:estado     # imprime el saldo de cada uno
+npm run demo:pe:limpiar    # borra todo lo que creó, incluido el Excel
+```
+
+| Quién | Qué demuestra |
+|-------|---------------|
+| Ana Pérez | Mucha antigüedad y casi todo gozado: el caso de la reunión |
+| Luis Quispe | 2 años y 3 meses, 60 días acumulados |
+| Rosa Ccahuana | Sin historial: estado vacío y saldo completo |
+| Jorge Medina | Todavía no cumple el año: solo acumula trunco |
+| Elena Vargas | Más historial del que generó: dispara la alerta |
+
+El Excel trae filas buenas, una duplicada y cinco rotas a propósito (documento
+vacío, trabajador inexistente, mes ilegible, cero días, período anterior al
+ingreso) para que la vista previa muestre cada error.
+
+Todo queda marcado —correo `demo.*@demo.invalid`, documentos `9000xxxx`— y
+`--limpiar` lo borra entero sin tocar una fila que no haya creado él.
+
 ### Rutas de RR.HH.
 
 | Ruta | Qué hace |

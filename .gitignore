@@ -47,3 +47,6 @@ desktop.ini
 .cursor/*
 !.cursor/rules/
 .claude/
+
+# Datos de prueba generados por scripts/demo-vacaciones.js
+DEMO-*.xlsx

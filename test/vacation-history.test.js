@@ -256,6 +256,34 @@ describe("Imputación FIFO del historial", () => {
     assert.doesNotThrow(() => pe.allocateHistoricalBlockDays(period, 40));
   });
 
+  it("FIFO-05: un período tocado por el historial no arrastra el art. 17", () => {
+    // Luis: 22 días gozados antes de la intranet dejaron el bloque protegido
+    // agotado y 8 días de saldo. Sin esta excepción esos 8 no caben en ningún
+    // tramo legal —ni 1–6 ni 7–14— y el saldo quedaba imposible de pedir.
+    const conHistorial = {
+      historical_used_days: 22,
+      protected_block_days_used: 15,
+      flexible_block_days_used: 7,
+    };
+    const r = pe.validateFractionAgainstPeriod(8, conHistorial);
+    assert.equal(r.valid, true);
+
+    const alloc = pe.allocateBlockDays(conHistorial, 8);
+    assert.equal(alloc.protectedDelta + alloc.flexibleDelta, 8);
+  });
+
+  it("FIFO-06: un período sin historial sigue validando el art. 17 entero", () => {
+    const limpio = {
+      historical_used_days: 0,
+      protected_block_days_used: 15,
+      flexible_block_days_used: 7,
+    };
+    // 8 días con el protegido agotado: el bloque flexible solo admite 1–6.
+    const r = pe.validateFractionAgainstPeriod(8, limpio);
+    assert.equal(r.valid, false);
+    assert.throws(() => pe.allocateBlockDays(limpio, 8));
+  });
+
   it("FIFO-03: más historial que derecho generado → overflow, no excepción", () => {
     const periods = anaPerez();
     const { overflow } = allocateHistoricalFifo({

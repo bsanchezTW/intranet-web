@@ -445,6 +445,14 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
     const country = resolveCountryForUser(profile);
     const currentYear = Number((todayInCountry() || "").slice(0, 4));
 
+    // Días del historial que no caben en ningún período devengado. La
+    // imputación FIFO llena hasta donde hay derecho; sin esto, cargar de más
+    // deja el saldo en cero y el sobrante desaparece sin avisar.
+    const historyTotalDays =
+      Math.round(history.reduce((sum, h) => sum + Number(h.days_used), 0) * 100) / 100;
+    const unimputedDays =
+      Math.round((historyTotalDays - summary.historicalUsedDays) * 100) / 100;
+
     res.render("RRHH/vacaciones/detalle_colaborador", {
       titulo: "Detalle de vacaciones",
       user: req.session.user,
@@ -454,6 +462,8 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
       requests: requests.map(mapVacationRequestForView),
       history: history.map(mapVacationHistoryForView),
       historyAudit,
+      historyTotalDays,
+      unimputedDays: unimputedDays > 0.001 ? unimputedDays : 0,
       serviceTime: reportService.serviceTimeLabel(profile.hire_date, todayInCountry()),
       nextAccrualFmt: summary.nextAccrualDate
         ? formatDisplay(summary.nextAccrualDate)
