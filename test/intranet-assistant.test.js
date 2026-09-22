@@ -398,7 +398,8 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
 
   it("las instrucciones piden revisar la autoayuda antes de ofrecer un ticket", () => {
     const [instrucciones] = claudeService.buildSystemPrompt();
-    assert.match(instrucciones.text, /Asistente de Transworld/);
+    assert.match(instrucciones.text, /Tu nombre es Luna/);
+    assert.match(instrucciones.text, /asistente de la Intranet de Transworld/);
     assert.match(instrucciones.text, /list_self_help_tools antes de ofrecer un ticket/);
     assert.match(instrucciones.text, /Reparación de Impresora/);
   });

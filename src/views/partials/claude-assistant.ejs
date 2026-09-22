@@ -26,7 +26,7 @@
     { key: 'ticket', path: '<path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z"/><line x1="14" y1="5" x2="14" y2="19" stroke-dasharray="2 3"/>', message: '¿Quieres saber cómo va tu ticket?', soporte: true },
   ].filter((topic) => !topic.soporte || features.supportTickets);
 %>
-<button type="button" class="claude-fab" id="claudeFab" aria-controls="claudePanel" aria-expanded="false" aria-label="Abrir el Asistente de Transworld">
+<button type="button" class="claude-fab" id="claudeFab" aria-controls="claudePanel" aria-expanded="false" aria-label="Abrir a Luna">
   <span class="claude-fab__iconos" aria-hidden="true">
     <% fabTopics.forEach(function (topic, i) { %>
       <svg class="claude-fab__icono<%= i === 0 ? ' is-visible' : '' %>" data-mensaje="<%= topic.message %>"
@@ -42,20 +42,20 @@
   <header class="claude-panel__header">
     <span class="claude-panel__avatar"><%- assistantIcon %></span>
     <div class="claude-panel__heading">
-      <h2 id="claudePanelTitle">Asistente de Transworld</h2>
-      <p>Te ayudo a moverte por la intranet</p>
+      <h2 id="claudePanelTitle">Luna</h2>
+      <p>Asistente de la intranet de Transworld</p>
     </div>
     <button type="button" class="claude-panel__icon" id="claudeReset" title="Empezar de nuevo" aria-label="Borrar la conversación y empezar de nuevo">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
     </button>
-    <button type="button" class="claude-panel__icon" id="claudeClose" title="Cerrar" aria-label="Cerrar asistente">
+    <button type="button" class="claude-panel__icon" id="claudeClose" title="Cerrar" aria-label="Cerrar a Luna">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg>
     </button>
   </header>
 
   <div class="claude-panel__body" id="claudeScroll">
     <div class="claude-welcome" id="claudeWelcome">
-      <p class="claude-welcome__hello">¡Hola<%= assistantFirstName ? ', ' + assistantFirstName : '' %>! ¿En qué te ayudo?</p>
+      <p class="claude-welcome__hello">¡Hola<%= assistantFirstName ? ', ' + assistantFirstName : '' %>! Soy Luna. ¿En qué te ayudo?</p>
       <p>Te digo dónde está cada cosa y cómo se usa, busco personas y documentos<% if (features.supportTickets) { %>, creo tickets de Soporte<% } %> y te llevo a la página que necesitas.</p>
       <div class="claude-chips">
         <% if (features.supportTickets) { %>
@@ -78,7 +78,7 @@
     <%# Sin botón en el chat: se adjunta sólo desde la casilla del borrador de ticket. %>
     <input type="file" id="claudeFileInput" accept="image/*,video/*,.pdf,.doc,.docx" multiple hidden>
     <% } %>
-    <textarea id="claudeInput" rows="1" maxlength="2000" placeholder="Escribe tu pregunta…" aria-label="Mensaje para el asistente"></textarea>
+    <textarea id="claudeInput" rows="1" maxlength="2000" placeholder="Escribe tu pregunta…" aria-label="Mensaje para Luna"></textarea>
     <button type="submit" class="claude-composer__send" id="claudeSend" aria-label="Enviar" disabled>
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
     </button>

@@ -190,7 +190,7 @@
     requestAnimationFrame(() => panel.classList.add("is-open"));
     fab.classList.add("is-active");
     fab.setAttribute("aria-expanded", "true");
-    fab.setAttribute("aria-label", "Cerrar el Asistente de Transworld");
+    fab.setAttribute("aria-label", "Cerrar a Luna");
     rememberOpen(true);
     loadHistory();
     if (focus) input.focus();
@@ -200,7 +200,7 @@
     panel.classList.remove("is-open");
     fab.classList.remove("is-active");
     fab.setAttribute("aria-expanded", "false");
-    fab.setAttribute("aria-label", "Abrir el Asistente de Transworld");
+    fab.setAttribute("aria-label", "Abrir a Luna");
     rememberOpen(false);
     FabRotacion.reanudar();
     closeTimer = setTimeout(() => { panel.hidden = true; }, 220);
