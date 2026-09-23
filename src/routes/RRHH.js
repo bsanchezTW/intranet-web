@@ -57,6 +57,7 @@ const {
   maskEmail,
 } = require("../utils/contactEmails");
 const balanceService = require("../services/vacations/vacationBalanceService");
+const profileService = require("../services/vacations/vacationProfileService");
 const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
 const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
 const { invalidateStaffAccess } = require("../services/access/staffAccess");
@@ -835,7 +836,7 @@ router.post(
       }
 
       const { rows: prev } = await db.query(
-        "SELECT photo AS foto, password_hash, email_confirmed, role, email FROM users WHERE id = $1",
+        "SELECT photo AS foto, password_hash, email_confirmed, role, email, hire_date, national_id FROM users WHERE id = $1",
         [id],
       );
       if (!prev.length) {
@@ -943,6 +944,23 @@ router.post(
         `UPDATE users SET ${setClauses.join(", ")} WHERE id=$${values.length}`,
         values,
       );
+
+      // La fecha de ingreso y el documento mueven el cálculo de vacaciones:
+      // el cambio queda en la bitácora de la ficha de vacaciones.
+      if (isFeatureEnabled("vacations")) {
+        profileService
+          .auditProfileChange(db, {
+            userId: id,
+            actorId: req.session.user?.id,
+            before: profileService.profileSnapshot(prevUser),
+            after: profileService.profileSnapshot({
+              hire_date: hireVal,
+              national_id: documentoVal,
+            }),
+            reason: "Editado desde Personal",
+          })
+          .catch((e) => console.error("[Vacaciones] bitácora al editar:", e.message));
+      }
 
       // La ficha muestra el conjunto completo de centros activos, así que lo
       // que venga marcado es el estado final; sin casillas, ninguno.

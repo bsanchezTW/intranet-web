@@ -44,7 +44,6 @@
     "test": "node --test test/**/*.test.js",
     "test:pe": "node --test test/env-peru.test.js",
     "demo:pe": "node scripts/demo-vacaciones.js --country=PE --sembrar",
-    "demo:pe:excel": "node scripts/demo-vacaciones.js --country=PE --excel",
     "demo:pe:estado": "node scripts/demo-vacaciones.js --country=PE --estado",
     "demo:pe:limpiar": "node scripts/demo-vacaciones.js --country=PE --limpiar",
     "email-listener": "node src/email-listener"

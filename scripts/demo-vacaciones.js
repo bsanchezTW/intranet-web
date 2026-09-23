@@ -3,26 +3,25 @@
  * Elenco de prueba para demostrar el módulo de vacaciones de Perú.
  *
  *   node scripts/demo-vacaciones.js --country=PE --sembrar
- *   node scripts/demo-vacaciones.js --country=PE --excel
  *   node scripts/demo-vacaciones.js --country=PE --estado
  *   node scripts/demo-vacaciones.js --country=PE --limpiar
  *
  * Crea colaboradores ficticios elegidos para que cada caso del módulo se vea en
- * pantalla —el que cuadra con el Excel de RR.HH., el que todavía no cumple el
- * año, el que tiene el historial mal cargado— y genera un Excel de importación
- * que calza con ellos, con filas buenas y filas rotas a propósito.
+ * pantalla —el que cuadra con la planilla de RR.HH., el que todavía no cumple
+ * el año, el que tiene el historial mal cargado— con parte de su historial ya
+ * registrado y saldos de referencia para conciliar. Uno queda sin historial a
+ * propósito, para probar la carga por lotes desde su ficha.
  *
  * Todo lo que siembra queda marcado (correo `demo.*@demo.invalid`, documentos
  * 90000001+) y `--limpiar` lo borra entero: colaboradores, períodos,
- * solicitudes, historial, ajustes, bitácora y lotes de importación. No toca
- * ninguna fila que no haya creado él mismo.
+ * solicitudes, historial, referencias, ajustes y bitácora. No toca ninguna
+ * fila que no haya creado él mismo.
  *
  * Los colaboradores se crean SIN contraseña: sirven para verlos desde la
  * gestión de RR.HH., no para iniciar sesión.
  */
 
 const path = require("path");
-const fs = require("fs");
 const dotenv = require("dotenv");
 const logger = require("../src/utils/logger");
 const { isValidCountryCode } = require("../src/config/country");
@@ -38,8 +37,9 @@ const ROOT = path.join(__dirname, "..");
 // modo que el borrado no puede llevarse por delante a una persona de verdad.
 const DEMO_EMAIL_SUFFIX = "@demo.invalid";
 const DEMO_DOC_PREFIX = "9000"; // documentos 9000xxxx, fuera de cualquier DNI real
+// Lotes del importador Excel (ya retirado) que sembraban versiones anteriores
+// de este script: --limpiar los sigue borrando.
 const DEMO_FILE_TAG = "DEMO-";
-const EXCEL_NAME = "DEMO-vacaciones-historicas.xlsx";
 
 function parseArgs(argv) {
   const args = {};
@@ -70,7 +70,9 @@ applyCountryPoolerUser(process.env);
 const db = require("../src/db");
 const balanceService = require("../src/services/vacations/vacationBalanceService");
 const reportService = require("../src/services/vacations/vacationReportService");
-const { buildWorkbook } = require("../src/services/exports/excelWorkbook");
+const historyService = require("../src/services/vacations/vacationHistoryService");
+const referenceService = require("../src/services/vacations/vacationReferenceService");
+const { parseMonth } = require("../src/constants/vacationHistory");
 const { todayInCountry } = require("../src/utils/vacationDateUtils");
 
 // ===========================================================================
@@ -91,9 +93,10 @@ function ingresoHace(anios, meses = 0) {
 }
 
 /**
- * Cada persona demuestra un caso distinto del módulo. El campo `historial` se
- * carga por el importador de Excel, no por aquí: la gracia de la demostración
- * es verlo entrar.
+ * Cada persona demuestra un caso distinto del módulo. `historial` se registra
+ * al sembrar, salvo en quien tiene `cargarAMano`: esas filas se imprimen para
+ * cargarlas desde su ficha con «Cargar salidas». `referencia` es el saldo que
+ * tendría anotado RR.HH. hoy (null = sin referencia).
  */
 const ELENCO = [
   {
@@ -102,6 +105,7 @@ const ELENCO = [
     apellido: "Pérez Quispe",
     ingreso: ingresoHace(8, 6),
     caso: "El caso de la reunión: mucha antigüedad y casi todo ya gozado.",
+    referencia: 60,
     historial: [
       { anio: 6, mes: "Marzo", dias: 15 },
       { anio: 6, mes: "Octubre", dias: 10 },
@@ -119,6 +123,8 @@ const ELENCO = [
     apellido: "Quispe Mamani",
     ingreso: ingresoHace(2, 3),
     caso: "Los «2 años y 3 meses, 60 días acumulados» que mencionó RR.HH.",
+    cargarAMano: true,
+    referencia: 38,
     historial: [
       { anio: 1, mes: "Julio", dias: 15 },
       { anio: 1, mes: "Noviembre", dias: 7 },
@@ -146,6 +152,8 @@ const ELENCO = [
     apellido: "Vargas Ríos",
     ingreso: ingresoHace(1, 2),
     caso: "Historial que supera lo generado: dispara la alerta roja del resumen.",
+    // La planilla decía 0: la referencia no cuadra y el resumen lo marca.
+    referencia: 0,
     // 45 días contra 30 generados. Los meses van dentro de su año de servicio
     // para que las filas sean válidas: el error que se quiere mostrar es el
     // exceso, no una fecha anterior al ingreso.
@@ -154,15 +162,6 @@ const ELENCO = [
       { anio: 0, mes: "Abril", dias: 20 },
     ],
   },
-];
-
-/** Filas rotas a propósito, para que la vista previa muestre cada error. */
-const FILAS_CON_ERROR = [
-  { documento: "90009999", nombre: "No existe en la intranet", anio: -2, mes: "Marzo", dias: 10 },
-  { documento: "", nombre: "Sin documento", anio: -2, mes: "Marzo", dias: 10 },
-  { documento: "90000001", nombre: "Ana Pérez Quispe", anio: -2, mes: "Marzoo", dias: 10 },
-  { documento: "90000002", nombre: "Luis Quispe Mamani", anio: -1, mes: "Mayo", dias: 0 },
-  { documento: "90000003", nombre: "Rosa Ccahuana Flores", anio: -30, mes: "Abril", dias: 10 },
 ];
 
 // ===========================================================================
@@ -184,6 +183,9 @@ async function sembrar() {
   );
   const areaId = areas[0] ? areas[0].id : null;
 
+  const anioActual = Number(todayInCountry().slice(0, 4));
+  const pendientesAMano = [];
+
   for (const persona of ELENCO) {
     const { rows } = await db.queryRetryIdCollision(
       `INSERT INTO users
@@ -202,6 +204,28 @@ async function sembrar() {
     );
     const id = rows[0].id;
     await balanceService.recalculatePeriods(id);
+
+    const filas = persona.historial.map((h) => ({
+      month: `${anioActual - h.anio}-${String(parseMonth(h.mes)).padStart(2, "0")}`,
+      days: String(h.dias),
+      observation: "Planilla de RR.HH. (demo)",
+    }));
+    if (persona.cargarAMano) {
+      pendientesAMano.push({ persona, filas });
+    } else if (filas.length > 0) {
+      const res = await historyService.createHistoryBatch({ userId: id, rows: filas, actorId: null });
+      if (!res.ok) logger.warn("demo", `${persona.nombre}: ${res.errors.join(" ")}`);
+    }
+    if (persona.referencia != null) {
+      await referenceService.createReference({
+        userId: id,
+        asOfDate: todayInCountry(),
+        expectedDays: persona.referencia,
+        note: "Planilla de RR.HH. (demo)",
+        actorId: null,
+      });
+    }
+
     const saldo = await balanceService.getBalanceSummary(id);
     logger.info(
       "demo",
@@ -211,8 +235,14 @@ async function sembrar() {
   }
 
   console.log("");
-  logger.info("demo", `${ELENCO.length} colaboradores de prueba creados, sin historial todavía.`);
-  logger.info("demo", "Siguiente: --excel, y luego impórtalo desde la intranet.");
+  logger.info("demo", `${ELENCO.length} colaboradores de prueba creados.`);
+  for (const { persona, filas } of pendientesAMano) {
+    logger.info(
+      "demo",
+      `Para probar la carga por lotes, abre la ficha de ${persona.nombre} ${persona.apellido} ` +
+        `y carga: ${filas.map((f) => `${f.month} · ${f.days} d`).join(", ")}.`,
+    );
+  }
 }
 
 function correoDemo(persona) {
@@ -221,78 +251,6 @@ function correoDemo(persona) {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
   return `demo.${slug}${DEMO_EMAIL_SUFFIX}`;
-}
-
-// ===========================================================================
-// Excel de importación
-// ===========================================================================
-
-async function generarExcel() {
-  const anioActual = Number(todayInCountry().slice(0, 4));
-  const filas = [];
-
-  for (const persona of ELENCO) {
-    for (const h of persona.historial) {
-      filas.push({
-        documento: persona.doc,
-        nombre: `${persona.nombre} ${persona.apellido}`,
-        anio: anioActual - h.anio,
-        mes: h.mes,
-        dias: h.dias,
-        desde: "",
-        hasta: "",
-        observacion: "Vacaciones registradas en Excel",
-      });
-    }
-  }
-
-  // Un duplicado exacto de la primera fila: la vista previa lo marca en ámbar
-  // y por defecto no lo importa.
-  if (filas.length > 0) filas.push({ ...filas[0] });
-
-  for (const rota of FILAS_CON_ERROR) {
-    filas.push({
-      documento: rota.documento,
-      nombre: rota.nombre,
-      anio: rota.anio < -25 ? 1900 : anioActual + rota.anio,
-      mes: rota.mes,
-      dias: rota.dias,
-      desde: "",
-      hasta: "",
-      observacion: "",
-    });
-  }
-
-  const buffer = await buildWorkbook([
-    {
-      name: "Historial",
-      columns: [
-        { header: "documento", key: "documento", width: 14 },
-        { header: "nombre", key: "nombre", width: 30 },
-        { header: "anio", key: "anio", width: 10 },
-        { header: "mes", key: "mes", width: 14 },
-        { header: "dias", key: "dias", width: 10 },
-        { header: "desde", key: "desde", width: 14 },
-        { header: "hasta", key: "hasta", width: 14 },
-        { header: "observacion", key: "observacion", width: 36 },
-      ],
-      rows: filas,
-    },
-  ]);
-
-  const destino = path.join(ROOT, EXCEL_NAME);
-  fs.writeFileSync(destino, buffer);
-
-  const buenas = filas.length - FILAS_CON_ERROR.length;
-  logger.info("demo", `Excel escrito en ${destino}`);
-  logger.info(
-    "demo",
-    `${filas.length} filas: ${buenas - 1} válidas, 1 duplicada y ${FILAS_CON_ERROR.length} con error.`,
-  );
-  logger.info(
-    "demo",
-    "Súbelo en RRHH › Vacaciones › Importar historial y revisa la vista previa antes de confirmar.",
-  );
 }
 
 // ===========================================================================
@@ -367,6 +325,11 @@ async function limpiar() {
         "DELETE FROM vacation_history_audit WHERE user_id = ANY($1::int[])",
         ids,
       );
+      borrados.referencias = await borrar(
+        client,
+        "DELETE FROM vacation_reference_balances WHERE user_id = ANY($1::int[])",
+        ids,
+      );
       borrados.historial = await borrar(
         client,
         "DELETE FROM vacation_history WHERE user_id = ANY($1::int[])",
@@ -423,12 +386,6 @@ async function limpiar() {
     if (cuantos > 0) logger.info("demo", `${que}: ${cuantos} fila(s) borradas`);
   }
   logger.info("demo", "Elenco de prueba eliminado.");
-
-  const excel = path.join(ROOT, EXCEL_NAME);
-  if (fs.existsSync(excel)) {
-    fs.unlinkSync(excel);
-    logger.info("demo", `${EXCEL_NAME} eliminado.`);
-  }
 }
 
 async function borrar(client, sql, params) {
@@ -447,7 +404,7 @@ async function idsDemo() {
   return rows.map((r) => r.id);
 }
 
-/** Lotes de importación generados por este script. */
+/** Lotes del importador que dejaron versiones anteriores de este script. */
 async function lotesDemo() {
   const { rows } = await db.query(
     "SELECT id FROM vacation_history_imports WHERE file_name LIKE $1",
@@ -463,7 +420,6 @@ async function main() {
   logger.info("demo", `Perú · schema=${binding.schema}`);
 
   if (args.sembrar) return sembrar();
-  if (args.excel) return generarExcel();
   if (args.estado) return estado();
   if (args.limpiar) return limpiar();
 
@@ -471,9 +427,8 @@ async function main() {
 Elenco de prueba del módulo de vacaciones de Perú.
 
   --sembrar   Crea 5 colaboradores ficticios, cada uno con un caso distinto
-  --excel     Genera ${EXCEL_NAME} para importarlo desde la intranet
   --estado    Muestra el saldo de cada uno en la consola
-  --limpiar   Borra todo lo que creó el script, incluido el Excel
+  --limpiar   Borra todo lo que creó el script
 
 Ejemplo:
   node scripts/demo-vacaciones.js --country=PE --sembrar

@@ -1,8 +1,11 @@
 const db = require("../../db");
 const balanceService = require("./vacationBalanceService");
 const { getCurrentCountry } = require("../../config/country");
+const { getStrategy, resolveCountryForUser } = require("./VacationEngine");
+const { periodShortLabel } = require("../../utils/schemaMappers");
 const { VACATION_MESSAGES } = require("../../constants/vacationMessages");
 const {
+  HISTORY_AUDIT_ACTION,
   HISTORY_ORIGIN,
   ALL_HISTORY_ORIGINS,
   MIN_HISTORY_YEAR,
@@ -43,6 +46,15 @@ const SELECT_HISTORY = `
 // Validación (pura: sin base de datos, para poder probarla sola)
 // ===========================================================================
 
+/** «2024-03» → { year: 2024, month: 3 }; cualquier otra cosa → null. */
+function parseYearMonth(value) {
+  const m = String(value ?? "").trim().match(/^(\d{4})-(\d{1,2})$/);
+  if (!m) return null;
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return { year: Number(m[1]), month };
+}
+
 /**
  * Normaliza y valida los datos de un registro histórico.
  *
@@ -52,14 +64,24 @@ function normalizeHistoryInput(input, context = {}) {
   const errors = [];
   const warnings = [];
   const { hireDate = null, cutoffDate = null, referenceYear = null } = context;
+  // Hasta qué mes se puede registrar historial: el en curso. Lo que viene
+  // después se pide como solicitud.
+  const referenceDate =
+    toDateOnly(context.referenceDate) ||
+    (referenceYear ? `${referenceYear}-12-31` : todayInCountry());
 
-  const year = Number.parseInt(input.periodYear ?? input.period_year, 10);
-  const month = parseMonth(input.periodMonth ?? input.period_month);
+  // «2024-03», como lo entrega <input type="month">, trae año y mes juntos.
+  const yearMonth = parseYearMonth(input.yearMonth ?? input.year_month);
+  const year = yearMonth
+    ? yearMonth.year
+    : Number.parseInt(input.periodYear ?? input.period_year, 10);
+  const month = yearMonth
+    ? yearMonth.month
+    : parseMonth(input.periodMonth ?? input.period_month);
   const startDate = toDateOnly(input.startDate ?? input.start_date);
   const endDate = toDateOnly(input.endDate ?? input.end_date);
   const days = Number(input.daysUsed ?? input.days_used);
-  const maxYear =
-    referenceYear || Number((todayInCountry() || "").slice(0, 4)) || year;
+  const maxYear = Number((referenceDate || "").slice(0, 4)) || year;
 
   if (!Number.isInteger(year)) {
     errors.push(VACATION_MESSAGES.historyNeedYear);
@@ -67,9 +89,17 @@ function normalizeHistoryInput(input, context = {}) {
     errors.push(VACATION_MESSAGES.historyInvalidYear(MIN_HISTORY_YEAR));
   }
 
-  const rawMonth = input.periodMonth ?? input.period_month;
+  const rawMonth = yearMonth ? yearMonth.month : input.periodMonth ?? input.period_month;
   if (rawMonth != null && String(rawMonth).trim() !== "" && month == null) {
     errors.push(VACATION_MESSAGES.historyInvalidMonth);
+  }
+
+  if (
+    Number.isInteger(year) &&
+    month != null &&
+    `${year}-${String(month).padStart(2, "0")}` > String(referenceDate).slice(0, 7)
+  ) {
+    errors.push(VACATION_MESSAGES.historyFutureMonth);
   }
 
   if (!Number.isFinite(days) || days <= 0) {
@@ -157,7 +187,7 @@ async function listForUser(userId, { includeDeleted = false } = {}) {
     `${SELECT_HISTORY}
       WHERE h.user_id = $1
         ${includeDeleted ? "" : "AND h.deleted_at IS NULL"}
-      ORDER BY h.period_year DESC, COALESCE(h.period_month, 0) DESC, h.id DESC`,
+      ORDER BY h.period_year ASC, COALESCE(h.period_month, 0) ASC, h.id ASC`,
     [userId],
   );
   return rows;
@@ -281,39 +311,227 @@ async function insertHistoryRow(client, { userId, employee, value, actorId, impo
   return rows[0];
 }
 
-/** Registro manual desde la ficha del colaborador. */
-async function createHistory({ userId, input, actorId, cutoffDate = null }) {
-  const employee = await balanceService.getUserVacationProfile(userId);
-  if (!employee) {
-    return { ok: false, errors: [VACATION_MESSAGES.collaboratorNotFound] };
-  }
+// ===========================================================================
+// Carga manual por lotes
+// ===========================================================================
 
-  const normalized = normalizeHistoryInput(
-    { ...input, origin: input.origin || HISTORY_ORIGIN.MANUAL },
-    { hireDate: employee.hire_date, cutoffDate },
+const BATCH_SOURCE = "Carga manual";
+const MAX_BATCH_ROWS = 200;
+
+/** Fila del formulario de carga → entrada de normalizeHistoryInput. */
+function batchRowInput(row = {}) {
+  return {
+    yearMonth: row.month,
+    startDate: row.start || null,
+    endDate: row.end || null,
+    daysUsed: row.days,
+    observation: row.observation,
+    origin: HISTORY_ORIGIN.MANUAL,
+    source: BATCH_SOURCE,
+  };
+}
+
+/** Sin mes, días, fechas ni observación es una fila vacía: se ignora. */
+function isBlankBatchRow(row = {}) {
+  return ["month", "days", "start", "end", "observation"].every(
+    (key) => row[key] == null || String(row[key]).trim() === "",
   );
-  if (!normalized.valid) {
-    return { ok: false, errors: normalized.errors, warnings: normalized.warnings };
+}
+
+function round2(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
+
+/**
+ * Valida un lote y calcula cómo quedaría el saldo, sin escribir nada.
+ *
+ * Función pura: recibe todo lo que necesita. Los duplicados son avisos y no
+ * errores porque dos salidas iguales en el mismo mes existen de verdad (en el
+ * Excel de RR.HH. hay «08-2024, 7 días» dos veces para la misma persona).
+ *
+ * `before`/`after` resumen el saldo con el historial actual y con el lote.
+ */
+function previewBatch({
+  rows,
+  employee,
+  existingHistory,
+  periods,
+  approvedBlocks = new Map(),
+  strategy,
+  country,
+  cutoffDate = null,
+  referenceDate = null,
+  periodLabels = new Map(),
+}) {
+  const today = toDateOnly(referenceDate) || todayInCountry();
+  const existingKeys = new Set(
+    existingHistory.map((h) =>
+      duplicateKey({
+        userId: employee.id,
+        periodYear: h.period_year,
+        periodMonth: h.period_month,
+        daysUsed: h.days_used,
+        startDate: h.start_date,
+        endDate: h.end_date,
+      }),
+    ),
+  );
+  const seenInBatch = new Set();
+
+  const checked = (rows || []).map((row, index) => {
+    if (isBlankBatchRow(row)) return { index, blank: true, errors: [], warnings: [] };
+    const normalized = normalizeHistoryInput(batchRowInput(row), {
+      hireDate: employee.hire_date,
+      cutoffDate,
+      referenceDate: today,
+    });
+    const warnings = [...normalized.warnings];
+    if (normalized.valid) {
+      const key = duplicateKey({ userId: employee.id, ...normalized.value });
+      if (existingKeys.has(key)) warnings.push(VACATION_MESSAGES.historyDuplicateWarning);
+      else if (seenInBatch.has(key)) warnings.push(VACATION_MESSAGES.historyDuplicateInBatch);
+      seenInBatch.add(key);
+    }
+    return {
+      index,
+      blank: false,
+      errors: normalized.errors,
+      warnings,
+      value: normalized.valid ? normalized.value : null,
+    };
+  });
+
+  const entries = checked.filter((r) => !r.blank);
+  const existingRecords = existingHistory.map((h) => ({
+    id: h.id,
+    period_year: h.period_year,
+    period_month: h.period_month,
+    days_used: h.days_used,
+  }));
+  const newRecords = entries
+    .filter((r) => r.value)
+    .map((r) => ({
+      index: r.index,
+      period_year: r.value.periodYear,
+      period_month: r.value.periodMonth,
+      days_used: r.value.daysUsed,
+    }));
+
+  const simulate = (records) =>
+    balanceService.simulateHistoryImputation({ periods, records, strategy, approvedBlocks });
+  const summarize = (simulation) => {
+    const s = balanceService.summarizePeriods({
+      periods: simulation.periods,
+      country,
+      referenceDate: today,
+    });
+    return {
+      availableDays: s.availableDays,
+      historicalUsedDays: s.historicalUsedDays,
+      unimputedDays: simulation.overflow,
+    };
+  };
+
+  const before = simulate(existingRecords);
+  const after = simulate([...existingRecords, ...newRecords]);
+  const imputedByIndex = new Map(
+    after.results
+      .filter((r) => r.record.index != null)
+      .map((r) => [r.record.index, r]),
+  );
+
+  return {
+    rows: checked.map((r) => {
+      const imputed = imputedByIndex.get(r.index);
+      return {
+        index: r.index,
+        blank: r.blank,
+        errors: r.errors,
+        warnings: r.warnings,
+        allocations: imputed
+          ? imputed.allocations.map((a) => ({
+              label: periodLabels.get(a.periodId) || "—",
+              days: a.days,
+            }))
+          : [],
+        unallocated: imputed ? imputed.overflow : 0,
+      };
+    }),
+    entries: entries.length,
+    errorCount: entries.filter((r) => r.errors.length > 0).length,
+    valid: entries.length > 0 && entries.every((r) => r.errors.length === 0),
+    addedDays: round2(newRecords.reduce((sum, r) => sum + Number(r.days_used), 0)),
+    before: summarize(before),
+    after: summarize(after),
+    values: entries.filter((r) => r.value).map((r) => r.value),
+  };
+}
+
+/** Junta de la base lo que previewBatch necesita para un colaborador. */
+async function loadBatchContext(userId, { cutoffDate = null } = {}) {
+  const employee = await balanceService.getUserVacationProfile(userId);
+  if (!employee) return null;
+  const country = resolveCountryForUser(employee);
+  const [existingHistory, periods, approvedBlocks] = await Promise.all([
+    listForUser(userId),
+    balanceService.listPeriods(userId),
+    balanceService.approvedBlocksByPeriod(db, userId),
+  ]);
+  return {
+    employee,
+    existingHistory,
+    periods,
+    approvedBlocks,
+    strategy: getStrategy(country),
+    country,
+    cutoffDate,
+    periodLabels: new Map(periods.map((p) => [p.id, periodShortLabel(p)])),
+  };
+}
+
+async function previewHistoryBatch({ userId, rows, cutoffDate = null }) {
+  if (!Array.isArray(rows) || rows.length > MAX_BATCH_ROWS) {
+    return { ok: false, errors: [VACATION_MESSAGES.historyBatchTooLarge(MAX_BATCH_ROWS)] };
+  }
+  const context = await loadBatchContext(userId, { cutoffDate });
+  if (!context) return { ok: false, errors: [VACATION_MESSAGES.collaboratorNotFound] };
+  if (!context.employee.hire_date) {
+    return { ok: false, errors: [VACATION_MESSAGES.historyNeedHireDate] };
+  }
+  return { ok: true, preview: previewBatch({ rows, ...context }) };
+}
+
+/**
+ * Guarda un lote completo o nada: si una sola fila tiene errores no se
+ * inserta ninguna y la respuesta trae la vista previa con el detalle.
+ */
+async function createHistoryBatch({ userId, rows, actorId, cutoffDate = null }) {
+  const result = await previewHistoryBatch({ userId, rows, cutoffDate });
+  if (!result.ok) return result;
+  const { preview } = result;
+  if (preview.entries === 0) {
+    return { ok: false, errors: [VACATION_MESSAGES.historyBatchEmpty], preview };
+  }
+  if (!preview.valid) {
+    return { ok: false, errors: [VACATION_MESSAGES.historyBatchHasErrors], preview };
   }
 
+  const employee = await balanceService.getUserVacationProfile(userId);
   const client = await db.getClient();
   try {
     await client.query("BEGIN");
-    const row = await insertHistoryRow(client, {
-      userId,
-      employee,
-      value: normalized.value,
-      actorId,
-    });
-    await writeAudit(client, {
-      historyId: row.id,
-      userId,
-      action: "CREATE",
-      actorId,
-      oldValue: null,
-      newValue: auditSnapshot(row),
-      source: normalized.value.source,
-    });
+    for (const value of preview.values) {
+      const row = await insertHistoryRow(client, { userId, employee, value, actorId });
+      await writeAudit(client, {
+        historyId: row.id,
+        userId,
+        action: HISTORY_AUDIT_ACTION.CREATE,
+        actorId,
+        oldValue: null,
+        newValue: auditSnapshot(row),
+        source: BATCH_SOURCE,
+      });
+    }
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
@@ -323,12 +541,18 @@ async function createHistory({ userId, input, actorId, cutoffDate = null }) {
   client.release();
 
   const imputation = await balanceService.reimputeHistoricalDays(userId);
-  return { ok: true, warnings: normalized.warnings, imputation };
+  return { ok: true, created: preview.values.length, imputation };
 }
 
-async function updateHistory({ historyId, input, actorId, cutoffDate = null }) {
+/** ¿El registro existe, está vivo y es del colaborador indicado? */
+function belongsTo(record, userId) {
+  if (!record || record.deleted_at) return false;
+  return userId == null || String(record.user_id) === String(userId);
+}
+
+async function updateHistory({ historyId, userId = null, input, actorId, cutoffDate = null }) {
   const current = await getById(historyId);
-  if (!current || current.deleted_at) {
+  if (!belongsTo(current, userId)) {
     return { ok: false, errors: [VACATION_MESSAGES.historyNotFound] };
   }
 
@@ -369,7 +593,7 @@ async function updateHistory({ historyId, input, actorId, cutoffDate = null }) {
     await writeAudit(client, {
       historyId,
       userId: current.user_id,
-      action: "UPDATE",
+      action: HISTORY_AUDIT_ACTION.UPDATE,
       actorId,
       oldValue: auditSnapshot(current),
       newValue: auditSnapshot(rows[0]),
@@ -393,9 +617,9 @@ async function updateHistory({ historyId, input, actorId, cutoffDate = null }) {
  * Borrado lógico: el saldo deja de contar el registro, pero la fila y su
  * auditoría siguen ahí. Un historial de RR.HH. no se borra físicamente.
  */
-async function deleteHistory({ historyId, actorId }) {
+async function deleteHistory({ historyId, userId = null, actorId }) {
   const current = await getById(historyId);
-  if (!current || current.deleted_at) {
+  if (!belongsTo(current, userId)) {
     return { ok: false, error: VACATION_MESSAGES.historyNotFound };
   }
 
@@ -411,7 +635,7 @@ async function deleteHistory({ historyId, actorId }) {
     await writeAudit(client, {
       historyId,
       userId: current.user_id,
-      action: "DELETE",
+      action: HISTORY_AUDIT_ACTION.DELETE,
       actorId,
       oldValue: auditSnapshot(current),
       newValue: null,
@@ -455,7 +679,10 @@ module.exports = {
   getById,
   getUserTotals,
   existingKeysFor,
-  createHistory,
+  parseYearMonth,
+  previewBatch,
+  previewHistoryBatch,
+  createHistoryBatch,
   updateHistory,
   deleteHistory,
   listAudit,

@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260922a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260923a">
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -13,7 +13,7 @@
       <h2 class="page-title">Resumen de vacaciones</h2>
       <p class="page-description">
         Saldo de cada colaborador al <%= referenceDateFmt %>, en días calendario.
-        <% if (cutoffDateFmt) { %>Historial migrado hasta el <%= cutoffDateFmt %>.<% } %>
+        El historial previo a la intranet se carga en la ficha de cada uno.
       </p>
     </div>
   </div>
@@ -32,6 +32,20 @@
       (<%= totals.unimputedDays %> día(s) en total no alcanzan a descontarse de
       ningún período)<% } %>. Revisa su fecha de ingreso y que no haya períodos
       repetidos: aparecen marcados en la tabla.
+    </div>
+  <% } %>
+
+  <% if (totals.withOverdue > 0) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <%= totals.withOverdue %> colaborador(es) tienen días con el plazo legal para
+      gozarlos vencido. Los días no se pierden, pero la demora genera indemnización.
+    </div>
+  <% } %>
+
+  <% if (totals.mismatched > 0) { %>
+    <div class="flash-msg flash-msg--info" role="status">
+      <%= totals.mismatched %> de <%= totals.withReference %> saldo(s) de referencia no
+      cuadran con lo que calcula la intranet. Revisa esas fichas.
     </div>
   <% } %>
 
@@ -67,8 +81,8 @@
         <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/resumen/exportar">
           Exportar a Excel
         </a>
-        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/importar">
-          Importar historial
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/exportar">
+          Exportar historial
         </a>
       </div>
     </div>
@@ -101,7 +115,8 @@
           <tr>
             <th>Colaborador</th><th>Ingreso</th><th>Servicio</th>
             <th>Generados</th><th>Histórico</th><th>Intranet</th>
-            <th>Saldo</th><th>Trunco</th><th>A liquidar</th><th>Próximo derecho</th>
+            <th>Saldo</th><th>Trunco</th><th>A liquidar</th><th>Plazo</th>
+            <th>Referencia</th><th>Próximo derecho</th>
           </tr>
         </thead>
         <tbody>
@@ -126,6 +141,26 @@
               <td data-label="Saldo"><strong><%= r.availableDays %></strong></td>
               <td data-label="Trunco"><%= r.truncoDays %></td>
               <td data-label="A liquidar"><%= r.severanceDays %></td>
+              <td data-label="Plazo">
+                <% if (r.overdueDays > 0) { %>
+                  <span class="vac-badge vac-badge-rejected"><%= r.overdueDays %> d vencidos</span>
+                <% } else if (r.dueSoonDays > 0) { %>
+                  <span class="vac-badge vac-badge-pending"><%= r.dueSoonDays %> d al <%= r.nextDeadlineFmt %></span>
+                <% } else { %>
+                  <span class="vac-nodata">—</span>
+                <% } %>
+              </td>
+              <td data-label="Referencia">
+                <% if (!r.reference) { %>
+                  <span class="vac-nodata">—</span>
+                <% } else if (r.reference.matches) { %>
+                  <span class="vac-badge vac-badge-approved">Cuadra</span>
+                  <br><span class="vac-stat-unit"><%= r.reference.expected %> al <%= r.reference.asOfFmt %></span>
+                <% } else { %>
+                  <span class="vac-badge vac-badge-rejected"><%= r.reference.difference > 0 ? '+' : '' %><%= r.reference.difference %> d</span>
+                  <br><span class="vac-stat-unit"><%= r.reference.expected %> al <%= r.reference.asOfFmt %></span>
+                <% } %>
+              </td>
               <td data-label="Próximo derecho" class="<%= r.nextAccrualFmt === '—' ? 'vac-nodata' : '' %>"><%= r.nextAccrualFmt %></td>
             </tr>
           <% }) %>
@@ -135,8 +170,32 @@
         «Generados» son los días de años de servicio ya cumplidos.
         «Trunco» es el proporcional del año en curso: se paga en una
         liquidación, pero todavía no se puede pedir como vacaciones.
-        La columna «A liquidar» es la suma de saldo y trunco.
+        La columna «A liquidar» es la suma de saldo y trunco. «Plazo» avisa
+        cuando pasó (o está por pasar) el año que da la ley para gozar un
+        período. «Referencia» compara con el último saldo anotado de la
+        planilla de RR.HH.
       </p>
     <% } %>
+  </div>
+
+  <div class="vac-panel">
+    <div class="vac-panel-head">Fecha de corte del historial</div>
+    <form class="vac-form vac-form-inline" method="POST" action="/RRHH/vacaciones/gestion/corte">
+      <div class="campo">
+        <label for="cutoff_date">Historial hasta el</label>
+        <input type="date" id="cutoff_date" name="cutoff_date" value="<%= cutoffDate || '' %>" required>
+      </div>
+      <button type="submit" class="vac-btn vac-btn-cancel"><%= cutoffDate ? 'Actualizar corte' : 'Fijar corte' %></button>
+    </form>
+    <p class="vac-panel-note">
+      <% if (cutoffDateFmt) { %>
+        Las salidas hasta el <strong><%= cutoffDateFmt %></strong> se registran como
+        historial; desde el día siguiente, como solicitud en la intranet.
+      <% } else { %>
+        Todavía no está definida. Fíjala para dejar claro hasta qué día manda la
+        planilla de RR.HH. y desde cuándo manda la intranet: las salidas posteriores
+        cargadas como historial se marcan con un aviso.
+      <% } %>
+    </p>
   </div>
 </div>

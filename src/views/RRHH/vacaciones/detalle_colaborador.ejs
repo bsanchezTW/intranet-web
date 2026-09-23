@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260922a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260923a">
 
 <%
   const nombre = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || ('#' + profile.id);
@@ -6,6 +6,7 @@
   const ingresoFmt = profile.hire_date
     ? new Date(profile.hire_date).toISOString().split('T')[0].split('-').reverse().join('-')
     : null;
+  const fichaPath = '/RRHH/vacaciones/gestion/' + profile.id;
 %>
 
 <div class="vac-wrap">
@@ -15,14 +16,14 @@
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
         <a href="/RRHH/vacaciones">Vacaciones</a> <span aria-hidden="true">/</span>
-        <a href="/RRHH/vacaciones/gestion">Gestión</a> <span aria-hidden="true">/</span>
+        <a href="/RRHH/vacaciones/gestion/resumen">Resumen</a> <span aria-hidden="true">/</span>
         <span>Colaborador</span>
       </nav>
       <h2 class="page-title"><%= nombre %></h2>
       <p class="page-description">
         Ingreso: <%= ingresoFmt || 'no registrado' %>
         <% if (serviceTime && profile.hire_date) { %> · <%= serviceTime %> de servicio<% } %>
-        <% if (profile.national_id) { %> · <%= profile.national_id %><% } %>
+        <% if (profile.national_id) { %> · <%= documentLabel %> <%= profile.national_id %><% } %>
       </p>
     </div>
   </div>
@@ -40,9 +41,13 @@
 
   <% if (!profile.hire_date) { %>
     <div class="flash-msg flash-msg--info" role="status">
-      Este colaborador no tiene fecha de ingreso. Edítalo en
-      <a href="/RRHH/personal?editar=<%= profile.id %>">Personal</a> para calcular sus vacaciones.
+      Este colaborador no tiene fecha de ingreso. Regístrala en «Datos para el cálculo» para
+      generar sus períodos y descontar el historial.
     </div>
+  <% } %>
+
+  <% if (periodsBlockedMessage) { %>
+    <div class="flash-msg flash-msg--error" role="alert"><%= periodsBlockedMessage %></div>
   <% } %>
 
   <% if (summary.availableDays < 0 || unimputedDays > 0) { %>
@@ -53,11 +58,25 @@
         Hay <strong><%= unimputedDays %> día(s)</strong> que no se descuentan de
         ningún período.
       <% } %>
-      Revisa su fecha de ingreso y que no haya períodos repetidos en el historial.
+      Revisa su fecha de ingreso y que no haya salidas repetidas en el historial.
     </div>
   <% } %>
 
-  <%# Las cuatro cifras de la hoja "resumen" de RR.HH., en el mismo orden. %>
+  <% if (overduePeriods.length > 0) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <%= overduePeriods.length === 1 ? 'Un período tiene' : overduePeriods.length + ' períodos tienen' %>
+      días sin gozar con el plazo legal vencido
+      (<%= overduePeriods.map(p => p.periodLabel + ': ' + p.available + ' d').join(' · ') %>).
+      Los días no se pierden, pero la demora genera indemnización vacacional.
+    </div>
+  <% } else if (dueSoonPeriods.length > 0) { %>
+    <div class="flash-msg flash-msg--info" role="status">
+      Vence pronto el plazo para gozar
+      <%= dueSoonPeriods.map(p => p.available + ' d de ' + p.periodLabel + ' (hasta el ' + p.enjoyByFmt + ')').join(' · ') %>.
+    </div>
+  <% } %>
+
+  <%# Las cuatro cifras de la hoja de RR.HH., en el mismo orden. %>
   <div class="vac-balance-grid">
     <div class="vac-stat vac-stat--quiet">
       <div class="vac-stat-label">Días generados</div>
@@ -68,9 +87,9 @@
       <div class="vac-stat-label">Gozados antes de la intranet</div>
       <div class="vac-stat-value"><%= summary.historicalUsedDays %></div>
       <p class="vac-stat-note">
-        <%= history.length %> registro(s) históricos.
+        <%= history.length %> salida(s) registradas.
         <% if (unimputedDays > 0) { %>
-          <br>Otros <%= unimputedDays %> día(s) cargados no caben en ningún período.
+          <br>Otros <%= unimputedDays %> día(s) no caben en ningún período.
         <% } %>
       </p>
     </div>
@@ -81,14 +100,341 @@
     </div>
     <div class="vac-stat">
       <div class="vac-stat-label">Saldo disponible</div>
-      <div class="vac-stat-value"><%= summary.availableDays %></div>
+      <div class="vac-stat-value <%= summary.availableDays < 0 ? 'danger' : '' %>"><%= summary.availableDays %></div>
       <p class="vac-stat-note">
         <% if (nextAccrualFmt) { %>Próximo derecho: <%= nextAccrualFmt %><% } else { %>Días calendario<% } %>
       </p>
     </div>
   </div>
 
-  <%# Trunco y liquidación: lo que Patricia necesita mandarle al abogado. %>
+  <%# ======================== Datos para el cálculo ======================== %>
+  <div class="vac-panel">
+    <div class="vac-panel-head">
+      Datos para el cálculo
+      <div class="vac-panel-actions">
+        <button type="button" class="vac-btn vac-btn-cancel vac-btn-sm" id="btnEditarDatos">Corregir</button>
+      </div>
+    </div>
+    <dl class="vac-datos">
+      <div>
+        <dt>Fecha de ingreso</dt>
+        <dd class="<%= ingresoFmt ? '' : 'vac-nodata' %>"><%= ingresoFmt || 'Sin registrar' %></dd>
+      </div>
+      <div>
+        <dt><%= documentLabel %></dt>
+        <dd class="<%= profile.national_id ? '' : 'vac-nodata' %>"><%= profile.national_id || 'Sin registrar' %></dd>
+      </div>
+      <div>
+        <dt>Tiempo de servicio</dt>
+        <dd><%= profile.hire_date ? serviceTime : '—' %></dd>
+      </div>
+      <div>
+        <dt>Próximo derecho</dt>
+        <dd class="<%= nextAccrualFmt ? '' : 'vac-nodata' %>"><%= nextAccrualFmt || '—' %></dd>
+      </div>
+    </dl>
+    <p class="vac-panel-note">
+      Todo el cálculo parte de la fecha de ingreso: al corregirla se recalculan
+      los períodos y el historial se vuelve a descontar. El cambio queda en la bitácora.
+    </p>
+  </div>
+
+  <%# ===================== Historial previo a la intranet ===================== %>
+  <div class="vac-panel" id="historial">
+    <div class="vac-panel-head">
+      Vacaciones anteriores a la intranet
+      <div class="vac-panel-actions">
+        <button
+          type="button"
+          class="vac-btn vac-btn-primary vac-btn-sm"
+          id="btnCargarSalidas"
+          aria-controls="cargaLote"
+          aria-expanded="false"
+          <%= profile.hire_date ? '' : 'disabled' %>
+        >Cargar salidas</button>
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/exportar">
+          Exportar
+        </a>
+      </div>
+    </div>
+
+    <%- include('partials/carga_lote', { fichaPath }) %>
+
+    <% if (!history || history.length === 0) { %>
+      <p class="vac-empty">
+        Todavía no hay salidas registradas.<br>
+        Cárgalas con «Cargar salidas», una fila por cada salida del Excel (mes y días).
+      </p>
+    <% } else { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Mes</th><th>Días</th><th>Descontado de</th><th>Fechas</th>
+            <th>Observación</th><th>Registrado</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% history.forEach(h => { %>
+            <tr>
+              <td data-label="Mes"><%= h.periodLabel %></td>
+              <td data-label="Días"><strong><%= h.days %></strong></td>
+              <td data-label="Descontado de">
+                <span class="vac-chips">
+                  <% h.allocations.forEach(a => { %>
+                    <span class="vac-chip"><%= a.label %> · <%= a.days %> d</span>
+                  <% }) %>
+                  <% if (h.unallocated > 0) { %>
+                    <span class="vac-chip vac-chip--alerta"><%= h.unallocated %> d sin período</span>
+                  <% } %>
+                </span>
+              </td>
+              <%# Sin fechas exactas se muestra un guion: no se inventan rangos. %>
+              <td data-label="Fechas" class="<%= h.hasDates ? '' : 'vac-nodata' %>">
+                <%= h.hasDates ? (h.startDateFmt + ' → ' + h.endDateFmt) : '—' %>
+              </td>
+              <td data-label="Observación"><%= h.observation || '—' %></td>
+              <td data-label="Registrado">
+                <%= h.createdByName || '—' %>
+                <br><span class="vac-stat-unit"><%= h.createdAtFmt %> · <%= h.originLabel %></span>
+              </td>
+              <td data-label="">
+                <span class="vac-row-actions">
+                  <button
+                    type="button"
+                    class="vac-btn vac-btn-cancel vac-btn-sm js-editar-historial"
+                    data-id="<%= h.id %>"
+                    data-month="<%= h.monthValue %>"
+                    data-start="<%= h.startDateValue %>"
+                    data-end="<%= h.endDateValue %>"
+                    data-days="<%= h.days %>"
+                    data-observation="<%= h.observation || '' %>"
+                    data-period="<%= h.periodLabel %>"
+                  >Editar</button>
+                  <form
+                    class="vac-inline-form"
+                    method="POST"
+                    action="<%= fichaPath %>/historial/<%= h.id %>/eliminar"
+                    data-confirm="Se quitarán <%= h.days %> día(s) de <%= h.periodLabel %> del historial y el saldo se recalculará."
+                    data-confirm-title="¿Eliminar la salida?"
+                    data-confirm-accept="Eliminar"
+                    data-confirm-tone="peligro"
+                  >
+                    <button type="submit" class="vac-btn vac-btn-cancel vac-btn-sm">Eliminar</button>
+                  </form>
+                </span>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td data-label="Total">Total</td>
+            <td data-label="Días"><strong><%= historyTotalDays %></strong></td>
+            <td colspan="5" data-label=""></td>
+          </tr>
+        </tfoot>
+      </table>
+      <p class="vac-panel-note">
+        Cada salida se descuenta del período más antiguo con saldo, igual que las
+        columnas por período del Excel. No son solicitudes: ocurrieron antes de
+        que la intranet administrara las vacaciones<% if (cutoffDateFmt) { %>, hasta el <%= cutoffDateFmt %><% } %>.
+      </p>
+    <% } %>
+  </div>
+
+  <%# ========================= Saldo de referencia ========================== %>
+  <div class="vac-panel" id="referencia">
+    <div class="vac-panel-head">Saldo de referencia</div>
+    <form class="vac-form vac-form-inline" method="POST" action="<%= fichaPath %>/referencia">
+      <div class="campo">
+        <label for="ref_as_of">Fecha</label>
+        <input type="date" id="ref_as_of" name="as_of_date" value="<%= today %>" max="<%= today %>" required>
+      </div>
+      <div class="campo">
+        <label for="ref_days">Saldo según RR.HH.</label>
+        <input type="number" id="ref_days" name="expected_days" step="0.5" inputmode="decimal" placeholder="Ej: 7" required>
+      </div>
+      <div class="campo vac-form-inline__grow">
+        <label for="ref_note">Nota</label>
+        <input type="text" id="ref_note" name="note" maxlength="255" placeholder="Ej: Excel RR.HH., hoja Agendas, saldo legal">
+      </div>
+      <button type="submit" class="vac-btn vac-btn-primary">Comparar</button>
+    </form>
+
+    <% if (references.length > 0) { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr><th>Fecha</th><th>Según RR.HH.</th><th>Intranet</th><th>Resultado</th><th>Nota</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% references.forEach(r => { %>
+            <tr>
+              <td data-label="Fecha"><%= r.asOfFmt %></td>
+              <td data-label="Según RR.HH."><%= r.expected %></td>
+              <td data-label="Intranet"><strong><%= r.computed %></strong></td>
+              <td data-label="Resultado">
+                <% if (r.matches) { %>
+                  <span class="vac-badge vac-badge-approved">Cuadra</span>
+                <% } else { %>
+                  <span class="vac-badge vac-badge-rejected">Diferencia <%= r.difference > 0 ? '+' : '' %><%= r.difference %> d</span>
+                <% } %>
+              </td>
+              <td data-label="Nota">
+                <%= r.note || '—' %>
+                <% if (r.createdByName) { %><br><span class="vac-stat-unit"><%= r.createdByName %></span><% } %>
+              </td>
+              <td data-label="">
+                <form
+                  class="vac-inline-form"
+                  method="POST"
+                  action="<%= fichaPath %>/referencia/<%= r.id %>/eliminar"
+                  data-confirm="Se quitará el saldo de referencia del <%= r.asOfFmt %>. No cambia el saldo del colaborador."
+                  data-confirm-title="¿Eliminar la referencia?"
+                  data-confirm-accept="Eliminar"
+                  data-confirm-tone="peligro"
+                >
+                  <button type="submit" class="vac-btn vac-btn-cancel vac-btn-sm">Eliminar</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+    <p class="vac-panel-note">
+      Anota el saldo que tenía tu planilla a una fecha para confirmar que la carga
+      quedó bien. La intranet lo compara con años cumplidos × 30 menos lo gozado
+      hasta ese mes. «Diferencia +3» significa que la intranet calcula 3 días más.
+      Es solo una referencia: no cambia el saldo.
+    </p>
+  </div>
+
+  <%# ============================ Períodos ============================== %>
+  <div class="vac-panel">
+    <div class="vac-panel-head">
+      Períodos de devengo
+      <div class="vac-panel-actions">
+        <form class="vac-inline-form" method="POST" action="<%= fichaPath %>/recalcular">
+          <button type="submit" class="vac-btn vac-btn-ghost vac-btn-sm">Recalcular saldo</button>
+        </form>
+      </div>
+    </div>
+    <% if (!periods || periods.length === 0) { %>
+      <p class="vac-empty">Sin períodos calculados.</p>
+    <% } else { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Período</th><th>Devengado</th><th>Ajuste</th>
+            <th>Histórico</th><th>Intranet</th><th>Disponible</th>
+            <% if (isPeru) { %><th>Gozar hasta</th><th>Seguidos rest.</th><th>Sueltos rest.</th><% } %>
+            <th>Récord</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% periods.forEach(p => { %>
+            <tr>
+              <td data-label="Período">
+                <strong><%= p.periodLabel %></strong>
+                <br><span class="vac-stat-unit"><%= p.periodStartFmt %> → <%= p.periodEndFmt %></span>
+                <% if (p.inProgress) { %><br><span class="vac-stat-unit">En curso (trunco)</span><% } %>
+              </td>
+              <td data-label="Devengado"><%= p.recordMet === false ? '0 (no cumplido)' : p.entitled %></td>
+              <td data-label="Ajuste"><%= p.adjusted %></td>
+              <td data-label="Histórico"><%= p.historicalUsed %></td>
+              <td data-label="Intranet"><%= p.used %></td>
+              <%# El período en curso no suma al saldo: sus días son trunco. %>
+              <td data-label="Disponible">
+                <% if (p.inProgress) { %>
+                  <span class="vac-nodata"><%= p.available %> trunco</span>
+                <% } else { %>
+                  <strong><%= p.available %></strong>
+                <% } %>
+              </td>
+              <% if (isPeru) { %>
+                <td data-label="Gozar hasta">
+                  <% if (p.inProgress || !p.enjoyByFmt) { %>
+                    <span class="vac-nodata">—</span>
+                  <% } else { %>
+                    <%= p.enjoyByFmt %>
+                    <% if (p.overdue) { %><br><span class="vac-badge vac-badge-rejected">Vencido</span><% } %>
+                    <% if (p.dueSoon) { %><br><span class="vac-badge vac-badge-pending">Vence pronto</span><% } %>
+                  <% } %>
+                </td>
+                <td data-label="Seguidos rest."><%= p.protectedBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.protectedBlockUsed %>)</span></td>
+                <td data-label="Sueltos rest."><%= p.flexibleBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.flexibleBlockUsed %>)</span></td>
+              <% } %>
+              <td data-label="Récord"><%= p.recordMet === false ? ('No — ' + (p.record_notes || '')) : 'Cumplido' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="vac-panel-note">
+        Los días no gozados no caducan: se acumulan hasta que el colaborador los
+        tome o se le liquiden. Solo suman al saldo los períodos de años ya cumplidos.
+        <% if (isPeru) { %>
+          «Gozar hasta» es el plazo legal para tomarlos (el año siguiente a
+          cumplir el período); pasado ese plazo corresponde indemnización.
+        <% } %>
+      </p>
+
+      <details class="vac-details">
+        <summary>Ajustes manuales<% if (isPeru) { %> y récord vacacional<% } %></summary>
+
+        <% if (isPeru) { %>
+        <form class="vac-form" action="<%= fichaPath %>/periodo/<%= periods[0].id %>/record" method="POST" id="recordForm">
+          <div class="vac-subhead">Récord vacacional (art. 10 D.L. 713)</div>
+          <div class="vac-form-grid-2">
+            <div class="campo">
+              <label for="record_period_id">Período</label>
+              <select id="record_period_id" name="record_period_id">
+                <% periods.forEach(p => { %>
+                  <option value="<%= p.id %>"><%= p.periodLabel %> (<%= p.periodStartFmt %> → <%= p.periodEndFmt %>)</option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="campo vac-check-campo">
+              <label>
+                <input type="checkbox" name="record_met" value="1" checked id="record_met_check">
+                Récord cumplido para el período seleccionado
+              </label>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="record_notes">Motivo (obligatorio si no cumple)</label>
+            <input type="text" id="record_notes" name="record_notes" placeholder="Ej: faltas injustificadas superiores al límite">
+          </div>
+          <button type="submit" class="vac-btn vac-btn-primary">Actualizar récord</button>
+        </form>
+        <% } %>
+
+        <form class="vac-form" action="<%= fichaPath %>/ajustar" method="POST">
+          <div class="vac-subhead">Ajuste manual de saldo</div>
+          <div class="vac-form-grid-2">
+            <div class="campo">
+              <label for="period_id">Período</label>
+              <select id="period_id" name="period_id" required>
+                <% periods.forEach(p => { %>
+                  <option value="<%= p.id %>"><%= p.periodLabel %> (disp. <%= p.available %>)</option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="campo">
+              <label for="days_delta">Días (+ suma / − resta)</label>
+              <input type="number" id="days_delta" name="days_delta" step="0.5" placeholder="Ej: 2 o -1.5" required>
+            </div>
+          </div>
+          <div class="campo">
+            <label for="reason">Motivo del ajuste *</label>
+            <input type="text" id="reason" name="reason" required placeholder="Ej: corrección de saldo inicial">
+          </div>
+          <button type="submit" class="vac-btn vac-btn-primary">Aplicar ajuste</button>
+        </form>
+      </details>
+    <% } %>
+  </div>
+
+  <%# Trunco y liquidación: lo que RR.HH. manda al abogado. %>
   <% if (isPeru) { %>
     <div class="vac-panel">
       <div class="vac-panel-head">
@@ -121,204 +467,6 @@
     </div>
   <% } %>
 
-  <%# ===================== Historial previo a la intranet ===================== %>
-  <div class="vac-panel">
-    <div class="vac-panel-head">
-      Vacaciones anteriores a la intranet
-      <div class="vac-panel-actions">
-        <button type="button" class="vac-btn vac-btn-primary vac-btn-sm" id="btnNuevoHistorial">
-          Registrar período
-        </button>
-        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/importar">
-          Importar Excel
-        </a>
-        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/exportar">
-          Exportar
-        </a>
-      </div>
-    </div>
-
-    <% if (!history || history.length === 0) { %>
-      <p class="vac-empty">
-        Este colaborador todavía no tiene períodos históricos registrados.<br>
-        Cárgalos con «Registrar período» o importando el Excel de RR.HH.
-      </p>
-    <% } else { %>
-      <table class="vac-table vac-table--stack">
-        <thead>
-          <tr>
-            <th>Período</th><th>Desde</th><th>Hasta</th><th>Días</th>
-            <th>Origen</th><th>Observación</th><th>Registrado</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <% history.forEach(h => { %>
-            <tr>
-              <td data-label="Período"><%= h.periodLabel %></td>
-              <%# Sin fechas exactas se muestra un guion: no se inventan rangos. %>
-              <td data-label="Desde" class="<%= h.hasDates ? '' : 'vac-nodata' %>"><%= h.startDateFmt %></td>
-              <td data-label="Hasta" class="<%= h.hasDates ? '' : 'vac-nodata' %>"><%= h.endDateFmt %></td>
-              <td data-label="Días"><strong><%= h.days %></strong></td>
-              <td data-label="Origen"><span class="<%= h.originBadge %>"><%= h.originLabel %></span></td>
-              <td data-label="Observación"><%= h.observation || '—' %></td>
-              <td data-label="Registrado">
-                <%= h.createdByName || '—' %><br>
-                <span class="vac-stat-unit"><%= h.createdAtFmt %></span>
-              </td>
-              <td data-label="">
-                <button
-                  type="button"
-                  class="vac-btn vac-btn-cancel vac-btn-sm js-editar-historial"
-                  data-id="<%= h.id %>"
-                  data-year="<%= h.period_year %>"
-                  data-month="<%= h.period_month || '' %>"
-                  data-start="<%= h.start_date ? String(h.start_date).slice(0, 10) : '' %>"
-                  data-end="<%= h.end_date ? String(h.end_date).slice(0, 10) : '' %>"
-                  data-days="<%= h.days %>"
-                  data-observation="<%= h.observation || '' %>"
-                  data-period="<%= h.periodLabel %>"
-                >Editar</button>
-                <form
-                  class="vac-inline-form"
-                  method="POST"
-                  action="/RRHH/vacaciones/gestion/<%= profile.id %>/historial/<%= h.id %>/eliminar"
-                  data-confirm="Se quitarán <%= h.days %> día(s) de <%= h.periodLabel %> del historial y el saldo se recalculará."
-                  data-confirm-title="¿Eliminar el período histórico?"
-                  data-confirm-accept="Eliminar"
-                  data-confirm-tone="peligro"
-                >
-                  <button type="submit" class="vac-btn vac-btn-cancel vac-btn-sm">Eliminar</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-      <p class="vac-panel-note">
-        Estos días se descuentan del saldo igual que una solicitud aprobada,
-        pero no son solicitudes: ocurrieron antes de que la intranet
-        administrara las vacaciones<% if (cutoffDateFmt) { %>, hasta el <%= cutoffDateFmt %><% } %>.
-      </p>
-    <% } %>
-  </div>
-
-  <%# ============================ Períodos ============================== %>
-  <div class="vac-panel">
-    <div class="vac-panel-head">
-      Períodos de devengo
-      <div class="vac-panel-actions">
-        <form class="vac-inline-form" method="POST" action="/RRHH/vacaciones/gestion/<%= profile.id %>/recalcular">
-          <button type="submit" class="vac-btn vac-btn-ghost vac-btn-sm">Recalcular saldo</button>
-        </form>
-      </div>
-    </div>
-    <% if (!periods || periods.length === 0) { %>
-      <p class="vac-empty">Sin períodos calculados.</p>
-    <% } else { %>
-      <table class="vac-table vac-table--stack">
-        <thead>
-          <tr>
-            <th>Período</th><th>Devengado</th><th>Ajuste</th>
-            <th>Histórico</th><th>Intranet</th><th>Disponible</th>
-            <% if (isPeru) { %><th>Seguidos rest.</th><th>Sueltos rest.</th><% } %>
-            <th>Récord</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% periods.forEach(p => { %>
-            <tr>
-              <td data-label="Período">
-                <%= p.periodStartFmt %> → <%= p.periodEndFmt %>
-                <% if (p.inProgress) { %><br><span class="vac-stat-unit">En curso (trunco)</span><% } %>
-              </td>
-              <td data-label="Devengado"><%= p.recordMet === false ? '0 (no cumplido)' : p.entitled %></td>
-              <td data-label="Ajuste"><%= p.adjusted %></td>
-              <td data-label="Histórico"><%= p.historicalUsed %></td>
-              <td data-label="Intranet"><%= p.used %></td>
-              <%# El período en curso no suma al saldo: sus días son trunco.
-                  Se muestran, pero sin el énfasis de los que sí se pueden pedir. %>
-              <td data-label="Disponible">
-                <% if (p.inProgress) { %>
-                  <span class="vac-nodata"><%= p.available %> trunco</span>
-                <% } else { %>
-                  <strong><%= p.available %></strong>
-                <% } %>
-              </td>
-              <% if (isPeru) { %>
-                <td data-label="Seguidos rest."><%= p.protectedBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.protectedBlockUsed %>)</span></td>
-                <td data-label="Sueltos rest."><%= p.flexibleBlockRemaining %> <span class="vac-stat-unit">(usados <%= p.flexibleBlockUsed %>)</span></td>
-              <% } %>
-              <td data-label="Récord"><%= p.recordMet === false ? ('No — ' + (p.record_notes || '')) : 'Cumplido' %></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-      <p class="vac-panel-note">
-        Los días no gozados no caducan: se acumulan hasta que el colaborador los
-        tome o se le liquiden. Solo suman al saldo disponible los períodos de
-        años ya cumplidos.
-      </p>
-
-      <% if (isPeru) { %>
-      <form class="vac-form" action="/RRHH/vacaciones/gestion/<%= profile.id %>/periodo/<%= periods[0].id %>/record" method="POST" id="recordForm">
-        <div class="vac-panel-head" style="margin-top:1rem;">Récord vacacional (art. 10 D.L. 713)</div>
-        <div class="campo">
-          <label>
-            <input type="checkbox" name="record_met" value="1" checked id="record_met_check">
-            Récord cumplido para el período seleccionado
-          </label>
-        </div>
-        <div class="campo">
-          <label for="record_period_id">Período</label>
-          <select id="record_period_id" name="record_period_id" onchange="document.getElementById('recordForm').action='/RRHH/vacaciones/gestion/<%= profile.id %>/periodo/' + this.value + '/record'">
-            <% periods.forEach(p => { %>
-              <option value="<%= p.id %>"><%= p.periodStartFmt %> → <%= p.periodEndFmt %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="campo">
-          <label for="record_notes">Motivo (obligatorio si no cumple)</label>
-          <input type="text" id="record_notes" name="record_notes" placeholder="Ej: faltas injustificadas superiores al límite">
-        </div>
-        <button type="submit" class="vac-btn vac-btn-primary">Actualizar récord</button>
-      </form>
-      <script>
-        (function () {
-          const cb = document.getElementById('record_met_check');
-          const notes = document.getElementById('record_notes');
-          if (!cb || !notes) return;
-          cb.addEventListener('change', function () {
-            notes.required = !cb.checked;
-          });
-        })();
-      </script>
-      <% } %>
-
-      <form class="vac-form" action="/RRHH/vacaciones/gestion/<%= profile.id %>/ajustar" method="POST">
-        <div class="vac-panel-head" style="margin-top:1rem;">Ajuste manual de saldo</div>
-        <div class="vac-form-grid-2">
-          <div class="campo">
-            <label for="period_id">Período</label>
-            <select id="period_id" name="period_id" required>
-              <% periods.forEach(p => { %>
-                <option value="<%= p.id %>"><%= p.periodStartFmt %> → <%= p.periodEndFmt %> (disp. <%= p.available %>)</option>
-              <% }) %>
-            </select>
-          </div>
-          <div class="campo">
-            <label for="days_delta">Días (+ suma / − resta)</label>
-            <input type="number" id="days_delta" name="days_delta" step="0.5" placeholder="Ej: 2 o -1.5" required>
-          </div>
-        </div>
-        <div class="campo">
-          <label for="reason">Motivo del ajuste *</label>
-          <input type="text" id="reason" name="reason" required placeholder="Ej: corrección de saldo inicial">
-        </div>
-        <button type="submit" class="vac-btn vac-btn-primary">Aplicar ajuste</button>
-      </form>
-    <% } %>
-  </div>
-
   <%# ====================== Solicitudes de la intranet ====================== %>
   <div class="vac-panel">
     <div class="vac-panel-head">Solicitudes gestionadas por la intranet</div>
@@ -344,32 +492,24 @@
     <% } %>
   </div>
 
-  <%# ============================== Auditoría ============================== %>
+  <%# ============================== Bitácora ============================== %>
   <% if (historyAudit && historyAudit.length) { %>
   <div class="vac-panel">
-    <div class="vac-panel-head">Bitácora del historial</div>
-    <ul class="vac-rows">
+    <div class="vac-panel-head">Bitácora</div>
+    <div class="vac-rows">
       <details>
         <summary>Ver los últimos <%= historyAudit.length %> cambios</summary>
-        <% historyAudit.forEach(a => {
-             const actor = [a.actor_first_name, a.actor_last_name].filter(Boolean).join(' ') || 'Sistema';
-             const cuando = a.created_at ? new Date(a.created_at).toLocaleString('es-PE') : '';
-             const antes = a.old_value ? (typeof a.old_value === 'string' ? JSON.parse(a.old_value) : a.old_value) : null;
-             const despues = a.new_value ? (typeof a.new_value === 'string' ? JSON.parse(a.new_value) : a.new_value) : null;
-        %>
-          <li class="vac-row-issue">
-            <strong><%= a.action %></strong> · <%= actor %> · <%= cuando %>
-            <% if (antes && antes.days_used != null) { %>
-              <span>Antes: <%= antes.period_year %><%= antes.period_month ? '/' + antes.period_month : '' %> · <%= antes.days_used %> día(s)</span>
-            <% } %>
-            <% if (despues && despues.days_used != null) { %>
-              <span>Después: <%= despues.period_year %><%= despues.period_month ? '/' + despues.period_month : '' %> · <%= despues.days_used %> día(s)</span>
-            <% } %>
-            <% if (a.source) { %><span>Origen: <%= a.source %></span><% } %>
-          </li>
-        <% }) %>
+        <ul class="vac-audit">
+          <% historyAudit.forEach(a => { %>
+            <li class="vac-row-issue">
+              <strong><%= a.actionLabel %></strong> · <%= a.actorName %> · <%= a.createdAtFmt %>
+              <% a.details.forEach(d => { %><span><%= d %></span><% }) %>
+              <% if (a.note) { %><span>Motivo / origen: <%= a.note %></span><% } %>
+            </li>
+          <% }) %>
+        </ul>
       </details>
-    </ul>
+    </div>
   </div>
   <% } %>
 </div>
@@ -378,8 +518,16 @@
   id: 'modalHistorial',
   titleId: 'modalHistorialTitulo',
   panelClass: 'vac-modal-panel',
-  closeLabel: 'Cerrar el registro de vacaciones históricas',
-  body: include('partials/modal_historial')
+  closeLabel: 'Cerrar la edición de la salida',
+  body: include('partials/modal_historial', { fichaPath })
 }) %>
 
-<script src="/js/vacaciones-historial.js?v=20260922a" defer></script>
+<%- include('../../partials/modal', {
+  id: 'modalDatos',
+  titleId: 'modalDatosTitulo',
+  panelClass: 'vac-modal-panel',
+  closeLabel: 'Cerrar la corrección de datos',
+  body: include('partials/modal_datos', { fichaPath, nombre })
+}) %>
+
+<script src="/js/vacaciones-historial.js?v=20260923a" defer></script>

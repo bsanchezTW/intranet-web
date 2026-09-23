@@ -640,6 +640,7 @@ body:not(.login-split-page) {
 .campo-form input[type="email"],
 .campo-form input[type="tel"],
 .campo-form input[type="date"],
+.campo-form input[type="month"],
 .campo-form input[type="number"],
 .campo-form input[type="password"],
 .campo-form input[type="search"],

@@ -118,6 +118,8 @@ const VACATION_MESSAGES = {
     return `El año debe estar entre ${min} y el año en curso.`;
   },
   historyInvalidMonth: "El mes no es válido.",
+  historyFutureMonth:
+    "Ese mes todavía no llega. Las vacaciones futuras se piden como solicitud, no como historial.",
   historyNeedMonthOrDates:
     "Indica al menos el mes del período, o las fechas exactas si las tienes.",
   historyEndBeforeStart:
@@ -132,6 +134,19 @@ const VACATION_MESSAGES = {
   },
   historyDuplicateWarning:
     "Ya existe un registro con el mismo trabajador, año, mes y cantidad de días.",
+  historyDuplicateInBatch:
+    "Hay otra fila igual en esta carga. Si fueron dos salidas distintas, déjalas; si no, quita una.",
+  historyBatchEmpty: "Agrega al menos una salida con mes y días.",
+  historyBatchHasErrors:
+    "Hay filas con errores. Corrígelas: no se guardó ninguna para no dejar la carga a medias.",
+  historyBatchTooLarge(max) {
+    return `Carga hasta ${max} filas por vez.`;
+  },
+  historyBatchCreated(count) {
+    return `Se registraron ${count} salida(s) y el saldo se recalculó.`;
+  },
+  historyNeedHireDate:
+    "Registra primero la fecha de ingreso: sin ella no hay períodos a los que descontar los días.",
   historyNotFound: "No encontramos ese registro histórico.",
   historyCreated: "Período histórico registrado.",
   historyUpdated: "Período histórico actualizado.",
@@ -145,35 +160,30 @@ const VACATION_MESSAGES = {
   historyLoadFailed:
     "No pudimos cargar el historial de vacaciones. Inténtalo de nuevo.",
 
-  // --- Importación desde Excel ---------------------------------------------
-  importNoFile: "Selecciona un archivo Excel para continuar.",
-  importBadFormat:
-    "No fue posible leer el archivo. Debe ser un Excel (.xlsx) con la plantilla del módulo.",
-  importEmpty: "El archivo no tiene filas para importar.",
-  importNoValidRows:
-    "No fue posible importar el archivo porque no contiene ningún registro válido. Revisa los errores indicados.",
-  importExpired:
-    "La revisión del archivo expiró. Vuelve a cargarlo para continuar.",
-  importConfirmed(count) {
-    return `Se importaron ${count} registro(s) históricos.`;
-  },
-  importReverted(count) {
-    return `Se revirtió la importación: ${count} registro(s) eliminados.`;
-  },
-  importFailed: "No se pudo importar el archivo. Inténtalo de nuevo.",
-  importBatchNotFound: "No encontramos esa importación.",
-  importAlreadyReverted: "Esta importación ya fue revertida.",
+  // --- Saldo de referencia (conciliación con el Excel de RR.HH.) -----------
+  referenceNeedDate: "Indica la fecha a la que corresponde el saldo.",
+  referenceFutureDate: "La fecha del saldo de referencia no puede ser futura.",
+  referenceNeedDays: "Indica el saldo en días (puede ser 0 o negativo).",
+  referenceNotFound: "No encontramos ese saldo de referencia.",
+  referenceSaved: "Saldo de referencia guardado.",
+  referenceDeleted: "Saldo de referencia eliminado.",
+  referenceFailed: "No se pudo guardar el saldo de referencia. Inténtalo de nuevo.",
 
-  // Errores por fila del archivo
-  rowEmployeeNotFound: "Trabajador no encontrado",
-  rowEmployeeIdMissing: "Falta el documento del trabajador",
-  rowYearInvalid: "Año inválido",
-  rowMonthInvalid: "Mes inválido",
-  rowDaysInvalid: "Días inválidos",
-  rowDuplicateInFile: "Fila duplicada dentro del archivo",
-  rowDuplicateInDb: "Ya existe un registro igual en la intranet",
-  rowBeforeHire: "Período anterior al ingreso del trabajador",
-  rowNoHireDate: "El trabajador no tiene fecha de ingreso en la intranet",
+  // --- Datos del cálculo (fecha de ingreso y documento) --------------------
+  profileNeedHireDate: "Indica una fecha de ingreso válida.",
+  profileFutureHireDate: "La fecha de ingreso no puede ser futura.",
+  profileNeedReason: "Escribe el motivo del cambio: queda en la bitácora.",
+  profileNoChanges: "No hay cambios que guardar.",
+  profileDuplicateId: "Ese documento ya está registrado en otro colaborador.",
+  profileBlockedPeriods:
+    "Con esa fecha de ingreso desaparecerían períodos que ya tienen días aprobados en la intranet o ajustes. Revierte esos movimientos antes de cambiarla.",
+  profileHistoryBeforeHire(count, date) {
+    return `Hay ${count} salida(s) del historial anteriores al ${date}. Siguen descontándose; revísalas.`;
+  },
+  profileSaved: "Datos actualizados. Los períodos y el saldo se recalcularon.",
+  profileFailed: "No se pudieron actualizar los datos. Inténtalo de nuevo.",
+  periodsBlocked:
+    "La fecha de ingreso cambió, pero hay períodos con días aprobados en la intranet que ya no calzan con ella. Los períodos no se recalcularon: revisa esas solicitudes o ajustes.",
 
   // --- Fecha de corte y exportación ----------------------------------------
   cutoffSaved: "Fecha de corte actualizada.",

@@ -4,6 +4,8 @@ const {
   countryLabel,
 } = require("../constants/vacationStatuses");
 const {
+  HISTORY_AUDIT_ACTION,
+  HISTORY_AUDIT_ACTION_LABELS,
   historyOriginLabel,
   historyOriginBadge,
   monthLabel,
@@ -13,6 +15,7 @@ const {
   toDateOnly,
   todayInCountry,
 } = require("./vacationDateUtils");
+const { getStrategy } = require("../services/vacations/VacationEngine");
 
 const TICKET_STATUS_TO_DB = {
   Abierto: "open",
@@ -182,6 +185,17 @@ function mapVacationRequestForView(row) {
   };
 }
 
+/**
+ * "2023–2024": los años que cubre un período, como las columnas
+ * "VACACIONES 2023-2024" del Excel de RR.HH.
+ */
+function periodShortLabel(row) {
+  const start = toDateOnly(row?.period_start);
+  const end = toDateOnly(row?.period_end);
+  if (!start || !end) return "—";
+  return `${start.slice(0, 4)}–${end.slice(0, 4)}`;
+}
+
 function mapVacationPeriodForView(row) {
   if (!row) return row;
   const recordMet = row.record_met !== false;
@@ -202,10 +216,23 @@ function mapVacationPeriodForView(row) {
   // trunco de liquidación, no días que el colaborador pueda pedir.
   const periodEnd = toDateOnly(row.period_end);
   const inProgress = !isChile && Boolean(periodEnd) && periodEnd >= today;
+  // Plazo legal para gozarlo (Perú, art. 23): alerta, no caducidad.
+  const enjoyment = inProgress
+    ? { enjoyBy: null, overdue: false, dueSoon: false }
+    : getStrategy(row.country_code).getEnjoymentStatus({
+        period: row,
+        available,
+        referenceDate: today,
+      });
   return {
     ...row,
+    periodLabel: periodShortLabel(row),
     periodStartFmt: formatDisplay(row.period_start),
     periodEndFmt: formatDisplay(row.period_end),
+    enjoyBy: enjoyment.enjoyBy,
+    enjoyByFmt: enjoyment.enjoyBy ? formatDisplay(enjoyment.enjoyBy) : null,
+    overdue: enjoyment.overdue,
+    dueSoon: enjoyment.dueSoon,
     expiresAtFmt: null,
     available: round2(available),
     entitled: Number(row.entitled_days),
@@ -231,18 +258,49 @@ function mapVacationPeriodForView(row) {
  * Cuando no hay fechas exactas se muestra "—": el Excel de RR.HH. guarda mes y
  * cantidad de días, y rellenarlo con un rango inventado sería inventar datos.
  */
-function mapVacationHistoryForView(row) {
+/**
+ * A qué períodos se descontó un registro histórico, para mostrarlo como las
+ * columnas por período del Excel. `periodLabels`: Map periodId → "2023–2024".
+ * Lo que no cupo en ningún período sale como `unallocated`.
+ */
+function historyAllocationsForView(row, periodLabels) {
+  let allocations = row.period_allocations;
+  if (typeof allocations === "string") {
+    try {
+      allocations = JSON.parse(allocations);
+    } catch {
+      allocations = null;
+    }
+  }
+  const list = (Array.isArray(allocations) ? allocations : [])
+    .map((a) => ({
+      label: periodLabels.get(Number(a.periodId ?? a.period_id)) || "—",
+      days: Math.round(Number(a.days || 0) * 100) / 100,
+    }))
+    .filter((a) => a.days > 0);
+  const allocated = list.reduce((sum, a) => sum + a.days, 0);
+  const unallocated = Math.round((Number(row.days_used) - allocated) * 100) / 100;
+  return { allocations: list, unallocated: unallocated > 0.001 ? unallocated : 0 };
+}
+
+function mapVacationHistoryForView(row, periodLabels = new Map()) {
   if (!row) return row;
   const employeeName =
     [row.first_name, row.last_name].filter(Boolean).join(" ") || null;
   const month = monthLabel(row.period_month);
   return {
     ...row,
+    ...historyAllocationsForView(row, periodLabels),
+    monthValue: row.period_month
+      ? `${row.period_year}-${String(row.period_month).padStart(2, "0")}`
+      : "",
     employeeName,
     periodLabel: month ? `${month} ${row.period_year}` : String(row.period_year),
     monthLabel: month || "—",
     startDateFmt: row.start_date ? formatDisplay(row.start_date) : "—",
     endDateFmt: row.end_date ? formatDisplay(row.end_date) : "—",
+    startDateValue: toDateOnly(row.start_date) || "",
+    endDateValue: toDateOnly(row.end_date) || "",
     hasDates: Boolean(row.start_date),
     days: Number(row.days_used),
     originLabel: historyOriginLabel(row.origin),
@@ -251,6 +309,72 @@ function mapVacationHistoryForView(row) {
       [row.created_by_first_name, row.created_by_last_name].filter(Boolean).join(" ") ||
       null,
     createdAtFmt: row.created_at ? formatDisplay(row.created_at) : "—",
+  };
+}
+
+/**
+ * Una entrada de la bitácora del historial en palabras: qué cambió, de qué a
+ * qué. old_value/new_value son JSON con forma distinta según la acción.
+ */
+function mapHistoryAuditForView(row) {
+  if (!row) return row;
+  const parse = (v) => {
+    if (!v) return null;
+    if (typeof v !== "string") return v;
+    try {
+      return JSON.parse(v);
+    } catch {
+      return null;
+    }
+  };
+  const before = parse(row.old_value);
+  const after = parse(row.new_value);
+  const details = [];
+
+  const historyLine = (h) => {
+    const month = monthLabel(h.period_month);
+    const when = month ? `${month} ${h.period_year}` : String(h.period_year);
+    return `${when} · ${Number(h.days_used)} día(s)`;
+  };
+
+  if (row.action === HISTORY_AUDIT_ACTION.PROFILE) {
+    const b = before || {};
+    const a = after || {};
+    if (b.hire_date !== a.hire_date) {
+      details.push(
+        `Fecha de ingreso: ${b.hire_date ? formatDisplay(b.hire_date) : "sin dato"} → ${a.hire_date ? formatDisplay(a.hire_date) : "sin dato"}`,
+      );
+    }
+    if (b.national_id !== a.national_id) {
+      details.push(`Documento: ${b.national_id || "sin dato"} → ${a.national_id || "sin dato"}`);
+    }
+  } else if (row.action === HISTORY_AUDIT_ACTION.REFERENCE) {
+    const ref = after || before;
+    if (ref) {
+      const verb = after ? "Registrado" : "Eliminado";
+      details.push(
+        `${verb}: ${Number(ref.expected_days)} día(s) al ${formatDisplay(ref.as_of_date)}`,
+      );
+    }
+  } else {
+    if (before && before.days_used != null) details.push(`Antes: ${historyLine(before)}`);
+    if (after && after.days_used != null) details.push(`Después: ${historyLine(after)}`);
+  }
+
+  return {
+    ...row,
+    actionLabel: HISTORY_AUDIT_ACTION_LABELS[row.action] || row.action,
+    actorName:
+      [row.actor_first_name, row.actor_last_name].filter(Boolean).join(" ") || "Sistema",
+    createdAtFmt: row.created_at
+      ? new Date(row.created_at).toLocaleString("es-PE", {
+          dateStyle: "short",
+          timeStyle: "short",
+        })
+      : "",
+    details,
+    // En PROFILE y REFERENCE `source` es el motivo o la nota que se escribió.
+    note: row.source || null,
   };
 }
 
@@ -440,6 +564,8 @@ module.exports = {
   mapVacationRequestForView,
   mapVacationPeriodForView,
   mapVacationHistoryForView,
+  mapHistoryAuditForView,
+  periodShortLabel,
   mapCourseListRow,
   mapCourseProgressForView,
   mapCourseForView,

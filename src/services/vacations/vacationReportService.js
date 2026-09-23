@@ -1,5 +1,7 @@
 const db = require("../../db");
 const balanceService = require("./vacationBalanceService");
+const referenceService = require("./vacationReferenceService");
+const { getStrategy } = require("./VacationEngine");
 const { getCurrentCountry } = require("../../config/country");
 const { buildWorkbook } = require("../exports/excelWorkbook");
 const { vacationStatusLabel } = require("../../constants/vacationStatuses");
@@ -79,6 +81,28 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
     [userIds],
   );
 
+  // Saldo de referencia (el que RR.HH. anotó de su Excel): solo se trae el
+  // historial detallado de quienes tienen uno, para conciliar a su fecha.
+  const references = await referenceService.latestByUser(userIds);
+  const referencedIds = [...references.keys()];
+  const [{ rows: referencedHistory }, consumingRequests] = await Promise.all([
+    referencedIds.length
+      ? db.query(
+          `SELECT user_id, period_year, period_month, days_used
+             FROM vacation_history
+            WHERE user_id = ANY($1::int[]) AND deleted_at IS NULL`,
+          [referencedIds],
+        )
+      : { rows: [] },
+    referenceService.consumingRequestsByUser(referencedIds),
+  ]);
+  const historyRowsByUser = new Map();
+  for (const h of referencedHistory) {
+    if (!historyRowsByUser.has(h.user_id)) historyRowsByUser.set(h.user_id, []);
+    historyRowsByUser.get(h.user_id).push(h);
+  }
+  const strategy = getStrategy(country);
+
   const periodsByUser = new Map();
   for (const p of periods) {
     if (!periodsByUser.has(p.user_id)) periodsByUser.set(p.user_id, []);
@@ -103,6 +127,16 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
     // llena hasta donde hay derecho y el resto queda fuera. Sin esto el saldo
     // dice 0 y nadie se entera de que sobran días cargados.
     const unimputed = Math.round((history.days - summary.historicalUsedDays) * 100) / 100;
+    const deadlines = enjoymentDeadlines(userPeriods, strategy, today);
+    const reference = references.get(user.id) || null;
+    const comparison = reference
+      ? referenceService.compareReference({
+          reference,
+          periods: userPeriods,
+          history: historyRowsByUser.get(user.id) || [],
+          requests: consumingRequests.get(user.id) || [],
+        })
+      : null;
 
     return {
       id: user.id,
@@ -130,10 +164,38 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
       // El historial cargado supera el derecho generado: casi siempre es una
       // fecha de ingreso mal puesta o una fila duplicada. RR.HH. lo ve marcado.
       overDrawn: summary.availableDays < -0.001 || unimputed > 0.001,
+      overdueDays: deadlines.overdueDays,
+      dueSoonDays: deadlines.dueSoonDays,
+      nextDeadlineFmt: deadlines.nextDeadline ? formatDisplay(deadlines.nextDeadline) : null,
+      reference: comparison
+        ? { ...comparison, asOfFmt: formatDisplay(reference.as_of_date) }
+        : null,
     };
   });
 
   return { rows, totals: sumTotals(rows), referenceDate: today };
+}
+
+/**
+ * Días con el plazo legal para gozarlos vencido o por vencer (Perú, art. 23).
+ * Solo períodos cerrados con saldo; el año en curso todavía no genera plazo.
+ */
+function enjoymentDeadlines(periods, strategy, today) {
+  let overdueDays = 0;
+  let dueSoonDays = 0;
+  let nextDeadline = null;
+  for (const p of periods) {
+    if (!strategy.isPeriodClaimable({ period: p, referenceDate: today })) continue;
+    const available = balanceService.periodAvailable(p);
+    const status = strategy.getEnjoymentStatus({ period: p, available, referenceDate: today });
+    if (status.overdue) overdueDays += available;
+    if (status.dueSoon) {
+      dueSoonDays += available;
+      if (!nextDeadline || status.enjoyBy < nextDeadline) nextDeadline = status.enjoyBy;
+    }
+  }
+  const round2 = (n) => Math.round(n * 100) / 100;
+  return { overdueDays: round2(overdueDays), dueSoonDays: round2(dueSoonDays), nextDeadline };
 }
 
 function emptyTotals() {
@@ -147,6 +209,9 @@ function emptyTotals() {
     severanceDays: 0,
     unimputedDays: 0,
     overDrawn: 0,
+    withOverdue: 0,
+    withReference: 0,
+    mismatched: 0,
   };
 }
 
@@ -162,6 +227,9 @@ function sumTotals(rows) {
     severanceDays: round2(rows.reduce((s, r) => s + r.severanceDays, 0)),
     unimputedDays: round2(rows.reduce((s, r) => s + r.unimputedDays, 0)),
     overDrawn: rows.filter((r) => r.overDrawn).length,
+    withOverdue: rows.filter((r) => r.overdueDays > 0).length,
+    withReference: rows.filter((r) => r.reference).length,
+    mismatched: rows.filter((r) => r.reference && !r.reference.matches).length,
   };
 }
 
@@ -188,9 +256,18 @@ async function exportTeamReport({ referenceDate = null } = {}) {
         { header: "Total gozado", key: "totalUsedDays", width: 14, numFmt: "0.##" },
         { header: "Ajustes", key: "adjustedDays", width: 10, numFmt: "0.##" },
         { header: "Saldo disponible", key: "availableDays", width: 17, numFmt: "0.##" },
+        { header: "Días con plazo vencido", key: "overdueDays", width: 22, numFmt: "0.##" },
         { header: "Próximo derecho", key: "nextAccrualFmt", width: 16 },
+        { header: "Saldo de referencia", key: "referenceLabel", width: 34 },
       ],
-      rows,
+      rows: rows.map((r) => ({
+        ...r,
+        referenceLabel: r.reference
+          ? `${r.reference.expected} al ${r.reference.asOfFmt} · ${
+              r.reference.matches ? "cuadra" : `diferencia ${r.reference.difference}`
+            }`
+          : "—",
+      })),
       note: `Saldo al ${formatDisplay(ref)}. Días calendario.`,
     },
     {

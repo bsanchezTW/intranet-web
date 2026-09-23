@@ -1,0 +1,73 @@
+<%#
+  Carga manual por lotes del historial previo a la intranet.
+
+  Una fila por salida, como en el Excel de RR.HH.: mes y días; las fechas
+  exactas solo si existen. Mientras se escribe, el servidor revisa cada fila
+  y simula el descuento (vacaciones-historial.js → /historial/lote/previsualizar).
+  Se guarda todo o nada: con una fila con error no se inserta ninguna.
+%>
+<section
+  class="vac-lote"
+  id="cargaLote"
+  hidden
+  data-preview-url="<%= fichaPath %>/historial/lote/previsualizar"
+  data-save-url="<%= fichaPath %>/historial/lote"
+  data-max-month="<%= currentMonth %>"
+  data-min-month="<%= hireDateValue ? hireDateValue.slice(0, 7) : '' %>"
+  aria-labelledby="cargaLoteTitulo"
+>
+  <div class="vac-lote__intro">
+    <h3 class="vac-subhead" id="cargaLoteTitulo">Cargar salidas</h3>
+    <p class="vac-hint">
+      Una fila por salida: el mes y los días calendario. Las fechas exactas son
+      opcionales; si las pones, los días se calculan solos. «Descontado de» muestra
+      a qué período irá cada salida antes de guardar.
+    </p>
+  </div>
+
+  <table class="vac-table vac-table--stack vac-lote__tabla">
+    <thead>
+      <tr>
+        <th>Mes *</th><th>Días *</th><th>Desde</th><th>Hasta</th>
+        <th>Observación</th><th>Descontado de</th><th><span class="sr-only">Quitar</span></th>
+      </tr>
+    </thead>
+    <tbody id="cargaLoteFilas"></tbody>
+  </table>
+
+  <template id="cargaLoteFila">
+    <tr class="vac-lote__fila">
+      <td data-label="Mes">
+        <input type="month" name="month" aria-label="Mes de la salida" required>
+      </td>
+      <td data-label="Días">
+        <input type="number" name="days" min="0.5" step="0.5" inputmode="decimal" aria-label="Días" placeholder="7" required>
+      </td>
+      <td data-label="Desde">
+        <input type="date" name="start" aria-label="Desde (opcional)">
+      </td>
+      <td data-label="Hasta">
+        <input type="date" name="end" aria-label="Hasta (opcional)">
+      </td>
+      <td data-label="Observación">
+        <input type="text" name="observation" maxlength="500" aria-label="Observación" placeholder="Opcional">
+      </td>
+      <td data-label="Descontado de" class="vac-lote__estado" aria-live="polite"></td>
+      <td data-label="">
+        <button type="button" class="vac-btn vac-btn-cancel vac-btn-sm js-quitar-fila" aria-label="Quitar fila">Quitar</button>
+      </td>
+    </tr>
+  </template>
+
+  <div class="vac-lote__acciones">
+    <button type="button" class="vac-btn vac-btn-ghost vac-btn-sm" id="cargaLoteAgregar">+ Agregar fila</button>
+    <span class="vac-hint">Enter en la última fila agrega otra.</span>
+  </div>
+
+  <div class="vac-lote__resumen" id="cargaLoteResumen" aria-live="polite"></div>
+
+  <div class="vac-lote__pie">
+    <button type="button" class="vac-btn vac-btn-cancel" id="cargaLoteCancelar">Cancelar</button>
+    <button type="button" class="vac-btn vac-btn-primary" id="cargaLoteGuardar" disabled>Guardar salidas</button>
+  </div>
+</section>

@@ -119,12 +119,21 @@ como solicitudes inventadas: una fila por salida en `vacation_history`, con año
 mes y días. Las fechas exactas son opcionales —el Excel casi nunca las tiene— y
 nunca se rellenan con un rango ficticio.
 
+Se carga **a mano, desde la ficha de cada colaborador** («Cargar salidas»): una
+tabla de filas mes + días que el servidor revisa mientras se escribe
+(`historial/lote/previsualizar`) mostrando a qué período irá cada salida y
+cómo queda el saldo. Se guarda todo el lote o nada. No hay importador de Excel:
+la planilla de RR.HH. tiene fórmulas con rangos rotos, fechas de ingreso que no
+coinciden entre hojas y columnas por período corridas, y leerla automáticamente
+arrastraba esos errores.
+
 | Tabla | Qué guarda |
 |-------|------------|
 | `vacation_history` | Una fila por salida previa. Borrado lógico (`deleted_at`). |
-| `vacation_history_imports` | Lote de importación, reversible completo. |
-| `vacation_history_audit` | Quién, cuándo, qué cambió y el valor anterior. |
+| `vacation_history_audit` | Bitácora: historial, fecha de ingreso/documento y referencias, con el valor anterior. |
+| `vacation_reference_balances` | Saldo que RR.HH. tenía anotado a una fecha, para conciliar. |
 | `vacation_settings` | Fecha de corte: hasta cuándo mandó el Excel. |
+| `vacation_history_imports` | Lotes del importador retirado; se conserva por los datos ya cargados. |
 
 `vacation_periods.historical_used_days` guarda cuántos de esos días cayeron en
 cada período. Se calcula **imputando FIFO** (del período más antiguo al más
@@ -137,29 +146,38 @@ la ficha y sólo reimputa si dejó de cuadrar.
 Los registros históricos no validan el fraccionamiento del art. 17: son hechos
 ya ocurridos, muchos anteriores al D. Leg. 1405. Las solicitudes nuevas sí.
 
+**Saldo de referencia.** RR.HH. anota el saldo de su planilla a una fecha y la
+ficha lo compara con `balanceAt`: años cumplidos × 30 (más ajustes) menos lo
+gozado hasta ese mes, la misma cuenta que la hoja «Agendas». Muestra «Cuadra» o
+la diferencia; no mueve el saldo.
+
+**Plazo de goce.** Cada período cerrado se debe gozar dentro del año siguiente
+(art. 23 D.L. 713). Pasado ese plazo con saldo, la ficha y el resumen lo marcan
+como vencido (indemnización). Los días no caducan.
+
+**Fecha de ingreso.** Se corrige desde la ficha con motivo obligatorio. Los
+períodos se realinean en su lugar (`planPeriodRealignment`): el k-ésimo año de
+servicio sigue siendo el mismo registro, con lo consumido y los ajustes, en vez
+de sumarse a los períodos de la fecha anterior.
+
 ### Probar el flujo completo
 
 `scripts/demo-vacaciones.js` siembra un elenco ficticio elegido para que cada
-caso del módulo se vea en pantalla, y genera el Excel que calza con él.
+caso del módulo se vea en pantalla, con su historial y saldos de referencia.
 
 ```bash
 npm run demo:pe            # crea 5 colaboradores de prueba
-npm run demo:pe:excel      # genera DEMO-vacaciones-historicas.xlsx
 npm run demo:pe:estado     # imprime el saldo de cada uno
-npm run demo:pe:limpiar    # borra todo lo que creó, incluido el Excel
+npm run demo:pe:limpiar    # borra todo lo que creó
 ```
 
 | Quién | Qué demuestra |
 |-------|---------------|
 | Ana Pérez | Mucha antigüedad y casi todo gozado: el caso de la reunión |
-| Luis Quispe | 2 años y 3 meses, 60 días acumulados |
+| Luis Quispe | 2 años y 3 meses, 60 días; su historial se carga a mano para probar el lote |
 | Rosa Ccahuana | Sin historial: estado vacío y saldo completo |
 | Jorge Medina | Todavía no cumple el año: solo acumula trunco |
-| Elena Vargas | Más historial del que generó: dispara la alerta |
-
-El Excel trae filas buenas, una duplicada y cinco rotas a propósito (documento
-vacío, trabajador inexistente, mes ilegible, cero días, período anterior al
-ingreso) para que la vista previa muestre cada error.
+| Elena Vargas | Más historial del que generó: alerta y referencia que no cuadra |
 
 Todo queda marcado —correo `demo.*@demo.invalid`, documentos `9000xxxx`— y
 `--limpiar` lo borra entero sin tocar una fila que no haya creado él.
@@ -168,14 +186,8 @@ Todo queda marcado —correo `demo.*@demo.invalid`, documentos `9000xxxx`— y
 
 | Ruta | Qué hace |
 |------|----------|
-| `/RRHH/vacaciones/gestion/resumen` | Saldo de cada colaborador y liquidación |
-| `/RRHH/vacaciones/gestion/:userId` | Ficha: historial, períodos, ajustes |
-| `/RRHH/vacaciones/gestion/historial/importar` | Plantilla → archivo → vista previa → confirmar |
-
-La importación **nunca inserta al subir**: valida, muestra cuántas filas están
-bien, cuáles no y por qué, y espera la confirmación. El trabajador se busca por
-documento (`users.national_id`), no por nombre. Los duplicados se avisan, no se
-descartan en silencio. Un lote se puede revertir completo.
+| `/RRHH/vacaciones/gestion/resumen` | Saldo de cada colaborador, liquidación, plazos, referencias y fecha de corte |
+| `/RRHH/vacaciones/gestion/:userId` | Ficha: datos del cálculo, carga del historial, referencia, períodos, ajustes |
 
 Las exportaciones usan `services/exports/excelWorkbook.js` (exceljs). Es el
 primer exportador del proyecto y vive fuera de vacaciones a propósito: el

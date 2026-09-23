@@ -16,6 +16,32 @@ const HISTORY_ORIGIN = {
 
 const ALL_HISTORY_ORIGINS = Object.values(HISTORY_ORIGIN);
 
+/**
+ * Acciones de la bitácora (vacation_history_audit). IMPORT y REVERT quedan por
+ * los lotes que se cargaron con el importador Excel, ya retirado.
+ */
+const HISTORY_AUDIT_ACTION = {
+  CREATE: "CREATE",
+  UPDATE: "UPDATE",
+  DELETE: "DELETE",
+  IMPORT: "IMPORT",
+  REVERT: "REVERT",
+  PROFILE: "PROFILE",
+  REFERENCE: "REFERENCE",
+};
+
+const HISTORY_AUDIT_ACTIONS = Object.values(HISTORY_AUDIT_ACTION);
+
+const HISTORY_AUDIT_ACTION_LABELS = {
+  CREATE: "Registro",
+  UPDATE: "Edición",
+  DELETE: "Eliminación",
+  IMPORT: "Importación",
+  REVERT: "Reversión",
+  PROFILE: "Datos del cálculo",
+  REFERENCE: "Saldo de referencia",
+};
+
 const HISTORY_ORIGIN_LABELS = {
   MANUAL: "Manual",
   IMPORTED: "Importado",
@@ -27,21 +53,6 @@ const HISTORY_ORIGIN_BADGE = {
   MANUAL: "vac-badge vac-badge-progress",
   IMPORTED: "vac-badge vac-badge-completed",
   ADJUSTMENT: "vac-badge vac-badge-pending",
-};
-
-/**
- * Detalle del registro. "Resumido" es el caso normal del Excel de RRHH:
- * año, mes y cantidad de días, sin fechas exactas. Nunca se inventan fechas
- * para rellenar el esquema.
- */
-const HISTORY_DETAIL = {
-  SUMMARY: "SUMMARY",
-  DETAILED: "DETAILED",
-};
-
-const HISTORY_DETAIL_LABELS = {
-  SUMMARY: "Histórico resumido",
-  DETAILED: "Histórico detallado",
 };
 
 const MONTH_NAMES = [
@@ -114,12 +125,13 @@ function parseMonth(value) {
 }
 
 module.exports = {
+  HISTORY_AUDIT_ACTION,
+  HISTORY_AUDIT_ACTIONS,
+  HISTORY_AUDIT_ACTION_LABELS,
   HISTORY_ORIGIN,
   ALL_HISTORY_ORIGINS,
   HISTORY_ORIGIN_LABELS,
   HISTORY_ORIGIN_BADGE,
-  HISTORY_DETAIL,
-  HISTORY_DETAIL_LABELS,
   MONTH_NAMES,
   MIN_HISTORY_YEAR,
   historyOriginLabel,

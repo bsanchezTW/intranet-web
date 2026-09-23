@@ -76,6 +76,24 @@ class PeruVacationStrategy extends BaseVacationStrategy {
   }
 
   /**
+   * Plazo para gozar el descanso: dentro del año siguiente a aquel en que se
+   * generó el derecho (art. 23 D.L. 713). El derecho nace al terminar el
+   * período, así que el plazo vence un año después de period_end.
+   *
+   * Pasado el plazo los días NO caducan (ver getExpirationDate): lo que se
+   * gatilla es la indemnización vacacional. Por eso esto es una alerta para
+   * RR.HH., no un cambio en el saldo.
+   */
+  getEnjoymentDeadline({ periodEnd }) {
+    const end = toDateOnly(periodEnd);
+    if (!end) return null;
+    const [y, m, d] = end.split("-").map(Number);
+    // 29-feb + 1 año → 28-feb.
+    const lastDay = new Date(Date.UTC(y + 1, m, 0)).getUTCDate();
+    return `${y + 1}-${String(m).padStart(2, "0")}-${String(Math.min(d, lastDay)).padStart(2, "0")}`;
+  }
+
+  /**
    * Imputa días YA GOZADOS (historial previo a la intranet) a los bloques del
    * período, sin validar el art. 17.
    *
