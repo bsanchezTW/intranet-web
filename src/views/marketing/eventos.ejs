@@ -14,7 +14,7 @@ const formatoFecha = (valor) => {
     <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'camera' }) %></span>
     <div class="page-header__text">
       <h2 class="page-title">Galería</h2>
-      <p class="page-description">Revive los eventos de Transworld: fotos y videos de cada celebración.</p>
+      <p class="page-description">Eventos de Chile y Perú. Los públicos se ven en ambos países; los privados, solo donde se publicaron.</p>
     </div>
 
     <% if (can.eventos_write) { %>
@@ -38,10 +38,55 @@ const formatoFecha = (valor) => {
       <% } %>
     </div>
   <% } else { %>
-    <div class="galeria-grid">
-      <% eventos.forEach(function (ev) { %>
-        <%- include('partials/evento-card', { ev, fecha: formatoFecha(ev.created_at) }) %>
-      <% }) %>
+    <% const secciones = [
+      { code: 'CL', titulo: 'Chile', desc: 'Eventos publicados desde Chile.' },
+      { code: 'PE', titulo: 'Perú', desc: 'Eventos publicados desde Perú.' },
+    ]; %>
+
+    <div class="galeria-filtros">
+      <div class="galeria-filtros__grupo">
+        <span class="galeria-filtros__etiqueta" id="galeriaFiltroPais">País</span>
+        <div class="personal-chips" role="group" aria-labelledby="galeriaFiltroPais">
+          <button type="button" class="personal-chip is-activo" data-filtro-pais="" aria-pressed="true">Todos</button>
+          <button type="button" class="personal-chip" data-filtro-pais="CL" aria-pressed="false">Chile</button>
+          <button type="button" class="personal-chip" data-filtro-pais="PE" aria-pressed="false">Perú</button>
+        </div>
+      </div>
+      <div class="galeria-filtros__grupo">
+        <span class="galeria-filtros__etiqueta" id="galeriaFiltroVisibilidad">Visibilidad</span>
+        <div class="personal-chips" role="group" aria-labelledby="galeriaFiltroVisibilidad">
+          <button type="button" class="personal-chip is-activo" data-filtro-visibilidad="" aria-pressed="true">Todos</button>
+          <button type="button" class="personal-chip" data-filtro-visibilidad="publico" aria-pressed="false">Públicos</button>
+          <button type="button" class="personal-chip" data-filtro-visibilidad="privado" aria-pressed="false">Privados</button>
+        </div>
+      </div>
+    </div>
+
+    <% secciones.forEach(function (sec) {
+         const lista = eventos.filter((ev) => ev.country_code === sec.code);
+    %>
+      <section class="seccion" data-seccion-pais="<%= sec.code %>" aria-labelledby="galeria-<%= sec.code %>" <%= lista.length ? '' : 'hidden' %>>
+        <div class="seccion__head">
+          <div class="seccion__heading">
+            <h3 class="seccion__title" id="galeria-<%= sec.code %>">
+              <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'flag' }) %></span>
+              <%= sec.titulo %>
+            </h3>
+            <p class="seccion__desc"><%= sec.desc %></p>
+          </div>
+        </div>
+        <div class="galeria-grid">
+          <% lista.forEach(function (ev) { %>
+            <%- include('partials/evento-card', { ev, fecha: formatoFecha(ev.created_at) }) %>
+          <% }) %>
+        </div>
+      </section>
+    <% }) %>
+
+    <div class="galeria-vacio" id="galeriaFiltroVacio" hidden>
+      <span class="galeria-vacio__icono"><%- include('../partials/icon', { name: 'camera' }) %></span>
+      <h3 class="galeria-vacio__titulo">Ningún evento coincide</h3>
+      <p class="galeria-vacio__texto">Prueba otro país o cambia entre públicos y privados.</p>
     </div>
   <% } %>
 </div>

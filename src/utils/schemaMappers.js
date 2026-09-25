@@ -75,7 +75,7 @@ const NOTICIA_VIEW_COLUMNS = `
 `;
 
 const EVENTO_VIEW_COLUMNS = `
-  id, name, slug, description, image, created_at
+  id, name, slug, description, image, created_at, country_code, is_private
 `;
 
 const APPLICATION_VIEW_COLUMNS = `

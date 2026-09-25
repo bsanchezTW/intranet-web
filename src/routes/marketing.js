@@ -9,11 +9,13 @@ const fileStorage = require('../services/fileStorage');
 const requireRole = require('../middlewares/requireRole');
 const { UPLOAD_LIMITS_BYTES } = require('../config/uploadLimits');
 const { EVENTO_VIEW_COLUMNS } = require('../utils/schemaMappers');
+const { getCurrentCountry } = require('../config/country');
+const { isPrivateFlag, hasPrivacyField } = require('../utils/eventAccess');
 
 const router = express.Router();
 const WRITE_ROLES = ['admin'];
 
-const ASSET_VERSION = '20260917r';
+const ASSET_VERSION = '20260922a';
 const ASSETS_LISTA = {
   extraCss: [`/css/galeria.css?v=${ASSET_VERSION}`],
   extraJs: [`/js/galeria.js?v=${ASSET_VERSION}`],
@@ -57,7 +59,8 @@ function createSlug(text) {
 function eventFieldsFromBody(body = {}) {
   const name = String(body.name ?? body.nombre ?? '').trim();
   const description = body.description ?? body.descripcion ?? null;
-  return { name, description };
+  const isPrivate = isPrivateFlag(body.is_private ?? body.privado);
+  return { name, description, isPrivate, hasPrivacy: hasPrivacyField(body) };
 }
 
 // Normaliza imágenes enviadas desde el front
@@ -103,7 +106,7 @@ router.get('/eventos/nuevo', requireRole(...WRITE_ROLES), (req, res) => {
 });
 
 router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
-  const { name, description } = eventFieldsFromBody(req.body);
+  const { name, description, isPrivate } = eventFieldsFromBody(req.body);
   const responderError = (status, error) => {
     if (wantsJsonResponse(req)) return res.status(status).json({ error });
     return res.redirect(`/marketing/eventos?modal=nuevo&error=${encodeURIComponent(error)}`);
@@ -120,14 +123,18 @@ router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
     }
 
     await db.queryRetryIdCollision(
-      'INSERT INTO events (name, slug, description) VALUES ($1, $2, $3)',
-      [name, slug, description],
+      `INSERT INTO events (name, slug, description, country_code, is_private)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [name, slug, description, getCurrentCountry(), isPrivate],
     );
     if (wantsJsonResponse(req)) return res.json({ ok: true, slug });
     res.redirect(`/marketing/eventos/${encodeURIComponent(slug)}?ok=Evento creado`);
   } catch (err) {
     console.error(err);
     if (err.code === '23505') return responderError(409, 'Ya existe un evento con ese nombre.');
+    if (err.code === '44000') {
+      return responderError(400, 'Un evento privado solo puede quedar en el país que lo crea.');
+    }
     return responderError(500, 'No se pudo crear el evento.');
   }
 });
@@ -313,15 +320,31 @@ router.get('/eventos/:slug/editar', requireRole(...WRITE_ROLES), (req, res) => {
 
 router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, res) => {
   const { slug } = req.params;
-  const { name, description } = eventFieldsFromBody(req.body);
+  const { name, description, isPrivate, hasPrivacy } = eventFieldsFromBody(req.body);
+  const responderError = (status, error) => {
+    if (wantsJsonResponse(req)) return res.status(status).json({ error });
+    return res.status(status).send(error);
+  };
+
   try {
     if (!name) {
-      if (wantsJsonResponse(req)) {
-        return res.status(400).json({ error: 'El nombre del evento es obligatorio.' });
-      }
-      return res.status(400).send('El nombre del evento es obligatorio');
+      return responderError(400, 'El nombre del evento es obligatorio.');
     }
-    await db.query('UPDATE events SET name = $1, description = $2 WHERE slug = $3', [name, description, slug]);
+
+    const { rows } = await db.query(
+      `SELECT country_code, is_private FROM events WHERE slug = $1`,
+      [slug],
+    );
+    if (!rows.length) return responderError(404, 'Evento no encontrado');
+
+    const actual = rows[0];
+    const propio = actual.country_code === getCurrentCountry();
+    const privado = propio && hasPrivacy ? isPrivate : actual.is_private;
+
+    await db.query(
+      'UPDATE events SET name = $1, description = $2, is_private = $3 WHERE slug = $4',
+      [name, description, privado, slug],
+    );
     if (req.session.user && req.session.user.id) {
       await db.query('INSERT INTO change_log (user_id, action, section, link_path) VALUES ($1, $2, $3, $4)',
         [req.session.user.id, 'editó información del evento', 'Galería de Eventos', `/marketing/eventos/${slug}`]);
@@ -330,8 +353,10 @@ router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, re
     res.redirect(`/marketing/eventos/${slug}?ok=Evento actualizado correctamente`);
   } catch (err) {
     console.error(err);
-    if (wantsJsonResponse(req)) return res.status(500).json({ error: 'No se pudo actualizar el evento.' });
-    res.status(500).send('Error al actualizar el evento');
+    if (err.code === '44000') {
+      return responderError(400, 'Un evento privado solo puede quedar en el país que lo creó.');
+    }
+    return responderError(500, 'No se pudo actualizar el evento.');
   }
 });
 

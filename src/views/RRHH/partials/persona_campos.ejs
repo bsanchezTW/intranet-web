@@ -163,7 +163,8 @@ const rolActual = p.role || 'Usuario';
       </div>
     <% } %>
 
-    <% if (country === 'PE') { %>
+    <%# La jornada sólo se usa para calcular vacaciones en Perú. %>
+    <% if (country === 'PE' && features.vacations) { %>
       <% const jornada = p.work_days_per_week || 5; %>
       <div class="campo-form">
         <label for="<%= pre %>work_days_per_week">Jornada (días/semana)</label>

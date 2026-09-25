@@ -73,8 +73,9 @@ const FEATURE_MATRIX = {
     expenseCenter: true,
     // Igual que Chile: apagado en producción mientras se termina en su rama.
     expenseRequests: false,
-    // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú.
-    vacations: true,
+    // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú en
+    // la rama features. Apagado en producción hasta que esté terminado.
+    vacations: false,
   },
 };
 

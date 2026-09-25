@@ -63,7 +63,10 @@
         <button type="button" class="claude-chip" data-send="No puedo imprimir">No puedo imprimir</button>
         <% } %>
         <button type="button" class="claude-chip" data-prompt="Busca a ">Buscar a una persona</button>
+        <%# Con el módulo apagado solo se ofrece donde hay dónde pedirlas (Rex+ en Chile). %>
+        <% if (features.vacations || features.chileHrPortals) { %>
         <button type="button" class="claude-chip" data-send="¿Cómo pido vacaciones?">¿Cómo pido vacaciones?</button>
+        <% } %>
         <% if (features.expenseRequests) { %>
         <button type="button" class="claude-chip" data-send="¿Dónde rindo gastos?">¿Dónde rindo gastos?</button>
         <% } %>

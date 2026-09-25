@@ -23,10 +23,66 @@
    1. Lista de eventos
    ========================================================================== */
 
+.galeria-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 28px;
+  margin-bottom: 28px;
+}
+
+.galeria-filtros__grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.galeria-filtros__etiqueta {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.galeria .personal-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.galeria .personal-chip {
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.galeria .personal-chip:hover { border-color: var(--brand); color: var(--brand); }
+.galeria .personal-chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.galeria .personal-chip.is-activo {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--color-bg);
+}
+
 .galeria-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--gal-gap);
+}
+
+.galeria-card[hidden],
+.galeria .seccion[hidden] {
+  display: none !important;
 }
 
 .galeria-card {
@@ -123,6 +179,12 @@
   color: #fff;
 }
 
+.galeria-card__marcas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .galeria-card__fecha {
   display: inline-flex;
   align-items: center;
@@ -137,6 +199,10 @@
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.galeria-card__privado {
+  background: rgba(0, 0, 0, 0.38);
 }
 
 .galeria-card__titulo {
@@ -1164,6 +1230,75 @@ body.galeria-visor-abierto .claude-fab {
   gap: 14px;
 }
 
+.galeria-privado__label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.galeria-privado__label input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.galeria-privado__pista {
+  position: relative;
+  flex-shrink: 0;
+  width: 42px;
+  height: 24px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  transition: background 0.18s ease;
+}
+
+.galeria-privado__pista::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s ease;
+}
+
+.galeria-privado__label input:checked + .galeria-privado__pista {
+  background: var(--brand);
+}
+
+.galeria-privado__label input:checked + .galeria-privado__pista::after {
+  transform: translateX(18px);
+}
+
+.galeria-privado__label input:focus-visible + .galeria-privado__pista {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.galeria-privado__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.galeria-privado__texto strong {
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.galeria-privado__texto span {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
 .galeria-modal .modal-body {
   display: grid;
   gap: 18px;
@@ -1482,6 +1617,17 @@ body.galeria-visor-abierto .claude-fab {
 @media (max-width: 768px) {
   .galeria {
     --gal-gap: 16px;
+  }
+
+  .galeria .personal-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+    scrollbar-width: none;
+  }
+
+  .galeria .personal-chip {
+    flex-shrink: 0;
   }
 
   .galeria-grid {
