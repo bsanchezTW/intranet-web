@@ -377,6 +377,10 @@
        await IntranetDialog.confirm({ title, message, acceptLabel, tone })  → boolean
        await IntranetDialog.alert({ title, message })                       → void
        await IntranetDialog.prompt({ title, message, label, required })     → string | null
+       await IntranetDialog.ask({ title, message, acceptLabel, cancelLabel }) → 'accept' | 'decline' | null
+
+     `ask` distingue el botón secundario («No, …») de cerrar el diálogo con
+     Escape, la X o el fondo, que devuelve null (no decidió).
 
      Y sin JavaScript propio, en el marcado:
 
@@ -482,7 +486,7 @@
       overlay.append(panel);
       document.body.append(overlay);
 
-      let resultado = kind === 'confirm' ? false : kind === 'prompt' ? null : undefined;
+      let resultado = kind === 'confirm' ? false : (kind === 'prompt' || kind === 'ask') ? null : undefined;
       let resuelto = false;
 
       overlay.addEventListener('modal:cerrando', () => {
@@ -509,11 +513,18 @@
           resultado = valor;
         } else if (kind === 'confirm') {
           resultado = true;
+        } else if (kind === 'ask') {
+          resultado = 'accept';
         }
         close(overlay);
       });
 
-      if (cancelar) cancelar.addEventListener('click', () => close(overlay));
+      if (cancelar) {
+        cancelar.addEventListener('click', () => {
+          if (kind === 'ask') resultado = 'decline';
+          close(overlay);
+        });
+      }
       if (campo) {
         campo.addEventListener('input', () => campo.closest('.campo-form').classList.remove('is-invalid'));
       }
@@ -540,6 +551,15 @@
         kind: 'alert',
         title: 'Aviso',
         acceptLabel: 'Entendido',
+        tone: 'normal',
+      }));
+    },
+    ask(opciones) {
+      return abrirDialogo(normalizarOpciones(opciones, {
+        kind: 'ask',
+        title: '¿Qué quieres hacer?',
+        acceptLabel: 'Sí',
+        cancelLabel: 'No',
         tone: 'normal',
       }));
     },

@@ -258,6 +258,16 @@
     sincronizarFecha();
     initVistaPreviaCrear(formulario);
 
+    var enviarClave = document.getElementById('crear_enviar_clave');
+    // true en la segunda pasada, cuando RRHH ya respondió la pregunta.
+    var claveDecidida = false;
+
+    function correoDeCuenta() {
+      var empresa = email ? String(email.value || '').trim() : '';
+      var personal = correoPersonal ? String(correoPersonal.value || '').trim() : '';
+      return empresa || personal;
+    }
+
     formulario.addEventListener('submit', function (evento) {
       var hayError = false;
 
@@ -283,6 +293,30 @@
         window.CampoForm.enfocarPrimerError(formulario);
         return;
       }
+
+      // Con correo se crea la cuenta de intranet: se pregunta si mandar ya la
+      // clave temporal. Cerrar el diálogo (Escape, fondo) no guarda nada.
+      var correo = correoDeCuenta();
+      if (correo && enviarClave && !claveDecidida) {
+        evento.preventDefault();
+        var boton = evento.submitter && evento.submitter.form === formulario ? evento.submitter : null;
+        window.IntranetDialog.ask({
+          title: '¿Enviar contraseña temporal?',
+          message: 'Se enviará un correo a ' + correo +
+            ' con una contraseña temporal para que active su acceso a la intranet. ' +
+            'Si eliges no enviarla, podrás hacerlo después desde su ficha.',
+          acceptLabel: 'Sí, enviar correo',
+          cancelLabel: 'No enviar',
+        }).then(function (respuesta) {
+          if (!respuesta) return;
+          enviarClave.value = respuesta === 'accept' ? '1' : '0';
+          claveDecidida = true;
+          if (typeof formulario.requestSubmit === 'function') formulario.requestSubmit(boton || undefined);
+          else formulario.submit();
+        });
+        return;
+      }
+      claveDecidida = false;
       window.CampoForm.ocuparSubmit(formulario);
     });
   }

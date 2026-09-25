@@ -3,6 +3,8 @@
   const tieneFoto = Boolean(persona.photo);
   // `email` es el correo de la cuenta (empresa o, si no hay, el personal).
   const tieneCorreoRegistrado = Boolean(persona.email && String(persona.email).trim());
+  // Los deshabilitados pueden recibir una clave temporal para (re)activar su acceso.
+  const estaDeshabilitado = String(persona.role || 'Deshabilitado').toLowerCase() === 'deshabilitado';
   const areaActual = (areas || []).find((a) => Number(a.id) === Number(persona.work_area_id));
   const pillArea = areaActual
     ? getWorkAreaPill(areaActual.area_name, areaActual.color)
@@ -64,6 +66,13 @@
     <button type="submit" form="formEliminarPersona" class="btn-peligro-suave">
       <%- include('../../partials/icon', { name: 'trash' }) %> Eliminar colaborador
     </button>
+    <% if (estaDeshabilitado) { %>
+      <button type="button" class="btn-secundario" data-enviar-clave="<%= persona.id %>"
+              data-enviar-clave-correo="<%= tieneCorreoRegistrado ? persona.email : '' %>"
+              <% if (!tieneCorreoRegistrado) { %>disabled title="Agrega un correo y guarda la ficha para poder enviarla"<% } %>>
+        <%- include('../../partials/icon', { name: 'mail' }) %> Enviar contraseña temporal
+      </button>
+    <% } %>
   </div>
   <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
   <button type="submit" form="formEditarPersona" class="btn-primario">Guardar cambios</button>

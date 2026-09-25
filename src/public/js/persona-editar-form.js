@@ -171,6 +171,57 @@
     form.addEventListener('submit', onSubmit);
     syncFechaRequired();
 
+    // «Enviar contraseña temporal» (sólo deshabilitados): va por fetch para no
+    // descartar lo que se esté editando en la ficha.
+    const btnEnviarClave = document.querySelector('[data-enviar-clave]');
+    const errorModal = document.getElementById('editarColaboradorError');
+
+    function mostrarErrorModal(texto) {
+      if (!errorModal) return;
+      errorModal.textContent = texto || '';
+      errorModal.classList.toggle('show', Boolean(texto));
+    }
+
+    async function onEnviarClave() {
+      const correo = btnEnviarClave.dataset.enviarClaveCorreo;
+      const ok = await global.IntranetDialog.confirm({
+        title: '¿Enviar contraseña temporal?',
+        message: 'Se enviará una contraseña temporal a ' + correo +
+          '. Al ingresar verificará su correo, creará su contraseña y su acceso quedará habilitado.',
+        acceptLabel: 'Enviar correo',
+      });
+      if (!ok) return;
+
+      mostrarErrorModal('');
+      global.IntranetModal.ocuparBoton(btnEnviarClave, true);
+      try {
+        const respuesta = await fetch(
+          '/RRHH/enviar-clave/' + encodeURIComponent(btnEnviarClave.dataset.enviarClave),
+          {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'fetch', Accept: 'application/json' },
+          },
+        );
+        const datos = await respuesta.json().catch(function () { return {}; });
+        if (!respuesta.ok || !datos.ok) {
+          throw new Error(datos.message || 'No se pudo enviar la contraseña temporal.');
+        }
+        if (global.IntranetToast) global.IntranetToast.show(datos.message, { tone: 'ok' });
+      } catch (fallo) {
+        mostrarErrorModal(fallo.message);
+      } finally {
+        global.IntranetModal.ocuparBoton(btnEnviarClave, false);
+      }
+    }
+
+    if (btnEnviarClave && !btnEnviarClave.disabled) {
+      btnEnviarClave.addEventListener('click', onEnviarClave);
+      destroyFns.push(function () {
+        btnEnviarClave.removeEventListener('click', onEnviarClave);
+      });
+    }
+
     destroyFns.push(function () {
       emailInput?.removeEventListener('input', onEmailInput);
       correosExtra.forEach(function (input) { input.removeEventListener('input', onCorreoExtraInput); });

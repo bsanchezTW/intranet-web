@@ -268,6 +268,67 @@ const uploadProfilePhoto = multer({
   },
 });
 
+/**
+ * Filas de `users` con lo que necesita el login para abrir la sesión.
+ * `column` es "u.email" o "u.id": nunca viene del usuario.
+ */
+async function findLoginRows(column, value) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.email_confirmed,
+              u.password_hash, u.password_salt, u.photo, u.must_change_password,
+              u.confirm_token, u.confirm_expires, u.home_tutorial_seen, u.last_login_at,
+              u.work_area_id, at.area_name, at.color AS area_color
+       FROM users u
+       LEFT JOIN work_areas at ON at.id = u.work_area_id
+       WHERE ${column} = $1 LIMIT 1`,
+      [value],
+    );
+    return rows;
+  } catch (queryErr) {
+    if (queryErr.code !== "42703") throw queryErr;
+    const { rows } = await pool.query(
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.email_confirmed,
+              u.password_hash, u.password_salt, u.photo, u.must_change_password,
+              u.confirm_token, u.confirm_expires
+       FROM users u WHERE ${column} = $1 LIMIT 1`,
+      [value],
+    );
+    rows.forEach((row) => {
+      row.home_tutorial_seen = true;
+      row.last_login_at = new Date();
+    });
+    return rows;
+  }
+}
+
+function startUserSession(req, u) {
+  const isFirstLogin = u.last_login_at == null;
+  const showHomeTutorial = isFirstLogin || u.home_tutorial_seen === false;
+
+  req.session.user = {
+    id: u.id,
+    username: u.email,
+    email: u.email,
+    role: normalizeRole(u.role),
+    nombre: u.first_name + (u.last_name ? " " + u.last_name : ""),
+    first_name: u.first_name,
+    last_name: u.last_name,
+    foto: u.photo || null,
+    photo: u.photo || null,
+    work_area_id: u.work_area_id || null,
+    area: u.area_name || null,
+    must_change_password: u.must_change_password,
+    home_tutorial_seen: u.home_tutorial_seen !== false,
+    show_home_tutorial: showHomeTutorial,
+  };
+  // El SELECT de respaldo (esquema viejo) no trae color: dejar `undefined`
+  // para que el middleware hidrate el área en el siguiente request.
+  if ("area_color" in u) {
+    req.session.user.area_color = u.area_color ?? null;
+  }
+}
+
 // ==========================================
 // LOGIN
 // ==========================================
@@ -350,32 +411,7 @@ router.post("/login", async (req, res) => {
       return fail(400, "Debes ingresar un usuario corporativo válido.");
     }
 
-    let rows;
-    try {
-      ({ rows } = await pool.query(
-        `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.email_confirmed,
-                u.password_hash, u.password_salt, u.photo, u.must_change_password,
-                u.confirm_token, u.confirm_expires, u.home_tutorial_seen, u.last_login_at,
-                u.work_area_id, at.area_name, at.color AS area_color
-         FROM users u
-         LEFT JOIN work_areas at ON at.id = u.work_area_id
-         WHERE u.email = $1 LIMIT 1`,
-        [email],
-      ));
-    } catch (queryErr) {
-      if (queryErr.code !== "42703") throw queryErr;
-      ({ rows } = await pool.query(
-        `SELECT id, first_name, last_name, email, role, email_confirmed,
-                password_hash, password_salt, photo, must_change_password,
-                confirm_token, confirm_expires
-         FROM users WHERE email = $1 LIMIT 1`,
-        [email],
-      ));
-      rows.forEach((row) => {
-        row.home_tutorial_seen = true;
-        row.last_login_at = new Date();
-      });
-    }
+    const rows = await findLoginRows("u.email", email);
 
     if (!rows.length) {
       return fail(401, "Usuario no registrado en la intranet");
@@ -423,31 +459,7 @@ router.post("/login", async (req, res) => {
 
     delete req.session.pendingPasswordReset;
 
-    const isFirstLogin = u.last_login_at == null;
-    const showHomeTutorial =
-      isFirstLogin || u.home_tutorial_seen === false;
-
-    req.session.user = {
-      id: u.id,
-      username: u.email,
-      email: u.email,
-      role: normalizeRole(u.role),
-      nombre: u.first_name + (u.last_name ? " " + u.last_name : ""),
-      first_name: u.first_name,
-      last_name: u.last_name,
-      foto: u.photo || null,
-      photo: u.photo || null,
-      work_area_id: u.work_area_id || null,
-      area: u.area_name || null,
-      must_change_password: u.must_change_password,
-      home_tutorial_seen: u.home_tutorial_seen !== false,
-      show_home_tutorial: showHomeTutorial,
-    };
-    // El SELECT de respaldo (esquema viejo) no trae color: dejar `undefined`
-    // para que el middleware hidrate el área en el siguiente request.
-    if ("area_color" in u) {
-      req.session.user.area_color = u.area_color ?? null;
-    }
+    startUserSession(req, u);
 
     if (u.must_change_password) {
       return succeed("/reset-password");
@@ -995,10 +1007,18 @@ router.post("/reset-password", async (req, res) => {
     );
 
     if (!sessionUser) {
-      // Venía del flujo de verificación: ahora debe ingresar con su
-      // correo y la nueva contraseña.
+      // Venía del flujo de verificación (clave temporal → código → nueva
+      // contraseña): ya demostró ser dueño del correo y de la clave, así que
+      // entra directo en vez de volver a escribirla en el login.
       delete req.session.pendingPasswordReset;
-      return res.redirect("/login?changed=1");
+      const rows = await findLoginRows("u.id", userId);
+      const u = rows[0];
+      if (!u || !u.email_confirmed || !canLogin(u.role)) {
+        return res.redirect("/login?changed=1");
+      }
+      u.must_change_password = false;
+      startUserSession(req, u);
+      return res.redirect(consumeReturnTo(req.session, "/?changed=1"));
     }
 
     req.session.user.must_change_password = false;

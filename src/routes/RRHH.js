@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fileStorage = require("../services/fileStorage");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
-const { ROLES, ALL_ROLES } = require("../constants/roles");
+const { ROLES, ALL_ROLES, isDeshabilitado } = require("../constants/roles");
 const {
   DEFAULT_COLOR,
   COLOR_PALETTE,
@@ -197,9 +197,12 @@ function enviarClaveTemporal(email, firstName, passwordTemporal) {
       <p style="margin:0; color:#51637a;">En el primer acceso te pediremos verificar tu correo y cambiar esta contraseña.</p>
     `,
     text: `Hola ${firstName}, tu contraseña temporal es: ${passwordTemporal}. Ingresa con tu correo y esta contraseña; en el primer acceso te pediremos verificar tu correo.`,
-  }).catch((mailErr) =>
-    console.error("Error enviando correo:", mailErr.message),
-  );
+  })
+    .then(() => true)
+    .catch((mailErr) => {
+      console.error("Error enviando correo:", mailErr.message);
+      return false;
+    });
 }
 
 async function getAreasTrabajo() {
@@ -579,7 +582,12 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
       }
     }
 
-    const crearCuentaIntranet = puedeCrearCuentaIntranet(emailClean);
+    // El modal de alta pregunta si enviar la clave temporal. Si RR.HH. dice
+    // que no, la ficha queda sin credenciales y se envían después con el botón
+    // «Enviar contraseña temporal» de la edición.
+    const enviarClave = String(req.body.enviar_clave ?? "1") !== "0";
+    const crearCuentaIntranet =
+      enviarClave && puedeCrearCuentaIntranet(emailClean);
     let successMsg = "Colaborador+agregado+correctamente";
     let userId;
 
@@ -613,14 +621,19 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
       );
       userId = inserted[0].id;
 
-      await enviarClaveTemporal(emailClean, firstName, passwordTemporal);
-      successMsg =
-        "Usuario+creado+correctamente.+Se+envió+la+clave+temporal+al+correo.";
+      const enviado = await enviarClaveTemporal(
+        emailClean,
+        firstName,
+        passwordTemporal,
+      );
+      successMsg = enviado
+        ? "Usuario+creado+correctamente.+Se+envió+la+clave+temporal+al+correo."
+        : "Usuario+creado,+pero+no+se+pudo+enviar+el+correo.+Reintenta+desde+su+ficha.";
     } else {
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
           (first_name, last_name, email, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id, work_phone, personal_email)
-        VALUES ($1, $2, $3, $4, FALSE, FALSE, $5, $6, $7, FALSE, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, FALSE, FALSE, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING id`,
         [
           firstName,
@@ -630,6 +643,7 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
           areaId,
           fechaVal,
           contacto.personalPhone,
+          Boolean(emailClean),
           hireVal,
           priorYearsVal,
           progressiveOverrideVal,
@@ -640,6 +654,10 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
         ],
       );
       userId = inserted[0].id;
+      if (emailClean) {
+        successMsg =
+          "Colaborador+agregado+sin+enviar+la+clave+temporal.+Puedes+enviarla+desde+su+ficha.";
+      }
     }
 
     // Genera los períodos de vacaciones si se registró fecha de ingreso y el
@@ -852,13 +870,10 @@ router.post(
         );
       }
       const previousUrl = prevUser.foto || null;
-      const teniaPassword = Boolean(prevUser.password_hash);
       const correoVerificado = Boolean(prevUser.email_confirmed);
       const roleToSave = correoVerificado
         ? parseRoleFromForm(role)
         : ROLES.DESHABILITADO;
-      const crearCuentaIntranet =
-        !teniaPassword && puedeCrearCuentaIntranet(emailClean);
       const shouldRemovePhoto =
         eliminar_foto === "1" || eliminar_foto === "true";
 
@@ -920,24 +935,9 @@ router.post(
         values.push(fotoValue);
       }
 
-      let successMsg = "Usuario+actualizado+correctamente";
-      let passwordTemporalNueva = null;
-      if (crearCuentaIntranet) {
-        const credenciales = generarCredencialesTemporales();
-        passwordTemporalNueva = credenciales.passwordTemporal;
-        setClauses.push(
-          `password_hash=$${values.length + 1}`,
-          `password_salt=$${values.length + 2}`,
-          "email_confirmed=FALSE",
-          "must_change_password=TRUE",
-          "is_intranet_user=TRUE",
-          "confirm_token=NULL",
-          "confirm_expires=NULL",
-        );
-        values.push(credenciales.hashHex, credenciales.saltHex);
-        successMsg =
-          "Usuario+actualizado.+Se+envió+la+clave+temporal+al+correo.";
-      }
+      // La clave temporal ya no se envía sola al guardar: RR.HH. la manda
+      // explícitamente con «Enviar contraseña temporal» (POST /enviar-clave/:id).
+      const successMsg = "Usuario+actualizado+correctamente";
 
       values.push(id);
       await db.query(
@@ -982,10 +982,6 @@ router.post(
         await refreshSessionIdentity(req, id);
       }
 
-      if (passwordTemporalNueva) {
-        await enviarClaveTemporal(emailClean, firstName, passwordTemporalNueva);
-      }
-
       // Recalcula períodos de vacaciones si hay fecha de ingreso y el módulo existe.
       if (hireVal && isFeatureEnabled("vacations")) {
         balanceService
@@ -1007,6 +1003,89 @@ router.post(
     }
   },
 );
+
+/**
+ * Envía (o reenvía) la contraseña temporal a un colaborador deshabilitado.
+ * La cuenta vuelve al flujo del primer acceso: clave temporal → código de
+ * verificación → nueva contraseña. Al verificar el correo, /verify-email lo
+ * pasa a Usuario porque la ficha tiene área (la creó RR.HH.).
+ */
+router.post("/enviar-clave/:id", requireRrhhManager(), async (req, res) => {
+  const { id } = req.params;
+  const responder = (status, ok, mensaje) => {
+    if (req.get("X-Requested-With") === "fetch") {
+      return res.status(status).json({ ok, message: mensaje });
+    }
+    if (!ok) return redirectPersonalEditarError(res, id, mensaje);
+    return res.redirect(
+      `/RRHH/personal?ok=1&msg=${encodeURIComponent(mensaje)}`,
+    );
+  };
+
+  try {
+    const { rows } = await db.query(
+      "SELECT id, first_name, email, role, work_area_id FROM users WHERE id = $1",
+      [id],
+    );
+    if (!rows.length) return responder(404, false, "Usuario no encontrado.");
+    const u = rows[0];
+    const email = u.email ? String(u.email).trim() : "";
+
+    if (!email) {
+      return responder(
+        400,
+        false,
+        "El colaborador no tiene correo. Agrega uno y guarda la ficha antes de enviar la contraseña.",
+      );
+    }
+    if (!isDeshabilitado(u.role)) {
+      return responder(
+        400,
+        false,
+        "Sólo se envía la contraseña temporal a usuarios deshabilitados.",
+      );
+    }
+    if (u.work_area_id == null) {
+      return responder(
+        400,
+        false,
+        "Asigna un área de trabajo y guarda la ficha antes de enviar la contraseña.",
+      );
+    }
+
+    const { passwordTemporal, saltHex, hashHex } =
+      generarCredencialesTemporales();
+    await db.query(
+      `UPDATE users
+       SET password_hash = $1,
+           password_salt = $2,
+           email_confirmed = FALSE,
+           must_change_password = TRUE,
+           is_intranet_user = TRUE,
+           confirm_token = NULL,
+           confirm_expires = NULL
+       WHERE id = $3`,
+      [hashHex, saltHex, id],
+    );
+
+    const enviado = await enviarClaveTemporal(
+      email,
+      u.first_name,
+      passwordTemporal,
+    );
+    if (!enviado) {
+      return responder(
+        502,
+        false,
+        "No se pudo enviar el correo. Intenta de nuevo en unos minutos.",
+      );
+    }
+    return responder(200, true, `Contraseña temporal enviada a ${email}.`);
+  } catch (err) {
+    console.error("Error enviando clave temporal:", err);
+    return responder(500, false, "Error al enviar la contraseña temporal.");
+  }
+});
 
 router.post("/eliminar/:id", requireRrhhManager(), async (req, res) => {
   const { id } = req.params;
