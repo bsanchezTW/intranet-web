@@ -1,6 +1,8 @@
 <%# Alta de colaborador. Misma anatomía que la edición (persona_editar_modal):
     lateral con la identidad, campos en el centro y acciones en el pie. %>
 <form action="/RRHH/crear" method="POST" id="formCrearColaborador">
+  <%# personal-tabla.js pregunta al guardar si se envía la clave temporal. %>
+  <input type="hidden" name="enviar_clave" id="crear_enviar_clave" value="1">
   <header class="modal-head">
     <h2 id="crearColaboradorTitle" class="modal-title">Agregar colaborador</h2>
     <p class="modal-subtitle">Los campos con <span class="required-mark">*</span> son obligatorios. La foto se agrega después, al editar la ficha.</p>
