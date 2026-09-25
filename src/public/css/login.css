@@ -727,40 +727,11 @@ body.login-split-page {
   line-height: inherit;
   appearance: none;
   -webkit-appearance: none;
-  cursor: default;
-}
-
-.login-field--username .login-domain__input:not([readonly]) {
   cursor: text;
+}
+
+.login-field--username .login-domain__input:focus {
   color: var(--color-input-text, #1a202c);
-}
-
-.login-field--username .login-domain__edit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  margin-left: 2px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--login-text-muted);
-  cursor: pointer;
-}
-
-.login-field--username .login-domain__edit .icon-svg {
-  display: block;
-  width: 12px;
-  height: 12px;
-}
-
-.login-field--username .login-domain__edit:hover,
-.login-field--username .login-domain__edit[aria-pressed="true"] {
-  color: var(--login-blue);
-  background: rgba(0, 58, 112, 0.08);
 }
 
 /* Teléfono: prefijo + número en la misma caja visual */

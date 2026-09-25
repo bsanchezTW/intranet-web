@@ -893,7 +893,10 @@ router.get("/forgot-password", (req, res) => {
 
 router.post("/forgot-password", async (req, res) => {
   const json = wantsJsonResponse(req);
-  const { email } = req.body || {};
+  // Igual que el login: usuario + dominio (editable, por defecto el de la
+  // instancia). `email` completo se sigue aceptando por compatibilidad.
+  const username = bodyString(req.body && (req.body.username || req.body.email));
+  const domain = bodyString(req.body && req.body.domain);
 
   const fail = (status, error) => {
     if (json) return res.status(status).json({ ok: false, error });
@@ -906,9 +909,16 @@ router.post("/forgot-password", async (req, res) => {
   };
 
   try {
-    const cleanEmail = String(email || "")
-      .trim()
-      .toLowerCase();
+    if (!username.trim()) {
+      return fail(400, "Debes ingresar tu usuario.");
+    }
+    const tldError = foreignDomainError(selectedEmailDomain(username, domain));
+    if (tldError) return fail(400, tldError);
+
+    const cleanEmail = normalizeCorporateEmail(username, domain);
+    if (!cleanEmail) {
+      return fail(400, "Debes ingresar un usuario corporativo válido.");
+    }
 
     const { rows } = await pool.query(
       "SELECT id, first_name FROM users WHERE email = $1",
