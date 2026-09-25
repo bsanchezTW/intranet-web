@@ -71,6 +71,14 @@ const fakePool = {
       });
       return { rows: [] };
     }
+    if (/^UPDATE users SET password_hash = \$1, password_salt = \$2, must_change_password = TRUE WHERE id = \$3/.test(q)) {
+      Object.assign(users.get(Number(params[2])), {
+        password_hash: params[0],
+        password_salt: params[1],
+        must_change_password: true,
+      });
+      return { rows: [] };
+    }
     if (/^UPDATE users SET password_hash = \$1, password_salt = \$2, email_confirmed = FALSE, must_change_password = TRUE/.test(q)) {
       Object.assign(users.get(Number(params[2])), {
         password_hash: params[0],
@@ -112,8 +120,12 @@ before(async () => {
   app.use(session({ secret: "test", resave: false, saveUninitialized: true }));
   app.set("views", path.join(SRC, "views"));
   app.set("view engine", "ejs");
+  app.locals.formatPageTitle = require(path.join(SRC, "utils/pageTitle")).formatPageTitle;
+  app.locals.phoneClientConfig = require(path.join(SRC, "utils/phone")).phoneClientConfig;
   app.use((req, res, next) => {
-    res.locals.countryConfig = { name: "Chile" };
+    res.locals.countryConfig = require(path.join(SRC, "config/country")).getCountryConfig();
+    res.locals.country = res.locals.countryConfig.code;
+    res.locals.features = require(path.join(SRC, "config/features")).getFeatures();
     next();
   });
   app.post("/__test/as-admin", (req, res) => {
@@ -232,6 +244,46 @@ describe("primer acceso con contraseña temporal", () => {
     });
     assert.equal(res.headers.get("location"), "/login");
     assert.equal(users.get(5).password_hash, original);
+  });
+});
+
+describe("recuperar contraseña", () => {
+  it("arma el correo con usuario + dominio, como el login", async () => {
+    const { password_hash: original } = seedUser({ role: "Usuario", email_confirmed: true });
+    const request = browser();
+    const res = await request("POST", "/forgot-password", {
+      username: "ana",
+      domain: "transworld.cl",
+    });
+    assert.equal(res.headers.get("location"), "/login?reset=1");
+    assert.notEqual(users.get(5).password_hash, original);
+    assert.equal(mails[0].to, "ana@transworld.cl");
+  });
+
+  it("rechaza el dominio del otro país", async () => {
+    seedUser({ role: "Usuario", email_confirmed: true });
+    const request = browser();
+    const res = await request("POST", "/forgot-password", {
+      username: "ana",
+      domain: "transworld.pe",
+    });
+    assert.equal(res.status, 400);
+    assert.match(await res.text(), /no está disponible en Chile/);
+    assert.equal(mails.length, 0);
+  });
+
+  it("muestra el dominio editable, sin lápiz, con el de la instancia", async () => {
+    const request = browser();
+    for (const url of ["/login", "/register", "/forgot-password"]) {
+      const html = await (await request("GET", url)).text();
+      const campos = html.match(/<input[^>]*name="domain"[^>]*>/g) || [];
+      assert.equal(campos.length, 3, url);
+      for (const campo of campos) {
+        assert.match(campo, /value="transworld\.cl"/);
+        assert.doesNotMatch(campo, /readonly/);
+      }
+      assert.doesNotMatch(html, /login-domain__edit/);
+    }
   });
 });
 

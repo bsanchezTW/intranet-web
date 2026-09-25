@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= formatPageTitle(titulo || "Iniciar sesión") %></title>
-  <link rel="stylesheet" href="/css/login.css?v=20260917a">
+  <link rel="stylesheet" href="/css/login.css?v=20260925a">
   <script>
     (function () {
       var raiz = document.documentElement;
@@ -110,17 +110,12 @@
                     name="domain"
                     class="login-domain__input"
                     value="<%= countryConfig.corporateEmailDomain %>"
-                    readonly
-                    tabindex="-1"
                     spellcheck="false"
                     autocomplete="off"
                     autocapitalize="none"
                     inputmode="url"
                     aria-label="Dominio de correo"
                   >
-                  <button type="button" class="login-domain__edit" title="Editar dominio" aria-label="Editar dominio" aria-pressed="false">
-                    <%- include('partials/icon', { name: 'edit' }) %>
-                  </button>
                 </div>
               </div>
             </div>
@@ -211,17 +206,12 @@
                     name="domain"
                     class="login-domain__input"
                     value="<%= regSelectedDomain %>"
-                    readonly
-                    tabindex="-1"
                     spellcheck="false"
                     autocomplete="off"
                     autocapitalize="none"
                     inputmode="url"
                     aria-label="Dominio de correo"
                   >
-                  <button type="button" class="login-domain__edit" title="Editar dominio" aria-label="Editar dominio" aria-pressed="false">
-                    <%- include('partials/icon', { name: 'edit' }) %>
-                  </button>
                 </div>
               </div>
               <p class="login-field__error" data-error-for="reg-username" hidden></p>
@@ -296,17 +286,34 @@
         <!-- ── Olvidé contraseña ── -->
         <div class="login-view" data-view="forgot"<% if (activeView !== 'forgot') { %> hidden<% } %>>
           <form action="/forgot-password" method="POST" novalidate>
-            <div class="login-field">
-              <label class="login-field__label" for="forgot-email">Email corporativo</label>
-              <input
-                type="email"
-                id="forgot-email"
-                name="email"
-                class="login-field__input"
-                required
-                placeholder="nombre@<%= countryConfig.corporateEmailDomain %>"
-                <% if (activeView === 'forgot') { %>autofocus<% } %>
-              >
+            <div class="login-field login-field--username">
+              <label class="login-field__label" for="forgot-username">Usuario</label>
+              <div class="login-username-row">
+                <input
+                  type="text"
+                  id="forgot-username"
+                  name="username"
+                  class="login-field__input"
+                  autocomplete="username"
+                  title="Ingresa solo el usuario, sin dominio"
+                  required
+                  <% if (activeView === 'forgot') { %>autofocus<% } %>
+                >
+                <div class="login-domain" data-login-domain>
+                  <span class="login-domain__at">@</span>
+                  <input
+                    type="text"
+                    name="domain"
+                    class="login-domain__input"
+                    value="<%= countryConfig.corporateEmailDomain %>"
+                    spellcheck="false"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    inputmode="url"
+                    aria-label="Dominio de correo"
+                  >
+                </div>
+              </div>
             </div>
 
             <button type="submit" class="login-split__submit">Enviar correo</button>
@@ -1056,117 +1063,62 @@
         input.style.width = len + 'ch';
       }
 
+      // El dominio siempre es editable: viene con el corporativo de la
+      // instancia (transworld.cl / transworld.pe) y la persona lo cambia si usa
+      // otro de los permitidos.
       function bindDomainEditor(row) {
         const wrap = row.querySelector('[data-login-domain]');
         const input = wrap ? wrap.querySelector('.login-domain__input') : null;
-        const button = wrap ? wrap.querySelector('.login-domain__edit') : null;
-        if (!wrap || !input || !button) return null;
+        if (!wrap || !input) return null;
 
-        let previousValue = input.value || DEFAULT_DOMAIN;
+        if (!input.value) input.value = DEFAULT_DOMAIN;
         resizeDomainInput(input);
 
-        function setEditing(editing) {
-          input.readOnly = !editing;
-          input.tabIndex = editing ? 0 : -1;
-          wrap.classList.toggle('login-domain--editing', editing);
-          button.setAttribute('aria-pressed', editing ? 'true' : 'false');
-          button.title = editing ? 'Confirmar dominio' : 'Editar dominio';
-          button.setAttribute('aria-label', button.title);
+        function markInvalid() {
+          wrap.classList.toggle('login-domain--invalid', isForbiddenDomain(input.value));
         }
-
-        function commitDomain() {
-          let value = normalizeDomainValue(input.value);
-          if (!value) value = previousValue || DEFAULT_DOMAIN;
-          if (isForbiddenDomain(value)) {
-            wrap.classList.add('login-domain--invalid');
-            return { ok: false, message: FOREIGN_DOMAIN_MSG };
-          }
-          input.value = value;
-          previousValue = value;
-          wrap.classList.remove('login-domain--invalid');
-          setEditing(false);
-          resizeDomainInput(input);
-          return { ok: true, value: value };
-        }
-
-        function unlock() {
-          const current = normalizeDomainValue(input.value);
-          if (current && !isForbiddenDomain(current)) {
-            previousValue = current;
-          }
-          setEditing(true);
-          input.focus();
-          input.select();
-        }
-
-        button.addEventListener('mousedown', function (e) {
-          e.preventDefault();
-          if (input.readOnly) unlock();
-          else commitDomain();
-        });
 
         input.addEventListener('input', function () {
           input.value = normalizeDomainValue(input.value);
-          wrap.classList.toggle('login-domain--invalid', isForbiddenDomain(input.value));
+          markInvalid();
           resizeDomainInput(input);
         });
 
+        // Vacío no es un dominio: vuelve al de la instancia.
         input.addEventListener('blur', function () {
-          if (input.readOnly || wrap.dataset.blockBlur === '1') {
-            delete wrap.dataset.blockBlur;
-            return;
-          }
-          if (isForbiddenDomain(normalizeDomainValue(input.value))) {
-            input.value = previousValue || DEFAULT_DOMAIN;
-            wrap.classList.remove('login-domain--invalid');
-          }
-          commitDomain();
+          input.value = normalizeDomainValue(input.value) || DEFAULT_DOMAIN;
+          markInvalid();
+          resizeDomainInput(input);
         });
 
         input.addEventListener('keydown', function (e) {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            const result = commitDomain();
-            if (result.ok) {
-              const form = input.closest('form');
-              const password = form ? form.querySelector('input[type="password"]') : null;
-              if (password) password.focus();
-            }
-          }
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            input.value = previousValue || DEFAULT_DOMAIN;
-            wrap.classList.remove('login-domain--invalid');
-            setEditing(false);
-            resizeDomainInput(input);
-          }
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          const form = input.closest('form');
+          const password = form ? form.querySelector('input[type="password"]') : null;
+          if (password) password.focus();
+          else if (form && typeof form.requestSubmit === 'function') form.requestSubmit();
         });
 
         const form = input.closest('form');
         if (form && !form.dataset.domainGuard) {
           form.dataset.domainGuard = '1';
-          const submitBtn = form.querySelector('[type="submit"]');
-          if (submitBtn) {
-            submitBtn.addEventListener('mousedown', function () {
-              if (!input.readOnly && isForbiddenDomain(normalizeDomainValue(input.value))) {
-                wrap.dataset.blockBlur = '1';
-              }
-            });
-          }
           form.addEventListener('submit', function (e) {
-            const value = normalizeDomainValue(input.value);
-            if (isForbiddenDomain(value)) {
-              e.preventDefault();
-              const errorEl = document.getElementById('loginAuthError');
-              if (errorEl) {
-                errorEl.textContent = FOREIGN_DOMAIN_MSG;
-                errorEl.hidden = false;
-              }
-              wrap.classList.add('login-domain--invalid');
-              unlock();
+            input.value = normalizeDomainValue(input.value) || DEFAULT_DOMAIN;
+            resizeDomainInput(input);
+            if (!isForbiddenDomain(input.value)) {
+              wrap.classList.remove('login-domain--invalid');
               return;
             }
-            commitDomain();
+            e.preventDefault();
+            const errorEl = document.getElementById('loginAuthError');
+            if (errorEl) {
+              errorEl.textContent = FOREIGN_DOMAIN_MSG;
+              errorEl.hidden = false;
+            }
+            wrap.classList.add('login-domain--invalid');
+            input.focus();
+            input.select();
           });
         }
 
@@ -1174,7 +1126,7 @@
           setDomain: function (domain) {
             if (!domain || isForbiddenDomain(domain)) return;
             input.value = domain;
-            previousValue = domain;
+            markInvalid();
             resizeDomainInput(input);
           }
         };
@@ -1216,7 +1168,7 @@
         window.setTimeout(apply, 500);
       }
 
-      ['login-username', 'reg-username'].forEach(function (id) {
+      ['login-username', 'reg-username', 'forgot-username'].forEach(function (id) {
         const el = document.getElementById(id);
         if (el) sanitizeUsernameField(el);
       });
