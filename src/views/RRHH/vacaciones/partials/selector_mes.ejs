@@ -1,0 +1,38 @@
+<%#
+  Mes y año de una salida del historial, como dos listas.
+
+  Reemplaza a <input type="month">, que en Firefox y Safari de escritorio se
+  ve como un campo de texto libre. El servidor sigue recibiendo «YYYY-MM» en
+  el campo oculto `month`; vacaciones-historial.js lo compone con las dos
+  listas y deshabilita los meses fuera de rango (antes del ingreso o futuros).
+
+  Parámetros:
+    monthNames  nombres de los meses (constants/vacationHistory.js)
+    minMonth    'YYYY-MM' del ingreso ('' si no hay)
+    maxMonth    'YYYY-MM' del mes en curso
+    idPrefix    prefijo de ids para asociar un <label> (opcional)
+    required    true si el mes es obligatorio
+%>
+<%
+  const maxYear = Number(String(maxMonth || '').slice(0, 4)) || new Date().getFullYear();
+  const minYear = Number(String(minMonth || '').slice(0, 4)) || (maxYear - 30);
+  const anios = [];
+  for (let y = maxYear; y >= minYear; y--) anios.push(y);
+  const pre = typeof idPrefix !== 'undefined' && idPrefix ? idPrefix : '';
+  const obligatorio = typeof required !== 'undefined' && required;
+%>
+<span class="vac-selector-mes" data-selector-mes data-min-month="<%= minMonth || '' %>" data-max-month="<%= maxMonth || '' %>">
+  <select data-mes <%- pre ? `id="${pre}_mes"` : '' %> aria-label="Mes de la salida" <%= obligatorio ? 'required' : '' %>>
+    <option value="">Mes…</option>
+    <% monthNames.forEach((nombre, i) => { %>
+      <option value="<%= String(i + 1).padStart(2, '0') %>"><%= nombre %></option>
+    <% }) %>
+  </select>
+  <select data-anio <%- pre ? `id="${pre}_anio"` : '' %> aria-label="Año de la salida" <%= obligatorio ? 'required' : '' %>>
+    <option value="">Año…</option>
+    <% anios.forEach((y) => { %>
+      <option value="<%= y %>"><%= y %></option>
+    <% }) %>
+  </select>
+  <input type="hidden" name="month" value="">
+</span>

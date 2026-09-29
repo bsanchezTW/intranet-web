@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260923a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260929b">
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -35,10 +35,20 @@
     </div>
   <% } %>
 
-  <% if (totals.withOverdue > 0) { %>
+  <%# Dos niveles: todo saldo de años cumplidos está vencido (hay que tomarlo);
+      si además pasó el plazo legal, la demora genera indemnización. %>
+  <% if (totals.withPending > 0) { %>
     <div class="flash-msg flash-msg--error" role="alert">
-      <%= totals.withOverdue %> colaborador(es) tienen días con el plazo legal para
-      gozarlos vencido. Los días no se pierden, pero la demora genera indemnización.
+      <div>
+        <strong>Días vencidos:</strong>
+        <%= totals.withPending === 1 ? '1 colaborador tiene' : totals.withPending + ' colaboradores suman' %>
+        <%= totals.availableDays %> día(s) vencidos que deben tomar.
+        <% if (totals.withOverdue > 0) { %>
+          <br><%= totals.withOverdue === 1 ? '1 de ellos ya pasó' : totals.withOverdue + ' de ellos ya pasaron' %>
+          el plazo legal para gozarlos: los días no se pierden, pero la demora
+          genera indemnización.
+        <% } %>
+      </div>
     </div>
   <% } %>
 
@@ -68,9 +78,9 @@
       </p>
     </div>
     <div class="vac-stat">
-      <div class="vac-stat-label">Saldo pendiente</div>
-      <div class="vac-stat-value"><%= totals.availableDays %></div>
-      <p class="vac-stat-note">Con trunco: <%= totals.severanceDays %> a liquidar.</p>
+      <div class="vac-stat-label">Días vencidos</div>
+      <div class="vac-stat-value <%= totals.availableDays > 0 ? 'danger' : '' %>"><%= totals.availableDays %></div>
+      <p class="vac-stat-note">Por tomar. Con trunco: <%= totals.severanceDays %> a liquidar.</p>
     </div>
   </div>
 
@@ -115,13 +125,13 @@
           <tr>
             <th>Colaborador</th><th>Ingreso</th><th>Servicio</th>
             <th>Generados</th><th>Histórico</th><th>Intranet</th>
-            <th>Saldo</th><th>Trunco</th><th>A liquidar</th><th>Plazo</th>
+            <th>Vencido</th><th>Trunco</th><th>A liquidar</th><th>Plazo legal</th>
             <th>Referencia</th><th>Próximo derecho</th>
           </tr>
         </thead>
         <tbody>
           <% rows.forEach(r => { %>
-            <tr class="<%= r.overDrawn ? 'is-alerta' : '' %>">
+            <tr class="<%= r.overDrawn ? 'is-alerta' : (r.availableDays > 0 ? 'is-vencido' : '') %>">
               <td data-label="Colaborador">
                 <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.id %>"><%= r.name %></a>
                 <br><span class="vac-stat-unit"><%= r.nationalId %> · <%= r.area %></span>
@@ -138,16 +148,47 @@
                 <% } %>
               </td>
               <td data-label="Intranet"><%= r.approvedUsedDays %></td>
-              <td data-label="Saldo"><strong><%= r.availableDays %></strong></td>
+              <td data-label="Vencido">
+                <% if (r.availableDays > 0) { %>
+                  <span class="vac-aviso-celda">
+                    <span class="vac-badge vac-badge-rejected vac-badge-vencido"><%= r.availableDays %> d · debe tomar</span>
+                    <% if (r.email && r.email !== '—') { %>
+                      <form
+                        class="vac-inline-form"
+                        method="POST"
+                        action="/RRHH/vacaciones/gestion/<%= r.id %>/avisar-vencidos"
+                        data-confirm="Se enviará un correo a <%= r.email %> con sus <%= r.availableDays %> día(s) vencidos."
+                        data-confirm-title="¿Avisar a <%= r.name %>?"
+                        data-confirm-accept="Enviar aviso"
+                      >
+                        <input type="hidden" name="volver" value="resumen">
+                        <button type="submit" class="vac-btn vac-btn-ghost vac-btn-sm">Avisar</button>
+                      </form>
+                    <% } %>
+                    <% if (r.lastReminder) { %>
+                      <span class="vac-stat-unit">Avisado el <%= r.lastReminder.dateFmt %></span>
+                    <% } %>
+                  </span>
+                <% } else { %>
+                  <strong class="<%= r.availableDays < 0 ? 'danger' : 'vac-nodata' %>"><%= r.availableDays %></strong>
+                <% } %>
+              </td>
               <td data-label="Trunco"><%= r.truncoDays %></td>
               <td data-label="A liquidar"><%= r.severanceDays %></td>
-              <td data-label="Plazo">
-                <% if (r.overdueDays > 0) { %>
-                  <span class="vac-badge vac-badge-rejected"><%= r.overdueDays %> d vencidos</span>
-                <% } else if (r.dueSoonDays > 0) { %>
-                  <span class="vac-badge vac-badge-pending"><%= r.dueSoonDays %> d al <%= r.nextDeadlineFmt %></span>
-                <% } else { %>
+              <td data-label="Plazo legal">
+                <% if (r.overdueDays <= 0 && !r.nextDeadlineFmt) { %>
                   <span class="vac-nodata">—</span>
+                <% } %>
+                <% if (r.overdueDays > 0) { %>
+                  <span class="vac-badge vac-badge-rejected"><%= r.overdueDays %> d fuera de plazo</span>
+                <% } %>
+                <% if (r.nextDeadlineFmt) { %>
+                  <% if (r.overdueDays > 0) { %><br><% } %>
+                  <% if (r.dueSoonDays > 0) { %>
+                    <span class="vac-badge vac-badge-pending">vence <%= r.nextDeadlineFmt %></span>
+                  <% } else { %>
+                    <span class="vac-stat-unit">vence <%= r.nextDeadlineFmt %></span>
+                  <% } %>
                 <% } %>
               </td>
               <td data-label="Referencia">
@@ -168,12 +209,14 @@
       </table>
       <p class="vac-panel-note">
         «Generados» son los días de años de servicio ya cumplidos.
-        «Trunco» es el proporcional del año en curso: se paga en una
-        liquidación, pero todavía no se puede pedir como vacaciones.
-        La columna «A liquidar» es la suma de saldo y trunco. «Plazo» avisa
-        cuando pasó (o está por pasar) el año que da la ley para gozar un
-        período. «Referencia» compara con el último saldo anotado de la
-        planilla de RR.HH.
+        «Vencido» es lo que queda de esos días sin tomar: el colaborador
+        debe tomarlos. «Trunco» es el proporcional del año en curso: se paga
+        en una liquidación, pero todavía no se puede pedir como vacaciones.
+        La columna «A liquidar» es la suma de vencido y trunco. «Plazo legal»
+        es el año que da la ley para gozar cada período: «fuera de plazo»
+        significa que ya pasó y la demora genera indemnización; «vence» indica
+        el próximo plazo. «Referencia» compara con el último saldo anotado de
+        la planilla de RR.HH.
       </p>
     <% } %>
   </div>

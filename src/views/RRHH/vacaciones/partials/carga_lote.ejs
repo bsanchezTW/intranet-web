@@ -12,8 +12,6 @@
   hidden
   data-preview-url="<%= fichaPath %>/historial/lote/previsualizar"
   data-save-url="<%= fichaPath %>/historial/lote"
-  data-max-month="<%= currentMonth %>"
-  data-min-month="<%= hireDateValue ? hireDateValue.slice(0, 7) : '' %>"
   aria-labelledby="cargaLoteTitulo"
 >
   <div class="vac-lote__intro">
@@ -38,7 +36,13 @@
   <template id="cargaLoteFila">
     <tr class="vac-lote__fila">
       <td data-label="Mes">
-        <input type="month" name="month" aria-label="Mes de la salida" required>
+        <%- include('selector_mes', {
+          monthNames,
+          minMonth: hireDateValue ? hireDateValue.slice(0, 7) : '',
+          maxMonth: currentMonth,
+          idPrefix: '',
+          required: true,
+        }) %>
       </td>
       <td data-label="Días">
         <input type="number" name="days" min="0.5" step="0.5" inputmode="decimal" aria-label="Días" placeholder="7" required>

@@ -1577,7 +1577,8 @@ router.get("/vacaciones/feriados", (req, res) => res.redirect(301, "/RRHH/feriad
 const vacationsRouter = require("./vacations");
 router.use("/vacaciones", requireFeature("vacations"), vacationsRouter);
 
+// Centros de costo sólo donde existen (hoy, Chile).
 const costCentersRouter = require("./costCenters");
-router.use("/centros-costo", requireRrhhManager(), costCentersRouter);
+router.use("/centros-costo", requireFeature("expenseCenter"), requireRrhhManager(), costCentersRouter);
 
 module.exports = router;

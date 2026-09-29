@@ -33,7 +33,9 @@ const {
   eachDay,
   formatDisplay,
   todayInCountry,
+  zonedDateOnly,
 } = require("../utils/vacationDateUtils");
+const { getTimezone } = require("../config/country");
 
 // ---------- helpers de redirect con flash ----------
 function redirectOk(res, path, msg) {
@@ -59,6 +61,15 @@ async function logChange(req, action, linkPath) {
   } catch (err) {
     console.error("[Vacaciones] Error en change_log:", err.message);
   }
+}
+
+/** Último aviso de días vencidos, listo para la vista ("28-09-2026 · Patricia"). */
+function reminderForView(row) {
+  if (!row) return null;
+  return {
+    dateFmt: formatDisplay(zonedDateOnly(row.created_at, getTimezone())),
+    actorName: [row.actor_first_name, row.actor_last_name].filter(Boolean).join(" ") || null,
+  };
 }
 
 async function getAreas() {
@@ -227,11 +238,12 @@ router.get("/gestion/resumen", requireRrhhManager(), async (req, res) => {
       reportService.buildTeamReport({ search }),
       settingsService.getSettings(),
     ]);
+    const reminders = await historyService.lastRemindersByUser(report.rows.map((r) => r.id));
 
     res.render("RRHH/vacaciones/resumen", {
       titulo: "Resumen de vacaciones",
       user: req.session.user,
-      rows: report.rows,
+      rows: report.rows.map((r) => ({ ...r, lastReminder: reminderForView(reminders.get(r.id)) })),
       totals: report.totals,
       referenceDateFmt: formatDisplay(report.referenceDate),
       cutoffDate: settings.historyCutoffDate,
@@ -311,7 +323,7 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
       await balanceService.ensureHistoryImputed(userId);
     }
 
-    const [summary, periods, requests, history, historyAudit, settings, references, consuming] =
+    const [summary, periods, requests, history, historyAudit, settings, references, consuming, reminders] =
       await Promise.all([
         balanceService.getBalanceSummary(userId),
         balanceService.listPeriods(userId),
@@ -321,6 +333,7 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
         settingsService.getSettings(),
         referenceService.listForUser(userId),
         referenceService.consumingRequestsByUser([Number(userId)]),
+        historyService.lastRemindersByUser([Number(userId)]),
       ]);
 
     const country = resolveCountryForUser(profile);
@@ -375,6 +388,9 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
         ? formatDisplay(settings.historyCutoffDate)
         : null,
       currentMonth: today.slice(0, 7),
+      monthNames: MONTH_NAMES,
+      lastReminder: reminderForView(reminders.get(Number(userId))),
+      hasEmail: Boolean(profile.email),
       documentLabel: nationalIdClientConfig().label,
       employmentCountry: country,
       countryLabel: countryLabel(country),
@@ -383,6 +399,55 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
   } catch (err) {
     console.error("Error en detalle colaborador:", err);
     res.status(500).send(VACATION_MESSAGES.loadDetailFailed);
+  }
+});
+
+// ---------- aviso manual de días vencidos ----------
+
+/**
+ * RR.HH. avisa por correo al colaborador los días vencidos que debe tomar.
+ * Es manual a propósito (así lo pidió RR.HH.): decide a quién y cuándo.
+ * `volver=resumen` regresa al resumen en vez de a la ficha.
+ */
+router.post("/gestion/:userId/avisar-vencidos", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const fichaPath = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  const backTo = req.body.volver === "resumen" ? RESUMEN_PATH : fichaPath;
+  try {
+    const profile = await balanceService.getUserVacationProfile(userId);
+    if (!profile) return redirectErr(res, RESUMEN_PATH, VACATION_MESSAGES.collaboratorNotFound);
+    if (!profile.hire_date) return redirectErr(res, backTo, VACATION_MESSAGES.reminderNoHireDate);
+    if (!profile.email) return redirectErr(res, backTo, VACATION_MESSAGES.reminderNoEmail);
+
+    await balanceService.recalculatePeriods(userId);
+    await balanceService.ensureHistoryImputed(userId);
+    const [summary, periods] = await Promise.all([
+      balanceService.getBalanceSummary(userId),
+      balanceService.listPeriods(userId),
+    ]);
+    if (!(summary.availableDays > 0)) {
+      return redirectErr(res, backTo, VACATION_MESSAGES.reminderNoPending);
+    }
+
+    const note = String(req.body.nota || "").trim().slice(0, 500);
+    await notificationService.sendPendingReminder({
+      user: profile,
+      summary,
+      periods: periods.map(mapVacationPeriodForView),
+      note,
+    });
+    await historyService.recordReminder({
+      userId: Number(userId),
+      actorId: req.session.user.id,
+      email: profile.email,
+      days: summary.availableDays,
+      note: note || null,
+    });
+    await logChange(req, "avisó días de vacaciones vencidos", fichaPath);
+    return redirectOk(res, backTo, VACATION_MESSAGES.reminderSent(profile.email));
+  } catch (err) {
+    console.error("Error enviando aviso de días vencidos:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.reminderFailed);
   }
 });
 

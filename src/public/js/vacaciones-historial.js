@@ -20,6 +20,49 @@
     return Math.round((b - a) / 86400000) + 1;
   }
 
+  // ------------------------------------------------------------------------
+  // Mes y año (partials/selector_mes.ejs): dos listas que componen el campo
+  // oculto `month` = 'YYYY-MM', que es lo que sigue recibiendo el servidor.
+  // ------------------------------------------------------------------------
+
+  /**
+   * Deshabilita los meses fuera de rango para el año elegido: antes del
+   * ingreso o posteriores al mes en curso. Si el mes elegido quedó fuera, lo
+   * suelta en vez de mandar un valor que el servidor va a rechazar.
+   */
+  function limitarMeses(selector) {
+    const { minMonth, maxMonth } = selector.dataset;
+    const mes = selector.querySelector("[data-mes]");
+    const anio = selector.querySelector("[data-anio]").value;
+    Array.from(mes.options).forEach((opcion) => {
+      if (!opcion.value) return;
+      const valor = `${anio}-${opcion.value}`;
+      opcion.disabled = Boolean(
+        anio && ((maxMonth && valor > maxMonth) || (minMonth && valor < minMonth)),
+      );
+    });
+    if (mes.selectedOptions[0] && mes.selectedOptions[0].disabled) mes.value = "";
+  }
+
+  function componerMes(selector) {
+    limitarMeses(selector);
+    const mes = selector.querySelector("[data-mes]").value;
+    const anio = selector.querySelector("[data-anio]").value;
+    selector.querySelector('[name="month"]').value = mes && anio ? `${anio}-${mes}` : "";
+  }
+
+  /** Fija las dos listas desde 'YYYY-MM' (o las deja vacías). */
+  function fijarMes(selector, valor) {
+    const partes = /^(\d{4})-(\d{2})$/.exec(String(valor || ""));
+    const anio = selector.querySelector("[data-anio]");
+    anio.value = partes ? partes[1] : "";
+    // Un año fuera de la lista (p. ej. antes del ingreso) queda sin elegir.
+    if (partes && anio.value !== partes[1]) anio.value = "";
+    limitarMeses(selector);
+    selector.querySelector("[data-mes]").value = partes && anio.value ? partes[2] : "";
+    componerMes(selector);
+  }
+
   /**
    * Con las dos fechas, los días y el mes salen de ellas y el campo de días
    * queda de solo lectura: editarlos por separado dejaría el registro
@@ -31,7 +74,7 @@
     if (!conFechas) return;
     const n = contarDiasCalendario(inicio.value, fin.value);
     if (n >= 1) dias.value = String(n);
-    mes.value = inicio.value.slice(0, 7);
+    fijarMes(mes, inicio.value.slice(0, 7));
   }
 
   function crear(tag, className, text) {
@@ -54,7 +97,7 @@
     const btnAgregar = document.getElementById("cargaLoteAgregar");
     const btnGuardar = document.getElementById("cargaLoteGuardar");
     const btnCancelar = document.getElementById("cargaLoteCancelar");
-    const { previewUrl, saveUrl, maxMonth, minMonth } = lote.dataset;
+    const { previewUrl, saveUrl } = lote.dataset;
 
     let temporizador = null;
     let secuencia = 0;
@@ -79,12 +122,18 @@
     function agregarFila() {
       const fragmento = plantilla.content.cloneNode(true);
       const tr = fragmento.querySelector("tr");
-      const mes = tr.querySelector('[name="month"]');
-      if (maxMonth) mes.max = maxMonth;
-      if (minMonth) mes.min = minMonth;
+      // Las salidas del Excel suelen venir seguidas del mismo año: la fila
+      // nueva hereda el año de la anterior y solo falta elegir el mes.
+      const anterior = filas().at(-1);
+      const selector = tr.querySelector("[data-selector-mes]");
+      if (anterior) {
+        selector.querySelector("[data-anio]").value =
+          anterior.querySelector("[data-anio]").value;
+      }
+      componerMes(selector);
       cuerpo.appendChild(fragmento);
       actualizarQuitar();
-      mes.focus();
+      tr.querySelector("[data-mes]").focus();
       return tr;
     }
 
@@ -99,7 +148,7 @@
       lote.hidden = false;
       btnCargar.setAttribute("aria-expanded", "true");
       if (filas().length === 0) agregarFila();
-      else filas()[0].querySelector('[name="month"]').focus();
+      else filas()[0].querySelector("[data-mes]").focus();
       lote.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
@@ -210,7 +259,7 @@
       stat("Salidas", String(preview.entries));
       stat("Días a cargar", String(preview.addedDays));
       stat(
-        "Saldo disponible",
+        "Días vencidos",
         `${preview.before.availableDays} → ${preview.after.availableDays}`,
         preview.after.availableDays < 0 ? "error" : "ok",
       );
@@ -280,12 +329,14 @@
       const tr = evento.target.closest("tr");
       if (!tr) return;
       const campo = evento.target.name;
+      const selector = evento.target.closest("[data-selector-mes]");
+      if (selector) componerMes(selector);
       if (campo === "start" || campo === "end") {
         sincronizarFechas({
           inicio: tr.querySelector('[name="start"]'),
           fin: tr.querySelector('[name="end"]'),
           dias: tr.querySelector('[name="days"]'),
-          mes: tr.querySelector('[name="month"]'),
+          mes: tr.querySelector("[data-selector-mes]"),
         });
       }
       programarVistaPrevia();
@@ -298,17 +349,18 @@
       const siguiente = tr.nextElementSibling || tr.previousElementSibling;
       tr.remove();
       actualizarQuitar();
-      if (siguiente) siguiente.querySelector('[name="month"]').focus();
+      if (siguiente) siguiente.querySelector("[data-mes]").focus();
       programarVistaPrevia();
     });
 
     // Enter avanza como en una planilla: en la última fila agrega otra.
     cuerpo.addEventListener("keydown", (evento) => {
-      if (evento.key !== "Enter" || evento.target.tagName !== "INPUT") return;
+      const tag = evento.target.tagName;
+      if (evento.key !== "Enter" || (tag !== "INPUT" && tag !== "SELECT")) return;
       evento.preventDefault();
       const tr = evento.target.closest("tr");
       const siguiente = tr.nextElementSibling;
-      if (siguiente) siguiente.querySelector('[name="month"]').focus();
+      if (siguiente) siguiente.querySelector("[data-mes]").focus();
       else agregarFila();
     });
   }
@@ -321,7 +373,7 @@
     const base = formHistorial.getAttribute("action");
     const subtitulo = document.getElementById("modalHistorialSubtitulo");
     const campos = {
-      mes: document.getElementById("hist_month"),
+      mes: formHistorial.querySelector("[data-selector-mes]"),
       inicio: document.getElementById("hist_start_date"),
       fin: document.getElementById("hist_end_date"),
       dias: document.getElementById("days_used"),
@@ -332,7 +384,12 @@
       boton.addEventListener("click", () => {
         const d = boton.dataset;
         formHistorial.setAttribute("action", `${base}/${d.id}/editar`);
-        campos.mes.value = d.month || "";
+        fijarMes(campos.mes, d.month);
+        // Registro sin mes (solo año): se deja elegido el año.
+        if (!d.month && d.year) {
+          campos.mes.querySelector("[data-anio]").value = d.year;
+          componerMes(campos.mes);
+        }
         campos.inicio.value = d.start || "";
         campos.fin.value = d.end || "";
         campos.dias.value = d.days || "";
@@ -346,6 +403,7 @@
 
     campos.inicio.addEventListener("change", () => sincronizarFechas(campos));
     campos.fin.addEventListener("change", () => sincronizarFechas(campos));
+    campos.mes.addEventListener("change", () => componerMes(campos.mes));
   }
 
   // ========================================================================

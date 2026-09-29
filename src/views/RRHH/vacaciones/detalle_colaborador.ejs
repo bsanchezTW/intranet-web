@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260923a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260929b">
 
 <%
   const nombre = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || ('#' + profile.id);
@@ -62,17 +62,52 @@
     </div>
   <% } %>
 
-  <% if (overduePeriods.length > 0) { %>
+  <%# Días vencidos = saldo de años cumplidos: hay que tomarlos. El plazo
+      legal (art. 23) es el segundo nivel: pasado, genera indemnización. %>
+  <% if (summary.availableDays > 0) { %>
+    <%
+      const pendientes = periods.filter(p => !p.inProgress && p.available > 0);
+    %>
     <div class="flash-msg flash-msg--error" role="alert">
-      <%= overduePeriods.length === 1 ? 'Un período tiene' : overduePeriods.length + ' períodos tienen' %>
-      días sin gozar con el plazo legal vencido
-      (<%= overduePeriods.map(p => p.periodLabel + ': ' + p.available + ' d').join(' · ') %>).
-      Los días no se pierden, pero la demora genera indemnización vacacional.
-    </div>
-  <% } else if (dueSoonPeriods.length > 0) { %>
-    <div class="flash-msg flash-msg--info" role="status">
-      Vence pronto el plazo para gozar
-      <%= dueSoonPeriods.map(p => p.available + ' d de ' + p.periodLabel + ' (hasta el ' + p.enjoyByFmt + ')').join(' · ') %>.
+      <div>
+        <strong>Tiene <%= summary.availableDays %> día(s) vencidos: debe tomarlos.</strong>
+        <% if (pendientes.length > 0) { %>
+          (<%= pendientes.map(p => p.periodLabel + ': ' + p.available + ' d').join(' · ') %>)
+        <% } %>
+        <% if (overduePeriods.length > 0) { %>
+          <br>Fuera del plazo legal para gozarlos:
+          <%= overduePeriods.map(p => p.available + ' d de ' + p.periodLabel).join(' · ') %>.
+          Los días no se pierden, pero la demora genera indemnización vacacional.
+        <% } %>
+        <% if (dueSoonPeriods.length > 0) { %>
+          <br>Vence pronto el plazo legal de
+          <%= dueSoonPeriods.map(p => p.available + ' d de ' + p.periodLabel + ' (hasta el ' + p.enjoyByFmt + ')').join(' · ') %>.
+        <% } %>
+
+        <%# Aviso manual por correo: RR.HH. decide a quién y cuándo. %>
+        <% if (hasEmail) { %>
+          <form
+            class="vac-aviso-form"
+            method="POST"
+            action="<%= fichaPath %>/avisar-vencidos"
+            data-confirm="Se enviará un correo a <%= profile.email %> con sus <%= summary.availableDays %> día(s) vencidos y el plazo de cada período."
+            data-confirm-title="¿Avisar a <%= nombre %>?"
+            data-confirm-accept="Enviar aviso"
+          >
+            <input type="text" name="nota" maxlength="500" placeholder="Mensaje opcional para el colaborador" aria-label="Mensaje opcional para el colaborador">
+            <button type="submit" class="vac-btn vac-btn-primary vac-btn-sm">Avisar al colaborador</button>
+          </form>
+        <% } else { %>
+          <p class="vac-aviso-ultimo">No tiene correo registrado: agrégalo en Personal para poder avisarle.</p>
+        <% } %>
+        <p class="vac-aviso-ultimo">
+          <% if (lastReminder) { %>
+            Último aviso: <%= lastReminder.dateFmt %><% if (lastReminder.actorName) { %>, por <%= lastReminder.actorName %><% } %>.
+          <% } else { %>
+            Todavía no se le ha enviado un aviso.
+          <% } %>
+        </p>
+      </div>
     </div>
   <% } %>
 
@@ -98,10 +133,11 @@
       <div class="vac-stat-value"><%= summary.approvedUsedDays %></div>
       <p class="vac-stat-note">Solicitudes aprobadas aquí.</p>
     </div>
-    <div class="vac-stat">
-      <div class="vac-stat-label">Saldo disponible</div>
-      <div class="vac-stat-value <%= summary.availableDays < 0 ? 'danger' : '' %>"><%= summary.availableDays %></div>
+    <div class="vac-stat <%= summary.availableDays > 0 ? 'vac-stat--vencido' : '' %>">
+      <div class="vac-stat-label">Días vencidos</div>
+      <div class="vac-stat-value <%= summary.availableDays !== 0 ? 'danger' : '' %>"><%= summary.availableDays %></div>
       <p class="vac-stat-note">
+        <% if (summary.availableDays > 0) { %><strong>Debe tomarlos.</strong><br><% } %>
         <% if (nextAccrualFmt) { %>Próximo derecho: <%= nextAccrualFmt %><% } else { %>Días calendario<% } %>
       </p>
     </div>
@@ -204,6 +240,7 @@
                     class="vac-btn vac-btn-cancel vac-btn-sm js-editar-historial"
                     data-id="<%= h.id %>"
                     data-month="<%= h.monthValue %>"
+                    data-year="<%= h.period_year %>"
                     data-start="<%= h.startDateValue %>"
                     data-end="<%= h.endDateValue %>"
                     data-days="<%= h.days %>"
@@ -326,7 +363,7 @@
         <thead>
           <tr>
             <th>Período</th><th>Devengado</th><th>Ajuste</th>
-            <th>Histórico</th><th>Intranet</th><th>Disponible</th>
+            <th>Histórico</th><th>Intranet</th><th>Vencido</th>
             <% if (isPeru) { %><th>Gozar hasta</th><th>Seguidos rest.</th><th>Sueltos rest.</th><% } %>
             <th>Récord</th>
           </tr>
@@ -344,11 +381,11 @@
               <td data-label="Histórico"><%= p.historicalUsed %></td>
               <td data-label="Intranet"><%= p.used %></td>
               <%# El período en curso no suma al saldo: sus días son trunco. %>
-              <td data-label="Disponible">
+              <td data-label="Vencido">
                 <% if (p.inProgress) { %>
                   <span class="vac-nodata"><%= p.available %> trunco</span>
                 <% } else { %>
-                  <strong><%= p.available %></strong>
+                  <strong class="<%= p.available > 0 ? 'danger' : '' %>"><%= p.available %></strong>
                 <% } %>
               </td>
               <% if (isPeru) { %>
@@ -357,7 +394,7 @@
                     <span class="vac-nodata">—</span>
                   <% } else { %>
                     <%= p.enjoyByFmt %>
-                    <% if (p.overdue) { %><br><span class="vac-badge vac-badge-rejected">Vencido</span><% } %>
+                    <% if (p.overdue) { %><br><span class="vac-badge vac-badge-rejected">Fuera de plazo</span><% } %>
                     <% if (p.dueSoon) { %><br><span class="vac-badge vac-badge-pending">Vence pronto</span><% } %>
                   <% } %>
                 </td>
@@ -370,11 +407,13 @@
         </tbody>
       </table>
       <p class="vac-panel-note">
-        Los días no gozados no caducan: se acumulan hasta que el colaborador los
-        tome o se le liquiden. Solo suman al saldo los períodos de años ya cumplidos.
+        «Vencido» son los días de un año ya cumplido que el colaborador todavía
+        no toma: debe tomarlos. No caducan: se acumulan hasta que los tome o se
+        le liquiden. El año en curso no suma, es trunco.
         <% if (isPeru) { %>
           «Gozar hasta» es el plazo legal para tomarlos (el año siguiente a
-          cumplir el período); pasado ese plazo corresponde indemnización.
+          cumplir el período); «fuera de plazo» significa que ya pasó y
+          corresponde indemnización.
         <% } %>
       </p>
 
@@ -444,7 +483,7 @@
       <table class="vac-table vac-table--stack">
         <thead>
           <tr>
-            <th>Saldo pendiente</th>
+            <th>Días vencidos</th>
             <th>Trunco del año en curso</th>
             <th>Total a liquidar</th>
             <th>Ajustes aplicados</th>
@@ -452,7 +491,7 @@
         </thead>
         <tbody>
           <tr>
-            <td data-label="Saldo pendiente"><%= summary.availableDays %></td>
+            <td data-label="Días vencidos"><%= summary.availableDays %></td>
             <td data-label="Trunco del año en curso"><%= summary.truncoDays %></td>
             <td data-label="Total a liquidar"><strong><%= summary.severanceDays %></strong></td>
             <td data-label="Ajustes aplicados"><%= summary.adjustedDays %></td>
@@ -460,7 +499,7 @@
         </tbody>
       </table>
       <p class="vac-panel-note">
-        El saldo pendiente son los días de años ya cumplidos. El trunco es el
+        Los días vencidos son los de años ya cumplidos sin tomar. El trunco es el
         proporcional del año en curso: se paga en una liquidación, pero todavía
         no se puede pedir como vacaciones.
       </p>
@@ -530,4 +569,4 @@
   body: include('partials/modal_datos', { fichaPath, nombre })
 }) %>
 
-<script src="/js/vacaciones-historial.js?v=20260923a" defer></script>
+<script src="/js/vacaciones-historial.js?v=20260929a" defer></script>

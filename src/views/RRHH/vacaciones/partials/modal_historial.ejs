@@ -13,8 +13,16 @@
   <div class="modal-body">
     <div class="campos-grid">
       <div class="campo-form">
-        <label for="hist_month">Mes *</label>
-        <input type="month" id="hist_month" name="month" max="<%= currentMonth %>" required>
+        <label for="hist_month_mes">Mes y año *</label>
+        <div id="hist_month">
+          <%- include('selector_mes', {
+            monthNames,
+            minMonth: hireDateValue ? hireDateValue.slice(0, 7) : '',
+            maxMonth: currentMonth,
+            idPrefix: 'hist_month',
+            required: true,
+          }) %>
+        </div>
       </div>
       <div class="campo-form">
         <label for="days_used">Días *</label>

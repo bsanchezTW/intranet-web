@@ -474,6 +474,34 @@ a.vac-btn { display: inline-block; text-decoration: none; }
 /* Fila del resumen con el historial pasado del derecho generado. */
 .vac-table tbody tr.is-alerta td { background: rgba(208, 92, 92, 0.08); }
 
+/* Días vencidos: saldo de años cumplidos que el colaborador debe tomar. */
+.vac-table tbody tr.is-vencido td { background: rgba(208, 92, 92, 0.04); }
+.vac-table .danger { color: var(--down); }
+.vac-badge-vencido { font-weight: 700; white-space: nowrap; }
+.vac-stat--vencido { border-color: var(--down); box-shadow: inset 4px 0 0 var(--down), var(--shadow); }
+
+/* Aviso manual de días vencidos (ficha y resumen). */
+.vac-aviso-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.vac-aviso-form input[type="text"] {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--color-input-text);
+  background: var(--color-input-bg);
+}
+.vac-wrap .flash-msg > div { flex: 1 1 auto; min-width: 0; }
+.vac-aviso-ultimo { margin: 8px 0 0; font-size: 0.8rem; font-weight: 500; opacity: 0.85; }
+.vac-aviso-celda { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+
 /* Buscador del resumen consolidado. */
 .vac-filters input[type="search"],
 .vac-filters input[type="date"] {
@@ -614,7 +642,13 @@ a.vac-btn { display: inline-block; text-decoration: none; }
 .vac-lote__tabla th:first-child { padding-left: 18px; }
 .vac-lote__tabla tbody tr:hover td { background: transparent; }
 
-.vac-lote__tabla input {
+/* Mes y año de una salida: dos listas en vez de <input type="month">. */
+.vac-selector-mes { display: flex; gap: 6px; min-width: 0; }
+.vac-selector-mes select { flex: 1 1 auto; min-width: 0; }
+.vac-selector-mes select[data-anio] { flex: 0 0 5.6em; }
+
+.vac-lote__tabla input,
+.vac-lote__tabla select {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -627,18 +661,20 @@ a.vac-btn { display: inline-block; text-decoration: none; }
   background: var(--color-input-bg);
 }
 
-.vac-lote__tabla input:focus {
+.vac-lote__tabla input:focus,
+.vac-lote__tabla select:focus {
   outline: none;
   border-color: var(--brand);
   box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
 .vac-lote__tabla input[readonly] { background: var(--color-surface); color: var(--color-text-muted); }
-.vac-lote__tabla input[name="month"] { min-width: 150px; }
+.vac-lote__tabla .vac-selector-mes { min-width: 210px; }
 .vac-lote__tabla input[name="days"] { width: 80px; }
 .vac-lote__tabla input[type="date"] { min-width: 140px; }
 
-.vac-lote__fila.is-error input { border-color: var(--down); }
+.vac-lote__fila.is-error input,
+.vac-lote__fila.is-error select { border-color: var(--down); }
 
 .vac-lote__estado { min-width: 170px; font-size: 0.82rem; }
 
@@ -671,8 +707,9 @@ a.vac-btn { display: inline-block; text-decoration: none; }
   .vac-lote__tabla td { align-items: center; }
   .vac-lote__tabla input,
   .vac-lote__tabla input[name="days"],
-  .vac-lote__tabla input[name="month"],
-  .vac-lote__tabla input[type="date"] { width: 62%; min-width: 0; }
+  .vac-lote__tabla input[type="date"],
+  .vac-lote__tabla .vac-selector-mes { width: 62%; min-width: 0; }
+  .vac-lote__tabla .vac-selector-mes select { width: auto; }
   .vac-lote__estado { min-width: 0; flex-direction: column; align-items: flex-end !important; }
   .vac-lote__fila.is-error { border-color: var(--down); }
   .vac-form-inline .campo,

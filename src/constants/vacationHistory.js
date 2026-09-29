@@ -28,6 +28,8 @@ const HISTORY_AUDIT_ACTION = {
   REVERT: "REVERT",
   PROFILE: "PROFILE",
   REFERENCE: "REFERENCE",
+  // RR.HH. avisó por correo al colaborador que tiene días vencidos por tomar.
+  REMINDER: "REMINDER",
 };
 
 const HISTORY_AUDIT_ACTIONS = Object.values(HISTORY_AUDIT_ACTION);
@@ -40,6 +42,7 @@ const HISTORY_AUDIT_ACTION_LABELS = {
   REVERT: "Reversión",
   PROFILE: "Datos del cálculo",
   REFERENCE: "Saldo de referencia",
+  REMINDER: "Aviso de días vencidos",
 };
 
 const HISTORY_ORIGIN_LABELS = {

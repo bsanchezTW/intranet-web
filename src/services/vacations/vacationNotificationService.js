@@ -120,7 +120,7 @@ function notifyRejected({ request, user }) {
     subject: "Tu solicitud de vacaciones fue rechazada",
     senderName: MAIL_SENDERS.hr,
     heading: "Solicitud rechazada",
-    cta: { href: "/RRHH/vacaciones/mis_vacaciones", label: "Ver mis vacaciones" },
+    cta: { href: "/RRHH/vacaciones/mis-vacaciones", label: "Ver mis vacaciones" },
     html: `
       <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
       <p style="margin:0 0 16px 0;">Tu solicitud de vacaciones (${rangeText(request)}) fue <strong>rechazada</strong>.</p>
@@ -130,8 +130,84 @@ function notifyRejected({ request, user }) {
   });
 }
 
+/**
+ * Aviso manual de días vencidos → colaborador.
+ *
+ * Lo envía RR.HH. con un botón desde la ficha o el resumen: "vencido" es el
+ * saldo de años ya cumplidos que el colaborador todavía no toma. Detalla cada
+ * período con su plazo legal (art. 23) y marca los que ya lo pasaron.
+ *
+ * `periods` son períodos mapeados para la vista (mapVacationPeriodForView).
+ * Arma el correo sin enviarlo, para poder probarlo solo.
+ */
+function buildPendingReminder({ user, summary, periods = [], note = "" }) {
+  const pendientes = periods.filter((p) => !p.inProgress && Number(p.available) > 0);
+  const fueraDePlazo = pendientes.filter((p) => p.overdue);
+  const dias = Number(summary.availableDays);
+
+  const filas = pendientes
+    .map((p, i) => {
+      const borde = i === 0 ? "border-top:1px solid #e5e7eb;" : "";
+      const plazo = p.overdue
+        ? `<span style="color:#b42318;font-weight:700;">Fuera de plazo (desde el ${escapeHtml(p.enjoyByFmt || "")})</span>`
+        : p.enjoyByFmt
+          ? `Tomar antes del ${escapeHtml(p.enjoyByFmt)}`
+          : "—";
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;${borde}color:#0f172a;font-size:13px;">Período ${escapeHtml(p.periodLabel)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;${borde}color:#0f172a;font-size:13px;font-weight:700;text-align:right;">${escapeHtml(String(p.available))} día(s)</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;${borde}color:#64748b;font-size:13px;text-align:right;">${plazo}</td>
+        </tr>`;
+    })
+    .join("");
+
+  const nota = String(note || "").trim();
+  const avisoPlazo = fueraDePlazo.length
+    ? `<p style="margin:0 0 16px 0;color:#b42318;">Parte de estos días ya pasó el plazo legal para gozarlos. Coordina tus fechas con tu jefatura y solicítalos cuanto antes.</p>`
+    : "";
+
+  return {
+    to: user.email,
+    subject: `Tienes ${dias} día(s) de vacaciones vencidos por tomar`,
+    senderName: MAIL_SENDERS.hr,
+    heading: "Tienes vacaciones vencidas por tomar",
+    cta: { href: "/RRHH/vacaciones/mis-vacaciones", label: "Solicitar vacaciones" },
+    html: `
+      <p style="margin:0 0 16px 0;">Hola ${escapeHtml(fullName(user))},</p>
+      <p style="margin:0 0 16px 0;">
+        Recursos Humanos te recuerda que tienes <strong>${escapeHtml(String(dias))} día(s) de vacaciones vencidos</strong>:
+        son días de años de servicio ya cumplidos que todavía no has tomado y debes tomar.
+      </p>
+      ${filas ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 16px 0;">${filas}</table>` : ""}
+      ${avisoPlazo}
+      ${nota ? `<p style="margin:0 0 16px 0;">Mensaje de RR.HH.: ${escapeHtml(nota)}</p>` : ""}
+      <p style="margin:0;color:#64748b;font-size:13px;">
+        Puedes solicitarlos desde la intranet, en «Mis vacaciones».
+      </p>
+    `,
+    text:
+      `Hola ${fullName(user)}, tienes ${dias} día(s) de vacaciones vencidos que debes tomar. ` +
+      pendientes
+        .map((p) => `Período ${p.periodLabel}: ${p.available} día(s)${p.overdue ? " (fuera de plazo legal)" : p.enjoyByFmt ? ` (tomar antes del ${p.enjoyByFmt})` : ""}.`)
+        .join(" ") +
+      (nota ? ` Mensaje de RR.HH.: ${nota}` : "") +
+      " Solicítalos desde la intranet, en «Mis vacaciones».",
+  };
+}
+
+/**
+ * Envía el aviso de días vencidos. A diferencia de las demás notificaciones,
+ * aquí el correo ES la operación: si falla, el error sube para que RR.HH. lo vea.
+ */
+function sendPendingReminder(args) {
+  return sendMail(buildPendingReminder(args));
+}
+
 module.exports = {
   notifyNewRequest,
   notifyApproved,
   notifyRejected,
+  buildPendingReminder,
+  sendPendingReminder,
 };

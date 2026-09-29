@@ -177,7 +177,12 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
 }
 
 /**
- * Días con el plazo legal para gozarlos vencido o por vencer (Perú, art. 23).
+ * Plazo legal para gozar los días vencidos (Perú, art. 23).
+ *
+ * Para RR.HH. todo el saldo de años cumplidos es "vencido": ya se ganó y hay
+ * que tomarlo. El plazo legal es el segundo nivel de la alerta: pasado ese
+ * año (overdueDays) la demora genera indemnización. nextDeadline es el plazo
+ * más próximo de lo que todavía está dentro de plazo, venza pronto o no.
  * Solo períodos cerrados con saldo; el año en curso todavía no genera plazo.
  */
 function enjoymentDeadlines(periods, strategy, today) {
@@ -188,10 +193,13 @@ function enjoymentDeadlines(periods, strategy, today) {
     if (!strategy.isPeriodClaimable({ period: p, referenceDate: today })) continue;
     const available = balanceService.periodAvailable(p);
     const status = strategy.getEnjoymentStatus({ period: p, available, referenceDate: today });
-    if (status.overdue) overdueDays += available;
-    if (status.dueSoon) {
-      dueSoonDays += available;
-      if (!nextDeadline || status.enjoyBy < nextDeadline) nextDeadline = status.enjoyBy;
+    if (status.overdue) {
+      overdueDays += available;
+      continue;
+    }
+    if (status.dueSoon) dueSoonDays += available;
+    if (available > 0.001 && status.enjoyBy && (!nextDeadline || status.enjoyBy < nextDeadline)) {
+      nextDeadline = status.enjoyBy;
     }
   }
   const round2 = (n) => Math.round(n * 100) / 100;
@@ -209,6 +217,7 @@ function emptyTotals() {
     severanceDays: 0,
     unimputedDays: 0,
     overDrawn: 0,
+    withPending: 0,
     withOverdue: 0,
     withReference: 0,
     mismatched: 0,
@@ -227,6 +236,7 @@ function sumTotals(rows) {
     severanceDays: round2(rows.reduce((s, r) => s + r.severanceDays, 0)),
     unimputedDays: round2(rows.reduce((s, r) => s + r.unimputedDays, 0)),
     overDrawn: rows.filter((r) => r.overDrawn).length,
+    withPending: rows.filter((r) => r.availableDays > 0.001).length,
     withOverdue: rows.filter((r) => r.overdueDays > 0).length,
     withReference: rows.filter((r) => r.reference).length,
     mismatched: rows.filter((r) => r.reference && !r.reference.matches).length,
@@ -255,20 +265,25 @@ async function exportTeamReport({ referenceDate = null } = {}) {
         { header: "Gozados por la intranet", key: "approvedUsedDays", width: 22, numFmt: "0.##" },
         { header: "Total gozado", key: "totalUsedDays", width: 14, numFmt: "0.##" },
         { header: "Ajustes", key: "adjustedDays", width: 10, numFmt: "0.##" },
-        { header: "Saldo disponible", key: "availableDays", width: 17, numFmt: "0.##" },
-        { header: "Días con plazo vencido", key: "overdueDays", width: 22, numFmt: "0.##" },
+        { header: "Días vencidos (debe tomar)", key: "availableDays", width: 26, numFmt: "0.##" },
+        { header: "Fuera de plazo legal (indemnización)", key: "overdueDays", width: 34, numFmt: "0.##" },
+        { header: "Plazo legal más próximo", key: "nextDeadlineLabel", width: 22 },
         { header: "Próximo derecho", key: "nextAccrualFmt", width: 16 },
         { header: "Saldo de referencia", key: "referenceLabel", width: 34 },
       ],
       rows: rows.map((r) => ({
         ...r,
+        nextDeadlineLabel: r.nextDeadlineFmt || "—",
         referenceLabel: r.reference
           ? `${r.reference.expected} al ${r.reference.asOfFmt} · ${
               r.reference.matches ? "cuadra" : `diferencia ${r.reference.difference}`
             }`
           : "—",
       })),
-      note: `Saldo al ${formatDisplay(ref)}. Días calendario.`,
+      note:
+        `Cálculo al ${formatDisplay(ref)}. Días calendario. "Días vencidos" son los días de años ` +
+        `ya cumplidos que el colaborador debe tomar; "fuera de plazo legal" son los que pasaron ` +
+        `el año que da la ley para gozarlos (generan indemnización).`,
     },
     {
       name: "Liquidación",
@@ -279,13 +294,13 @@ async function exportTeamReport({ referenceDate = null } = {}) {
         { header: "Tiempo de servicio", key: "serviceTime", width: 20 },
         { header: "Días generados (años cumplidos)", key: "generatedDays", width: 30, numFmt: "0.##" },
         { header: "Total gozado", key: "totalUsedDays", width: 14, numFmt: "0.##" },
-        { header: "Saldo pendiente", key: "availableDays", width: 16, numFmt: "0.##" },
+        { header: "Días vencidos", key: "availableDays", width: 16, numFmt: "0.##" },
         { header: "Trunco del año en curso", key: "truncoDays", width: 24, numFmt: "0.##" },
         { header: "Total a liquidar", key: "severanceDays", width: 17, numFmt: "0.##" },
       ],
       rows,
       note:
-        `Cálculo al ${formatDisplay(ref)}. "Saldo pendiente" son los días de años ya cumplidos; ` +
+        `Cálculo al ${formatDisplay(ref)}. "Días vencidos" son los días de años ya cumplidos sin tomar; ` +
         `"trunco" es el proporcional del año en curso. El total a liquidar es la suma de ambos.`,
     },
   ]);
@@ -411,6 +426,7 @@ async function exportRequests({ workAreaId = null, status = null } = {}) {
 
 module.exports = {
   serviceTimeLabel,
+  enjoymentDeadlines,
   buildTeamReport,
   exportTeamReport,
   exportHistory,

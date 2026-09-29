@@ -202,3 +202,76 @@ describe("vacationBalanceService — récord y acumulación", () => {
     assert.equal(r.periodsWithBalance, 2);
   });
 });
+
+describe("Resumen — días vencidos y plazo legal (Perú)", () => {
+  const { enjoymentDeadlines } = require("../src/services/vacations/vacationReportService");
+  const { summarizePeriods } = require("../src/services/vacations/vacationBalanceService");
+
+  // Ramón (reunión RR.HH. 25/09/2026): ingresó el 08/04/2024, lleva dos años
+  // cumplidos (60 días) y gozó 29. RR.HH. espera ver 31 días vencidos.
+  const periodo = (start, end, historical) => ({
+    period_start: start,
+    period_end: end,
+    entitled_days: 30,
+    adjusted_days: 0,
+    used_days: 0,
+    historical_used_days: historical,
+    record_met: true,
+  });
+  const periods = [
+    periodo("2024-04-08", "2025-04-07", 29),
+    periodo("2025-04-08", "2026-04-07", 0),
+    periodo("2026-04-08", "2027-04-07", 0),
+  ];
+  const today = "2026-09-28";
+
+  it("los días vencidos son todo el saldo de años cumplidos (31)", () => {
+    const summary = summarizePeriods({ periods, country: "PE", referenceDate: today });
+    assert.equal(summary.availableDays, 31);
+  });
+
+  it("solo 1 día pasó el plazo legal y el próximo plazo es el del 2.º período", () => {
+    const d = enjoymentDeadlines(periods, pe, today);
+    assert.equal(d.overdueDays, 1);
+    assert.equal(d.dueSoonDays, 0);
+    assert.equal(d.nextDeadline, "2027-04-07");
+  });
+
+  it("el plazo más próximo se informa aunque todavía no venza pronto", () => {
+    const d = enjoymentDeadlines([periodo("2025-04-08", "2026-04-07", 21)], pe, today);
+    assert.equal(d.overdueDays, 0);
+    assert.equal(d.nextDeadline, "2027-04-07");
+  });
+
+  it("sin saldo no hay plazo que mostrar", () => {
+    const d = enjoymentDeadlines([periodo("2025-04-08", "2026-04-07", 30)], pe, today);
+    assert.equal(d.nextDeadline, null);
+  });
+});
+
+describe("Aviso manual de días vencidos (correo)", () => {
+  const { buildPendingReminder } = require("../src/services/vacations/vacationNotificationService");
+  const user = { first_name: "Ramón", last_name: "Cerna", email: "ramon@transworld.pe" };
+  const periods = [
+    { periodLabel: "2024–2025", available: 1, overdue: true, enjoyByFmt: "07-04-2026", inProgress: false },
+    { periodLabel: "2025–2026", available: 30, overdue: false, enjoyByFmt: "07-04-2027", inProgress: false },
+    { periodLabel: "2026–2027", available: 12.5, overdue: false, enjoyByFmt: null, inProgress: true },
+  ];
+
+  it("va al colaborador con el total y el detalle por período, sin el trunco", () => {
+    const mail = buildPendingReminder({ user, summary: { availableDays: 31 }, periods });
+    assert.equal(mail.to, "ramon@transworld.pe");
+    assert.match(mail.subject, /31 día\(s\)/);
+    assert.match(mail.html, /2024–2025/);
+    assert.match(mail.html, /Fuera de plazo/);
+    assert.match(mail.html, /Tomar antes del 07-04-2027/);
+    assert.doesNotMatch(mail.html, /2026–2027/);
+    assert.equal(mail.cta.href, "/RRHH/vacaciones/mis-vacaciones");
+  });
+
+  it("incluye el mensaje de RR.HH. escapado", () => {
+    const mail = buildPendingReminder({ user, summary: { availableDays: 31 }, periods, note: "Coordina <b>octubre</b>" });
+    assert.match(mail.html, /Coordina &lt;b&gt;octubre&lt;\/b&gt;/);
+    assert.match(mail.text, /Coordina <b>octubre<\/b>/);
+  });
+});

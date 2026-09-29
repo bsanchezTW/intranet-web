@@ -70,8 +70,9 @@ const FEATURE_MATRIX = {
     homeQuickAccess: true,
     // Rex+, ACHS y Caja Los Andes son portales chilenos; no se ofrecen en Perú.
     chileHrPortals: false,
-    // Centros de costo en RRHH. No es la sección Finanzas de Procesos.
-    expenseCenter: true,
+    // Centros de costo en RRHH: por ahora sólo se usan en Chile (base de las
+    // rendiciones). No es la sección Finanzas de Procesos.
+    expenseCenter: false,
     // Rendiciones y la sección Finanzas de Procesos son sólo de Chile.
     expenseRequests: false,
     // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú.

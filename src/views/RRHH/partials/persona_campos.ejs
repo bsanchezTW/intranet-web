@@ -163,18 +163,9 @@ const rolActual = p.role || 'Usuario';
       </div>
     <% } %>
 
-    <% if (country === 'PE') { %>
-      <% const jornada = p.work_days_per_week || 5; %>
-      <div class="campo-form">
-        <label for="<%= pre %>work_days_per_week">Jornada (días/semana)</label>
-        <select id="<%= pre %>work_days_per_week" name="work_days_per_week">
-          <option value="5" <%= jornada === 5 ? 'selected' : '' %>>5 días</option>
-          <option value="6" <%= jornada === 6 ? 'selected' : '' %>>6 días</option>
-          <option value="4" <%= jornada === 4 ? 'selected' : '' %>>4 días</option>
-          <option value="3" <%= jornada === 3 ? 'selected' : '' %>>3 días</option>
-        </select>
-      </div>
-    <% } %>
+    <%# Sin campo de jornada: en Perú siempre son 5 días (lunes a viernes).
+        Al crear, el servidor guarda 5 (parseWorkDaysPerWeek); al editar, sin
+        el campo en el formulario no toca lo que ya estaba. %>
 
     <%- include('campo_centros_costo', {
       centros: typeof centrosCosto !== 'undefined' ? centrosCosto : [],

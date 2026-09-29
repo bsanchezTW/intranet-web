@@ -24,7 +24,7 @@ const {
 } = require("../src/services/assistant/directorySearch");
 
 const CL_FEATURES = { supportTickets: true, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: true, lunchMenu: true };
-const PE_FEATURES = { supportTickets: false, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: false, lunchMenu: false };
+const PE_FEATURES = { supportTickets: false, expenseCenter: false, expenseRequests: true, vacations: true, chileHrPortals: false, lunchMenu: false };
 const ids = (entries) => entries.map((entry) => entry.id);
 
 describe("intranetGuide — catálogo filtrado", () => {

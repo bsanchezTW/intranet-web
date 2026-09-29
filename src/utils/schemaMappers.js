@@ -348,6 +348,10 @@ function mapHistoryAuditForView(row) {
     if (b.national_id !== a.national_id) {
       details.push(`Documento: ${b.national_id || "sin dato"} → ${a.national_id || "sin dato"}`);
     }
+  } else if (row.action === HISTORY_AUDIT_ACTION.REMINDER) {
+    if (after) {
+      details.push(`Correo a ${after.email || "—"} · ${Number(after.days)} día(s) vencidos`);
+    }
   } else if (row.action === HISTORY_AUDIT_ACTION.REFERENCE) {
     const ref = after || before;
     if (ref) {
@@ -373,7 +377,8 @@ function mapHistoryAuditForView(row) {
         })
       : "",
     details,
-    // En PROFILE y REFERENCE `source` es el motivo o la nota que se escribió.
+    // En PROFILE y REFERENCE `source` es el motivo o la nota que se escribió;
+    // en REMINDER, el mensaje que RR.HH. agregó al aviso.
     note: row.source || null,
   };
 }

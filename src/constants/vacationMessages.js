@@ -185,6 +185,16 @@ const VACATION_MESSAGES = {
   periodsBlocked:
     "La fecha de ingreso cambió, pero hay períodos con días aprobados en la intranet que ya no calzan con ella. Los períodos no se recalcularon: revisa esas solicitudes o ajustes.",
 
+  // --- Aviso manual de días vencidos ---------------------------------------
+  reminderNoPending: "Este colaborador no tiene días vencidos: no hay nada que avisar.",
+  reminderNoEmail:
+    "Este colaborador no tiene correo registrado. Agrégalo en Personal para poder avisarle.",
+  reminderNoHireDate: "Sin fecha de ingreso no hay días que calcular ni avisar.",
+  reminderFailed: "No se pudo enviar el aviso. Inténtalo de nuevo.",
+  reminderSent(email) {
+    return `Aviso de días vencidos enviado a ${email}.`;
+  },
+
   // --- Fecha de corte y exportación ----------------------------------------
   cutoffSaved: "Fecha de corte actualizada.",
   cutoffInvalid: "Indica una fecha de corte válida.",

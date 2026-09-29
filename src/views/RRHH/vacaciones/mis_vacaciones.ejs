@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260923a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20260929b">
 <%
   const isPeru = country === 'PE';
   // El período del que se van a descontar los próximos días: el más antiguo
@@ -9,6 +9,16 @@
         .slice()
         .sort((a, b) => String(a.period_start).localeCompare(String(b.period_start)))[0]
     : null;
+  // Perú: el saldo de años cumplidos está vencido y hay que tomarlo. El plazo
+  // legal (art. 23) dice hasta cuándo sin que se genere indemnización.
+  const vencidos = isPeru && summary && summary.availableDays > 0;
+  const periodosPendientes = isPeru && Array.isArray(periods)
+    ? periods.filter((p) => !p.inProgress && Number(p.available) > 0)
+    : [];
+  const fueraDePlazo = periodosPendientes.filter((p) => p.overdue);
+  const proximoPlazo = periodosPendientes
+    .filter((p) => !p.overdue && p.enjoyBy)
+    .sort((a, b) => String(a.enjoyBy).localeCompare(String(b.enjoyBy)))[0] || null;
 %>
 
 <div class="vac-wrap">
@@ -42,12 +52,28 @@
     </div>
   <% } %>
 
+  <% if (vencidos) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <div>
+        <strong>Tienes <%= summary.availableDays %> día(s) de vacaciones vencidos: debes tomarlos.</strong>
+        <% if (fueraDePlazo.length > 0) { %>
+          <br>Parte de ellos ya pasó el plazo legal para gozarlos. Coordina tus fechas con tu jefatura y solicítalos cuanto antes.
+        <% } else if (proximoPlazo) { %>
+          <br>Tómalos antes del <%= proximoPlazo.enjoyByFmt %>, que es el plazo legal para gozarlos.
+        <% } %>
+      </div>
+    </div>
+  <% } %>
+
   <%# El colaborador ve totales, no el detalle del historial de RR.HH.: los
       días que se tomó antes de la intranet ya están dentro de "Usado". %>
   <div class="vac-balance-grid">
-    <div class="vac-stat">
-      <div class="vac-stat-label">Saldo disponible</div>
-      <div class="vac-stat-value"><%= summary.availableDays %> <span class="vac-stat-unit"><%= dayUnit === 'business' ? 'háb.' : 'cal.' %></span></div>
+    <div class="vac-stat <%= vencidos ? 'vac-stat--vencido' : '' %>">
+      <div class="vac-stat-label"><%= isPeru ? 'Días vencidos' : 'Saldo disponible' %></div>
+      <div class="vac-stat-value <%= vencidos ? 'danger' : '' %>"><%= summary.availableDays %> <span class="vac-stat-unit"><%= dayUnit === 'business' ? 'háb.' : 'cal.' %></span></div>
+      <% if (vencidos) { %>
+        <p class="vac-stat-note"><strong>Debes tomarlos;</strong> puedes pedirlos ahora.</p>
+      <% } %>
       <% if (locals.nextAccrualFmt) { %>
         <p class="vac-stat-note">Próximo derecho: <%= nextAccrualFmt %></p>
       <% } %>

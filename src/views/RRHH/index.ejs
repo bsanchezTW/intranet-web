@@ -34,6 +34,13 @@ if (hayVacaciones) {
     titulo: 'Gestión de vacaciones',
     desc: 'Aprueba o rechaza solicitudes y ajusta los saldos del equipo.',
   });
+  ADMINISTRACION.push({
+    href: '/RRHH/vacaciones/gestion/resumen',
+    icono: 'chart',
+    titulo: 'Resumen de vacaciones',
+    desc: 'Días vencidos de cada colaborador, historial, liquidación y exportación.',
+    verde: true,
+  });
 }
 // Soporte usa los feriados para el horario hábil: existen aunque no haya Vacaciones.
 ADMINISTRACION.push({

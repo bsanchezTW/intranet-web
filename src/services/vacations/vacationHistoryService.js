@@ -669,7 +669,40 @@ async function listAudit(userId, limit = 50) {
   return rows;
 }
 
+/**
+ * Deja en la bitácora que RR.HH. avisó por correo los días vencidos. Queda
+ * junto al resto de movimientos del colaborador y sirve para mostrar el
+ * último aviso (change_log se limpia a los pocos días).
+ */
+async function recordReminder({ userId, actorId, email, days, note = null }) {
+  await writeAudit(db, {
+    userId,
+    action: HISTORY_AUDIT_ACTION.REMINDER,
+    actorId,
+    newValue: { email, days },
+    source: note ? String(note).slice(0, 255) : null,
+  });
+}
+
+/** Último aviso de días vencidos de cada colaborador: Map(userId → fila). */
+async function lastRemindersByUser(userIds) {
+  const ids = (userIds || []).map(Number).filter(Number.isInteger);
+  if (ids.length === 0) return new Map();
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (a.user_id) a.user_id, a.created_at, a.new_value,
+            act.first_name AS actor_first_name, act.last_name AS actor_last_name
+       FROM vacation_history_audit a
+       LEFT JOIN users act ON act.id = a.actor_user_id
+      WHERE a.user_id = ANY($1::int[]) AND a.action = $2
+      ORDER BY a.user_id, a.created_at DESC`,
+    [ids, HISTORY_AUDIT_ACTION.REMINDER],
+  );
+  return new Map(rows.map((r) => [r.user_id, r]));
+}
+
 module.exports = {
+  recordReminder,
+  lastRemindersByUser,
   normalizeHistoryInput,
   duplicateKey,
   auditSnapshot,

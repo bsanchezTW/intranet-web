@@ -215,6 +215,17 @@ const GUIDE_ENTRIES = Object.freeze([
     summary: "Aprobar o rechazar solicitudes de vacaciones y revisar los saldos del equipo.",
   },
   {
+    id: "vacaciones-resumen",
+    title: "Resumen de vacaciones",
+    href: "/RRHH/vacaciones/gestion/resumen",
+    feature: "vacations",
+    access: ACCESS.RRHH_MANAGER,
+    paths: [/^\/RRHH\/vacaciones\/gestion\/resumen(\/|$)/],
+    summary:
+      "Días vencidos que cada colaborador debe tomar, plazo legal, trunco, liquidación y exportación a Excel. " +
+      "Desde aquí se abre la ficha de cada uno para cargar sus vacaciones anteriores a la intranet.",
+  },
+  {
     id: "feriados",
     title: "Feriados",
     href: "/RRHH/feriados",
