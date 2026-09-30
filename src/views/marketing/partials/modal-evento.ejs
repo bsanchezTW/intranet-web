@@ -3,7 +3,7 @@
    viven en /css/galeria.css y la lógica en /js/galeria.js.
    Parámetros: modo ('crear' | 'editar'), evento (sólo editar), imagenes (sólo editar). */
 const esEditar = modo === 'editar';
-const ev = esEditar ? evento : { name: '', description: '', image: '', slug: '', is_private: false, country_code: '' };
+const ev = esEditar ? evento : { name: '', description: '', image: '', slug: '', is_private: false, visible_web: false, country_code: '' };
 const paisActual = (typeof country !== 'undefined' && country) ? country : '';
 const puedePrivatizar = !esEditar || ev.country_code === paisActual;
 const nombrePais = (typeof countryConfig !== 'undefined' && countryConfig.name) ? countryConfig.name : 'este país';
@@ -66,6 +66,20 @@ const fotosPortada = esEditar
             </label>
           </div>
           <% } %>
+
+          <div class="galeria-privado">
+            <input type="hidden" name="visible_web" value="0">
+            <label class="galeria-privado__label" for="eventoWeb">
+              <input type="checkbox" id="eventoWeb" name="visible_web" value="1"
+                     <%= ev.visible_web && !ev.is_private ? 'checked' : '' %>
+                     <%= ev.is_private ? 'disabled' : '' %>>
+              <span class="galeria-privado__pista" aria-hidden="true"></span>
+              <span class="galeria-privado__texto">
+                <strong>Mostrar en la web de eventos</strong>
+                <span>Publica las fotos y videos en eventos.transworld.cl, visibles para cualquiera. Un evento privado no se publica.</span>
+              </span>
+            </label>
+          </div>
         </div>
 
         <section class="modal-section galeria-modal__portada">

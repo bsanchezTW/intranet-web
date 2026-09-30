@@ -10,7 +10,7 @@ const requireRole = require('../middlewares/requireRole');
 const { UPLOAD_LIMITS_BYTES } = require('../config/uploadLimits');
 const { EVENTO_VIEW_COLUMNS } = require('../utils/schemaMappers');
 const { getCurrentCountry } = require('../config/country');
-const { isPrivateFlag, hasPrivacyField } = require('../utils/eventAccess');
+const { isPrivateFlag, hasPrivacyField, hasWebField } = require('../utils/eventAccess');
 
 const router = express.Router();
 const WRITE_ROLES = ['admin'];
@@ -60,7 +60,9 @@ function eventFieldsFromBody(body = {}) {
   const name = String(body.name ?? body.nombre ?? '').trim();
   const description = body.description ?? body.descripcion ?? null;
   const isPrivate = isPrivateFlag(body.is_private ?? body.privado);
-  return { name, description, isPrivate, hasPrivacy: hasPrivacyField(body) };
+  // Mismo parser que el de privado: acepta el hidden "0" y el checkbox "1" juntos.
+  const visibleWeb = isPrivateFlag(body.visible_web);
+  return { name, description, isPrivate, hasPrivacy: hasPrivacyField(body), visibleWeb, hasWeb: hasWebField(body) };
 }
 
 // Normaliza imágenes enviadas desde el front
@@ -106,7 +108,7 @@ router.get('/eventos/nuevo', requireRole(...WRITE_ROLES), (req, res) => {
 });
 
 router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
-  const { name, description, isPrivate } = eventFieldsFromBody(req.body);
+  const { name, description, isPrivate, visibleWeb } = eventFieldsFromBody(req.body);
   const responderError = (status, error) => {
     if (wantsJsonResponse(req)) return res.status(status).json({ error });
     return res.redirect(`/marketing/eventos?modal=nuevo&error=${encodeURIComponent(error)}`);
@@ -123,9 +125,10 @@ router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
     }
 
     await db.queryRetryIdCollision(
-      `INSERT INTO events (name, slug, description, country_code, is_private)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [name, slug, description, getCurrentCountry(), isPrivate],
+      `INSERT INTO events (name, slug, description, country_code, is_private, visible_web)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      // Un álbum privado nunca se publica en la web (también lo impide la base).
+      [name, slug, description, getCurrentCountry(), isPrivate, visibleWeb && !isPrivate],
     );
     if (wantsJsonResponse(req)) return res.json({ ok: true, slug });
     res.redirect(`/marketing/eventos/${encodeURIComponent(slug)}?ok=Evento creado`);
@@ -320,7 +323,7 @@ router.get('/eventos/:slug/editar', requireRole(...WRITE_ROLES), (req, res) => {
 
 router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, res) => {
   const { slug } = req.params;
-  const { name, description, isPrivate, hasPrivacy } = eventFieldsFromBody(req.body);
+  const { name, description, isPrivate, hasPrivacy, visibleWeb, hasWeb } = eventFieldsFromBody(req.body);
   const responderError = (status, error) => {
     if (wantsJsonResponse(req)) return res.status(status).json({ error });
     return res.status(status).send(error);
@@ -332,7 +335,7 @@ router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, re
     }
 
     const { rows } = await db.query(
-      `SELECT country_code, is_private FROM events WHERE slug = $1`,
+      `SELECT country_code, is_private, visible_web FROM events WHERE slug = $1`,
       [slug],
     );
     if (!rows.length) return responderError(404, 'Evento no encontrado');
@@ -340,10 +343,11 @@ router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, re
     const actual = rows[0];
     const propio = actual.country_code === getCurrentCountry();
     const privado = propio && hasPrivacy ? isPrivate : actual.is_private;
+    const enWeb = !privado && (hasWeb ? visibleWeb : actual.visible_web);
 
     await db.query(
-      'UPDATE events SET name = $1, description = $2, is_private = $3 WHERE slug = $4',
-      [name, description, privado, slug],
+      'UPDATE events SET name = $1, description = $2, is_private = $3, visible_web = $4 WHERE slug = $5',
+      [name, description, privado, enWeb, slug],
     );
     if (req.session.user && req.session.user.id) {
       await db.query('INSERT INTO change_log (user_id, action, section, link_path) VALUES ($1, $2, $3, $4)',

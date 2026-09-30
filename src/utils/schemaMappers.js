@@ -83,7 +83,7 @@ const NOTICIA_VIEW_COLUMNS = `
 `;
 
 const EVENTO_VIEW_COLUMNS = `
-  id, name, slug, description, image, created_at, country_code, is_private
+  id, name, slug, description, image, created_at, country_code, is_private, visible_web
 `;
 
 const APPLICATION_VIEW_COLUMNS = `

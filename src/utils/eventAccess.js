@@ -27,6 +27,11 @@ function hasPrivacyField(body = {}) {
   );
 }
 
+/** El formulario trae el interruptor "Mostrar en la web de eventos". */
+function hasWebField(body = {}) {
+  return Object.prototype.hasOwnProperty.call(body, "visible_web");
+}
+
 /** Público para ambos países. Privado solo para el país que lo creó. */
 function eventVisibleTo(event, countryCode) {
   if (!event || !event.is_private) return true;
@@ -40,5 +45,6 @@ module.exports = {
   eventSlugFromContentPath,
   isPrivateFlag,
   hasPrivacyField,
+  hasWebField,
   eventVisibleTo,
 };

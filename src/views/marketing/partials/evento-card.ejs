@@ -23,6 +23,9 @@
         <% if (ev.is_private) { %>
           <span class="galeria-card__fecha galeria-card__privado">Privado</span>
         <% } %>
+        <% if (ev.visible_web && !ev.is_private) { %>
+          <span class="galeria-card__fecha galeria-card__web">En la web</span>
+        <% } %>
       </span>
       <h3 class="galeria-card__titulo"><%= ev.name %></h3>
     </div>

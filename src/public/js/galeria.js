@@ -256,6 +256,16 @@
       estadoPie.textContent = activo ? texto || "" : "";
     }
 
+    // Un evento privado no puede publicarse en la web: el interruptor se apaga y bloquea.
+    var interruptorPrivado = document.getElementById("eventoPrivado");
+    var interruptorWeb = document.getElementById("eventoWeb");
+    if (interruptorPrivado && interruptorWeb) {
+      interruptorPrivado.addEventListener("change", function () {
+        interruptorWeb.disabled = interruptorPrivado.checked;
+        if (interruptorPrivado.checked) interruptorWeb.checked = false;
+      });
+    }
+
     form.addEventListener("submit", async function (evento) {
       evento.preventDefault();
       if (enviando) return;
@@ -271,6 +281,8 @@
       var datos = { name: titulo, description: descripcion.value.trim() };
       var privado = document.getElementById("eventoPrivado");
       if (privado) datos.is_private = privado.checked ? "1" : "0";
+      var web = document.getElementById("eventoWeb");
+      if (web) datos.visible_web = web.checked && !web.disabled ? "1" : "0";
 
       if (!esEditar) {
         ocupado(true, "Creando evento…");

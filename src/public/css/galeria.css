@@ -205,6 +205,12 @@
   background: rgba(0, 0, 0, 0.38);
 }
 
+/* Álbum publicado en la web pública de eventos */
+.galeria-card__web {
+  background: var(--brand);
+  border-color: transparent;
+}
+
 .galeria-card__titulo {
   margin: 0;
   font-size: 1.3rem;
