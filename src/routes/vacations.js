@@ -3,6 +3,8 @@ const router = express.Router();
 const db = require("../db");
 const requireRole = require("../middlewares/requireRole");
 const requireRrhhManager = require("../middlewares/requireRrhhManager");
+const { canManageRrhh } = require("../services/access/staffAccess");
+const areaManager = require("../services/expenses/areaManager");
 const {
   getStrategy,
   resolveCountryForUser,
@@ -164,6 +166,11 @@ router.post("/mis-vacaciones/solicitar", requireRole.intranetActivo(), async (re
       request: result.request,
       user: profile,
       accumulationAlert: Boolean(result.accumulationAlert),
+    });
+    notificationService.notifyApprover({
+      request: result.request,
+      user: profile,
+      approver: result.approver,
     });
 
     return redirectOk(
@@ -728,8 +735,70 @@ router.post("/gestion/:userId/periodo/:periodId/record", requireRrhhManager(), a
   }
 });
 
-router.post("/gestion/solicitud/:id/aprobar", requireRrhhManager(), async (req, res) => {
-  const backTo = "/RRHH/vacaciones/gestion";
+// ==========================================================
+// APROBACIONES DEL JEFE (organigrama)
+// ==========================================================
+// La gestión completa sigue siendo de RRHH. Aquí el jefe sólo ve lo que el
+// organigrama le asignó al crearse la solicitud.
+
+const APROBACIONES_PATH = "/RRHH/vacaciones/aprobaciones";
+
+router.get("/aprobaciones", requireRole.intranetActivo(), async (req, res) => {
+  const user = req.session.user;
+  try {
+    const [inbox, esJefe, esRrhh] = await Promise.all([
+      requestService.listForApprover(user.id),
+      areaManager.isAreaManager(user),
+      canManageRrhh(user),
+    ]);
+    if (!esJefe && !esRrhh && !inbox.pending.length && !inbox.history.length) {
+      return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    }
+    res.render("RRHH/vacaciones/aprobaciones", {
+      titulo: "Aprobaciones de vacaciones",
+      user,
+      pending: inbox.pending.map(mapVacationRequestForView),
+      history: inbox.history.map(mapVacationRequestForView),
+      esRrhh,
+      ...readFlash(req),
+    });
+  } catch (err) {
+    console.error("Error en aprobaciones de vacaciones:", err);
+    res.status(500).send(VACATION_MESSAGES.loadGestionFailed);
+  }
+});
+
+/**
+ * Aprobar y rechazar: el jefe asignado por el organigrama o RRHH. El resto de
+ * la gestión sigue cerrada con requireRrhhManager.
+ */
+function requireVacationReviewer() {
+  return async (req, res, next) => {
+    const backTo = reviewBackTo(req);
+    try {
+      const request = await requestService.getRequestById(req.params.id);
+      if (!request) return redirectErr(res, backTo, VACATION_MESSAGES.requestNotFound);
+      const isRrhhManager = await canManageRrhh(req.session.user);
+      if (!requestService.canReviewRequest(request, req.session.user.id, { isRrhhManager })) {
+        return redirectErr(res, backTo, VACATION_MESSAGES.notYourApproval);
+      }
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+}
+
+function reviewBackTo(req) {
+  return req.body && req.body.volver === "aprobaciones"
+    ? APROBACIONES_PATH
+    : "/RRHH/vacaciones/gestion";
+}
+
+const reviewGuards = [requireRole.intranetActivo(), requireVacationReviewer()];
+
+router.post("/gestion/solicitud/:id/aprobar", ...reviewGuards, async (req, res) => {
+  const backTo = reviewBackTo(req);
   try {
     const result = await requestService.approveRequest({
       requestId: req.params.id,
@@ -752,8 +821,8 @@ router.post("/gestion/solicitud/:id/aprobar", requireRrhhManager(), async (req, 
   }
 });
 
-router.post("/gestion/solicitud/:id/rechazar", requireRrhhManager(), async (req, res) => {
-  const backTo = "/RRHH/vacaciones/gestion";
+router.post("/gestion/solicitud/:id/rechazar", ...reviewGuards, async (req, res) => {
+  const backTo = reviewBackTo(req);
   try {
     const result = await requestService.rejectRequest({
       requestId: req.params.id,

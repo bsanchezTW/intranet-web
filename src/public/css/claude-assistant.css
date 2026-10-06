@@ -183,7 +183,9 @@ body.modal-open .claude-fab:not(.is-active) {
   z-index: 9999;
   width: 380px;
   max-width: calc(100vw - 24px);
-  height: min(600px, calc(100vh - 130px));
+  /* El alto que queda bajo la barra superior, que sigue a la vista (Abrir
+     ticket, menú de usuario) aunque la ventana sea baja. */
+  height: min(600px, calc(100vh - var(--shell-height, 0px) - var(--ca-fab-offset) - var(--ca-fab-size) - 28px));
   display: flex;
   flex-direction: column;
   background: var(--ca-bg);

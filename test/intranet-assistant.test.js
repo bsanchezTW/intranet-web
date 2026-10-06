@@ -51,7 +51,13 @@ describe("intranetGuide — catálogo filtrado", () => {
     assert.ok(rrhh.includes("rex"));
     const otroAdmin = ids(guideForUser({ features: chile, isAdmin: true }));
     assert.equal(otroAdmin.includes("feriados"), false);
-    assert.equal(otroAdmin.includes("areas"), false);
+  });
+
+  it("las áreas se administran en el organigrama: no tienen página propia", () => {
+    const rrhh = guideForUser({ features: CL_FEATURES, isAdmin: true, canManageRrhh: true });
+    assert.equal(ids(rrhh).includes("areas"), false);
+    assert.equal(findEntryForPath("/RRHH/organigrama", rrhh).id, "organigrama");
+    assert.equal(findEntryForPath("/RRHH/areas", rrhh), null);
   });
 
   it("la gestión de gastos es para revisores y administradores", () => {

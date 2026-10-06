@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260929b">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
 <link rel="stylesheet" href="/css/procesos.css?v=20260916m">
 <link rel="stylesheet" href="/css/rrhh.css?v=20260916g">
 
@@ -38,6 +38,16 @@
         <p class="procesos-card__desc">Vacaciones aprobadas de todo el equipo, día por día.</p>
       </div>
     </a>
+
+    <% if (typeof isAreaManager !== 'undefined' && isAreaManager) { %>
+    <a href="/RRHH/vacaciones/aprobaciones" class="procesos-card">
+      <span class="procesos-card__tile" aria-hidden="true"><%- include('../../partials/icon', { name: 'check-circle' }) %></span>
+      <div class="procesos-card__cuerpo">
+        <h4 class="procesos-card__titulo">Aprobar vacaciones</h4>
+        <p class="procesos-card__desc">Solicitudes de tu equipo que el organigrama te asigna.</p>
+      </div>
+    </a>
+    <% } %>
   </div>
   <%# La gestión (solicitudes, resumen y saldos) vive en RRHH → Administración:
       este hub es del colaborador. %>

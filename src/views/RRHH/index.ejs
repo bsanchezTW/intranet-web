@@ -8,29 +8,34 @@ const pais = (typeof countryConfig !== 'undefined' && countryConfig && countryCo
   : 'la empresa';
 
 const INTERNOS = [
-  { href: '/RRHH/organigrama', icono: 'building', titulo: 'Organigrama', desc: 'Estructura general y departamentos.' },
-  { href: '/RRHH/personal', icono: 'users', titulo: 'Personal', desc: 'Directorio de gestión y registro de colaboradores.', verde: true },
+  {
+    href: '/RRHH/organigrama',
+    icono: 'sitemap',
+    titulo: 'Organigrama',
+    desc: admin
+      ? 'Áreas, jefaturas y de quién depende cada una. Aquí se crean y editan.'
+      : 'Áreas, jefaturas y de quién depende cada una.',
+  },
+  { href: '/RRHH/personal', icono: 'users', titulo: 'Personal', desc: 'Directorio de gestión y registro de colaboradores.' },
 ];
 if (hayVacaciones) {
   INTERNOS.push({ href: '/RRHH/vacaciones', icono: 'umbrella', titulo: 'Vacaciones', desc: 'Consulta tu saldo, solicita días y revisa el calendario.' });
 }
 
-const ADMINISTRACION = [
-  { href: '/RRHH/areas', icono: 'layers', titulo: 'Áreas', desc: 'Gestionar áreas de trabajo y colaboradores asignados.' },
-];
+// Las áreas no tienen pantalla propia: se crean y editan en el Organigrama.
+const ADMINISTRACION = [];
 if (hayCentros) {
   ADMINISTRACION.push({
     href: '/RRHH/centros-costo',
     icono: 'briefcase',
     titulo: 'Centros de costo',
     desc: 'Definir centros y a cuáles rinde gastos cada colaborador.',
-    verde: true,
   });
 }
 if (hayVacaciones) {
   ADMINISTRACION.push({
     href: '/RRHH/vacaciones/gestion',
-    icono: 'inbox',
+    icono: 'check-circle',
     titulo: 'Gestión de vacaciones',
     desc: 'Aprueba o rechaza solicitudes y ajusta los saldos del equipo.',
   });
@@ -39,7 +44,6 @@ if (hayVacaciones) {
     icono: 'chart',
     titulo: 'Resumen de vacaciones',
     desc: 'Días vencidos de cada colaborador, historial, liquidación y exportación.',
-    verde: true,
   });
 }
 // Soporte usa los feriados para el horario hábil: existen aunque no haya Vacaciones.
@@ -48,7 +52,6 @@ ADMINISTRACION.push({
   icono: 'flag',
   titulo: 'Feriados',
   desc: 'Administra los feriados de ' + pais + '.',
-  verde: true,
 });
 
 const EXTERNOS = hayPortales
@@ -86,9 +89,9 @@ const EXTERNOS = hayPortales
     </div>
 
     <div class="procesos-grid">
-      <% INTERNOS.forEach(item => { %>
+      <% INTERNOS.forEach((item, i) => { %>
         <a href="<%= item.href %>" class="procesos-card">
-          <span class="procesos-card__tile<%= item.verde ? ' procesos-card__tile--green' : '' %>" aria-hidden="true"><%- include('../partials/icon', { name: item.icono }) %></span>
+          <span class="procesos-card__tile<%= i % 2 ? ' procesos-card__tile--green' : '' %>" aria-hidden="true"><%- include('../partials/icon', { name: item.icono }) %></span>
           <div class="procesos-card__cuerpo">
             <h4 class="procesos-card__titulo"><%= item.titulo %></h4>
             <p class="procesos-card__desc"><%= item.desc %></p>
@@ -108,15 +111,15 @@ const EXTERNOS = hayPortales
           Administración
         </h3>
         <p class="seccion__desc">
-          Áreas<% if (hayCentros) { %>, centros de costo<% } %>, feriados<% if (hayVacaciones) { %> y la gestión de vacaciones<% } %>.
+          <% if (hayCentros) { %>Centros de costo, feriados<% } else { %>Feriados<% } %><% if (hayVacaciones) { %> y la gestión de vacaciones<% } %>.
         </p>
       </div>
     </div>
 
     <div class="procesos-grid">
-      <% ADMINISTRACION.forEach(item => { %>
+      <% ADMINISTRACION.forEach((item, i) => { %>
         <a href="<%= item.href %>" class="procesos-card">
-          <span class="procesos-card__tile<%= item.verde ? ' procesos-card__tile--green' : '' %>" aria-hidden="true"><%- include('../partials/icon', { name: item.icono }) %></span>
+          <span class="procesos-card__tile<%= i % 2 ? ' procesos-card__tile--green' : '' %>" aria-hidden="true"><%- include('../partials/icon', { name: item.icono }) %></span>
           <div class="procesos-card__cuerpo">
             <h4 class="procesos-card__titulo"><%= item.titulo %></h4>
             <p class="procesos-card__desc"><%= item.desc %></p>

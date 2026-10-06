@@ -615,6 +615,22 @@ body:not(.login-split-page) {
 }
 
 
+/* Los controles de formulario no heredan la tipografía: sin esto, un botón sin
+   font-family propio (y todo lo que tenga dentro) se pinta en Arial. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* Chromium rellena 1px arriba y abajo el interior de los campos de fecha: con el
+   mismo padding quedan 2px más altos que un input de texto en la misma fila. */
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="month"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
 /* ── Campo de formulario ──────────────────────────────────────────────────────
    Etiqueta + control + ayuda. Vive en el CSS global porque lo usan Procesos, el
    centro de gastos y los modales; antes cada módulo redefinía lo mismo con su

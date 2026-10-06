@@ -1,12 +1,12 @@
-/* RRHH · Áreas de trabajo.
+/* RRHH · Organigrama (áreas de trabajo) y Centros de costo.
    Las clases con prefijo .ac- (áreas + centros) son el lenguaje común de las
    dos pantallas de agrupación y las carga también centros_costo.ejs vía
    extraCss; lo propio de la tarjeta de centro vive en centros-costo.css.
 
-   El rediseño parte de un problema concreto: la tarjeta listaba a todos sus
-   miembros, así que un área con cuarenta personas medía diez veces más que una
-   de tres y rompía la grilla. Ahora la tarjeta muestra siempre un resumen de
-   alto fijo y la lista completa se abre en un modal. */
+   Las áreas se dibujan como un árbol (.org-*) en el Organigrama, que es
+   también donde se editan. Cada nodo muestra un resumen de alto fijo de sus
+   miembros y la lista completa se abre en un modal, para que un área con
+   cuarenta personas no deforme el árbol. */
 
 .contenedor-areas {
   width: 100%;
@@ -163,107 +163,514 @@
   color: var(--color-text-muted);
 }
 
-/* ── Grilla de tarjetas ───────────────────────────────────────────────────── */
+/* ── Organigrama ──────────────────────────────────────────────────────────────
+   El primer nivel se abre en columnas y de ahí hacia abajo cada rama es una
+   lista con sangría, como un árbol de carpetas: el organigrama completo cabe
+   en el ancho de la página. Bajo 1024px también el primer nivel pasa a lista. */
 
-.areas-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-  gap: 18px;
-  /* Sin esto una tarjeta abierta estira a toda su fila. */
-  align-items: start;
+.org-ayuda {
+  margin: 0 0 14px;
+  max-width: 860px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
 }
 
-.area-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-  padding: 18px 18px 14px;
+.org-conteo {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.org {
+  --org-linea: var(--color-border-strong);
+  --org-grosor: 2px;
+  /* Altura a la que la rama entra en la tarjeta: a la altura del nombre. */
+  --org-codo: 34px;
+  --org-sangria: 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 28px;
+}
+
+/* Respaldo para un primer nivel con más columnas de las que caben: scrollea
+   dentro de su marco y no estira la página. El relleno deja sitio al anillo
+   de foco y de búsqueda, que el overflow recortaría. */
+.org-scroll {
+  margin: -6px;
+  padding: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.org-tree,
+.org-hijas,
+.org-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.org-item {
+  position: relative;
   min-width: 0;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.area-card:hover {
-  box-shadow: var(--shadow-lg);
-  border-color: var(--color-border-strong);
+/* Rama en lista: un riel baja por el costado mientras queden hermanas y un
+   codo entra en cada tarjeta; el de la última cierra el riel en curva. */
+.org-hijas {
+  padding-left: var(--org-sangria);
 }
 
-.area-card.is-oculta {
+.org-hijas > .org-item {
+  padding-top: 10px;
+}
+
+.org-hijas > .org-item::before,
+.org-hijas > .org-item::after {
+  content: "";
+  position: absolute;
+  left: -13px;
+  box-sizing: border-box;
+}
+
+.org-hijas > .org-item::before {
+  top: 0;
+  bottom: 0;
+  border-left: var(--org-grosor) solid var(--org-linea);
+}
+
+.org-hijas > .org-item::after {
+  top: 0;
+  width: 13px;
+  height: var(--org-codo);
+  border-bottom: var(--org-grosor) solid var(--org-linea);
+}
+
+.org-hijas > .org-item:last-child::before {
   display: none;
 }
 
-.area-card--unassigned {
-  --area-color: var(--color-text-subtle);
-  border-style: dashed;
+.org-hijas > .org-item:last-child::after {
+  border-left: var(--org-grosor) solid var(--org-linea);
+  border-bottom-left-radius: 10px;
 }
 
-.area-card__head {
+/* Rama en columnas: la línea que baja del área superior, y en cada columna
+   dos medias líneas horizontales que juntas forman la barra que las une. */
+@media (min-width: 1024px) {
+  /* Cada columna necesita al menos 250px; si no caben todas, el árbol crece
+     y scrollea dentro de .org-scroll. */
+  .org-tree {
+    width: max(100%, calc(var(--org-columnas, 1) * 250px));
+  }
+
+  .org-item--cabeza > .org-node {
+    width: min(100%, 300px);
+    margin-inline: auto;
+  }
+
+  .org-hijas--fila {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 24px 0 0;
+  }
+
+  .org-hijas--fila::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 24px;
+    margin-left: calc(var(--org-grosor) / -2);
+    border-left: var(--org-grosor) solid var(--org-linea);
+  }
+
+  .org-hijas--fila > .org-item {
+    flex: 1 1 0;
+    box-sizing: border-box;
+    max-width: 360px;
+    padding: 24px 9px 0;
+  }
+
+  .org-hijas--fila > .org-item::before,
+  .org-hijas--fila > .org-item::after {
+    display: block;
+    top: 0;
+    bottom: auto;
+    left: auto;
+    width: 50%;
+    height: 24px;
+    border: 0 none;
+    border-top: var(--org-grosor) solid var(--org-linea);
+    border-radius: 0;
+  }
+
+  .org-hijas--fila > .org-item::before {
+    right: 50%;
+  }
+
+  .org-hijas--fila > .org-item::after {
+    left: 50%;
+    margin-left: calc(var(--org-grosor) / -2);
+    border-left: var(--org-grosor) solid var(--org-linea);
+  }
+
+  .org-hijas--fila > .org-item:first-child::before,
+  .org-hijas--fila > .org-item:last-child::after {
+    border: 0 none;
+  }
+
+  .org-hijas--fila > .org-item:last-child::before {
+    display: block;
+    margin-right: calc(var(--org-grosor) / -2);
+    border-right: var(--org-grosor) solid var(--org-linea);
+    border-top-right-radius: 12px;
+  }
+
+  .org-hijas--fila > .org-item:first-child::after {
+    border-top-left-radius: 12px;
+  }
+
+  /* Hija única: la línea del área superior llega recta, sin barra. */
+  .org-hijas--fila > .org-item:only-child {
+    padding-top: 0;
+  }
+
+  .org-hijas--fila > .org-item:only-child::before,
+  .org-hijas--fila > .org-item:only-child::after {
+    display: none;
+  }
+}
+
+/* Áreas que no dependen de nadie ni tienen dependientes. */
+.org-sueltas__titulo {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.org-sueltas__desc {
+  margin: 3px 0 12px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.org-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* ── Nodo ─────────────────────────────────────────────────────────────────── */
+
+.org-node {
+  position: relative;
+  box-sizing: border-box;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 14px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: 0 1px 2px rgba(13, 31, 51, 0.05);
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.org-node:hover {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow);
+}
+
+.org-node--alerta,
+.org-node--alerta:hover {
+  border-color: rgba(224, 163, 60, 0.6);
+}
+
+.org-node.is-match {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand);
+}
+
+.org-node.is-dim {
+  opacity: 0.4;
+}
+
+.org-node__head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 9px;
   min-width: 0;
 }
 
-/* El color del área identifica la tarjeta igual que en las carpetas de
-   Procesos: tile teñido en vez de una franja superior. */
-.area-card__tile {
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-  border-radius: 13px;
+/* El color del área, el mismo de su chip en el resto de la intranet. */
+.org-node__punto {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 0.34em;
+  border-radius: 50%;
+  background: var(--area-color, var(--brand));
+}
+
+.org-node__nombre {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--color-heading);
+  overflow-wrap: anywhere;
+}
+
+/* La cabeza del árbol pesa un poco más que el resto. */
+.org-tree > .org-item > .org-node {
+  padding: 15px 16px 14px;
+  border-top: 3px solid var(--area-color, var(--brand));
+}
+
+.org-tree > .org-item > .org-node .org-node__nombre {
+  font-size: 1.05rem;
+}
+
+/* Quién aprueba: el jefe propio, el de un área superior (anillo punteado) o
+   nadie (ámbar). Los nombres se muestran completos, en dos líneas si hace
+   falta, en vez de cortarse. */
+.org-node__jefe {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.org-node__jefe-foto,
+.org-node__jefe-icono {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
+.org-node__jefe-foto {
+  border: 0 none;
+  object-fit: cover;
+}
+
+.avatar-fallback.org-node__jefe-foto {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  background: color-mix(in srgb, var(--area-color, var(--brand)) 16%, transparent);
-  color: var(--area-color, var(--brand));
-}
-
-/* El alto de dos líneas de título se reserva aquí y no en el <h3>: así un
-   nombre corto deja el hueco al final del bloque y no entre el nombre y su
-   chip de id, y todas las tarjetas siguen midiendo lo mismo. */
-.area-card__title {
-  flex: 1;
-  min-width: 0;
-  min-height: 68px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-/* Como mucho dos líneas; el nombre completo queda en el title del elemento. */
-.area-card__nombre {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 800;
-  line-height: 1.3;
-  color: var(--color-heading);
-  letter-spacing: -0.01em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.area-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-}
-
-.area-card__id {
-  font-variant-numeric: tabular-nums;
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--color-text-subtle);
-  background: var(--color-surface-muted);
-  border-radius: 6px;
+  color: #ffffff;
+}
+
+.org-node__jefe--heredado .org-node__jefe-foto {
+  outline: 2px dashed var(--color-border-strong);
+  outline-offset: 2px;
+  opacity: 0.8;
+}
+
+/* Ámbar propio: es una advertencia, no un token de superficie. */
+.org-node__jefe-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  background: rgba(224, 163, 60, 0.18);
+  color: #8a5d09;
+}
+
+.org-node__jefe-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.org-node__jefe-txt strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.org-node__jefe-txt small {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+}
+
+.org-node__jefe--alerta .org-node__jefe-txt strong,
+.org-node__jefe--alerta .org-node__jefe-txt small {
+  color: #8a5d09;
+}
+
+.org-node__multi {
+  flex: none;
   padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: help;
+}
+
+/* Resumen del equipo: abre la lista completa en un modal, para que un área
+   con cuarenta personas no deforme el árbol. */
+.org-node__equipo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 26px;
+  margin: 0;
+  padding: 10px 0 0;
+  box-sizing: content-box;
+  border: 0 none;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.org-node__equipo:hover {
+  color: var(--brand);
+}
+
+.org-node__equipo:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.org-node__equipo--vacio {
+  font-weight: 500;
+  cursor: default;
+}
+
+.org-node__equipo--vacio:hover {
+  color: var(--color-text-muted);
+}
+
+.org-node__equipo-txt {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-node__equipo-chev {
+  flex: none;
+  display: inline-flex;
+  color: var(--color-text-subtle);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.org-node__equipo:hover .org-node__equipo-chev {
+  color: inherit;
+  transform: translateX(2px);
+}
+
+.org-node .area-stack__item {
+  width: 24px;
+  height: 24px;
+}
+
+.org-node .avatar-fallback.area-stack__item {
+  font-size: 0.52rem;
+}
+
+/* En una tarjeta angosta (ramas muy anidadas) las caras le quitan el sitio
+   al texto: se queda sólo la cuenta. */
+@container (max-width: 184px) {
+  .org-node .area-stack {
+    display: none;
+  }
+}
+
+.org-node__acciones {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 -6px -5px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-border);
+}
+
+.org-node__id {
+  margin-right: auto;
+  padding-left: 6px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.org-node__acciones .area-icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
+/* ── Colaboradores sin área ───────────────────────────────────────────────── */
+
+.org-sin-area {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 12px 14px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.org-sin-area__icono {
+  display: inline-flex;
+  font-size: 1.1rem;
+  color: #8a5d09;
+}
+
+.org-sin-area__texto {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.86rem;
+  color: var(--color-text-muted);
+}
+
+.org-sin-area__texto strong {
+  color: var(--color-heading);
+}
+
+.org-sin-area .org-sin-area__btn {
+  width: auto;
+  margin-top: 0;
 }
 
 .area-card__count {
@@ -279,13 +686,6 @@
 }
 
 .required-mark { color: var(--down); }
-
-.area-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: none;
-}
 
 .area-icon-btn {
   display: inline-flex;
@@ -320,52 +720,6 @@
 .area-inline-form {
   display: inline;
   margin: 0;
-}
-
-/* ── Jefatura del área ────────────────────────────────────────────────────────
-   Requisito para aprobar rendiciones: cuando falta, la tarjeta lo dice en vez
-   de dejar que el colaborador lo descubra al intentar rendir. */
-
-.area-card__jefe {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  border-radius: 11px;
-  background: var(--color-surface-muted);
-  border: 1px solid var(--color-border);
-  font-size: 0.84rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-/* Ámbar propio: es una advertencia, no un token de superficie. */
-.area-card__jefe--vacio {
-  background: rgba(224, 163, 60, 0.14);
-  border-color: rgba(224, 163, 60, 0.3);
-  color: #8a5d09;
-}
-.area-card__jefe strong {
-  color: var(--color-heading);
-}
-
-.area-card__jefe--vacio strong {
-  color: inherit;
-}
-
-.area-card__jefe-icono {
-  display: inline-flex;
-  flex-shrink: 0;
-  font-size: 1rem;
-}
-
-/* También a una línea: dos tarjetas vecinas no deben desalinearse porque el
-   jefe de una tenga el nombre más largo. */
-.area-card__jefe-txt {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .area-jefe-ayuda {
@@ -790,7 +1144,7 @@
 }
 
 @media (max-width: 640px) {
-  .areas-grid {
-    grid-template-columns: 1fr;
+  .org {
+    --org-sangria: 20px;
   }
 }

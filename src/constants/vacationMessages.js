@@ -55,6 +55,9 @@ const VACATION_MESSAGES = {
   collaboratorDeleted:
     "El colaborador fue eliminado: esta solicitud ya no se puede aprobar, sólo rechazar.",
   noHireDate: "No tienes una fecha de ingreso registrada. Contacta a RRHH.",
+  noArea:
+    "No tienes un área asignada, así que no hay jefe que apruebe tu solicitud. Pídele a RRHH que te asigne una.",
+  notYourApproval: "Esta solicitud no está asignada a ti para aprobar.",
   noHireDateInfo:
     "No tienes una fecha de ingreso registrada. Contacta a RRHH para poder calcular tu saldo de vacaciones.",
   requestNotFound:

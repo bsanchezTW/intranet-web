@@ -27,6 +27,10 @@ const {
 } = require("../services/appCatalogService");
 const { getLocale } = require("../config/country");
 const { isFeatureEnabled } = require("../config/features");
+const {
+  resolveHomeQuickAccess,
+  sanitizeHomeQuickAccess,
+} = require("../services/homeQuickAccess");
 const requireRole = require("../middlewares/requireRole");
 const requireFeature = require("../middlewares/requireFeature");
 const { toTitleCase } = require("../utils/formatName");
@@ -427,6 +431,28 @@ router.get("/", async (req, res) => {
         : null;
     }
 
+    let quickPreference = null;
+    const userId = req.session.user && req.session.user.id;
+    if (isFeatureEnabled("homeQuickAccess") && userId > 0) {
+      try {
+        const { rows } = await db.query(
+          "SELECT home_quick_access FROM users WHERE id = $1",
+          [userId],
+        );
+        quickPreference = rows[0] ? rows[0].home_quick_access : null;
+      } catch (err) {
+        if (err.code !== "42703") logger.warn("home", err);
+      }
+    }
+    const quickAccess = isFeatureEnabled("homeQuickAccess")
+      ? resolveHomeQuickAccess({
+          countryCode: res.locals.country,
+          features: res.locals.features,
+          preference: quickPreference,
+          corporateSite: res.locals.countryConfig.corporateSite,
+        })
+      : null;
+
     await res.render("home", {
       // El sufijo por país lo añade formatPageTitle en la vista.
       titulo: "Inicio",
@@ -455,12 +481,57 @@ router.get("/", async (req, res) => {
         req.session.user &&
         req.session.user.id > 0 &&
         req.session.user.show_home_tutorial === true,
+      quickAccess,
     });
   } catch (err) {
     logger.error("home", err);
     res.status(500).send("Error cargando el inicio");
   }
 });
+
+// ==========================================
+// ACCESOS RÁPIDOS DEL HOME
+// ==========================================
+router.post(
+  "/home/accesos",
+  requireFeature("homeQuickAccess"),
+  async (req, res) => {
+    if (!req.session.user || !req.session.user.id) {
+      return res.status(401).json({ ok: false });
+    }
+
+    const userId = req.session.user.id;
+    const resolved = resolveHomeQuickAccess({
+      countryCode: res.locals.country,
+      features: res.locals.features,
+      preference: null,
+      corporateSite: res.locals.countryConfig.corporateSite,
+    });
+    const sanitized = sanitizeHomeQuickAccess(req.body, resolved.defaults);
+
+    // La cuenta de desarrollo no tiene fila: se queda con el orden del país.
+    if (userId <= 0) {
+      return res.json({ ok: true, persisted: false });
+    }
+
+    try {
+      await db.query(
+        "UPDATE users SET home_quick_access = $1::jsonb WHERE id = $2",
+        [sanitized ? JSON.stringify(sanitized) : null, userId],
+      );
+      return res.json({ ok: true, persisted: true });
+    } catch (err) {
+      if (err.code === "42703") {
+        return res.status(503).json({
+          ok: false,
+          error: "La preferencia todavía no está disponible.",
+        });
+      }
+      logger.error("home", err);
+      return res.status(500).json({ ok: false, error: "No se pudo guardar." });
+    }
+  },
+);
 
 // ==========================================
 // TUTORIAL DE BIENVENIDA (PRIMER INICIO)

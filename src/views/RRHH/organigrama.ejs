@@ -1,82 +1,315 @@
 <%
-/* Esta vista se renderiza dentro de layout.ejs: solo debe aportar el fragmento
-   de la página. Antes repetía <!DOCTYPE>/<html>/<head>/<body>, lo que anidaba
-   un documento dentro de otro. */
-const puedeSubir = typeof isAdministrador !== 'undefined' && isAdministrador;
+/* Organigrama: las áreas de la empresa, sus jefaturas y de quién depende cada
+   una. Todos lo leen; quien gestiona RRHH lo edita aquí mismo (?editar=1):
+   crea áreas, les asigna jefe y área superior, y mueve colaboradores. Lo que
+   queda dibujado es lo que decide quién aprueba fondos y vacaciones. */
+const gestiona = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+const enEdicion = gestiona && typeof editando !== 'undefined' && editando;
+const listado = areas || [];
+const palette = (typeof colorPalette !== 'undefined' && colorPalette) || [];
+const colorBase = (typeof defaultColor !== 'undefined' && defaultColor) || '#5a6879';
+const successMsg = (typeof success !== 'undefined' && success) ? success : null;
+const errorMsg = (typeof error !== 'undefined' && error) ? error : null;
+const listaSinArea = (typeof unassigned !== 'undefined' && unassigned) || [];
+const sinArea = listaSinArea.length;
+const totalMiembros = listado.reduce((n, a) => n + (a.memberCount || 0), 0);
+const sinJefe = listado.filter(a => !a.managerName).length;
+const sinAprobador = listado.filter(a => (!a.managerName && !a.inheritedManagerName) || a.approverUnavailable).length;
+
+const TOPE_STACK = 5;
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 %>
 
-<link rel="stylesheet" href="/css/rrhh.css?v=20260916g">
+<link rel="stylesheet" href="/css/areas.css?v=20261001d">
 
-<div class="contenedor">
+<% if (successMsg || errorMsg) { %>
+<div hidden data-toast="<%= successMsg || errorMsg %>" data-toast-tone="<%= successMsg ? 'ok' : 'error' %>"></div>
+<% } %>
+
+<div class="contenedor contenedor-areas">
   <div class="page-header">
-    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'chart' }) %></span>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'sitemap' }) %></span>
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
-        <span>Organigrama</span>
+        <% if (enEdicion) { %>
+          <a href="/RRHH/organigrama">Organigrama</a> <span aria-hidden="true">/</span>
+          <span>Editar</span>
+        <% } else { %>
+          <span>Organigrama</span>
+        <% } %>
       </nav>
-      <h2 class="page-title">Organigrama</h2>
-      <p class="page-description">Estructura general y departamentos de Transworld.</p>
+      <h2 class="page-title"><%= enEdicion ? 'Editar organigrama' : 'Organigrama' %></h2>
+      <p class="page-description">
+        <% if (listado.length) { %>
+          <%= plural(listado.length, 'área', 'áreas') %> · <%= plural(totalMiembros, 'colaborador', 'colaboradores') %><% if (enEdicion && sinArea) { %> · <%= sinArea %> sin área<% } %>
+        <% } else { %>
+          Áreas de la empresa, sus jefaturas y de quién depende cada una.
+        <% } %>
+      </p>
     </div>
+    <% if (gestiona) { %>
+    <div class="page-header-actions">
+      <% if (enEdicion) { %>
+        <a class="page-header-btn page-header-btn--secundario" href="/RRHH/organigrama">
+          <%- include('../partials/icon', { name: 'check' }) %> Listo
+        </a>
+        <button type="button" class="page-header-btn" data-abrir-crear>
+          <%- include('../partials/icon', { name: 'plus' }) %> Agregar área
+        </button>
+      <% } else { %>
+        <a class="page-header-btn page-header-btn--secundario" href="/RRHH/organigrama?editar=1">
+          <%- include('../partials/icon', { name: 'edit' }) %> Editar organigrama
+        </a>
+      <% } %>
+    </div>
+    <% } %>
   </div>
 
-  <% if (organigramaUrl) { %>
-    <a href="<%= organigramaUrl %>" target="_blank" rel="noopener noreferrer"
-       class="organigrama-link" title="Abrir en tamaño completo">
-      <img src="<%= organigramaUrl %>" alt="Organigrama de Transworld" class="organigrama-full">
-    </a>
-  <% } else { %>
-    <div class="organigrama-vacio">
-      <%- include('../partials/icon', { name: 'chart' }) %>
-      <p>Aún no se ha subido un organigrama.</p>
+  <% if (!listado.length && !(enEdicion && sinArea)) { %>
+    <div class="ac-vacio">
+      <span class="ac-vacio__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'sitemap' }) %></span>
+      <h3>Aún no hay áreas en el organigrama</h3>
+      <% if (enEdicion) { %>
+        <p>Agrega la primera área para empezar a armarlo.</p>
+      <% } else if (gestiona) { %>
+        <p>Entra a «Editar organigrama» para crear la primera área.</p>
+      <% } else { %>
+        <p>Apenas RRHH cree las áreas aparecerán aquí.</p>
+      <% } %>
     </div>
-  <% } %>
+  <% } else { %>
 
-  <% if (puedeSubir) { %>
-    <section class="upload-section">
-      <h3>Actualizar organigrama</h3>
-      <p class="upload-section__ayuda">
-        Al confirmar, el organigrama actual será reemplazado inmediatamente.
-      </p>
+    <% if (enEdicion) { %>
+    <%# La regla de aprobación se explica una vez aquí y no en cada nodo. %>
+    <p class="org-ayuda">
+      Cada área tiene un jefe que aprueba las solicitudes de fondos y vacaciones de su gente.
+      Si un área no tiene jefe, o quien solicita es el propio jefe, la solicitud sube al jefe del área superior.
+    </p>
+    <% } %>
 
-      <form action="/RRHH/organigrama/subir" method="POST" enctype="multipart/form-data" class="upload-form">
-        <div>
-          <input id="input-organigrama"
-                 class="upload-input sr-only"
-                 type="file"
-                 name="organigrama"
-                 accept="image/*,application/pdf"
-                 required
-                 data-organigrama-input>
-          <label for="input-organigrama" class="btn-custom-upload">
-            <%- include('../partials/icon', { name: 'upload' }) %>
-            Seleccionar archivo
-          </label>
-        </div>
+    <% if (listado.length) { %>
+    <div class="ac-toolbar">
+      <div class="ac-search">
+        <span class="ac-search__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
+        <label class="sr-only" for="buscadorOrganigrama">Buscar área o colaborador</label>
+        <input type="search" id="buscadorOrganigrama" class="ac-search__input" data-org-buscar
+               placeholder="Buscar un área o un colaborador…" autocomplete="off">
+      </div>
+      <span class="org-conteo" data-org-conteo role="status" hidden></span>
 
-        <span id="nombre-archivo" class="nombre-archivo-seleccionado" hidden data-organigrama-nombre></span>
-
-        <button type="submit" class="btn-confirmar" hidden data-organigrama-enviar>
-          Confirmar cambio
+      <% if (enEdicion) { %>
+      <div class="ac-filtros" role="group" aria-label="Resaltar áreas">
+        <button type="button" class="ac-chip is-active" data-org-filtro="todas">Todas</button>
+        <button type="button" class="ac-chip" data-org-filtro="sin-aprobador">
+          Sin aprobador<% if (sinAprobador) { %> <span class="ac-chip__n"><%= sinAprobador %></span><% } %>
         </button>
-      </form>
-    </section>
+        <button type="button" class="ac-chip" data-org-filtro="sin-jefe">
+          Sin jefe propio<% if (sinJefe) { %> <span class="ac-chip__n"><%= sinJefe %></span><% } %>
+        </button>
+        <button type="button" class="ac-chip" data-org-filtro="vacias">Sin colaboradores</button>
+      </div>
+      <% } %>
+    </div>
 
-    <script>
-      // Muestra el archivo elegido y solo entonces habilita el envío.
-      (function () {
-        var input = document.querySelector('[data-organigrama-input]');
-        var nombre = document.querySelector('[data-organigrama-nombre]');
-        var enviar = document.querySelector('[data-organigrama-enviar]');
-        if (!input || !nombre || !enviar) return;
+    <p class="ac-sin-resultados" data-org-sin-resultados hidden>
+      Ningún área ni colaborador coincide con la búsqueda.
+    </p>
 
-        input.addEventListener('change', function () {
-          var hayArchivo = Boolean(input.files && input.files.length);
-          nombre.textContent = hayArchivo ? input.files[0].name : '';
-          nombre.hidden = !hayArchivo;
-          enviar.hidden = !hayArchivo;
-        });
-      })();
-    </script>
+    <%- include('partials/org_arbol', { arbol, editable: enEdicion }) %>
+    <% } %>
+
+    <% if (enEdicion && sinArea) { %>
+      <%
+        const visiblesSA = listaSinArea.slice(0, TOPE_STACK);
+        const restantesSA = listaSinArea.length - visiblesSA.length;
+      %>
+      <section class="org-sin-area" aria-label="Colaboradores sin área">
+        <span class="org-sin-area__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+        <div class="org-sin-area__texto">
+          <strong><%= plural(listaSinArea.length, 'colaborador sin área', 'colaboradores sin área') %></strong>
+          <span>Sin área no hay jefe que apruebe sus solicitudes.</span>
+        </div>
+        <button type="button" class="area-resumen org-sin-area__btn" data-ver-miembros="sin-area">
+          <span class="area-stack" aria-hidden="true">
+            <% visiblesSA.forEach(m => { %>
+              <% if (m.photo) { %>
+                <img src="<%= m.photo %>" alt="" class="avatar area-stack__item" loading="lazy" decoding="async">
+              <% } else { %>
+                <%- include('../partials/monogram', { initials: m.inicial, style: m.monogramStyle, className: 'avatar-fallback area-stack__item' }) %>
+              <% } %>
+            <% }) %>
+            <% if (restantesSA > 0) { %>
+              <span class="area-stack__item area-stack__mas">+<%= restantesSA %></span>
+            <% } %>
+          </span>
+          <span class="area-resumen__txt">Ver y asignar</span>
+          <span class="area-resumen__chev" aria-hidden="true"><%- include('../partials/icon', { name: 'chevron-right' }) %></span>
+        </button>
+      </section>
+    <% } %>
   <% } %>
 </div>
+
+<%- include('partials/ac_modales') %>
+
+<% if (enEdicion) { %>
+<div id="modalMoverMiembro" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalMoverTitle" aria-hidden="true">
+  <div class="modal-content modal-content--sm">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <form id="formMoverMiembro" method="POST" action="#">
+      <header class="modal-head">
+        <h2 id="modalMoverTitle" class="modal-title">Cambiar de área</h2>
+        <p class="modal-subtitle" id="modalMoverSubtitle"></p>
+      </header>
+      <div class="modal-body">
+        <input type="hidden" name="user_id" id="mover_user_id" value="">
+        <div class="campo-form">
+          <label for="target_area_id">Área destino <span class="required-mark">*</span></label>
+          <select id="target_area_id" name="target_area_id" required>
+            <option value="">Selecciona un área…</option>
+          </select>
+        </div>
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario" id="modalMoverSubmit">Mover</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
+<div id="modalArea" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalAreaTitle" aria-hidden="true">
+  <div class="modal-content modal-content--md">
+    <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>
+    <form id="formArea" method="POST" action="/RRHH/areas">
+      <header class="modal-head">
+        <h2 id="modalAreaTitle" class="modal-title">Agregar área</h2>
+      </header>
+      <div class="modal-body">
+        <div class="campo-form">
+          <label for="area_name">Nombre <span class="required-mark">*</span></label>
+          <input type="text" id="area_name" name="area_name" required maxlength="150" placeholder="Ej: Operaciones">
+        </div>
+        <div class="campo-form">
+          <label for="area_parent">Depende de</label>
+          <select id="area_parent" name="parent_area_id">
+            <option value="">Ninguna (área principal)</option>
+          </select>
+          <p class="campo-form__ayuda area-jefe-ayuda">
+            Si esta área no tiene jefe, o quien solicita es su jefe, aprueba el jefe del área de la que depende.
+          </p>
+        </div>
+        <div class="campo-form" id="campoJefe">
+          <label for="area_manager">Jefe de área</label>
+          <select id="area_manager" name="manager_user_id">
+            <option value="">Sin jefe asignado</option>
+          </select>
+          <p class="campo-form__ayuda area-jefe-ayuda" id="jefeAyuda">
+            Aprueba las solicitudes de fondos y vacaciones de su gente. Puede ser de otra área: una misma persona puede dirigir varias.
+          </p>
+        </div>
+
+        <div class="campo-form">
+          <label for="area_color">Color</label>
+          <div class="area-palette" role="listbox" aria-label="Paleta de colores">
+            <% palette.forEach(c => { %>
+              <button type="button" class="area-palette__swatch" data-color="<%= c.hex %>"
+                      title="<%= c.label %>" aria-label="<%= c.label %>"
+                      style="background: <%= c.hex %>"></button>
+            <% }) %>
+          </div>
+          <div class="area-color-row">
+            <input type="color" id="area_color_picker" value="<%= colorBase %>" aria-label="Elegir color personalizado">
+            <input type="text" id="area_color" name="color" value="<%= colorBase %>" maxlength="7" pattern="#[0-9A-Fa-f]{6}" spellcheck="false">
+          </div>
+        </div>
+      </div>
+      <footer class="modal-foot">
+        <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+        <button type="submit" class="btn-primario" id="modalAreaSubmit">Crear área</button>
+      </footer>
+    </form>
+  </div>
+</div>
+<% } %>
+
+<%# Configuración de los modales de lista: las personas van una sola vez y los
+    grupos las referencian por id, para no repetir la plantilla en cada área.
+    En lectura sólo viaja la gente con área y nada se puede cambiar. %>
+<script type="application/json" id="ac-config"><%- JSON.stringify({
+  puedeEditar: enEdicion,
+  base: '/RRHH/areas',
+  permiteMover: enEdicion,
+  avatares: true,
+  detalleEnMiembros: false,
+  textos: {
+    miembrosVacio: 'Esta área todavía no tiene colaboradores.',
+    candidatosVacio: 'Todos los colaboradores ya están en esta área.',
+    agregarSub: 'Marca a quienes deban quedar en «{grupo}».',
+    agregarBoton: 'Agregar colaboradores',
+    quitarConfirmar: '¿Quitar a {nombre} de «{grupo}»? Quedará sin área hasta que le asignes otra.',
+    quitar: 'Quitar del área',
+    mover: 'Cambiar de área',
+    destacado: 'Jefe de área',
+    destacadoCorto: 'Jefe',
+    confirmarMoverUno: 'El colaborador que marcaste está en otra área y pasará a «{grupo}»: sus solicitudes las aprobará la jefatura de esta área.',
+    confirmarMover: '{n} de los colaboradores que marcaste están en otras áreas y pasarán a «{grupo}»: sus solicitudes las aprobará la jefatura de esta área.',
+  },
+  personas: (people || []).filter((p) => enEdicion || p.work_area_id).map((p) => ({
+    id: p.id,
+    nombre: p.nombreLista,
+    detalle: p.area_name || 'Sin área',
+    photo: p.photo || null,
+    inicial: p.inicial,
+    monogramStyle: p.monogramStyle,
+    // Quien ya tiene área cambia de jefe al pasar a otra: se avisa al agregar.
+    mueve: !!p.area_name,
+  })),
+  grupos: listado.map((a) => ({
+    id: a.id,
+    titulo: a.area_name,
+    subtitulo: (a.managerName
+      ? `Jefe de área: ${a.managerName}`
+      : (a.inheritedManagerName ? `Sin jefe propio: aprueba ${a.inheritedManagerName} (${a.inheritedFromName})` : 'Sin jefe en toda la cadena'))
+      + (a.approverUnavailable ? ' · no disponible: su cuenta está deshabilitada' : ''),
+    miembros: a.members.map((m) => m.id),
+    destacado: a.manager_user_id || null,
+    puedeAgregar: enEdicion,
+  })).concat(enEdicion && sinArea ? [{
+    id: 'sin-area',
+    // No es un área: con el destino vacío el modal ofrece "asignar" y no "mover".
+    moverId: '',
+    titulo: 'Sin área',
+    subtitulo: 'Estos colaboradores no tienen quién les apruebe sus solicitudes.',
+    miembros: listaSinArea.map((m) => m.id),
+    destacado: null,
+    puedeAgregar: false,
+  }] : []),
+}).replace(/</g, '\\u003c') %></script>
+
+<% if (enEdicion) { %>
+<script type="application/json" id="areas-config"><%- JSON.stringify({
+  puedeEditar: true,
+  defaultColor: colorBase,
+  areas: listado.map((a) => ({
+    id: a.id,
+    area_name: a.area_name,
+    parent_area_id: a.parent_area_id || null,
+    manager_user_id: a.manager_user_id || null,
+    members: a.members.map((m) => m.id),
+  })),
+  // Candidatos a jefe: cualquiera puede dirigir un área, también desde otra.
+  personas: (people || []).map((p) => ({
+    id: p.id,
+    nombre: p.nombreLista,
+    area: p.area_name || null,
+    disponible: p.disponible !== false,
+  })),
+}).replace(/</g, '\\u003c') %></script>
+<% } %>
+<script src="/js/ac-cards.js?v=20260916m" defer></script>
+<script src="/js/org-arbol.js?v=20261001b" defer></script>
+<% if (enEdicion) { %>
+<script src="/js/areas.js?v=20261001c" defer></script>
+<% } %>

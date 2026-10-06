@@ -694,7 +694,9 @@
   border-bottom: none;
 }
 
-.gasto-tabla__monto {
+/* Con la tabla en el selector: si no, el text-align de .gasto-tabla th deja el
+   encabezado «Monto» a la izquierda y los importes a la derecha. */
+.gasto-tabla .gasto-tabla__monto {
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -920,9 +922,11 @@
   line-height: 1.45;
 }
 
+/* auto-fill y no auto-fit: un bloque con menos datos conserva las columnas
+   vacías, así todos los bloques de la ficha comparten la misma grilla. */
 .gasto-ficha__lista {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: 12px 20px;
   margin: 0;
 }

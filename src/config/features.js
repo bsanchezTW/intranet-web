@@ -42,7 +42,10 @@ const FEATURE_MATRIX = {
     claudeAssistant: true,
     // Ticketera de Soporte (/soporte).
     supportTickets: true,
-    // Barra de accesos rápidos del home (sitio, Academy, Rex+, ACHS, Caja).
+    // Barra de accesos rápidos del home. El conjunto por país está en
+    // services/homeQuickAccess.js. En Chile los seis primeros son sitio,
+    // Academy, Rex+, ACHS, Caja y Soporte; organigrama, noticias, galería,
+    // apps y rendiciones quedan disponibles para personalizar.
     homeQuickAccess: true,
     // Portales RRHH chilenos: Rex+, ACHS y Caja Los Andes (home, menú, footer).
     chileHrPortals: true,
@@ -65,8 +68,8 @@ const FEATURE_MATRIX = {
     claudeAssistant: true,
     // Perú no opera ticketera ni mesa de ayuda en esta intranet.
     supportTickets: false,
-    // Barra de accesos rápidos del home: sitio y Academy. Rex+, ACHS y Caja
-    // siguen apagados con chileHrPortals; Tickets, con supportTickets.
+    // Barra de accesos rápidos del home. En Perú el conjunto es sitio,
+    // Academy, vacaciones, organigrama, noticias, galería y apps.
     homeQuickAccess: true,
     // Rex+, ACHS y Caja Los Andes son portales chilenos; no se ofrecen en Perú.
     chileHrPortals: false,

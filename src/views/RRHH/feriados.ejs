@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260929b">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
 
 <%
   function fmt(d) {
@@ -11,7 +11,7 @@
 
 <div class="vac-wrap">
   <div class="page-header">
-    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'calendar' }) %></span>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'flag' }) %></span>
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
@@ -38,7 +38,7 @@
   <!-- Agregar feriado -->
   <div class="vac-panel">
     <div class="vac-panel-head">Agregar feriado</div>
-    <form class="vac-form" action="/RRHH/feriados" method="POST">
+    <form class="vac-form vac-form-inline" action="/RRHH/feriados" method="POST">
       <%# El país no se elige: esta instancia solo administra sus propios
           feriados. El servidor rechaza cualquier otro. %>
       <input type="hidden" name="country_code" value="<%= country %>">
@@ -46,7 +46,7 @@
         <label for="holiday_date">Fecha *</label>
         <input type="date" id="holiday_date" name="holiday_date" required>
       </div>
-      <div class="campo">
+      <div class="campo vac-form-inline__grow">
         <label for="name">Nombre *</label>
         <input type="text" id="name" name="name" required placeholder="Ej: Día del Trabajo">
       </div>

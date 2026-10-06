@@ -50,6 +50,24 @@ function notifyNewRequest({ request, user, accumulationAlert = false }) {
   });
 }
 
+/** Nueva solicitud → jefe que la aprueba según el organigrama. */
+function notifyApprover({ request, user, approver }) {
+  if (!approver || !approver.email) return Promise.resolve();
+  return safeSend({
+    to: approver.email,
+    subject: "Solicitud de vacaciones por aprobar",
+    senderName: MAIL_SENDERS.hr,
+    heading: "Tienes una solicitud de vacaciones por aprobar",
+    cta: { href: "/RRHH/vacaciones/aprobaciones", label: "Revisar solicitud" },
+    html: `
+      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> solicitó vacaciones y te toca aprobarlas.</p>
+      <p style="margin:0 0 16px 0;">Período: ${rangeText(request)}</p>
+      ${request.requester_notes ? `<p style="margin:0 0 16px 0;">Comentario: ${escapeHtml(request.requester_notes)}</p>` : ""}
+    `,
+    text: `${fullName(user)} solicitó vacaciones (${rangeText(request)}) y te toca aprobarlas.`,
+  });
+}
+
 /**
  * Constancia de vacaciones aprobadas → colaborador.
  *
@@ -206,6 +224,7 @@ function sendPendingReminder(args) {
 
 module.exports = {
   notifyNewRequest,
+  notifyApprover,
   notifyApproved,
   notifyRejected,
   buildPendingReminder,

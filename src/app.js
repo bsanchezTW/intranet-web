@@ -39,6 +39,7 @@ const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
+const { isAreaManager } = require("./services/expenses/areaManager");
 const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
 const { migrateTicketCategories, ensureTicketReplyCorrelatives } = require("./services/tickets/ticketSchema");
 const { UPLOAD_LIMITS_MB } = require("./config/uploadLimits");
@@ -374,6 +375,10 @@ app.use(async (req, res, next) => {
     // Administración de RRHH y colaboradores: admins de RRHH o de Informática.
     const gestionaRrhh = await canManageRrhh(user);
     res.locals.canManageRrhh = gestionaRrhh;
+    // Jefes del organigrama: ven su bandeja de aprobación de vacaciones.
+    res.locals.isAreaManager = isFeatureEnabled("vacations")
+      ? await isAreaManager(user).catch(() => false)
+      : false;
 
     res.locals.can = {
       procedimientos_write: isAdministrador(role),
@@ -381,7 +386,6 @@ app.use(async (req, res, next) => {
       reglamento_write: isAdministrador(role),
       noticias_write: isAdministrador(role),
       personas_write: gestionaRrhh,
-      organigrama_write: isAdministrador(role),
       achs_write: isAdministrador(role),
       eventos_write: isAdministrador(role),
       tickets_reply: isAdministrador(role),
@@ -394,6 +398,7 @@ app.use(async (req, res, next) => {
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
     res.locals.canManageRrhh = false;
+    res.locals.isAreaManager = false;
     res.locals.can = {};
     res.locals.unreadTickets = 0;
   }
@@ -769,6 +774,18 @@ async function asegurarColumnaAppsOrden() {
   }
 }
 
+/** Preferencia de la banda del home. NULL conserva el orden del país. */
+async function asegurarColumnaAccesosHome() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS home_quick_access jsonb
+    `);
+  } catch (err) {
+    logger.error("home", err);
+  }
+}
+
 // ================================
 // INICIAR SERVIDOR
 // ================================
@@ -827,6 +844,7 @@ function startBackgroundJobs() {
     asegurarCorreoUnico(),
     asegurarColumnaNoticiasDestacada(),
     asegurarColumnasApps(),
+    asegurarColumnaAccesosHome(),
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
     asegurarSchemaAreas(),

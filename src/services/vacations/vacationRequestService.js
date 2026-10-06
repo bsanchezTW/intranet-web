@@ -7,6 +7,7 @@ const { VACATION_STATUS, VACATION_ACTIVE_STATUSES } = require("../../constants/v
 const { VACATION_CONFIG } = require("../../constants/vacationConfig");
 const { VACATION_MESSAGES } = require("../../constants/vacationMessages");
 const { toDateOnly, todayInCountry } = require("../../utils/vacationDateUtils");
+const areaManager = require("../expenses/areaManager");
 
 function requestBelongsToInstance(request) {
   return !request?.country_code || request.country_code === getCurrentCountry();
@@ -137,19 +138,27 @@ async function createRequest({
   // La ficha se copia en la solicitud: si mañana se elimina al colaborador,
   // su historial sigue mostrando de quién era.
   const { rows: areaRows } = await db.query(
-    `SELECT w.area_name
+    `SELECT w.id, w.area_name
        FROM users u
        LEFT JOIN work_areas w ON w.id = u.work_area_id
       WHERE u.id = $1`,
     [userId],
   );
 
+  // El aprobador se congela ahora: reordenar el organigrama después no le
+  // quita la solicitud a quien ya la tiene en su bandeja.
+  const area = areaRows[0] && areaRows[0].id != null ? areaRows[0] : null;
+  if (!area) return { ok: false, errors: [VACATION_MESSAGES.noArea] };
+  const approver = await areaManager.resolveApprover(userId, area.id);
+  if (!approver.ok) return { ok: false, errors: [approver.error] };
+
   const { rows } = await db.queryRetryIdCollision(
     `INSERT INTO vacation_requests
        (user_id, country_code, start_date, end_date, business_days, calendar_days,
         status, requester_notes, fraction_ack_at, policy_warning_ack,
-        requester_first_name, requester_last_name, requester_email, requester_area_name)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        requester_first_name, requester_last_name, requester_email, requester_area_name,
+        approver_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
     [
       userId,
@@ -165,13 +174,15 @@ async function createRequest({
       user.first_name || null,
       user.last_name || null,
       user.email || null,
-      areaRows[0] ? areaRows[0].area_name : null,
+      area.area_name,
+      approver.managerId,
     ],
   );
 
   return {
     ok: true,
     request: rows[0],
+    approver: approver.manager,
     days: result.days,
     warnings,
     accumulationAlert: (await balanceService.getBalanceSummary(userId)).accumulationAlert,
@@ -430,6 +441,63 @@ async function listForUser(userId) {
   return rows;
 }
 
+/**
+ * ¿Puede `reviewerId` aprobar o rechazar esta solicitud? El jefe congelado
+ * en approver_user_id, o RRHH como respaldo (y siempre cuando no hay jefe
+ * por encima del solicitante). Nadie resuelve su propia solicitud.
+ */
+function canReviewRequest(request, reviewerId, { isRrhhManager = false } = {}) {
+  if (!request || reviewerId == null) return false;
+  if (request.user_id != null && Number(request.user_id) === Number(reviewerId)) {
+    return false;
+  }
+  if (isRrhhManager) return true;
+  return (
+    request.approver_user_id != null &&
+    Number(request.approver_user_id) === Number(reviewerId)
+  );
+}
+
+/**
+ * Bandeja del jefe: pendientes que le tocan y lo último que ya resolvió.
+ * Ordenadas para que lo pendiente quede arriba.
+ */
+async function listForApprover(approverId, { historyLimit = 50 } = {}) {
+  const { rows } = await db.query(
+    `(SELECT r.*,
+             COALESCE(u.first_name, r.requester_first_name) AS first_name,
+             COALESCE(u.last_name, r.requester_last_name)   AS last_name,
+             COALESCE(wa.area_name, r.requester_area_name)  AS area,
+             (r.user_id IS NULL) AS requester_deleted
+        FROM vacation_requests r
+        LEFT JOIN users u ON u.id = r.user_id
+        LEFT JOIN work_areas wa ON wa.id = u.work_area_id
+       WHERE r.country_code = $1
+         AND r.status = $3
+         AND r.approver_user_id = $2
+       ORDER BY r.start_date ASC)
+     UNION ALL
+     (SELECT r.*,
+             COALESCE(u.first_name, r.requester_first_name) AS first_name,
+             COALESCE(u.last_name, r.requester_last_name)   AS last_name,
+             COALESCE(wa.area_name, r.requester_area_name)  AS area,
+             (r.user_id IS NULL) AS requester_deleted
+        FROM vacation_requests r
+        LEFT JOIN users u ON u.id = r.user_id
+        LEFT JOIN work_areas wa ON wa.id = u.work_area_id
+       WHERE r.country_code = $1
+         AND r.status <> $3
+         AND r.reviewed_by = $2
+       ORDER BY r.reviewed_at DESC NULLS LAST
+       LIMIT $4)`,
+    [getCurrentCountry(), approverId, VACATION_STATUS.PENDING, historyLimit],
+  );
+  return {
+    pending: rows.filter((r) => r.status === VACATION_STATUS.PENDING),
+    history: rows.filter((r) => r.status !== VACATION_STATUS.PENDING),
+  };
+}
+
 async function listForAdmin({ workAreaId, status } = {}) {
   const conditions = ["r.country_code = $1"];
   const params = [getCurrentCountry()];
@@ -453,10 +521,12 @@ async function listForAdmin({ workAreaId, status } = {}) {
             COALESCE(u.email, r.requester_email)           AS email,
             u.work_area_id,
             COALESCE(wa.area_name, r.requester_area_name)  AS area,
-            (r.user_id IS NULL) AS requester_deleted
+            (r.user_id IS NULL) AS requester_deleted,
+            NULLIF(TRIM(CONCAT_WS(' ', ap.first_name, ap.last_name)), '') AS approver_name
      FROM vacation_requests r
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN work_areas wa ON wa.id = u.work_area_id
+     LEFT JOIN users ap ON ap.id = r.approver_user_id
      ${where}
      ORDER BY
        CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END,
@@ -522,6 +592,8 @@ module.exports = {
   previewRequest,
   listForUser,
   listForAdmin,
+  listForApprover,
+  canReviewRequest,
   listApprovedInRange,
   runDailyStatusTransitions,
   requestDays,

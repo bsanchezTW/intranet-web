@@ -1,13 +1,14 @@
 <%
   const admin = (typeof esAdmin !== 'undefined' && esAdmin);
-  const ctx = (typeof areaContext !== 'undefined' && areaContext) ? areaContext : { area: null, manager: null, isManager: false };
+  const ctx = (typeof areaContext !== 'undefined' && areaContext) ? areaContext : { area: null, manager: null, isManager: false, requiresAdmin: false };
   const conteos = (typeof conteosArea !== 'undefined' && conteosArea) ? conteosArea : { procedimiento: 0, protocolo: 0 };
   const hayGastos = (typeof gastosActivos !== 'undefined') ? gastosActivos : false;
   const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
   const porAprobar = (typeof pendientes !== 'undefined' && pendientes) ? pendientes : 0;
 
-  // Sin área no hay jefe, y sin jefe no hay a quién enviarle la solicitud.
-  const puedeSolicitar = !!(ctx.area && ctx.manager);
+  // Sin área no hay jefe, y sin jefe en todo el organigrama no hay a quién
+  // enviarle la solicitud.
+  const puedeSolicitar = !!(ctx.area && (ctx.manager || ctx.requiresAdmin));
   const flashError = (typeof error !== 'undefined' && error) ? error : null;
 
   function plural(n, singular, pluralWord) { return n === 1 ? singular : pluralWord; }
@@ -47,7 +48,7 @@
         </h3>
         <p class="seccion__desc">
           <% if (puedeSolicitar) { %>
-            Tus solicitudes pasan primero por <strong><%= ctx.manager.name %></strong> y luego por Finanzas.
+            Tus solicitudes pasan primero por <strong><%= ctx.manager ? ctx.manager.name : 'un administrador' %></strong> y luego por Finanzas.
           <% } else { %>
             Rinde gastos ya realizados o pide fondos por adelantado.
           <% } %>
@@ -60,10 +61,15 @@
         <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
         <span>Todavía no tienes un área asignada, así que no es posible determinar quién aprueba tus solicitudes. Pídele a RRHH que te asigne una.</span>
       </div>
-    <% } else if (!ctx.manager) { %>
+    <% } else if (ctx.unavailableManager) { %>
       <div class="procesos-aviso" style="margin-bottom: 18px;">
         <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
-        <span>El área <strong><%= ctx.area.area_name %></strong> aún no tiene un jefe asignado, y la aprobación de la jefatura es un requisito. Pídele a RRHH que designe uno.</span>
+        <span><strong><%= ctx.unavailableManager.name %></strong>, quien debe aprobar tus solicitudes, no está disponible para atenderlas. Pídele a RRHH que habilite su cuenta o designe otro jefe.</span>
+      </div>
+    <% } else if (!puedeSolicitar) { %>
+      <div class="procesos-aviso" style="margin-bottom: 18px;">
+        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
+        <span>Ni el área <strong><%= ctx.area.area_name %></strong> ni sus áreas superiores tienen un jefe asignado, y la aprobación de la jefatura es un requisito. Pídele a RRHH que designe uno.</span>
       </div>
     <% } %>
 

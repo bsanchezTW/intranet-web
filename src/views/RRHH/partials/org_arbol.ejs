@@ -1,0 +1,185 @@
+<%
+/*
+  Organigrama de áreas.
+
+  Locals: arbol (raíces de buildTree, con children), editable (bool).
+
+  El primer nivel se abre en columnas y de ahí hacia abajo cada rama es una
+  lista con sangría: así el árbol entero cabe en el ancho de la página y se lee
+  sin scroll horizontal, tenga las áreas que tenga. En pantallas angostas todo
+  pasa a lista. Las áreas que no dependen de nadie ni tienen dependientes van
+  aparte, en una grilla.
+
+  La línea de jefatura dice quién aprueba: el jefe propio, el del área
+  superior al que se escala, o una advertencia si nadie en la cadena lo es.
+*/
+const TOPE_STACK = 3;
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+const raices = arbol || [];
+const arboles = raices.filter(a => a.children.length);
+const sueltas = raices.filter(a => !a.children.length);
+
+// Columnas que abre el árbol: las del primer nivel que tenga más de un área.
+// El CSS las usa para saber cuándo ya no caben y hay que scrollear.
+function columnas(raiz) {
+  let actual = raiz;
+  while (actual.children.length === 1) actual = actual.children[0];
+  return Math.max(1, actual.children.length);
+}
+
+function avatar(persona, clase) {
+  if (persona && persona.photo) { %>
+    <img src="<%= persona.photo %>" alt="" class="avatar <%= clase %>" loading="lazy" decoding="async">
+  <% } else if (persona) { %>
+    <%- include('../../partials/monogram', { initials: persona.inicial, style: persona.monogramStyle, className: 'avatar-fallback ' + clase }) %>
+  <% }
+}
+
+// `enFila`: sus áreas dependientes se abren en columnas (sólo arriba del árbol).
+function nodo(area, enFila) {
+  const sinAprobador = !area.managerName && !area.inheritedManagerName;
+  const noDisponible = !!area.approverUnavailable;
+  const alerta = sinAprobador || noDisponible;
+  const jefe = area.approverPerson || null;
+  const nombreJefe = area.managerName || area.inheritedManagerName;
+
+  // El jefe ya tiene su propia línea: el resumen muestra al resto del área.
+  const jefeEsMiembro = !!area.manager_user_id
+    && area.members.some(m => Number(m.id) === Number(area.manager_user_id));
+  const equipo = jefeEsMiembro
+    ? area.members.filter(m => Number(m.id) !== Number(area.manager_user_id))
+    : area.members;
+  const visibles = equipo.slice(0, TOPE_STACK);
+  const textoEquipo = equipo.length
+    ? plural(equipo.length, 'colaborador', 'colaboradores')
+    : (jefeEsMiembro ? 'Sin colaboradores a cargo' : 'Sin colaboradores');
+
+  let rol, ayuda;
+  if (noDisponible) {
+    rol = area.managerName ? 'Jefe de área · cuenta deshabilitada' : `Aprueba desde ${area.inheritedFromName} · cuenta deshabilitada`;
+    ayuda = `${nombreJefe} tiene la cuenta deshabilitada: no puede atender las solicitudes de esta área.`;
+  } else if (area.managerName) {
+    rol = area.managerHomeArea ? `Jefe de área · pertenece a ${area.managerHomeArea}` : 'Jefe de área';
+    ayuda = `Jefe de área: ${area.managerName}`;
+  } else if (area.inheritedManagerName) {
+    rol = `Aprueba desde ${area.inheritedFromName}`;
+    ayuda = `Sin jefe propio: aprueba ${area.inheritedManagerName}, jefe de ${area.inheritedFromName}.`;
+  } else {
+    rol = 'Nadie aprueba sus solicitudes';
+    ayuda = 'Ni esta área ni sus superiores tienen jefe: su gente no puede enviar solicitudes.';
+  }
+
+  const buscable = [area.area_name, area.managerName || '']
+    .concat(area.members.map(m => m.nombreCompleto))
+    .join(' ')
+    .toLowerCase();
+  const hijasEnFila = enFila && area.children.length > 0;
+%>
+  <li class="org-item<%= hijasEnFila ? ' org-item--cabeza' : '' %>">
+    <article class="org-node<%= alerta ? ' org-node--alerta' : '' %>" style="--area-color: <%= area.color %>"
+             data-org-node="<%= area.id %>"
+             data-buscar="<%= buscable %>"
+             data-miembros="<%= area.memberCount %>"
+             data-sin-jefe="<%= area.managerName ? 'false' : 'true' %>"
+             data-sin-aprobador="<%= alerta ? 'true' : 'false' %>">
+      <header class="org-node__head">
+        <span class="org-node__punto" aria-hidden="true"></span>
+        <h3 class="org-node__nombre"><%= area.area_name %></h3>
+      </header>
+
+      <div class="org-node__jefe<%= alerta ? ' org-node__jefe--alerta' : (area.managerName ? '' : ' org-node__jefe--heredado') %>" title="<%= ayuda %>">
+        <% if (jefe && !sinAprobador) { %>
+          <% avatar(jefe, 'org-node__jefe-foto') %>
+        <% } else { %>
+          <span class="org-node__jefe-icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+        <% } %>
+        <span class="org-node__jefe-txt">
+          <strong><%= sinAprobador ? 'Sin jefe' : ((jefe && jefe.nombreLista) || nombreJefe) %></strong>
+          <small><%= rol %></small>
+        </span>
+        <% if (editable && area.managerOtherAreas.length) { %>
+          <span class="org-node__multi" title="También dirige: <%= area.managerOtherAreas.join(', ') %>">+<%= area.managerOtherAreas.length %></span>
+        <% } %>
+      </div>
+
+      <% if (area.memberCount || editable) { %>
+      <button type="button" class="org-node__equipo" data-ver-miembros="<%= area.id %>"
+              aria-label="Ver colaboradores de <%= area.area_name %>">
+        <% if (visibles.length) { %>
+        <%# Sin burbuja «+N»: el total ya lo dice el texto de al lado. %>
+        <span class="area-stack" aria-hidden="true">
+          <% visibles.forEach(m => avatar(m, 'area-stack__item')) %>
+        </span>
+        <% } %>
+        <span class="org-node__equipo-txt"><%= textoEquipo %></span>
+        <span class="org-node__equipo-chev" aria-hidden="true"><%- include('../../partials/icon', { name: 'chevron-right' }) %></span>
+      </button>
+      <% } else { %>
+      <p class="org-node__equipo org-node__equipo--vacio"><%= textoEquipo %></p>
+      <% } %>
+
+      <% if (editable) { %>
+      <footer class="org-node__acciones">
+        <span class="org-node__id" title="ID del área">#<%= area.id %></span>
+        <button type="button" class="area-icon-btn" data-agregar-hija="<%= area.id %>"
+                title="Agregar área dependiente" aria-label="Agregar un área que dependa de <%= area.area_name %>">
+          <%- include('../../partials/icon', { name: 'plus' }) %>
+        </button>
+        <button type="button" class="area-icon-btn" data-agregar-miembros="<%= area.id %>"
+                title="Agregar colaboradores" aria-label="Agregar colaboradores a <%= area.area_name %>">
+          <%- include('../../partials/icon', { name: 'user-plus' }) %>
+        </button>
+        <button type="button" class="area-icon-btn" data-editar-area
+                data-id="<%= area.id %>"
+                data-name="<%= area.area_name %>"
+                data-color="<%= area.color %>"
+                data-parent="<%= area.parent_area_id || '' %>"
+                title="Editar área" aria-label="Editar <%= area.area_name %>">
+          <%- include('../../partials/icon', { name: 'edit' }) %>
+        </button>
+        <% const bloqueada = area.memberCount > 0 || area.children.length > 0; %>
+        <form action="/RRHH/areas/<%= area.id %>/eliminar" method="POST" class="area-inline-form"
+              data-eliminar-area="<%= area.area_name %>"
+              data-bloqueada="<%= bloqueada ? 'true' : 'false' %>">
+          <button type="submit" class="area-icon-btn area-icon-btn--danger"
+                  <%= bloqueada ? 'disabled' : '' %>
+                  title="<%= area.memberCount > 0 ? 'Mueve a los colaboradores antes de eliminar' : (area.children.length ? 'Reubica las áreas dependientes antes de eliminar' : 'Eliminar área') %>"
+                  aria-label="Eliminar <%= area.area_name %>">
+            <%- include('../../partials/icon', { name: 'trash' }) %>
+          </button>
+        </form>
+      </footer>
+      <% } %>
+    </article>
+
+    <% if (area.children.length) { %>
+      <ul class="org-hijas<%= hijasEnFila ? ' org-hijas--fila' : '' %>">
+        <%# Una rama de hija única sigue bajando recta: sus dependientes también
+            se abren en columnas, o un árbol angosto quedaría en una sola. %>
+        <% area.children.forEach(hija => nodo(hija, hijasEnFila && area.children.length === 1)) %>
+      </ul>
+    <% } %>
+  </li>
+<% } %>
+
+<div class="org" data-org>
+  <% arboles.forEach(raiz => { %>
+    <div class="org-scroll">
+      <ul class="org-tree" style="--org-columnas: <%= columnas(raiz) %>">
+        <% nodo(raiz, true) %>
+      </ul>
+    </div>
+  <% }) %>
+
+  <% if (sueltas.length) { %>
+    <section class="org-sueltas"<% if (arboles.length) { %> aria-labelledby="org-sueltas-titulo"<% } %>>
+      <% if (arboles.length) { %>
+        <h3 class="org-sueltas__titulo" id="org-sueltas-titulo">Áreas sin dependencia</h3>
+        <p class="org-sueltas__desc">No dependen de otra área ni tienen áreas a su cargo.</p>
+      <% } %>
+      <ul class="org-grid">
+        <% sueltas.forEach(area => nodo(area, false)) %>
+      </ul>
+    </section>
+  <% } %>
+</div>

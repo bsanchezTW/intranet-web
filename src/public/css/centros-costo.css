@@ -97,11 +97,15 @@
   text-overflow: ellipsis;
 }
 
+/* Fuera de la cabecera: el nombre necesita todo el ancho de la tarjeta para
+   caber en su línea. El margen negativo alinea los íconos con el borde del
+   contenido sin agrandar la fila del estado. */
 .centro-card__actions {
   display: flex;
   gap: 2px;
   align-items: center;
   flex: none;
+  margin: -6px -6px -6px auto;
 }
 
 .centro-card__estado {

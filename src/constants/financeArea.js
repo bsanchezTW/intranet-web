@@ -9,9 +9,14 @@
  *
  * El doble requisito se aplica en services/expenses/financeTeam.js; aquí sólo
  * vive el nombre del área. Para sumar otra área a Finanzas basta agregarla.
+ *
+ * Las áreas que dependen de Finanzas en el organigrama (Contabilidad,
+ * Tesorería…) también cuentan: separarlas en sub-áreas no debe quitarles la
+ * etapa de Finanzas a sus administradores.
  */
 
 const { normalizeAreaName } = require("./workAreas");
+const { descendantIds } = require("../services/workAreaTree");
 
 const FINANCE_AREA_NAMES = ["finanzas", "administracion y finanzas"];
 
@@ -21,7 +26,22 @@ function isFinanceAreaName(areaName) {
   return normalized.length > 0 && FINANCE_AREA_NAMES.includes(normalized);
 }
 
+/**
+ * Ids de las áreas que cuentan como Finanzas: las que se llaman así y todas
+ * las que cuelgan de ellas. `areas` son nodos { id, area_name, parent_area_id }.
+ */
+function financeAreaIds(areas) {
+  const ids = new Set();
+  for (const area of areas || []) {
+    if (!isFinanceAreaName(area.area_name)) continue;
+    ids.add(Number(area.id));
+    for (const id of descendantIds(areas, area.id)) ids.add(Number(id));
+  }
+  return ids;
+}
+
 module.exports = {
   FINANCE_AREA_NAMES,
   isFinanceAreaName,
+  financeAreaIds,
 };

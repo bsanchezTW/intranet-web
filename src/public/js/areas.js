@@ -1,5 +1,6 @@
 /**
- * RRHH · Áreas — modales, paleta de color y confirmaciones.
+ * RRHH · Organigrama en modo edición — modales de área, paleta de color,
+ * área superior y confirmaciones.
  */
 (function () {
   'use strict';
@@ -44,42 +45,132 @@
   }
 
   /**
-   * El jefe de un área tiene que pertenecer a ella (el servidor lo revalida),
-   * así que el selector se arma sólo con sus miembros. Al crear un área todavía
-   * no hay ninguno: el campo se deshabilita y se explica por qué.
+   * Cualquier colaborador puede dirigir un área, también si trabaja en otra.
+   * Se agrupa para que lo habitual quede arriba: primero la gente del área,
+   * después quienes ya dirigen otras áreas (gerentes) y al final el resto.
    */
-  function llenarJefes(area) {
+  function llenarJefes(area, areas, personas) {
     var select = document.getElementById('area_manager');
-    var ayuda = document.getElementById('jefeAyuda');
     if (!select) return;
 
-    var miembros = (area && Array.isArray(area.members)) ? area.members : [];
-    select.innerHTML = '';
+    var miembros = {};
+    ((area && area.members) || []).forEach(function (id) { miembros[String(id)] = true; });
+    var dirige = {};
+    areas.forEach(function (a) {
+      if (!a.manager_user_id || (area && String(a.id) === String(area.id))) return;
+      var clave = String(a.manager_user_id);
+      (dirige[clave] = dirige[clave] || []).push(a.area_name);
+    });
 
+    var grupos = [
+      { label: 'De esta área', items: [] },
+      { label: 'Ya dirigen otras áreas', items: [] },
+      { label: 'Otros colaboradores', items: [] },
+    ];
+    personas.forEach(function (p) {
+      var id = String(p.id);
+      var otras = dirige[id];
+      var texto = (p.nombre || ('Usuario ' + p.id)) + (p.disponible === false ? ' (deshabilitado)' : '');
+      if (miembros[id]) {
+        grupos[0].items.push({ id: id, texto: otras ? texto + ' · dirige ' + otras.join(', ') : texto });
+      } else if (otras) {
+        grupos[1].items.push({ id: id, texto: texto + ' · dirige ' + otras.join(', ') });
+      } else {
+        grupos[2].items.push({ id: id, texto: texto + ' · ' + (p.area || 'Sin área') });
+      }
+    });
+
+    select.innerHTML = '';
     var vacio = document.createElement('option');
     vacio.value = '';
     vacio.textContent = 'Sin jefe asignado';
     select.appendChild(vacio);
 
-    miembros.forEach(function (m) {
-      var option = document.createElement('option');
-      option.value = m.id;
-      option.textContent = m.nombre || ('Usuario ' + m.id);
-      select.appendChild(option);
+    grupos.forEach(function (grupo) {
+      if (!grupo.items.length) return;
+      var optgroup = document.createElement('optgroup');
+      optgroup.label = grupo.label;
+      grupo.items.forEach(function (item) {
+        var option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = item.texto;
+        optgroup.appendChild(option);
+      });
+      select.appendChild(optgroup);
     });
 
-    var actual = area && area.manager_user_id ? String(area.manager_user_id) : '';
-    select.value = actual;
-    select.disabled = !miembros.length;
+    select.value = area && area.manager_user_id ? String(area.manager_user_id) : '';
+  }
 
-    if (!ayuda) return;
-    if (!area) {
-      ayuda.textContent = 'Primero crea el área y asígnale colaboradores; después podrás designar a su jefe.';
-    } else if (!miembros.length) {
-      ayuda.textContent = 'Esta área todavía no tiene colaboradores entre los cuales elegir un jefe.';
-    } else {
-      ayuda.textContent = 'Debe ser alguien del área. Su aprobación es el primer paso de toda rendición de gastos o solicitud de fondos.';
+  /** Ids de las áreas que dependen de `areaId`, a cualquier profundidad. */
+  function descendientes(areas, areaId) {
+    var hijos = {};
+    areas.forEach(function (a) {
+      if (a.parent_area_id == null) return;
+      var clave = String(a.parent_area_id);
+      (hijos[clave] = hijos[clave] || []).push(String(a.id));
+    });
+    var encontrados = {};
+    var pila = (hijos[String(areaId)] || []).slice();
+    while (pila.length) {
+      var id = pila.pop();
+      if (encontrados[id] || id === String(areaId)) continue;
+      encontrados[id] = true;
+      pila.push.apply(pila, hijos[id] || []);
     }
+    return encontrados;
+  }
+
+  /**
+   * Opciones del área superior en orden de árbol, con sangría por nivel. Se
+   * excluyen el área misma y todas sus dependientes: colgarla de una de ellas
+   * cerraría un ciclo (el servidor también lo rechaza).
+   */
+  function llenarPadres(areas, areaId, seleccion) {
+    var select = document.getElementById('area_parent');
+    if (!select) return;
+
+    var excluir = areaId != null ? descendientes(areas, areaId) : {};
+    if (areaId != null) excluir[String(areaId)] = true;
+
+    var existentes = {};
+    areas.forEach(function (a) { existentes[String(a.id)] = true; });
+    var hijos = {};
+    var raices = [];
+    areas.forEach(function (a) {
+      var padre = a.parent_area_id != null ? String(a.parent_area_id) : null;
+      if (padre && existentes[padre]) {
+        (hijos[padre] = hijos[padre] || []).push(a);
+      } else {
+        raices.push(a);
+      }
+    });
+    var porNombre = function (x, y) {
+      return String(x.area_name || '').localeCompare(String(y.area_name || ''), 'es');
+    };
+
+    select.innerHTML = '';
+    var ninguna = document.createElement('option');
+    ninguna.value = '';
+    ninguna.textContent = 'Ninguna (área principal)';
+    select.appendChild(ninguna);
+
+    var vistos = {};
+    function agregar(area, nivel) {
+      var id = String(area.id);
+      if (vistos[id]) return;
+      vistos[id] = true;
+      if (!excluir[id]) {
+        var option = document.createElement('option');
+        option.value = id;
+        option.textContent = new Array(nivel + 1).join('\u2003') + (nivel ? '\u2514 ' : '') + area.area_name;
+        select.appendChild(option);
+      }
+      (hijos[id] || []).sort(porNombre).forEach(function (h) { agregar(h, nivel + 1); });
+    }
+    raices.sort(porNombre).forEach(function (r) { agregar(r, 0); });
+
+    select.value = seleccion != null && !excluir[String(seleccion)] ? String(seleccion) : '';
   }
 
   function initModal(config) {
@@ -90,9 +181,9 @@
     var titulo = document.getElementById('modalAreaTitle');
     var submit = document.getElementById('modalAreaSubmit');
     var nombre = document.getElementById('area_name');
-    var campoJefe = document.getElementById('campoJefe');
     var defaultColor = config.defaultColor || '#5a6879';
     var areas = Array.isArray(config.areas) ? config.areas : [];
+    var personas = Array.isArray(config.personas) ? config.personas : [];
 
     function buscarArea(id) {
       var buscado = String(id);
@@ -102,15 +193,16 @@
       return null;
     }
 
-    function abrirCrear() {
+    function abrirCrear(padreId) {
       form.action = '/RRHH/areas';
-      if (titulo) titulo.textContent = 'Agregar área';
+      var padre = padreId ? buscarArea(padreId) : null;
+      if (titulo) {
+        titulo.textContent = padre ? 'Agregar área dependiente de ' + padre.area_name : 'Agregar área';
+      }
       if (submit) submit.textContent = 'Crear área';
       if (nombre) nombre.value = '';
-      // El área nace vacía: no hay a quién nombrar jefe, así que el campo se
-      // oculta en vez de ofrecer un selector con una sola opción inútil.
-      if (campoJefe) campoJefe.hidden = true;
-      llenarJefes(null);
+      llenarJefes(null, areas, personas);
+      llenarPadres(areas, null, padre ? padre.id : null);
       setColorInputs(defaultColor);
       if (window.IntranetModal) window.IntranetModal.open(overlay);
       if (nombre) nombre.focus();
@@ -121,8 +213,8 @@
       if (titulo) titulo.textContent = 'Editar área';
       if (submit) submit.textContent = 'Guardar cambios';
       if (nombre) nombre.value = datos.name || '';
-      if (campoJefe) campoJefe.hidden = false;
-      llenarJefes(buscarArea(datos.id));
+      llenarJefes(buscarArea(datos.id), areas, personas);
+      llenarPadres(areas, datos.id, datos.parent || null);
       setColorInputs(datos.color || defaultColor);
       if (window.IntranetModal) window.IntranetModal.open(overlay);
       if (nombre) nombre.focus();
@@ -130,18 +222,23 @@
 
     var disparador = document.querySelector('[data-abrir-crear]');
     if (disparador) {
-      disparador.addEventListener('click', function () { abrirCrear(); });
+      disparador.addEventListener('click', function () { abrirCrear(null); });
     }
 
     document.addEventListener('click', function (evento) {
-      var btn = evento.target && evento.target.closest
-        ? evento.target.closest('[data-editar-area]')
-        : null;
+      if (!evento.target || !evento.target.closest) return;
+      var hija = evento.target.closest('[data-agregar-hija]');
+      if (hija) {
+        abrirCrear(hija.dataset.agregarHija);
+        return;
+      }
+      var btn = evento.target.closest('[data-editar-area]');
       if (!btn) return;
       abrirEditar({
         id: btn.dataset.id,
         name: btn.dataset.name,
         color: btn.dataset.color,
+        parent: btn.dataset.parent,
       });
     });
 
@@ -192,9 +289,9 @@
       if (!form || form.tagName !== 'FORM') return;
       if (!form.hasAttribute('data-eliminar-area')) return;
 
-      // Un área con gente dentro no se borra: el botón ya viene deshabilitado,
-      // esto sólo cubre el envío por teclado.
-      if (Number(form.dataset.miembros || 0) > 0) {
+      // Un área con gente o con áreas dependientes no se borra: el botón ya
+      // viene deshabilitado, esto sólo cubre el envío por teclado.
+      if (form.dataset.bloqueada === 'true') {
         evento.preventDefault();
         return;
       }

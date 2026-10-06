@@ -37,7 +37,7 @@ const GUIDE_ENTRIES = Object.freeze([
       "Panel de inicio con indicadores financieros, clima y noticias recientes.",
     featureNotes: {
       lunchMenu: "Muestra el menú semanal del casino.",
-      homeQuickAccess: "Tiene accesos rápidos a Academy, el sitio web y portales de RRHH.",
+      homeQuickAccess: "Tiene una banda de accesos rápidos. Cada persona puede ocultarlos y cambiar su orden.",
     },
   },
   {
@@ -156,15 +156,11 @@ const GUIDE_ENTRIES = Object.freeze([
     title: "Organigrama",
     href: "/RRHH/organigrama",
     paths: [/^\/RRHH\/organigrama(\/|$)/],
-    summary: "Estructura general y departamentos de Transworld.",
-  },
-  {
-    id: "areas",
-    title: "Áreas de trabajo",
-    href: "/RRHH/areas",
-    access: ACCESS.RRHH_MANAGER,
-    paths: [/^\/RRHH\/areas(\/|$)/],
-    summary: "Áreas de trabajo de la empresa y quiénes pertenecen a cada una.",
+    summary:
+      "Áreas de trabajo de la empresa, quién dirige cada una, de qué área depende y quiénes pertenecen a ella. Se busca por área o por colaborador.",
+    notes: [
+      "Las áreas se administran aquí mismo, no hay una pantalla de Áreas aparte: quien gestiona RRHH ve el botón «Editar organigrama» para crear, editar y eliminar áreas, asignarles jefe y área superior, y mover colaboradores.",
+    ],
   },
   {
     id: "centros-costo",

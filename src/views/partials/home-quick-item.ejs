@@ -1,0 +1,25 @@
+<%#
+  Chip de la banda del home.
+  item: { id, label, href, external, notif, glyph }
+  inHidden: el chip arranca en la fila de ocultos
+%>
+<div class="home-quick__item<%= item.notif ? ' ticket-notif-target' : '' %>" data-quick-id="<%= item.id %>" draggable="false">
+  <a href="<%= item.href %>" class="home-quick__link"<% if (item.external) { %> target="_blank" rel="noopener noreferrer"<% } %>>
+    <span class="home-quick__glyph home-quick__glyph--<%= item.glyph.tone %><%= item.glyph.kind === 'img' ? ' home-quick__glyph--logo' : '' %>">
+      <% if (item.glyph.kind === 'img') { %>
+        <img src="<%= item.glyph.src %>" alt="" class="home-quick__glyph-img" draggable="false">
+      <% } else if (item.glyph.kind === 'icon') { %>
+        <%- include('icon', { name: item.glyph.name }) %>
+      <% } else { %>
+        <%= item.glyph.text %>
+      <% } %>
+    </span>
+    <span class="home-quick__label"><%= item.label %></span>
+  </a>
+  <span class="home-quick__tools">
+    <button type="button" class="home-quick__tool" data-quick-move="-1" aria-label="Mover <%= item.label %> a la izquierda" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>‹</button>
+    <button type="button" class="home-quick__tool" data-quick-move="1" aria-label="Mover <%= item.label %> a la derecha" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>›</button>
+    <button type="button" class="home-quick__tool" data-quick-hide aria-label="Ocultar <%= item.label %>" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>Ocultar</button>
+    <button type="button" class="home-quick__tool" data-quick-show aria-label="Mostrar <%= item.label %>" tabindex="-1"<%= inHidden ? '' : ' hidden' %>>Mostrar</button>
+  </span>
+</div>

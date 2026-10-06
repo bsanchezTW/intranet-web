@@ -596,7 +596,7 @@ a.vac-btn { display: inline-block; text-decoration: none; }
   color: var(--color-heading);
 }
 
-/* Formulario en una sola línea (saldo de referencia). */
+/* Formulario en una sola línea (saldo de referencia, feriados). */
 .vac-form-inline {
   display: flex;
   flex-wrap: wrap;
@@ -604,6 +604,9 @@ a.vac-btn { display: inline-block; text-decoration: none; }
   gap: 0 14px;
   border-bottom: 1px solid var(--color-border);
 }
+
+/* Sin nada debajo, la línea se duplicaría con el borde del panel. */
+.vac-form-inline:last-child { border-bottom: 0; }
 
 .vac-form-inline .campo { flex: 0 1 180px; }
 .vac-form-inline .vac-form-inline__grow { flex: 1 1 260px; }

@@ -111,7 +111,7 @@ const COUNTRY_CONFIGS = {
       // Fijos (1 Lima, 41–84 provincias): sólo en el teléfono de empresa.
       landline: { pattern: "^[1-8]\\d{7}$", groups: [1, 3, 4] },
     },
-    corporateSite: "https://www.transworld.cl/",
+    corporateSite: "https://transworld.pe/",
     weather: {
       latitude: -12.0464,
       longitude: -77.0428,

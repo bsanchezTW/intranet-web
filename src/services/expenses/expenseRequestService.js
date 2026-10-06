@@ -1517,6 +1517,7 @@ async function listHistoryForReviewer(user) {
       WHERE r.status <> $6
         AND (r.manager_reviewed_by = $1
           OR r.finance_reviewed_by = $1
+          OR r.manager_user_id = $1
           OR r.work_area_id = ANY($2::int[])
           OR $3
           OR ($4 AND r.status <> $5))

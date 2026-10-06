@@ -107,6 +107,9 @@ const DDL_STATEMENTS = [
   `ALTER TABLE vacation_requests ADD COLUMN IF NOT EXISTS policy_warning_ack BOOLEAN NOT NULL DEFAULT FALSE`,
   // Imputaciones FIFO por período al aprobar (permite reverse completo al cancelar)
   `ALTER TABLE vacation_requests ADD COLUMN IF NOT EXISTS period_allocations JSONB`,
+  // Jefe que resuelve la solicitud según el organigrama, congelado al crearla.
+  `ALTER TABLE vacation_requests ADD COLUMN IF NOT EXISTS approver_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`,
+  `CREATE INDEX IF NOT EXISTS idx_vacation_requests_approver ON vacation_requests (approver_user_id, status) WHERE approver_user_id IS NOT NULL`,
 
   // vacation_balance_adjustments (IDENTITY; ensure_id_strategy convierte filas viejas)
   `CREATE TABLE IF NOT EXISTS vacation_balance_adjustments (

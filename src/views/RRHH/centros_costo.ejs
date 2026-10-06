@@ -12,12 +12,12 @@
   const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 %>
 
-<link rel="stylesheet" href="/css/centros-costo.css?v=20260911a">
+<link rel="stylesheet" href="/css/centros-costo.css?v=20261006a">
 
 <div class="contenedor">
 
   <div class="page-header">
-    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'banknote' }) %></span>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'briefcase' }) %></span>
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
@@ -119,6 +119,17 @@
               <h3 class="centro-card__codigo"><%= centro.code %></h3>
               <p class="centro-card__nombre" title="<%= centro.name %>"><%= centro.name %></p>
             </div>
+          </div>
+
+          <div class="centro-card__estado">
+            <% if (centro.active) { %>
+              <span class="centro-badge centro-badge--on">Activo</span>
+            <% } else { %>
+              <span class="centro-badge centro-badge--off">Inactivo</span>
+            <% } %>
+            <span class="area-card__count">
+              <%= plural(centro.memberCount, 'colaborador', 'colaboradores') %>
+            </span>
 
             <% if (puedeEditar) { %>
             <div class="centro-card__actions">
@@ -170,18 +181,7 @@
             <% } %>
           </div>
 
-          <div class="centro-card__estado">
-            <% if (centro.active) { %>
-              <span class="centro-badge centro-badge--on">Activo</span>
-            <% } else { %>
-              <span class="centro-badge centro-badge--off">Inactivo</span>
-            <% } %>
-            <span class="area-card__count">
-              <%= plural(centro.memberCount, 'colaborador', 'colaboradores') %>
-            </span>
-          </div>
-
-          <%# Igual que en Áreas: la tarjeta muestra un resumen de altura fija y
+          <%# Igual que en el Organigrama: la tarjeta muestra un resumen de altura fija y
               la lista completa se abre en un modal. %>
           <button type="button" class="area-resumen" data-ver-miembros="<%= centro.id %>">
             <span class="centro-resumen__nombres">

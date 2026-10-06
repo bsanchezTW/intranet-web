@@ -211,19 +211,6 @@ html.pagina-lista .cargando-pagina {
 }
 
 /* ── Cursos / Academy ── */
-.btn-cursos {
-  background: var(--glass-bg-strong);
-  color: var(--color-text);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-card);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-}
-
-.btn-cursos:hover {
-  background: var(--color-surface-elevated);
-}
-
 .cursos-sidebar {
   background: var(--color-surface) !important;
   border-color: var(--color-border) !important;
@@ -236,32 +223,8 @@ html.pagina-lista .cargando-pagina {
   border-bottom-color: var(--color-border) !important;
 }
 
-.cursos-sidebar .sidebar-nav a {
-  color: var(--color-text-muted) !important;
-}
-
-.cursos-sidebar .sidebar-nav a:hover {
-  background: var(--color-surface-muted) !important;
-  color: var(--color-heading) !important;
-}
-
-.cursos-sidebar .sidebar-nav a.active {
-  background: var(--corp-green-muted) !important;
-  color: var(--color-heading) !important;
-}
-
 .cursos-sidebar .sidebar-buttons {
   border-top-color: var(--color-border) !important;
-}
-
-.cursos-sidebar .btn-volver-intranet {
-  background: var(--color-surface-muted) !important;
-  color: var(--color-text) !important;
-  border-color: var(--color-border-strong) !important;
-}
-
-.cursos-sidebar .btn-volver-intranet:hover {
-  background: var(--color-surface-elevated) !important;
 }
 
 .cursos-welcome .welcome-title {

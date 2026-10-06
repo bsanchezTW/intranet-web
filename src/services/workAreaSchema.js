@@ -129,6 +129,41 @@ async function addWorkAreaIdRangeCheck(client) {
 }
 
 /**
+ * Organigrama: cada área cuelga de otra o es raíz (NULL). Los ciclos que no
+ * ve el CHECK (A → B → A) los frena la app al editar; ver workAreaTree.
+ */
+async function addParentAreaColumn(client) {
+  await client.query(
+    `ALTER TABLE work_areas
+       ADD COLUMN IF NOT EXISTS parent_area_id INTEGER
+       REFERENCES work_areas(id) ON DELETE RESTRICT`,
+  );
+  await client.query(`
+    DO $do$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint con
+        JOIN pg_class c ON c.oid = con.conrelid
+        JOIN pg_namespace n ON n.oid = con.connamespace
+        WHERE con.conname = 'work_areas_parent_not_self'
+          AND c.relname = 'work_areas'
+          AND n.nspname = current_schema()
+      ) THEN
+        ALTER TABLE work_areas
+          ADD CONSTRAINT work_areas_parent_not_self
+          CHECK (parent_area_id IS NULL OR parent_area_id <> id);
+      END IF;
+    END
+    $do$;
+  `);
+  await client.query(
+    `CREATE INDEX IF NOT EXISTS idx_work_areas_parent
+       ON work_areas (parent_area_id) WHERE parent_area_id IS NOT NULL`,
+  );
+}
+
+/**
  * Asegura color, trigger de ID 4 dígitos en altas nuevas, y matices
  * históricos si el área sigue con el gris por defecto. No remapea ids
  * existentes.
@@ -145,6 +180,7 @@ async function ensureWorkAreaSchema() {
     await dropWorkAreaIdentity(client);
     await installWorkAreaIdTrigger(client);
     await addWorkAreaIdRangeCheck(client);
+    await addParentAreaColumn(client);
 
     const names = Object.keys(WORK_AREA_COLORS);
     const colors = Object.values(WORK_AREA_COLORS);

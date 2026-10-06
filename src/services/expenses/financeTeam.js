@@ -1,7 +1,7 @@
 const db = require("../../db");
 const logger = require("../../utils/logger");
 const { isAdministrador, normalizeRole } = require("../../constants/roles");
-const { isFinanceAreaName } = require("../../constants/financeArea");
+const { financeAreaIds } = require("../../constants/financeArea");
 const { isInformaticaAdmin } = require("../access/staffAccess");
 
 /**
@@ -12,7 +12,7 @@ const { isInformaticaAdmin } = require("../access/staffAccess");
  * vivas), así que el área se resuelve contra la base y se cachea unos segundos.
  *
  * A diferencia de tickets, aquí hacen falta las DOS condiciones: pertenecer a
- * Finanzas y tener rol Administrador. El área sola dejaría liquidar a cualquier
+ * Finanzas (o a un área que dependa de ella) y tener rol Administrador. El área sola dejaría liquidar a cualquier
  * asistente del departamento; el rol solo le abriría las rendiciones de toda la
  * empresa a un administrador de Marketing.
  */
@@ -27,18 +27,22 @@ function displayName(row) {
 }
 
 async function fetchApprovers() {
-  // El filtro por nombre de área se hace en Node y no en SQL: los acentos y
-  // mayúsculas de `area_name` los normaliza constants/workAreas.
-  const { rows } = await db.query(
-    `SELECT u.id, u.first_name, u.last_name, u.email, u.role, w.area_name
-       FROM users u
-       JOIN work_areas w ON w.id = u.work_area_id
-      WHERE u.is_intranet_user = TRUE
-      ORDER BY u.first_name NULLS LAST, u.last_name NULLS LAST`,
-  );
+  // El filtro por área se hace en Node y no en SQL: los acentos y mayúsculas
+  // de `area_name` los normaliza constants/workAreas, y las sub-áreas de
+  // Finanzas salen del recorrido del organigrama.
+  const [areasResult, usersResult] = await Promise.all([
+    db.query("SELECT id, area_name, parent_area_id FROM work_areas"),
+    db.query(
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.work_area_id
+         FROM users u
+        WHERE u.is_intranet_user = TRUE AND u.work_area_id IS NOT NULL
+        ORDER BY u.first_name NULLS LAST, u.last_name NULLS LAST`,
+    ),
+  ]);
+  const finanzas = financeAreaIds(areasResult.rows);
 
-  return rows
-    .filter((row) => isFinanceAreaName(row.area_name))
+  return usersResult.rows
+    .filter((row) => finanzas.has(Number(row.work_area_id)))
     .filter((row) => isAdministrador(normalizeRole(row.role)))
     .map((row) => ({
       id: row.id,

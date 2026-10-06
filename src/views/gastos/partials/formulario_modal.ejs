@@ -76,7 +76,7 @@
             <div><dt>Nombre</dt><dd><%= nombre %></dd></div>
             <div><dt><%= reqF.documentoLabel %></dt><dd><%= documento %></dd></div>
             <div><dt>Área</dt><dd><%= reqF.area.area_name %></dd></div>
-            <div><dt>Jefatura</dt><dd><%= reqF.manager.name %></dd></div>
+            <div><dt>Jefatura</dt><dd><%= reqF.manager ? reqF.manager.name : 'Un administrador' %></dd></div>
             <% if (centroUnico) { %>
               <div><dt>Centro de costo</dt><dd><%= centroUnico.code %> · <%= centroUnico.name %></dd></div>
             <% } %>

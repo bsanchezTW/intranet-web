@@ -1,12 +1,11 @@
 <%- include('header-cursos') %>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
-  .cursos-main-content, .cursos-main-content * { font-family: 'Montserrat', sans-serif !important; }
+  :root { --text: #333; --muted-text: #6b6b6b; --line: #e6e6e6; --h-brown: var(--color-heading); --h-safety: var(--color-heading); }
 
-  :root { --text: #333; --muted-text: #6b6b6b; --line: #e6e6e6; --h-brown: #000000 !important; --h-safety: #000000 !important; }
-
-  .cursos-main-content a[class*="btn"], .cursos-main-content a[class*="boton"], .cursos-main-content button, #btnPrincipal, #btnResultados { background-color: #003a70 !important; color: #ffffff !important; border-color: #003a70 !important; }
-  .cursos-main-content a[class*="btn"]:hover, .cursos-main-content a[class*="boton"]:hover, .cursos-main-content button:hover, #btnPrincipal:hover, #btnResultados:hover { background-color: #002850 !important; border-color: #002850 !important; transform: translateY(-2px); }
+  /* Los modales viven dentro de .cursos-main-content y traen sus propios
+     botones (Cancelar, cerrar): quedan fuera. */
+  .cursos-main-content a[class*="btn"]:not(.modal-overlay *), .cursos-main-content a[class*="boton"]:not(.modal-overlay *), .cursos-main-content button:not(.modal-overlay *), #btnPrincipal, #btnResultados { background-color: #003a70 !important; color: #ffffff !important; border-color: #003a70 !important; }
+  .cursos-main-content a[class*="btn"]:not(.modal-overlay *):hover, .cursos-main-content a[class*="boton"]:not(.modal-overlay *):hover, .cursos-main-content button:not(.modal-overlay *):hover, #btnPrincipal:hover, #btnResultados:hover { background-color: #002850 !important; border-color: #002850 !important; transform: translateY(-2px); }
 
   .cursos-main-content .btn-completado {
     background-color: #598bbd !important;

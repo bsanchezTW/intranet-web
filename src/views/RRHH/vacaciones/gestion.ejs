@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20260929b">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -74,6 +74,9 @@
                   <span class="vac-link-colaborador"><%= r.collaboratorName || 'Colaborador' %> <small>(usuario eliminado)</small></span>
                 <% } else { %>
                   <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
+                <% } %>
+                <% if (r.status === 'pending') { %>
+                  <br><small>Aprueba: <%= r.approver_name || 'RRHH' %></small>
                 <% } %>
               </td>
               <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
