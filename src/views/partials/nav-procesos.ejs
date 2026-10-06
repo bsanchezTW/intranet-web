@@ -12,12 +12,18 @@
     : '/procesos/protocolos';
   const labelArea = adminNav ? 'Áreas' : 'Mi área';
 %>
-<% if (features.expenseRequests) { %>
+<% const letrasNav = features.billsOfExchange && typeof canIssueBills !== 'undefined' && canIssueBills; %>
+<% if (features.expenseRequests || letrasNav) { %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Finanzas</span>
+  <% if (features.expenseRequests) { %>
   <a href="/gastos/nueva/rendicion">Rendir gastos</a>
   <a href="/gastos/nueva/fondos">Solicitar fondos</a>
   <a href="/gastos">Mis solicitudes</a>
+  <% } %>
+  <% if (letrasNav) { %>
+  <a href="/letras">Letras de cambio</a>
+  <% } %>
 </div>
 <% } %>
 <div class="nav-menu-group">

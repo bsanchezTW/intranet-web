@@ -1,0 +1,531 @@
+/* ==========================================================================
+   Letras de cambio (Finanzas). Todo el color sale de los tokens de theme.css.
+   ========================================================================== */
+
+/* ── Resumen por cobrar ──────────────────────────────────────────────────── */
+
+.letras-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.letras-resumen__dato {
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.letras-resumen__label {
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.letras-resumen__dato strong {
+  color: var(--color-heading);
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.letras-resumen__alerta {
+  color: var(--down);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+/* ── Filtros ─────────────────────────────────────────────────────────────── */
+
+.letras-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.letras-filtros__buscar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 280px;
+  max-width: 440px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-input-bg);
+  color: var(--color-text-subtle);
+}
+
+.letras-filtros__buscar:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.letras-filtros__buscar input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-input-text);
+  font-size: 0.92rem;
+}
+
+.letras-filtros__estados {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.letras-chip {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.letras-chip:hover { border-color: var(--brand); color: var(--brand); }
+
+.letras-chip.is-active {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ── Tabla ───────────────────────────────────────────────────────────────── */
+
+.letras-tabla-wrap {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+.letras-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.letras-tabla th {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.letras-tabla td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.letras-tabla tbody tr:last-child td { border-bottom: 0; }
+
+.letras-tabla .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.letras-tabla tr.is-anulada td { color: var(--color-text-subtle); }
+.letras-tabla tr.is-anulada .letras-numero,
+.letras-tabla tr.is-anulada strong { text-decoration: line-through; }
+
+.letras-numero {
+  color: var(--color-heading);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.letras-numero:hover { color: var(--brand); text-decoration: underline; }
+
+.letras-cuota {
+  margin-left: 6px;
+  color: var(--color-text-subtle);
+  font-size: 0.75rem;
+}
+
+.letras-aceptante {
+  display: block;
+  color: var(--color-heading);
+  font-weight: 600;
+}
+
+.letras-doc {
+  color: var(--color-text-subtle);
+  font-size: 0.78rem;
+}
+
+/* La celda sigue siendo celda (un flex aquí descuadra los bordes de la fila):
+   los botones van en línea. */
+.letras-tabla td.letras-tabla__acciones {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.letras-tabla__acciones > * {
+  vertical-align: middle;
+}
+
+.letras-tabla__acciones form {
+  display: inline-block;
+  margin: 0 0 0 6px;
+}
+
+.letras-icono-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+.letras-icono-btn:hover { border-color: var(--brand); color: var(--brand); }
+
+.letras-accion {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.letras-accion:hover { border-color: var(--brand); color: var(--brand); }
+.letras-accion--peligro:hover { border-color: var(--down); color: var(--down); }
+
+.letras-tabla__vacio td {
+  padding: 18px 14px;
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+.letras-motivo {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-subtle);
+  font-size: 0.76rem;
+}
+
+/* ── Estados ─────────────────────────────────────────────────────────────── */
+
+.letra-estado {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.letra-estado--vigente { background: var(--brand-soft); color: var(--brand-deep); }
+.letra-estado--vencida { background: rgba(208, 92, 92, 0.12); color: var(--down); }
+.letra-estado--pagada { background: var(--green-soft); color: var(--green-ink); }
+.letra-estado--anulada { background: var(--color-surface-muted); color: var(--color-text-subtle); }
+
+/* ── Vacío y notas ───────────────────────────────────────────────────────── */
+
+.letras-vacio {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px 20px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.letras-vacio p { margin: 0; }
+
+.letras-vacio__icono {
+  color: var(--color-text-subtle);
+  font-size: 2rem;
+}
+
+.letras-nota {
+  margin: 12px 2px 0;
+  color: var(--color-text-subtle);
+  font-size: 0.82rem;
+}
+
+/* ── Formulario ──────────────────────────────────────────────────────────── */
+
+.letras-form {
+  display: grid;
+  gap: 18px;
+}
+
+.letras-panel {
+  padding: 22px 24px 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.letras-panel__titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 4px;
+  color: var(--color-heading);
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.letras-panel__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.letras-panel__opcional {
+  margin-left: auto;
+  color: var(--color-text-subtle);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.letras-panel__desc {
+  margin: 0 0 16px;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+}
+
+.letras-panel__subtitulo {
+  margin: 4px 0 10px;
+  color: var(--color-text-subtle);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.letras-panel--plegable { padding-bottom: 22px; }
+.letras-panel--plegable[open] { padding-bottom: 6px; }
+
+.letras-panel--plegable > summary {
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.letras-panel--plegable > summary::-webkit-details-marker { display: none; }
+
+.letras-panel--plegable > summary::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  margin-left: 10px;
+  border-right: 2px solid var(--color-text-subtle);
+  border-bottom: 2px solid var(--color-text-subtle);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.letras-panel--plegable[open] > summary { margin-bottom: 4px; }
+.letras-panel--plegable[open] > summary::after { transform: rotate(-135deg); }
+
+/* Ocupa dos columnas de la rejilla cuando caben. */
+@media (min-width: 720px) {
+  .campo-form--doble { grid-column: span 2; }
+}
+
+.letras-cronograma {
+  margin: 4px 0 18px;
+}
+
+.letras-cronograma__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.letras-cronograma__head h4 {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.letras-cronograma__total {
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.letras-cronograma__total.is-descuadre { color: var(--down); }
+
+.letras-cronograma__error {
+  margin: 0 0 10px;
+  color: var(--down);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.letras-cronograma.is-invalid .letras-tabla-wrap { border-color: var(--down); }
+
+.letras-tabla--cuotas .letras-cuota-num {
+  color: var(--color-heading);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.letras-tabla--cuotas input {
+  width: 100%;
+  max-width: 170px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.letras-tabla--cuotas input[type="number"] { text-align: right; }
+
+.letras-tabla--cuotas input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.letras-form__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-bottom: 20px;
+}
+
+/* ── Detalle del lote ────────────────────────────────────────────────────── */
+
+.letras-detalle {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+  margin-bottom: 30px;
+}
+
+.letras-detalle .letras-panel { padding-bottom: 18px; }
+
+.letras-datos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 12px 0 16px;
+}
+
+.letras-datos > div { min-width: 0; }
+.letras-datos--ancho { grid-column: 1 / -1; }
+
+.letras-datos dt {
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.letras-datos dd {
+  margin: 2px 0 0;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.letras-datos__monto {
+  color: var(--color-heading) !important;
+  font-size: 1.3rem !important;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Móvil: cada fila de la tabla se vuelve una tarjeta ──────────────────── */
+
+@media (max-width: 720px) {
+  .letras-tabla:not(.letras-tabla--cuotas) thead { display: none; }
+
+  .letras-tabla:not(.letras-tabla--cuotas) tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .letras-tabla:not(.letras-tabla--cuotas) tbody tr:last-child { border-bottom: 0; }
+
+  .letras-tabla:not(.letras-tabla--cuotas) td {
+    padding: 0;
+    border: 0;
+  }
+
+  .letras-tabla:not(.letras-tabla--cuotas) td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--color-text-subtle);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .letras-tabla:not(.letras-tabla--cuotas) .num { text-align: left; }
+
+  .letras-tabla td.letras-tabla__acciones {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .letras-tabla__acciones form:first-of-type { margin-left: 6px; }
+
+  .letras-panel { padding: 18px 16px 4px; }
+  .letras-datos { grid-template-columns: 1fr; }
+}

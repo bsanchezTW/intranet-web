@@ -1,0 +1,183 @@
+<%
+  const letrasLote = lote.bills || [];
+  const imprimibles = letrasLote.filter((b) => b.status !== 'voided').length;
+  const primera = letrasLote[0];
+  const ultima = letrasLote[letrasLote.length - 1];
+  const rango = letrasLote.length > 1 ? `${primera.number} a ${ultima.number}` : (primera ? primera.number : '');
+  const tieneAval = !!lote.guarantor_name;
+  const tieneCuenta = !!(lote.bank_name || lote.bank_account);
+  const fechaHora = new Date(lote.created_at).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
+%>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'file-text' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="/letras">Letras de cambio</a> <span aria-hidden="true">/</span>
+        <span><%= rango %></span>
+      </nav>
+      <h2 class="page-title"><%= lote.acceptor_name %></h2>
+      <p class="page-description">
+        <%= letrasLote.length %> <%= letrasLote.length === 1 ? 'letra' : 'letras' %>
+        <% if (lote.invoice_ref) { %> · Ref. <%= lote.invoice_ref %><% } %>
+        · Emitida<%= letrasLote.length === 1 ? '' : 's' %> el <%= fechaHora %><% if (lote.created_by_name) { %> por <%= lote.created_by_name %><% } %>
+      </p>
+    </div>
+    <div class="page-header-actions">
+      <% if (imprimibles > 0) { %>
+        <a href="/letras/lote/<%= lote.id %>/pdf" target="_blank" rel="noopener" class="page-header-btn">
+          <%- include('../partials/icon', { name: 'printer' }) %>
+          <%= imprimibles === 1 ? 'Imprimir letra' : `Imprimir ${imprimibles} letras` %>
+        </a>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= error %></span>
+    </div>
+  <% } %>
+
+  <div class="letras-detalle">
+    <section class="letras-panel letras-detalle__resumen" aria-labelledby="lote-condiciones">
+      <h3 class="letras-panel__titulo" id="lote-condiciones">Condiciones</h3>
+      <dl class="letras-datos">
+        <div><dt>Importe total</dt><dd class="letras-datos__monto"><%= formatBillMoney(lote.total_amount, lote.currency_code) %></dd></div>
+        <div class="letras-datos--ancho"><dt>En letras</dt><dd><%= totalEnLetras %></dd></div>
+        <div><dt>Fecha de giro</dt><dd><%= formatBillDate(lote.issue_date) %></dd></div>
+        <div><dt>Lugar de giro</dt><dd><%= lote.issue_place %></dd></div>
+        <div><dt>Ref. del girador</dt><dd><%= lote.invoice_ref || '—' %></dd></div>
+      </dl>
+    </section>
+
+    <section class="letras-panel" aria-labelledby="lote-aceptante">
+      <h3 class="letras-panel__titulo" id="lote-aceptante">Aceptante</h3>
+      <dl class="letras-datos">
+        <div class="letras-datos--ancho"><dt>Razón social</dt><dd><%= lote.acceptor_name %></dd></div>
+        <div><dt>RUC / DNI</dt><dd><%= lote.acceptor_doc %></dd></div>
+        <div><dt>Teléfono</dt><dd><%= lote.acceptor_phone || '—' %></dd></div>
+        <div class="letras-datos--ancho"><dt>Domicilio</dt><dd><%= lote.acceptor_address %><% if (lote.acceptor_locality) { %>, <%= lote.acceptor_locality %><% } %></dd></div>
+      </dl>
+      <% if (tieneAval) { %>
+        <h4 class="letras-panel__subtitulo">Aval permanente</h4>
+        <dl class="letras-datos">
+          <div class="letras-datos--ancho"><dt>Nombre</dt><dd><%= lote.guarantor_name %></dd></div>
+          <div><dt>RUC / DNI</dt><dd><%= lote.guarantor_doc || '—' %></dd></div>
+          <div><dt>Teléfono</dt><dd><%= lote.guarantor_phone || '—' %></dd></div>
+          <% if (lote.guarantor_address) { %>
+            <div class="letras-datos--ancho"><dt>Domicilio</dt><dd><%= lote.guarantor_address %><% if (lote.guarantor_locality) { %>, <%= lote.guarantor_locality %><% } %></dd></div>
+          <% } %>
+        </dl>
+      <% } %>
+      <% if (tieneCuenta) { %>
+        <h4 class="letras-panel__subtitulo">Cuenta de cargo</h4>
+        <dl class="letras-datos">
+          <div><dt>Banco</dt><dd><%= lote.bank_name || '—' %></dd></div>
+          <div><dt>Oficina</dt><dd><%= lote.bank_office || '—' %></dd></div>
+          <div><dt>N.º de cuenta</dt><dd><%= lote.bank_account || '—' %></dd></div>
+          <div><dt>DC</dt><dd><%= lote.bank_dc || '—' %></dd></div>
+        </dl>
+      <% } %>
+    </section>
+  </div>
+
+  <section class="seccion" aria-labelledby="lote-letras">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title" id="lote-letras">
+          <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'calendar' }) %></span>
+          Cronograma
+        </h3>
+        <p class="seccion__desc">Marca cada letra como pagada cuando se cobre. Una letra anulada no se vuelve a usar.</p>
+      </div>
+    </div>
+
+    <div class="letras-tabla-wrap">
+      <table class="letras-tabla">
+        <thead>
+          <tr>
+            <th scope="col">Letra</th>
+            <th scope="col">Número</th>
+            <th scope="col">Vencimiento</th>
+            <th scope="col" class="num">Importe</th>
+            <th scope="col">Estado</th>
+            <th scope="col"><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% letrasLote.forEach((b) => { const estado = billDisplayStatus(b.status, b.due_date, today); %>
+            <tr class="<%= estado.key === 'anulada' ? 'is-anulada' : '' %>">
+              <td data-label="Letra"><%= b.installment %> de <%= letrasLote.length %></td>
+              <td data-label="Número"><strong><%= b.number %></strong></td>
+              <td data-label="Vencimiento"><%= formatBillDate(b.due_date) %></td>
+              <td data-label="Importe" class="num"><%= formatBillMoney(b.amount, lote.currency_code) %></td>
+              <td data-label="Estado">
+                <span class="letra-estado letra-estado--<%= estado.key %>"><%= estado.label %></span>
+                <% if (b.status === 'voided' && b.void_reason) { %><span class="letras-motivo"><%= b.void_reason %></span><% } %>
+              </td>
+              <td class="letras-tabla__acciones">
+                <a href="/letras/<%= b.id %>/pdf" target="_blank" rel="noopener" class="letras-icono-btn" title="Imprimir <%= b.number %>" aria-label="Imprimir <%= b.number %>"><%- include('../partials/icon', { name: 'printer' }) %></a>
+                <% if (b.status === 'issued') { %>
+                  <form method="post" action="/letras/<%= b.id %>/estado"
+                        data-confirm="La letra <%= b.number %> quedará como cobrada."
+                        data-confirm-title="¿Marcar como pagada?" data-confirm-accept="Marcar pagada">
+                    <input type="hidden" name="accion" value="pagar">
+                    <button type="submit" class="letras-accion">Pagada</button>
+                  </form>
+                  <form method="post" action="/letras/<%= b.id %>/estado" class="letras-anular" data-numero="<%= b.number %>">
+                    <input type="hidden" name="accion" value="anular">
+                    <input type="hidden" name="motivo" value="">
+                    <button type="submit" class="letras-accion letras-accion--peligro">Anular</button>
+                  </form>
+                <% } else if (b.status === 'paid') { %>
+                  <form method="post" action="/letras/<%= b.id %>/estado"
+                        data-confirm="La letra <%= b.number %> volverá a figurar como pendiente de cobro."
+                        data-confirm-title="¿Revertir el pago?" data-confirm-accept="Revertir">
+                    <input type="hidden" name="accion" value="reactivar">
+                    <button type="submit" class="letras-accion">Revertir pago</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+  // Anular pide el motivo con el diálogo propio de la intranet (modal.js).
+  document.querySelectorAll('.letras-anular').forEach(function (form) {
+    form.addEventListener('submit', async function (event) {
+      if (form.dataset.confirmado === '1') return;
+      event.preventDefault();
+      var numero = form.dataset.numero;
+      var motivo = null;
+      if (window.IntranetDialog && typeof window.IntranetDialog.prompt === 'function') {
+        motivo = await window.IntranetDialog.prompt({
+          title: '¿Anular la letra ' + numero + '?',
+          message: 'El número no se reutiliza. Destruye la letra física si ya se imprimió.',
+          label: 'Motivo (opcional)',
+          required: false,
+          acceptLabel: 'Anular',
+          tone: 'peligro',
+        });
+      } else {
+        motivo = window.prompt('Motivo para anular la letra ' + numero + ' (opcional):', '');
+      }
+      if (motivo === null) return;
+      form.querySelector('input[name="motivo"]').value = String(motivo).trim();
+      form.dataset.confirmado = '1';
+      form.submit();
+    });
+  });
+</script>

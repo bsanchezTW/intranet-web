@@ -246,10 +246,11 @@
                   <a href="/marketing/eventos/<%= item.slug %>" class="home-gallery__link" title="Ver galería de <%= item.name %>">
                     <img
                       src="<%= item.image %>"
+                      data-full="<%= item.imageFull || item.image %>"
                       alt="Imagen de la galería de <%= item.name %>"
                       class="home-gallery__img"
                       loading="<%= index === 0 ? 'eager' : 'lazy' %>"
-                      onerror="this.src='/img/fondo-home.png'"
+                      onerror="if(!this.dataset.fullTried&&this.dataset.full&&this.dataset.full!==this.getAttribute('src')){this.dataset.fullTried='1';this.src=this.dataset.full}else{this.onerror=null;this.src='/img/fondo-home.png'}"
                     >
                     <div class="home-gallery__overlay">
                       <span class="home-gallery__eyebrow">Galería de eventos</span>

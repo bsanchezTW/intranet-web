@@ -28,6 +28,7 @@ const FEATURE_KEYS = [
   "expenseCenter",
   "expenseRequests",
   "vacations",
+  "billsOfExchange",
 ];
 
 const FEATURE_MATRIX = {
@@ -56,6 +57,8 @@ const FEATURE_MATRIX = {
     expenseRequests: true,
     // Vacaciones de la intranet: en Chile se solicitan en Rex+.
     vacations: false,
+    // Letras de cambio: el talonario y el girador (RUC) son de Transworld Perú.
+    billsOfExchange: false,
   },
   PE: {
     // Sin tabla linkedin_posts ni tokens; no se sincroniza el feed.
@@ -80,6 +83,9 @@ const FEATURE_MATRIX = {
     expenseRequests: false,
     // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú.
     vacations: true,
+    // Letras de cambio giradas por Transworld Power and Telecom S.A.C.
+    // (/letras, sección Finanzas de Procesos). Sólo el área de Finanzas.
+    billsOfExchange: true,
   },
 };
 

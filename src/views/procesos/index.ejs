@@ -5,6 +5,8 @@
   const hayGastos = (typeof gastosActivos !== 'undefined') ? gastosActivos : false;
   const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
   const porAprobar = (typeof pendientes !== 'undefined' && pendientes) ? pendientes : 0;
+  // Letras de cambio: sólo el personal de Finanzas, en las instancias que las emiten.
+  const puedeLetras = features.billsOfExchange && typeof canIssueBills !== 'undefined' && canIssueBills;
 
   // Sin área no hay jefe, y sin jefe en todo el organigrama no hay a quién
   // enviarle la solicitud.
@@ -23,6 +25,8 @@
       <p class="page-description">
         <% if (hayGastos) { %>
           Rinde tus gastos, consulta la normativa de la empresa y revisa los documentos de tu área.
+        <% } else if (puedeLetras) { %>
+          Emite letras de cambio, consulta la normativa de la empresa y revisa los documentos de tu área.
         <% } else { %>
           Consulta la normativa de la empresa y revisa los documentos de tu área.
         <% } %>
@@ -37,7 +41,7 @@
     </div>
   <% } %>
 
-  <% if (hayGastos) { %>
+  <% if (hayGastos || puedeLetras) { %>
   <!-- ═══════════ Finanzas ═══════════ -->
   <section class="seccion" aria-labelledby="seccion-finanzas">
     <div class="seccion__head">
@@ -47,7 +51,9 @@
           Finanzas
         </h3>
         <p class="seccion__desc">
-          <% if (puedeSolicitar) { %>
+          <% if (!hayGastos) { %>
+            Herramientas del área de Finanzas.
+          <% } else if (puedeSolicitar) { %>
             Tus solicitudes pasan primero por <strong><%= ctx.manager ? ctx.manager.name : 'un administrador' %></strong> y luego por Finanzas.
           <% } else { %>
             Rinde gastos ya realizados o pide fondos por adelantado.
@@ -56,7 +62,9 @@
       </div>
     </div>
 
-    <% if (!ctx.area) { %>
+    <% if (!hayGastos) { %>
+      <%# Sin rendiciones en esta instancia: los avisos de jefatura no aplican. %>
+    <% } else if (!ctx.area) { %>
       <div class="procesos-aviso" style="margin-bottom: 18px;">
         <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
         <span>Todavía no tienes un área asignada, así que no es posible determinar quién aprueba tus solicitudes. Pídele a RRHH que te asigne una.</span>
@@ -74,6 +82,7 @@
     <% } %>
 
     <div class="procesos-grid">
+      <% if (hayGastos) { %>
       <% if (puedeSolicitar) { %>
         <a href="/gastos/nueva/rendicion" class="procesos-card">
           <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'receipt' }) %></span>
@@ -150,6 +159,17 @@
                 </span>
               <% } %>
             </div>
+          </div>
+        </a>
+      <% } %>
+      <% } %>
+
+      <% if (puedeLetras) { %>
+        <a href="/letras" class="procesos-card">
+          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'file-text' }) %></span>
+          <div class="procesos-card__cuerpo">
+            <h4 class="procesos-card__titulo">Letras de cambio</h4>
+            <p class="procesos-card__desc">Emite letras a clientes a partir de una factura, imprímelas y controla su cobro.</p>
           </div>
         </a>
       <% } %>

@@ -19,14 +19,14 @@ const { isInformaticaAdmin } = require("../access/staffAccess");
 
 const CACHE_TTL_MS = 60 * 1000;
 
-let cache = { expiresAt: 0, approvers: [] };
+let cache = { expiresAt: 0, approvers: [], staffIds: new Set() };
 
 function displayName(row) {
   const full = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
   return full || row.email || `Usuario ${row.id}`;
 }
 
-async function fetchApprovers() {
+async function fetchTeam() {
   // El filtro por área se hace en Node y no en SQL: los acentos y mayúsculas
   // de `area_name` los normaliza constants/workAreas, y las sub-áreas de
   // Finanzas salen del recorrido del organigrama.
@@ -40,33 +40,41 @@ async function fetchApprovers() {
     ),
   ]);
   const finanzas = financeAreaIds(areasResult.rows);
+  const staff = usersResult.rows.filter((row) => finanzas.has(Number(row.work_area_id)));
 
-  return usersResult.rows
-    .filter((row) => finanzas.has(Number(row.work_area_id)))
-    .filter((row) => isAdministrador(normalizeRole(row.role)))
-    .map((row) => ({
-      id: row.id,
-      name: displayName(row),
-      email: row.email || null,
-    }));
+  return {
+    // Todo el personal de Finanzas, con cualquier rol (letras de cambio).
+    staffIds: new Set(staff.map((row) => row.id)),
+    // Sólo los administradores aprueban la etapa de Finanzas.
+    approvers: staff
+      .filter((row) => isAdministrador(normalizeRole(row.role)))
+      .map((row) => ({
+        id: row.id,
+        name: displayName(row),
+        email: row.email || null,
+      })),
+  };
 }
 
 /**
- * Aprobadores de Finanzas habilitados.
- * Ante un error de BD devuelve el caché previo (vacío la primera vez): sin
- * equipo resuelto nadie aprueba, que es más seguro que abrir la liquidación.
+ * Equipo de Finanzas resuelto y cacheado. Ante un error de BD devuelve el
+ * caché previo (vacío la primera vez): sin equipo resuelto nadie entra, que
+ * es más seguro que abrir la liquidación.
  */
-async function listFinanceApprovers({ force = false } = {}) {
-  if (!force && cache.expiresAt > Date.now()) return cache.approvers;
+async function loadTeam({ force = false } = {}) {
+  if (!force && cache.expiresAt > Date.now()) return cache;
 
   try {
-    const approvers = await fetchApprovers();
-    cache = { expiresAt: Date.now() + CACHE_TTL_MS, approvers };
-    return approvers;
+    cache = { expiresAt: Date.now() + CACHE_TTL_MS, ...(await fetchTeam()) };
   } catch (err) {
     logger.error("gastos", err);
-    return cache.approvers;
   }
+  return cache;
+}
+
+/** Aprobadores de Finanzas habilitados. */
+async function listFinanceApprovers({ force = false } = {}) {
+  return (await loadTeam({ force })).approvers;
 }
 
 /** ¿Este usuario de sesión aprueba en Finanzas? */
@@ -78,6 +86,17 @@ async function isFinanceApprover(user) {
   return approvers.some((approver) => approver.id === user.id);
 }
 
+/**
+ * ¿Trabaja en Finanzas (o en un área que dependa de ella), con cualquier rol?
+ * Es el criterio de las letras de cambio: emitir una letra es trabajo del
+ * área, no una aprobación, así que el asistente también la emite.
+ */
+async function isFinanceStaff(user) {
+  if (!user || user.id == null) return false;
+  if (await isInformaticaAdmin(user)) return true;
+  return (await loadTeam()).staffIds.has(user.id);
+}
+
 /** Correos a los que avisar cuando una solicitud llega a Finanzas. */
 async function financeApproverEmails() {
   const approvers = await listFinanceApprovers();
@@ -86,12 +105,13 @@ async function financeApproverEmails() {
 
 /** Invalida el caché tras cambios de área, de rol o de personal. */
 function invalidateFinanceTeam() {
-  cache = { expiresAt: 0, approvers: [] };
+  cache = { expiresAt: 0, approvers: [], staffIds: new Set() };
 }
 
 module.exports = {
   listFinanceApprovers,
   isFinanceApprover,
+  isFinanceStaff,
   financeApproverEmails,
   invalidateFinanceTeam,
 };

@@ -10,6 +10,7 @@ const {
 const logger = require("../utils/logger");
 const multer = require("multer");
 const fileStorage = require("../services/fileStorage");
+const { previewUrl } = require("../services/media/eventThumbnails");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { getIndicadores } = require("../services/usdService");
@@ -265,7 +266,8 @@ async function loadEventosCarouselPool() {
             return archivos
               .filter((item) => item.resource_type === "image")
               .map((item) => ({
-                image: item.url,
+                image: previewUrl(item.url),
+                imageFull: item.url,
                 name: evento.name,
                 slug: evento.slug,
                 created_at: item.created_at,

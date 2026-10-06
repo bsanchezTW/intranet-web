@@ -1,0 +1,127 @@
+<%
+  const lista = Array.isArray(letras) ? letras : [];
+  const porCobrar = Array.isArray(resumen) ? resumen : [];
+  const vencidasTotal = porCobrar.reduce((n, r) => n + r.vencidas, 0);
+  const vigentesTotal = porCobrar.reduce((n, r) => n + r.vigentes, 0);
+  const ESTADOS = [
+    ['', 'Todas'],
+    ['vigentes', 'Vigentes'],
+    ['vencidas', 'Vencidas'],
+    ['pagadas', 'Pagadas'],
+    ['anuladas', 'Anuladas'],
+  ];
+  const hayFiltro = !!(filtros.q || filtros.estado);
+%>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'file-text' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <span>Finanzas</span>
+      </nav>
+      <h2 class="page-title">Letras de cambio</h2>
+      <p class="page-description">
+        <%= vigentesTotal %> <%= vigentesTotal === 1 ? 'vigente' : 'vigentes' %>
+        · <%= vencidasTotal %> <%= vencidasTotal === 1 ? 'vencida' : 'vencidas' %> por cobrar
+      </p>
+    </div>
+    <div class="page-header-actions">
+      <a href="/letras/nueva" class="page-header-btn"><%- include('../partials/icon', { name: 'plus' }) %> Emitir letras</a>
+    </div>
+  </div>
+
+  <% if (success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (error) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= error %></span>
+    </div>
+  <% } %>
+
+  <% if (porCobrar.length) { %>
+    <div class="letras-resumen">
+      <% porCobrar.forEach((r) => { %>
+        <div class="letras-resumen__dato">
+          <span class="letras-resumen__label">Por cobrar en <%= currencies[r.currency_code] ? currencies[r.currency_code].label.split(' (')[0].toLowerCase() : r.currency_code %></span>
+          <strong><%= formatBillMoney(r.por_cobrar, r.currency_code) %></strong>
+          <% if (Number(r.vencido) > 0) { %>
+            <span class="letras-resumen__alerta"><%= formatBillMoney(r.vencido, r.currency_code) %> vencido</span>
+          <% } %>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <form class="letras-filtros" method="get" action="/letras" role="search">
+    <label class="letras-filtros__buscar">
+      <span class="sr-only">Buscar</span>
+      <%- include('../partials/icon', { name: 'search' }) %>
+      <input type="search" name="q" value="<%= filtros.q %>" placeholder="Aceptante, RUC, factura o número de letra" maxlength="80">
+    </label>
+    <div class="letras-filtros__estados" role="group" aria-label="Estado">
+      <% ESTADOS.forEach(([valor, texto]) => { %>
+        <button type="submit" name="estado" value="<%= valor %>" class="letras-chip<%= filtros.estado === valor ? ' is-active' : '' %>"<%= filtros.estado === valor ? ' aria-pressed="true"' : '' %>><%= texto %></button>
+      <% }) %>
+    </div>
+  </form>
+
+  <% if (!lista.length) { %>
+    <div class="letras-vacio">
+      <span class="letras-vacio__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'file-text' }) %></span>
+      <% if (hayFiltro) { %>
+        <p>Ninguna letra coincide con la búsqueda.</p>
+        <a href="/letras">Ver todas</a>
+      <% } else { %>
+        <p>Todavía no se ha emitido ninguna letra de cambio.</p>
+        <a href="/letras/nueva" class="page-header-btn"><%- include('../partials/icon', { name: 'plus' }) %> Emitir la primera</a>
+      <% } %>
+    </div>
+  <% } else { %>
+    <div class="letras-tabla-wrap">
+      <table class="letras-tabla">
+        <thead>
+          <tr>
+            <th scope="col">Número</th>
+            <th scope="col">Aceptante</th>
+            <th scope="col">Ref. girador</th>
+            <th scope="col">Giro</th>
+            <th scope="col">Vencimiento</th>
+            <th scope="col" class="num">Importe</th>
+            <th scope="col">Estado</th>
+            <th scope="col"><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% lista.forEach((l) => { const estado = billDisplayStatus(l.status, l.due_date, today); %>
+            <tr class="<%= estado.key === 'anulada' ? 'is-anulada' : '' %>">
+              <td data-label="Número">
+                <a class="letras-numero" href="/letras/lote/<%= l.batch_id %>"><%= l.number %></a>
+                <% if (l.installments_total > 1) { %><span class="letras-cuota"><%= l.installment %>/<%= l.installments_total %></span><% } %>
+              </td>
+              <td data-label="Aceptante">
+                <span class="letras-aceptante"><%= l.acceptor_name %></span>
+                <span class="letras-doc"><%= l.acceptor_doc %></span>
+              </td>
+              <td data-label="Ref. girador"><%= l.invoice_ref || '—' %></td>
+              <td data-label="Giro"><%= formatBillDate(l.issue_date) %></td>
+              <td data-label="Vencimiento"><%= formatBillDate(l.due_date) %></td>
+              <td data-label="Importe" class="num"><%= formatBillMoney(l.amount, l.currency_code) %></td>
+              <td data-label="Estado"><span class="letra-estado letra-estado--<%= estado.key %>"><%= estado.label %></span></td>
+              <td class="letras-tabla__acciones">
+                <a href="/letras/<%= l.id %>/pdf" target="_blank" rel="noopener" class="letras-icono-btn" title="Imprimir <%= l.number %>" aria-label="Imprimir <%= l.number %>"><%- include('../partials/icon', { name: 'printer' }) %></a>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% if (lista.length >= 500) { %>
+      <p class="letras-nota">Se muestran las 500 letras más recientes. Usa la búsqueda para encontrar las anteriores.</p>
+    <% } %>
+  <% } %>
+</div>

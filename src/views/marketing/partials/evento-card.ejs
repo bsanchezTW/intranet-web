@@ -10,7 +10,7 @@
       <%- include('../../partials/icon', { name: 'image' }) %>
     </span>
     <% if (ev.image) { %>
-      <img src="<%= ev.image %>" alt="" loading="lazy" decoding="async" data-galeria-revelar>
+      <img src="<%= eventPreviewUrl(ev.image) %>" data-full="<%= ev.image %>" alt="" loading="lazy" decoding="async" data-galeria-revelar>
     <% } %>
     <div class="galeria-card__velo" aria-hidden="true"></div>
     <div class="galeria-card__encabezado">

@@ -6,6 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 const db = require('../db');
 const fileStorage = require('../services/fileStorage');
+const eventThumbnails = require('../services/media/eventThumbnails');
+const contentCache = require('../services/storage/contentCache');
 const requireRole = require('../middlewares/requireRole');
 const { UPLOAD_LIMITS_BYTES } = require('../config/uploadLimits');
 const { EVENTO_VIEW_COLUMNS } = require('../utils/schemaMappers');
@@ -15,7 +17,7 @@ const { isPrivateFlag, hasPrivacyField, hasWebField } = require('../utils/eventA
 const router = express.Router();
 const WRITE_ROLES = ['admin'];
 
-const ASSET_VERSION = '20260922a';
+const ASSET_VERSION = '20261006a';
 const ASSETS_LISTA = {
   extraCss: [`/css/galeria.css?v=${ASSET_VERSION}`],
   extraJs: [`/js/galeria.js?v=${ASSET_VERSION}`],
@@ -216,6 +218,17 @@ router.post('/eventos/:slug/fotos/upload', requireRole(...WRITE_ROLES), upload.s
       req.file.originalname
     );
 
+    if (isImage) {
+      try {
+        await eventThumbnails.createFromLocalFile(req.file.path, result.public_id);
+      } catch (thumbErr) {
+        console.warn(
+          '[Eventos] No se pudo generar la miniatura:',
+          thumbErr.message || thumbErr,
+        );
+      }
+    }
+
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -284,7 +297,7 @@ router.post('/eventos/:slug/fotos/eliminar', requireRole(...WRITE_ROLES), async 
   const { slug } = req.params;
   
   try {
-    await fileStorage.deleteFile(public_id);
+    await eventThumbnails.removeStored(public_id);
 
     const { rows } = await db.query('SELECT image FROM events WHERE slug = $1', [slug]);
     if (rows.length > 0 && rows[0].image && rows[0].image.includes(public_id)) {
@@ -304,6 +317,7 @@ router.post('/eventos/:slug/eliminar', requireRole(...WRITE_ROLES), async (req, 
   const { slug } = req.params;
   try {
     await fileStorage.deleteFolder(`eventos/${slug}`);
+    await contentCache.forgetPrefix(`eventos/${slug}`);
     
     await db.query('DELETE FROM events WHERE slug = $1', [slug]);
     const redirect = '/marketing/eventos?ok=Evento eliminado';

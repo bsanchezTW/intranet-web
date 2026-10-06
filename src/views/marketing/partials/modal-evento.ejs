@@ -92,7 +92,7 @@ const fotosPortada = esEditar
               <span>Sin portada</span>
             </div>
             <img id="eventoPortadaImg" alt="Vista previa de la portada"
-                 <% if (ev.image) { %>src="<%= ev.image %>"<% } else { %>hidden<% } %>>
+                 <% if (ev.image) { %>src="<%= eventPreviewUrl(ev.image) %>" data-full="<%= ev.image %>"<% } else { %>hidden<% } %>>
             <button type="button" class="galeria-portada__quitar" id="eventoPortadaQuitar"
                     aria-label="Quitar la portada elegida" hidden>&times;</button>
           </div>
@@ -116,8 +116,8 @@ const fotosPortada = esEditar
             <% fotosPortada.forEach(function (item) { %>
               <button type="button" class="galeria-portada__opcion<%= item.url === ev.image ? ' is-actual' : '' %>"
                       role="option" aria-selected="<%= item.url === ev.image ? 'true' : 'false' %>"
-                      data-url="<%= item.url %>">
-                <img data-src="<%= item.url %>" alt="" loading="lazy">
+                      data-url="<%= item.url %>" data-preview="<%= eventPreviewUrl(item.url) %>">
+                <img data-src="<%= eventPreviewUrl(item.url) %>" data-full="<%= item.url %>" alt="" loading="lazy">
               </button>
             <% }) %>
           </div>

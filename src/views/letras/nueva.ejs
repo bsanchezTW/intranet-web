@@ -1,0 +1,241 @@
+<%
+  const v = values || {};
+  const err = errors || {};
+  const hayErrores = Object.keys(err).length > 0;
+  const lista = Array.isArray(aceptantes) ? aceptantes : [];
+  const cuotas = Array.isArray(v.cuotas) ? v.cuotas : [];
+  const conAval = !!(v.guarantor_name || v.guarantor_doc || v.guarantor_address || err.guarantor_name || err.guarantor_doc);
+  const conCuenta = !!(v.bank_name || v.bank_office || v.bank_account || v.bank_dc);
+
+  function invalido(campo) { return err[campo] ? ' is-invalid' : ''; }
+%>
+
+<%# Mensaje de error de un campo, si lo hay. %>
+<% function mensaje(campo) { if (err[campo]) { %><span class="campo-form__error" id="err-<%= campo %>"><%= err[campo] %></span><% } } %>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'file-text' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="/letras">Letras de cambio</a> <span aria-hidden="true">/</span>
+        <span>Emitir</span>
+      </nav>
+      <h2 class="page-title">Emitir letras de cambio</h2>
+      <p class="page-description">
+        Giradas por <%= drawer.name %> a la orden de sí misma. Divide una factura en cuotas y se numeran solas.
+      </p>
+    </div>
+  </div>
+
+  <% if (hayErrores) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span>Revisa los campos marcados antes de emitir.</span>
+    </div>
+  <% } %>
+
+  <form method="post" action="/letras" class="letras-form" id="letrasForm"
+        data-next-year="<%= siguiente.year %>" data-next-seq="<%= siguiente.seq %>"
+        data-max-cuotas="<%= maxCuotas %>">
+
+    <!-- ═══════════ Aceptante ═══════════ -->
+    <section class="letras-panel" aria-labelledby="panel-aceptante">
+      <h3 class="letras-panel__titulo" id="panel-aceptante">
+        <span class="letras-panel__num" aria-hidden="true">1</span> Aceptante
+      </h3>
+      <p class="letras-panel__desc">El cliente que se obliga a pagar. Si ya le emitiste letras, al escribir su RUC se completan sus datos.</p>
+
+      <div class="campos-grid">
+        <div class="campo-form<%= invalido('acceptor_doc') %>">
+          <label for="acceptor_doc">RUC o DNI <span class="required-mark">*</span></label>
+          <input type="text" id="acceptor_doc" name="acceptor_doc" value="<%= v.acceptor_doc || '' %>"
+                 inputmode="numeric" maxlength="11" autocomplete="off" list="aceptantesConocidos" required>
+          <% mensaje('acceptor_doc') %>
+          <span class="campo-form__ayuda" id="aceptanteAyuda">RUC de 11 dígitos o DNI de 8.</span>
+          <datalist id="aceptantesConocidos">
+            <% lista.forEach((a) => { %><option value="<%= a.acceptor_doc %>"><%= a.acceptor_name %></option><% }) %>
+          </datalist>
+        </div>
+        <div class="campo-form campo-form--doble<%= invalido('acceptor_name') %>">
+          <label for="acceptor_name">Razón social o nombre <span class="required-mark">*</span></label>
+          <input type="text" id="acceptor_name" name="acceptor_name" value="<%= v.acceptor_name || '' %>" maxlength="200" required>
+          <% mensaje('acceptor_name') %>
+        </div>
+        <div class="campo-form campo-form--ancho<%= invalido('acceptor_address') %>">
+          <label for="acceptor_address">Domicilio <span class="required-mark">*</span></label>
+          <input type="text" id="acceptor_address" name="acceptor_address" value="<%= v.acceptor_address || '' %>" maxlength="300" required>
+          <% mensaje('acceptor_address') %>
+        </div>
+        <div class="campo-form">
+          <label for="acceptor_locality">Localidad</label>
+          <input type="text" id="acceptor_locality" name="acceptor_locality" value="<%= v.acceptor_locality || '' %>" maxlength="120" placeholder="San Isidro - Lima">
+        </div>
+        <div class="campo-form">
+          <label for="acceptor_phone">Teléfono</label>
+          <input type="tel" id="acceptor_phone" name="acceptor_phone" value="<%= v.acceptor_phone || '' %>" maxlength="30">
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ Condiciones ═══════════ -->
+    <section class="letras-panel" aria-labelledby="panel-condiciones">
+      <h3 class="letras-panel__titulo" id="panel-condiciones">
+        <span class="letras-panel__num" aria-hidden="true">2</span> Importe y vencimientos
+      </h3>
+      <p class="letras-panel__desc">El total se reparte en cuotas iguales; los céntimos que sobran van a la última. Puedes ajustar cada cuota abajo.</p>
+
+      <div class="campos-grid">
+        <div class="campo-form<%= invalido('invoice_ref') %>">
+          <label for="invoice_ref">Ref. del girador</label>
+          <input type="text" id="invoice_ref" name="invoice_ref" value="<%= v.invoice_ref || '' %>" maxlength="40" placeholder="F001-00004989">
+          <span class="campo-form__ayuda">Factura u otro documento que origina la deuda.</span>
+        </div>
+        <div class="campo-form<%= invalido('issue_date') %>">
+          <label for="issue_date">Fecha de giro <span class="required-mark">*</span></label>
+          <input type="date" id="issue_date" name="issue_date" value="<%= v.issue_date || '' %>" required>
+          <% mensaje('issue_date') %>
+        </div>
+        <div class="campo-form">
+          <label for="issue_place">Lugar de giro</label>
+          <input type="text" id="issue_place" name="issue_place" value="<%= v.issue_place || '' %>" maxlength="80">
+        </div>
+        <div class="campo-form<%= invalido('currency_code') %>">
+          <label for="currency_code">Moneda <span class="required-mark">*</span></label>
+          <select id="currency_code" name="currency_code">
+            <% Object.values(currencies).forEach((c) => { %>
+              <option value="<%= c.code %>" data-symbol="<%= c.symbol %>"<%= v.currency_code === c.code ? ' selected' : '' %>><%= c.label %></option>
+            <% }) %>
+          </select>
+          <% mensaje('currency_code') %>
+        </div>
+        <div class="campo-form<%= invalido('total_amount') %>">
+          <label for="total_amount">Importe total <span class="required-mark">*</span></label>
+          <input type="number" id="total_amount" name="total_amount" value="<%= v.total_amount || '' %>" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
+          <% mensaje('total_amount') %>
+        </div>
+        <div class="campo-form<%= invalido('installments_count') %>">
+          <label for="installments_count">N.º de letras <span class="required-mark">*</span></label>
+          <input type="number" id="installments_count" name="installments_count" value="<%= v.installments_count || '1' %>" min="1" max="<%= maxCuotas %>" step="1">
+          <% mensaje('installments_count') %>
+        </div>
+        <div class="campo-form<%= invalido('first_due_date') %>">
+          <label for="first_due_date">Primer vencimiento <span class="required-mark">*</span></label>
+          <input type="date" id="first_due_date" name="first_due_date" value="<%= v.first_due_date || '' %>">
+          <% mensaje('first_due_date') %>
+        </div>
+        <div class="campo-form<%= invalido('interval_days') %>">
+          <label for="interval_days">Días entre vencimientos</label>
+          <input type="number" id="interval_days" name="interval_days" value="<%= v.interval_days || '30' %>" min="1" max="366" step="1">
+          <% mensaje('interval_days') %>
+        </div>
+        <div class="campo-form<%= invalido('start_number') %>">
+          <label for="start_number">N.º inicial</label>
+          <input type="number" id="start_number" name="start_number" value="<%= v.start_number || '' %>" min="1" max="99999" step="1" placeholder="<%= siguiente.seq %>">
+          <% mensaje('start_number') %>
+          <span class="campo-form__ayuda">Vacío: el siguiente libre (<span id="siguienteLibre"><%= siguiente.number %></span>).</span>
+        </div>
+      </div>
+
+      <div class="letras-cronograma<%= err.cuotas ? ' is-invalid' : '' %>">
+        <div class="letras-cronograma__head">
+          <h4>Cronograma</h4>
+          <span class="letras-cronograma__total" id="cronogramaTotal" aria-live="polite"></span>
+        </div>
+        <% if (err.cuotas) { %>
+          <p class="letras-cronograma__error" role="alert"><%= err.cuotas %></p>
+        <% } %>
+        <div class="letras-tabla-wrap">
+          <table class="letras-tabla letras-tabla--cuotas">
+            <thead>
+              <tr>
+                <th scope="col">Letra</th>
+                <th scope="col">Número</th>
+                <th scope="col">Vencimiento</th>
+                <th scope="col" class="num">Importe</th>
+              </tr>
+            </thead>
+            <tbody id="cuotasBody">
+              <% cuotas.forEach((c, i) => { %>
+                <tr>
+                  <td><%= i + 1 %></td>
+                  <td class="letras-cuota-num">—</td>
+                  <td><input type="date" name="cuotas[<%= i %>][due_date]" value="<%= c.due_date %>" aria-label="Vencimiento de la letra <%= i + 1 %>"></td>
+                  <td class="num"><input type="number" name="cuotas[<%= i %>][amount]" value="<%= c.amount %>" min="0.01" step="0.01" inputmode="decimal" aria-label="Importe de la letra <%= i + 1 %>"></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+        <noscript><p class="letras-nota">Sin JavaScript las cuotas se calculan al emitir, en partes iguales.</p></noscript>
+      </div>
+    </section>
+
+    <!-- ═══════════ Aval ═══════════ -->
+    <details class="letras-panel letras-panel--plegable"<%= conAval ? ' open' : '' %>>
+      <summary class="letras-panel__titulo">
+        <span class="letras-panel__num" aria-hidden="true">3</span> Aval permanente
+        <span class="letras-panel__opcional">Opcional</span>
+      </summary>
+      <p class="letras-panel__desc">Quien garantiza el pago si el aceptante no cumple. Firma en el recuadro del aval.</p>
+      <div class="campos-grid">
+        <div class="campo-form campo-form--doble<%= invalido('guarantor_name') %>">
+          <label for="guarantor_name">Nombre o razón social</label>
+          <input type="text" id="guarantor_name" name="guarantor_name" value="<%= v.guarantor_name || '' %>" maxlength="200">
+          <% mensaje('guarantor_name') %>
+        </div>
+        <div class="campo-form<%= invalido('guarantor_doc') %>">
+          <label for="guarantor_doc">RUC o DNI</label>
+          <input type="text" id="guarantor_doc" name="guarantor_doc" value="<%= v.guarantor_doc || '' %>" inputmode="numeric" maxlength="11">
+          <% mensaje('guarantor_doc') %>
+        </div>
+        <div class="campo-form campo-form--ancho">
+          <label for="guarantor_address">Domicilio</label>
+          <input type="text" id="guarantor_address" name="guarantor_address" value="<%= v.guarantor_address || '' %>" maxlength="300">
+        </div>
+        <div class="campo-form">
+          <label for="guarantor_locality">Localidad</label>
+          <input type="text" id="guarantor_locality" name="guarantor_locality" value="<%= v.guarantor_locality || '' %>" maxlength="120">
+        </div>
+        <div class="campo-form">
+          <label for="guarantor_phone">Teléfono</label>
+          <input type="tel" id="guarantor_phone" name="guarantor_phone" value="<%= v.guarantor_phone || '' %>" maxlength="30">
+        </div>
+      </div>
+    </details>
+
+    <!-- ═══════════ Cuenta de cargo ═══════════ -->
+    <details class="letras-panel letras-panel--plegable"<%= conCuenta ? ' open' : '' %>>
+      <summary class="letras-panel__titulo">
+        <span class="letras-panel__num" aria-hidden="true">4</span> Cuenta de cargo
+        <span class="letras-panel__opcional">Opcional</span>
+      </summary>
+      <p class="letras-panel__desc">Si el pago se debita de una cuenta del aceptante. Suele dejarse en blanco.</p>
+      <div class="campos-grid">
+        <div class="campo-form">
+          <label for="bank_name">Banco</label>
+          <input type="text" id="bank_name" name="bank_name" value="<%= v.bank_name || '' %>" maxlength="80">
+        </div>
+        <div class="campo-form">
+          <label for="bank_office">Oficina</label>
+          <input type="text" id="bank_office" name="bank_office" value="<%= v.bank_office || '' %>" maxlength="40">
+        </div>
+        <div class="campo-form">
+          <label for="bank_account">N.º de cuenta</label>
+          <input type="text" id="bank_account" name="bank_account" value="<%= v.bank_account || '' %>" maxlength="40">
+        </div>
+        <div class="campo-form">
+          <label for="bank_dc">DC</label>
+          <input type="text" id="bank_dc" name="bank_dc" value="<%= v.bank_dc || '' %>" maxlength="4">
+        </div>
+      </div>
+    </details>
+
+    <div class="letras-form__acciones">
+      <a href="/letras" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+      <button type="submit" class="page-header-btn" id="emitirBtn"><%- include('../partials/icon', { name: 'check' }) %> <span>Emitir letras</span></button>
+    </div>
+  </form>
+</div>
