@@ -371,9 +371,9 @@ function labelledBlank(doc, text, x, y, right) {
 }
 
 /**
- * Recuadro del girador, como en el talonario: sólo rótulos y renglones. La
- * razón social y el representante los pone el sello de la empresa (que cae
- * en el espacio libre del medio) y la firma va a mano.
+ * Recuadro del girador, como en el talonario: la razón social la pone el
+ * sello de la empresa (cae en el espacio libre del medio) y la firma va a
+ * mano. Sólo el nombre del representante legal sale impreso.
  */
 function drawDrawerSignature(doc) {
   const y = Y0 + 206;
@@ -383,11 +383,13 @@ function drawDrawerSignature(doc) {
 
   labelledBlank(doc, "Nombre o Razón Social del Girador", left, y + 10, right);
 
-  line(doc, left, y + 76, right, y + 76, 0.6);
-  fitText(doc, "Firma", left, y + 79, right - left, { size: 6.5, color: BLUE, align: "center" });
+  line(doc, left, y + 70, right, y + 70, 0.6);
+  fitText(doc, "Firma", left, y + 73, right - left, { size: 6.5, color: BLUE, align: "center" });
 
-  labelledBlank(doc, "Nombre del Representante Legal", left, y + 91, right);
-  labelledBlank(doc, "D.O.I.", left, y + 104, right);
+  label(doc, "Nombre del Representante Legal:", left, y + 84, 7);
+  fitText(doc, BILL_DRAWER.representative, left + 2, y + 93.5, right - left - 4, { font: FONT_BOLD, size: 8 });
+  underline(doc, left, right, y + 102);
+  labelledBlank(doc, "D.O.I.", left, y + 105, right);
 }
 
 function drawFooterRule(doc) {
