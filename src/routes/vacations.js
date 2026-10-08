@@ -746,12 +746,20 @@ const APROBACIONES_PATH = "/RRHH/vacaciones/aprobaciones";
 router.get("/aprobaciones", requireRole.intranetActivo(), async (req, res) => {
   const user = req.session.user;
   try {
-    const [inbox, esJefe, esRrhh] = await Promise.all([
+    // Quien gestiona RRHH aprueba dentro de la Gestión de vacaciones, que ya
+    // muestra todo lo pendiente. Se conserva la query (?ok=…&msg=…) y el
+    // enlace de los correos sigue sirviendo para ambos perfiles.
+    if (await canManageRrhh(user)) {
+      const query = req.originalUrl.includes("?")
+        ? req.originalUrl.slice(req.originalUrl.indexOf("?"))
+        : "";
+      return res.redirect(`/RRHH/vacaciones/gestion${query}`);
+    }
+    const [inbox, esJefe] = await Promise.all([
       requestService.listForApprover(user.id),
       areaManager.isAreaManager(user),
-      canManageRrhh(user),
     ]);
-    if (!esJefe && !esRrhh && !inbox.pending.length && !inbox.history.length) {
+    if (!esJefe && !inbox.pending.length && !inbox.history.length) {
       return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
     }
     res.render("RRHH/vacaciones/aprobaciones", {
@@ -759,7 +767,7 @@ router.get("/aprobaciones", requireRole.intranetActivo(), async (req, res) => {
       user,
       pending: inbox.pending.map(mapVacationRequestForView),
       history: inbox.history.map(mapVacationRequestForView),
-      esRrhh,
+      esRrhh: false,
       ...readFlash(req),
     });
   } catch (err) {

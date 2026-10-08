@@ -39,7 +39,10 @@
       </div>
     </a>
 
-    <% if (typeof isAreaManager !== 'undefined' && isAreaManager) { %>
+    <%# Quien gestiona RRHH aprueba dentro de la Gestión de vacaciones; el jefe
+        de área sin ese permiso sigue con su bandeja de aprobaciones. %>
+    <% const gestionaRrhh = typeof canManageRrhh !== 'undefined' && canManageRrhh; %>
+    <% if (!gestionaRrhh && typeof isAreaManager !== 'undefined' && isAreaManager) { %>
     <a href="/RRHH/vacaciones/aprobaciones" class="procesos-card">
       <span class="procesos-card__tile" aria-hidden="true"><%- include('../../partials/icon', { name: 'check-circle' }) %></span>
       <div class="procesos-card__cuerpo">

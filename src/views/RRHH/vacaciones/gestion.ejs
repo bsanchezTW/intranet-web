@@ -1,4 +1,16 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261008a">
+
+<%
+  // Una sola consulta (listForAdmin) y dos bloques: lo que falta resolver
+  // arriba y el historial abajo. El filtro de área aplica a ambos; el de
+  // estado elige qué bloque se ve.
+  const lista = Array.isArray(requests) ? requests : [];
+  const porAprobar = lista.filter((r) => r.status === 'pending');
+  const historial = lista.filter((r) => r.status !== 'pending');
+  const verPorAprobar = !filtros.status || filtros.status === 'pending';
+  const verHistorial = filtros.status !== 'pending';
+  const yo = user ? Number(user.id) : null;
+%>
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -12,6 +24,12 @@
       <h2 class="page-title">Gestión de vacaciones</h2>
       <p class="page-description">Aprueba o rechaza solicitudes y revisa los saldos del equipo.</p>
     </div>
+    <div class="page-header-actions">
+      <a class="page-header-btn page-header-btn--secundario" href="/RRHH/vacaciones/gestion/resumen">Resumen y días vencidos</a>
+      <%# La exportación respeta los filtros aplicados abajo. %>
+      <a class="page-header-btn page-header-btn--secundario"
+         href="/RRHH/vacaciones/gestion/exportar?area=<%= encodeURIComponent(filtros.area || '') %>&status=<%= encodeURIComponent(filtros.status || '') %>">Exportar a Excel</a>
+    </div>
   </div>
 
   <% if (typeof success !== 'undefined' && success) { %>
@@ -22,28 +40,14 @@
   <% } %>
 
   <div class="vac-panel">
-    <div class="vac-panel-head">
-      Solicitudes
-      <div class="vac-panel-actions">
-        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/resumen">
-          Resumen y días vencidos
-        </a>
-        <%# La exportación respeta los filtros aplicados arriba. %>
-        <a
-          class="vac-btn vac-btn-cancel vac-btn-sm"
-          href="/RRHH/vacaciones/gestion/exportar?area=<%= encodeURIComponent(filtros.area || '') %>&status=<%= encodeURIComponent(filtros.status || '') %>"
-        >Exportar a Excel</a>
-      </div>
-    </div>
-
-    <form class="vac-filters" method="GET" action="/RRHH/vacaciones/gestion">
-      <select name="area">
+    <form class="vac-filters vac-filters--solo" method="GET" action="/RRHH/vacaciones/gestion">
+      <select name="area" aria-label="Área">
         <option value="">Todas las áreas</option>
         <% (areas || []).forEach(a => { %>
           <option value="<%= a.id %>" <%= String(filtros.area) === String(a.id) ? 'selected' : '' %>><%= a.area_name %></option>
         <% }) %>
       </select>
-      <select name="status">
+      <select name="status" aria-label="Estado">
         <option value="">Todos los estados</option>
         <option value="pending" <%= filtros.status === 'pending' ? 'selected' : '' %>>Pendiente</option>
         <option value="approved" <%= filtros.status === 'approved' ? 'selected' : '' %>>Aprobada</option>
@@ -54,37 +58,49 @@
       </select>
       <button type="submit" class="vac-btn vac-btn-primary vac-btn-sm">Filtrar</button>
     </form>
+  </div>
 
-    <% if (!requests || requests.length === 0) { %>
-      <p class="vac-empty">No hay solicitudes con los filtros aplicados.</p>
+  <% if (verPorAprobar) { %>
+  <div class="vac-panel">
+    <div class="vac-panel-head">
+      <span>Por aprobar <% if (porAprobar.length) { %><span class="vac-panel-count"><%= porAprobar.length %></span><% } %></span>
+    </div>
+    <% if (!porAprobar.length) { %>
+      <p class="vac-empty">No hay solicitudes pendientes<%= filtros.area ? ' en esta área' : '' %>.</p>
     <% } else { %>
       <table class="vac-table vac-table--stack">
         <thead>
           <tr>
-            <th>Colaborador</th><th>Período</th><th>Días</th>
-            <th>Estado</th><th>Comentario</th><th>Acciones</th>
+            <th>Colaborador</th><th>Área</th><th>Período</th><th>Días</th>
+            <th>Aprueba</th><th>Comentario</th><th>Acciones</th>
           </tr>
         </thead>
         <tbody>
-          <% requests.forEach(r => { %>
+          <% porAprobar.forEach(r => { const mia = yo !== null && Number(r.user_id) === yo; %>
             <tr>
               <td data-label="Colaborador">
                 <% if (r.requester_deleted) { %>
-                  <%# Colaborador eliminado: se conserva el nombre, pero ya no hay ficha a la que enlazar. %>
                   <span class="vac-link-colaborador"><%= r.collaboratorName || 'Colaborador' %> <small>(usuario eliminado)</small></span>
                 <% } else { %>
                   <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
                 <% } %>
-                <% if (r.status === 'pending') { %>
-                  <br><small>Aprueba: <%= r.approver_name || 'RRHH' %></small>
-                <% } %>
               </td>
+              <td data-label="Área"><%= r.area || '-' %></td>
               <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
               <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
-              <td data-label="Estado"><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
-              <td data-label="Comentario"><%= r.reviewer_notes || r.requester_notes || '-' %></td>
+              <td data-label="Aprueba">
+                <% if (r.approver_user_id != null && Number(r.approver_user_id) === yo) { %>
+                  <span class="vac-badge vac-badge-pending">Tú</span>
+                <% } else { %>
+                  <%= r.approver_name || 'RRHH' %>
+                <% } %>
+              </td>
+              <td data-label="Comentario"><%= r.requester_notes || '-' %></td>
               <td data-label="">
-                <% if (r.status === 'pending') { %>
+                <% if (mia) { %>
+                  <%# Nadie se aprueba a sí mismo (canReviewRequest): la resuelve otro administrador. %>
+                  <small class="vac-nota-propia">Es tu solicitud: la resuelve otra persona.</small>
+                <% } else { %>
                   <form class="vac-inline-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/aprobar" method="POST"
                         data-confirm="Se aprobarán <%= r.days %> <%= r.dayUnit %> (<%= r.startDateFmt %> → <%= r.endDateFmt %>)."
                         data-confirm-title="¿Aprobar la solicitud?"
@@ -95,8 +111,6 @@
                     <input type="hidden" name="reason">
                     <button type="submit" class="vac-btn vac-btn-reject vac-btn-sm">Rechazar</button>
                   </form>
-                <% } else { %>
-                  <span style="color:#94a3b8;">—</span>
                 <% } %>
               </td>
             </tr>
@@ -105,6 +119,44 @@
       </table>
     <% } %>
   </div>
+  <% } %>
+
+  <% if (verHistorial) { %>
+  <div class="vac-panel">
+    <div class="vac-panel-head">Historial</div>
+    <% if (!historial.length) { %>
+      <p class="vac-empty">No hay solicitudes resueltas con los filtros aplicados.</p>
+    <% } else { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Colaborador</th><th>Período</th><th>Días</th>
+            <th>Estado</th><th>Resuelta</th><th>Comentario</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% historial.forEach(r => { %>
+            <tr>
+              <td data-label="Colaborador">
+                <% if (r.requester_deleted) { %>
+                  <%# Colaborador eliminado: se conserva el nombre, pero ya no hay ficha a la que enlazar. %>
+                  <span class="vac-link-colaborador"><%= r.collaboratorName || 'Colaborador' %> <small>(usuario eliminado)</small></span>
+                <% } else { %>
+                  <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.user_id %>"><%= r.collaboratorName || ('#' + r.user_id) %></a>
+                <% } %>
+              </td>
+              <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
+              <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
+              <td data-label="Estado"><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
+              <td data-label="Resuelta"><%= r.reviewedAtFmt || '-' %></td>
+              <td data-label="Comentario"><%= r.reviewer_notes || r.requester_notes || '-' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+  <% } %>
 </div>
 
 <script>

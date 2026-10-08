@@ -811,3 +811,31 @@ a.vac-btn { display: inline-block; text-decoration: none; }
   color: var(--subtle);
   font-weight: 700;
 }
+
+/* ==========================================================================
+   Gestión de vacaciones: "Por aprobar" + "Historial"
+   ========================================================================== */
+
+/* Los filtros van solos en su panel, sobre los dos bloques. */
+.vac-filters--solo { border-bottom: 0; }
+
+/* Cuántas solicitudes faltan por resolver, junto al título del bloque. */
+.vac-panel-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.vac-nota-propia {
+  color: var(--subtle);
+  font-size: 0.78rem;
+}

@@ -1,7 +1,6 @@
 <%
   /* Mismas secciones que /RRHH: Plataformas internas, Administración y Portales externos. */
   const gestionRrhh = typeof canManageRrhh !== 'undefined' && canManageRrhh;
-  const jefeArea = typeof isAreaManager !== 'undefined' && isAreaManager;
 %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Plataformas internas</span>
@@ -9,9 +8,6 @@
   <a href="/RRHH/personal">Personal</a>
   <% if (features.vacations) { %>
   <a href="/RRHH/vacaciones">Vacaciones</a>
-  <% if (jefeArea) { %>
-  <a href="/RRHH/vacaciones/aprobaciones">Aprobar vacaciones</a>
-  <% } %>
   <% } %>
 </div>
 <% if (gestionRrhh) { %>
