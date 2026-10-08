@@ -5,7 +5,7 @@ const db = require("../db");
 const bills = require("../services/billsOfExchange/billOfExchangeService");
 const { renderBillsPdf } = require("../services/billsOfExchange/billOfExchangePdf");
 const {
-  BILL_CURRENCIES,
+  BILL_CURRENCY,
   BILL_DRAWER,
   DEFAULT_ISSUE_PLACE,
   DEFAULT_INTERVAL_DAYS,
@@ -30,7 +30,7 @@ const VIEW_HELPERS = {
   formatBillNumber,
   billDisplayStatus,
   formatBillDate: (value) => (value ? formatDisplay(value).replace(/-/g, "/") : "—"),
-  currencies: BILL_CURRENCIES,
+  currency: BILL_CURRENCY,
   drawer: BILL_DRAWER,
 };
 
@@ -106,7 +106,6 @@ function defaultFormValues(today) {
   return {
     issue_date: today,
     issue_place: DEFAULT_ISSUE_PLACE,
-    currency_code: "PEN",
     installments_count: "1",
     interval_days: String(DEFAULT_INTERVAL_DAYS),
     first_due_date: addDays(today, DEFAULT_INTERVAL_DAYS),
@@ -203,12 +202,11 @@ router.get("/lote/:id", async (req, res) => {
   try {
     const lote = await bills.getBatch(id);
     if (!lote) return res.status(404).render("404", { titulo: "Página no encontrada" });
-    const currency = BILL_CURRENCIES[lote.currency_code];
     res.render("letras/lote", {
       titulo: `Letras de ${lote.acceptor_name}`,
       lote,
       today: todayInCountry(),
-      totalEnLetras: amountToWords(lote.total_amount, currency ? currency.words : ""),
+      totalEnLetras: amountToWords(lote.total_amount, BILL_CURRENCY.words),
       ...flashFrom(req),
       ...VIEW_HELPERS,
       extraCss: EXTRA_CSS,

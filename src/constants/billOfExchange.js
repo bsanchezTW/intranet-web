@@ -7,15 +7,16 @@
  *
  * El formato impreso replica el talonario físico de la empresa (cláusulas
  * especiales en vertical, columnas de firma del aceptante, recuadro de firma
- * del representante legal). Ver services/billsOfExchange/billOfExchangePdf.js.
+ * del girador). Ver services/billsOfExchange/billOfExchangePdf.js.
+ *
+ * El recuadro del girador sale sólo con sus rótulos, como en el talonario: la
+ * razón social y el representante los pone el sello de la empresa y la firma
+ * va a mano. Por eso aquí no vive ningún dato del representante legal.
  */
 
 const BILL_DRAWER = Object.freeze({
   name: "TRANSWORLD POWER AND TELECOM S.A.C.",
   ruc: "20600956257",
-  representative: "JORGE ALEJANDRO MARTIN MASSON PAZOS",
-  representativeTitle: "Gerente General",
-  representativeDoc: "08232345",
 });
 
 /** Cláusulas especiales del reverso izquierdo, tal como las trae el talonario. */
@@ -27,12 +28,15 @@ const BILL_CLAUSES = Object.freeze([
 ]);
 
 /**
- * Monedas admitidas. `words` es lo que sigue a "CON 40/100" en el monto en
- * letras; `symbol` es el que se imprime en la casilla de importe.
+ * Las letras se giran sólo en dólares americanos. `words` es lo que sigue a
+ * "CON 40/100" en el monto en letras; `symbol` el de la casilla de importe.
+ * La columna currency_code se conserva para que cada letra diga su moneda.
  */
-const BILL_CURRENCIES = Object.freeze({
-  PEN: Object.freeze({ code: "PEN", label: "Soles (S/)", symbol: "S/", words: "SOLES" }),
-  USD: Object.freeze({ code: "USD", label: "Dólares (US$)", symbol: "US$", words: "DÓLARES AMERICANOS" }),
+const BILL_CURRENCY = Object.freeze({
+  code: "USD",
+  label: "Dólares americanos",
+  symbol: "US$",
+  words: "DÓLARES AMERICANOS",
 });
 
 const BILL_STATUS = Object.freeze({
@@ -50,10 +54,6 @@ const DEFAULT_INTERVAL_DAYS = 30;
 const MAX_INSTALLMENTS = 36;
 const MAX_INTERVAL_DAYS = 366;
 
-function isBillCurrency(code) {
-  return Object.prototype.hasOwnProperty.call(BILL_CURRENCIES, code);
-}
-
 /** "LT-00421-2026": prefijo, correlativo de 5 dígitos y año del giro. */
 function formatBillNumber(year, seq) {
   return `${BILL_NUMBER_PREFIX}-${String(seq).padStart(5, "0")}-${year}`;
@@ -70,10 +70,8 @@ function formatBillAmount(amount) {
 }
 
 /** "US$ 6,942.40" */
-function formatBillMoney(amount, currencyCode) {
-  const currency = BILL_CURRENCIES[currencyCode];
-  const value = formatBillAmount(amount);
-  return currency ? `${currency.symbol} ${value}` : value;
+function formatBillMoney(amount) {
+  return `${BILL_CURRENCY.symbol} ${formatBillAmount(amount)}`;
 }
 
 /**
@@ -92,7 +90,7 @@ function billDisplayStatus(status, dueDate, today) {
 module.exports = {
   BILL_DRAWER,
   BILL_CLAUSES,
-  BILL_CURRENCIES,
+  BILL_CURRENCY,
   BILL_STATUS,
   BILL_STATUS_VALUES,
   BILL_NUMBER_PREFIX,
@@ -100,7 +98,6 @@ module.exports = {
   DEFAULT_INTERVAL_DAYS,
   MAX_INSTALLMENTS,
   MAX_INTERVAL_DAYS,
-  isBillCurrency,
   formatBillNumber,
   formatBillAmount,
   formatBillMoney,

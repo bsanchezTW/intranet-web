@@ -50,7 +50,7 @@
     <section class="letras-panel letras-detalle__resumen" aria-labelledby="lote-condiciones">
       <h3 class="letras-panel__titulo" id="lote-condiciones">Condiciones</h3>
       <dl class="letras-datos">
-        <div><dt>Importe total</dt><dd class="letras-datos__monto"><%= formatBillMoney(lote.total_amount, lote.currency_code) %></dd></div>
+        <div><dt>Importe total</dt><dd class="letras-datos__monto"><%= formatBillMoney(lote.total_amount) %></dd></div>
         <div class="letras-datos--ancho"><dt>En letras</dt><dd><%= totalEnLetras %></dd></div>
         <div><dt>Fecha de giro</dt><dd><%= formatBillDate(lote.issue_date) %></dd></div>
         <div><dt>Lugar de giro</dt><dd><%= lote.issue_place %></dd></div>
@@ -118,7 +118,7 @@
               <td data-label="Letra"><%= b.installment %> de <%= letrasLote.length %></td>
               <td data-label="Número"><strong><%= b.number %></strong></td>
               <td data-label="Vencimiento"><%= formatBillDate(b.due_date) %></td>
-              <td data-label="Importe" class="num"><%= formatBillMoney(b.amount, lote.currency_code) %></td>
+              <td data-label="Importe" class="num"><%= formatBillMoney(b.amount) %></td>
               <td data-label="Estado">
                 <span class="letra-estado letra-estado--<%= estado.key %>"><%= estado.label %></span>
                 <% if (b.status === 'voided' && b.void_reason) { %><span class="letras-motivo"><%= b.void_reason %></span><% } %>

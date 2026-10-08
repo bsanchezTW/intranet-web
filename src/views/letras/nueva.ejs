@@ -25,7 +25,7 @@
       </nav>
       <h2 class="page-title">Emitir letras de cambio</h2>
       <p class="page-description">
-        Giradas por <%= drawer.name %> a la orden de sí misma. Divide una factura en cuotas y se numeran solas.
+        Giradas por <%= drawer.name %> a la orden de sí misma, en <%= currency.label.toLowerCase() %>. Divide una factura en cuotas y se numeran solas.
       </p>
     </div>
   </div>
@@ -39,7 +39,7 @@
 
   <form method="post" action="/letras" class="letras-form" id="letrasForm"
         data-next-year="<%= siguiente.year %>" data-next-seq="<%= siguiente.seq %>"
-        data-max-cuotas="<%= maxCuotas %>">
+        data-max-cuotas="<%= maxCuotas %>" data-currency-symbol="<%= currency.symbol %>">
 
     <!-- ═══════════ Aceptante ═══════════ -->
     <section class="letras-panel" aria-labelledby="panel-aceptante">
@@ -102,17 +102,8 @@
           <label for="issue_place">Lugar de giro</label>
           <input type="text" id="issue_place" name="issue_place" value="<%= v.issue_place || '' %>" maxlength="80">
         </div>
-        <div class="campo-form<%= invalido('currency_code') %>">
-          <label for="currency_code">Moneda <span class="required-mark">*</span></label>
-          <select id="currency_code" name="currency_code">
-            <% Object.values(currencies).forEach((c) => { %>
-              <option value="<%= c.code %>" data-symbol="<%= c.symbol %>"<%= v.currency_code === c.code ? ' selected' : '' %>><%= c.label %></option>
-            <% }) %>
-          </select>
-          <% mensaje('currency_code') %>
-        </div>
         <div class="campo-form<%= invalido('total_amount') %>">
-          <label for="total_amount">Importe total <span class="required-mark">*</span></label>
+          <label for="total_amount">Importe total (<%= currency.symbol %>) <span class="required-mark">*</span></label>
           <input type="number" id="total_amount" name="total_amount" value="<%= v.total_amount || '' %>" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
           <% mensaje('total_amount') %>
         </div>

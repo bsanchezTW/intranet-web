@@ -20,7 +20,7 @@
   var interval = $('interval_days');
   var issueDate = $('issue_date');
   var startNumber = $('start_number');
-  var currency = $('currency_code');
+  var currencySymbol = form.dataset.currencySymbol || '';
   var body = $('cuotasBody');
   var totalLabel = $('cronogramaTotal');
   var siguienteLibre = $('siguienteLibre');
@@ -45,9 +45,8 @@
   }
 
   function money(cents) {
-    var symbol = currency.selectedOptions[0] ? currency.selectedOptions[0].dataset.symbol : '';
     var text = (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return (symbol ? symbol + ' ' : '') + text;
+    return (currencySymbol ? currencySymbol + ' ' : '') + text;
   }
 
   function pad(n) { return String(n).padStart(5, '0'); }
@@ -184,7 +183,6 @@
     }
   });
   startNumber.addEventListener('input', refreshNumbers);
-  currency.addEventListener('change', refreshTotal);
   body.addEventListener('input', refreshTotal);
 
   // Al volver con errores del servidor se respetan las cuotas que ya traía.

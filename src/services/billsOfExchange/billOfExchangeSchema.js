@@ -22,7 +22,7 @@ const DDL_STATEMENTS = [
     invoice_ref        VARCHAR(40),
     issue_date         DATE NOT NULL,
     issue_place        VARCHAR(80) NOT NULL,
-    currency_code      VARCHAR(3) NOT NULL CHECK (currency_code IN ('PEN','USD')),
+    currency_code      VARCHAR(3) NOT NULL DEFAULT 'USD' CHECK (currency_code = 'USD'),
     total_amount       NUMERIC(14,2) NOT NULL CHECK (total_amount > 0),
     acceptor_name      VARCHAR(200) NOT NULL,
     acceptor_doc       VARCHAR(15) NOT NULL,

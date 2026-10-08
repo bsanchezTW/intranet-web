@@ -68,8 +68,8 @@ describe("constants/billOfExchange — formatos", () => {
   it("formatea montos al estilo peruano", () => {
     assert.equal(formatBillAmount("6942.4"), "6,942.40");
     assert.equal(formatBillAmount(1234567.891), "1,234,567.89");
-    assert.equal(formatBillMoney("27769.60", "USD"), "US$ 27,769.60");
-    assert.equal(formatBillMoney(10, "PEN"), "S/ 10.00");
+    assert.equal(formatBillMoney("27769.60"), "US$ 27,769.60");
+    assert.equal(formatBillMoney(10), "US$ 10.00");
   });
 
   it("deriva 'vencida' de una vigente con fecha pasada", () => {
@@ -145,9 +145,14 @@ describe("billOfExchangeService — validación y cronograma", () => {
     assert.match(errors.cuotas, /antes de la fecha de giro/);
   });
 
-  it("rechaza moneda y fechas inválidas", () => {
-    const { errors } = normalizeBatchInput({ ...base, currency_code: "EUR", issue_date: "2026-02-30" });
-    assert.ok(errors.currency_code);
+  it("emite siempre en dólares, diga lo que diga el formulario", () => {
+    const { ok, values } = normalizeBatchInput({ ...base, currency_code: "PEN" });
+    assert.equal(ok, true);
+    assert.equal(values.currency_code, "USD");
+  });
+
+  it("rechaza fechas inválidas", () => {
+    const { errors } = normalizeBatchInput({ ...base, issue_date: "2026-02-30" });
     assert.ok(errors.issue_date);
   });
 
@@ -169,7 +174,6 @@ describe("billOfExchangePdf — impresión", () => {
       acceptor_name: "LFT REP S.A.C.",
       acceptor_address: "Jr. Cerro Negro 434",
       issue_date: "2026-04-15",
-      currency_code: "PEN",
       total_amount: "300",
       installments_count: "3",
       interval_days: "30",
@@ -182,7 +186,7 @@ describe("billOfExchangePdf — impresión", () => {
         status: "issued",
       }),
     );
-    assert.equal(bills[0].amountWords, "CIEN CON 00/100 SOLES");
+    assert.equal(bills[0].amountWords, "CIEN CON 00/100 DÓLARES AMERICANOS");
     const pdf = await renderBillsPdf(bills);
     assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
     const pages = pdf.toString("latin1").match(/\/Type \/Page\b/g) || [];

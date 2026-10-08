@@ -25,7 +25,6 @@ const LOGO_PATH = path.join(__dirname, "..", "..", "public", "img", "logotw_blue
 
 const BLUE = "#26388f";
 const INK = "#111111";
-const MUTED = "#5a6690";
 const VOID_RED = "#c62828";
 
 const PAGE = { size: "A4", layout: "landscape" };
@@ -222,7 +221,7 @@ function drawTopTable(doc, bill) {
     issueDate: formatDisplay(bill.issueDate).replace(/-/g, "/"),
     issuePlace: upper(bill.issuePlace),
     dueDate: formatDisplay(bill.dueDate).replace(/-/g, "/"),
-    amount: formatBillMoney(bill.amount, bill.currencyCode),
+    amount: formatBillMoney(bill.amount),
   };
 
   let x = MX;
@@ -364,21 +363,31 @@ function drawGuarantor(doc, bill) {
   underline(doc, x + 240, right, r5 + 10.5);
 }
 
+/** Rótulo seguido de un renglón en blanco hasta el borde derecho. */
+function labelledBlank(doc, text, x, y, right) {
+  label(doc, text, x, y, 7);
+  const end = x + doc.font(FONT).fontSize(7).widthOfString(text) + 4;
+  underline(doc, end, right, y + 8.5);
+}
+
+/**
+ * Recuadro del girador, como en el talonario: sólo rótulos y renglones. La
+ * razón social y el representante los pone el sello de la empresa (que cae
+ * en el espacio libre del medio) y la firma va a mano.
+ */
 function drawDrawerSignature(doc) {
   const y = Y0 + 206;
+  const left = RX + 8;
+  const right = RX + RW - 8;
   box(doc, RX, y, RW, 116, 8);
-  const inner = RW - 16;
-  fitText(doc, BILL_DRAWER.name, RX + 8, y + 8, inner, { font: FONT_BOLD, size: 8.5, color: BLUE, align: "center" });
-  fitText(doc, `R.U.C.: ${BILL_DRAWER.ruc}`, RX + 8, y + 19, inner, { font: FONT_BOLD, size: 8, color: BLUE, align: "center" });
-  fitText(doc, "Nombre o Razón Social del Girador", RX + 8, y + 30, inner, { size: 6, color: MUTED, align: "center" });
 
-  line(doc, RX + 24, y + 72, RX + RW - 24, y + 72, 0.6);
-  fitText(doc, "Firma", RX + 8, y + 75, inner, { size: 6.5, color: BLUE, align: "center" });
+  labelledBlank(doc, "Nombre o Razón Social del Girador", left, y + 10, right);
 
-  label(doc, "Nombre del Representante Legal:", RX + 8, y + 86, 6.5);
-  fitText(doc, BILL_DRAWER.representative, RX + 8, y + 95, inner, { font: FONT_BOLD, size: 7.5 });
-  label(doc, "D.O.I.:", RX + 8, y + 105, 6.5);
-  fitText(doc, BILL_DRAWER.representativeDoc, RX + 32, y + 104.5, inner - 24, { font: FONT_BOLD, size: 7.5 });
+  line(doc, left, y + 76, right, y + 76, 0.6);
+  fitText(doc, "Firma", left, y + 79, right - left, { size: 6.5, color: BLUE, align: "center" });
+
+  labelledBlank(doc, "Nombre del Representante Legal", left, y + 91, right);
+  labelledBlank(doc, "D.O.I.", left, y + 104, right);
 }
 
 function drawFooterRule(doc) {

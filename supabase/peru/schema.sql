@@ -425,7 +425,7 @@ CREATE TABLE IF NOT EXISTS peru.bill_of_exchange_batches (
   invoice_ref character varying(40),             -- "Ref. del girador"
   issue_date date NOT NULL,
   issue_place character varying(80) NOT NULL,
-  currency_code character varying(3) NOT NULL CHECK (currency_code IN ('PEN','USD')),
+  currency_code character varying(3) NOT NULL DEFAULT 'USD' CHECK (currency_code = 'USD'), -- sólo dólares
   total_amount numeric(14,2) NOT NULL CHECK (total_amount > 0),
   acceptor_name character varying(200) NOT NULL,
   acceptor_doc character varying(15) NOT NULL,   -- RUC (11) o DNI (8)

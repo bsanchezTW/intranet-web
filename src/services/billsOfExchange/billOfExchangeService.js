@@ -1,12 +1,11 @@
 const db = require("../../db");
 const {
-  BILL_CURRENCIES,
+  BILL_CURRENCY,
   BILL_STATUS,
   DEFAULT_ISSUE_PLACE,
   DEFAULT_INTERVAL_DAYS,
   MAX_INSTALLMENTS,
   MAX_INTERVAL_DAYS,
-  isBillCurrency,
   formatBillNumber,
 } = require("../../constants/billOfExchange");
 const { amountToWords } = require("../../utils/amountInWords");
@@ -151,11 +150,8 @@ function normalizeBatchInput(body = {}) {
   }
 
   // --- Condiciones -------------------------------------------------------
-  values.currency_code = String(body.currency_code || "").toUpperCase();
-  if (!isBillCurrency(values.currency_code)) {
-    errors.currency_code = "Elige la moneda.";
-    values.currency_code = "PEN";
-  }
+  // Moneda única: lo que diga el formulario no cuenta.
+  values.currency_code = BILL_CURRENCY.code;
 
   values.issue_date = String(body.issue_date || "").trim();
   if (!isValidIsoDate(values.issue_date)) errors.issue_date = "Ingresa la fecha de giro.";
@@ -406,22 +402,18 @@ async function listBills({ q = "", estado = "", today }) {
   return rows.map(withNumber);
 }
 
-/** Letras por cobrar (vigentes y vencidas) por moneda, para el encabezado. */
+/** Letras por cobrar (vigentes y vencidas), para el encabezado. */
 async function summary(today) {
   const { rows } = await db.query(
-    `SELECT currency_code,
-            COUNT(*) FILTER (WHERE b.due_date >= $1::date)::int AS vigentes,
-            COUNT(*) FILTER (WHERE b.due_date < $1::date)::int AS vencidas,
-            COALESCE(SUM(b.amount), 0) AS por_cobrar,
-            COALESCE(SUM(b.amount) FILTER (WHERE b.due_date < $1::date), 0) AS vencido
-       FROM bills_of_exchange b
-       JOIN bill_of_exchange_batches bt ON bt.id = b.batch_id
-      WHERE b.status = 'issued'
-      GROUP BY currency_code
-      ORDER BY currency_code`,
+    `SELECT COUNT(*) FILTER (WHERE due_date >= $1::date)::int AS vigentes,
+            COUNT(*) FILTER (WHERE due_date < $1::date)::int AS vencidas,
+            COALESCE(SUM(amount), 0) AS por_cobrar,
+            COALESCE(SUM(amount) FILTER (WHERE due_date < $1::date), 0) AS vencido
+       FROM bills_of_exchange
+      WHERE status = 'issued'`,
     [today],
   );
-  return rows;
+  return rows[0];
 }
 
 async function getBatch(batchId) {
@@ -513,16 +505,14 @@ async function listAcceptors() {
  * monto en letras ya resuelto.
  */
 function toPrintable(batch, bill) {
-  const currency = BILL_CURRENCIES[batch.currency_code];
   return {
     number: bill.number,
     invoiceRef: batch.invoice_ref || "",
     issueDate: batch.issue_date,
     issuePlace: batch.issue_place,
     dueDate: bill.due_date,
-    currencyCode: batch.currency_code,
     amount: bill.amount,
-    amountWords: amountToWords(bill.amount, currency ? currency.words : ""),
+    amountWords: amountToWords(bill.amount, BILL_CURRENCY.words),
     voided: bill.status === BILL_STATUS.VOIDED,
     acceptor: {
       name: batch.acceptor_name,

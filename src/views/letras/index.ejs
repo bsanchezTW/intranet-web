@@ -1,8 +1,8 @@
 <%
   const lista = Array.isArray(letras) ? letras : [];
-  const porCobrar = Array.isArray(resumen) ? resumen : [];
-  const vencidasTotal = porCobrar.reduce((n, r) => n + r.vencidas, 0);
-  const vigentesTotal = porCobrar.reduce((n, r) => n + r.vigentes, 0);
+  const porCobrar = resumen || { vigentes: 0, vencidas: 0, por_cobrar: 0, vencido: 0 };
+  const vencidasTotal = porCobrar.vencidas;
+  const vigentesTotal = porCobrar.vigentes;
   const ESTADOS = [
     ['', 'Todas'],
     ['vigentes', 'Vigentes'],
@@ -43,17 +43,16 @@
     </div>
   <% } %>
 
-  <% if (porCobrar.length) { %>
+  <% if (vigentesTotal + vencidasTotal > 0) { %>
     <div class="letras-resumen">
-      <% porCobrar.forEach((r) => { %>
-        <div class="letras-resumen__dato">
-          <span class="letras-resumen__label">Por cobrar en <%= currencies[r.currency_code] ? currencies[r.currency_code].label.split(' (')[0].toLowerCase() : r.currency_code %></span>
-          <strong><%= formatBillMoney(r.por_cobrar, r.currency_code) %></strong>
-          <% if (Number(r.vencido) > 0) { %>
-            <span class="letras-resumen__alerta"><%= formatBillMoney(r.vencido, r.currency_code) %> vencido</span>
-          <% } %>
-        </div>
-      <% }) %>
+      <div class="letras-resumen__dato">
+        <span class="letras-resumen__label">Por cobrar</span>
+        <strong><%= formatBillMoney(porCobrar.por_cobrar) %></strong>
+      </div>
+      <div class="letras-resumen__dato">
+        <span class="letras-resumen__label">Vencido</span>
+        <strong class="<%= Number(porCobrar.vencido) > 0 ? 'letras-resumen__alerta' : '' %>"><%= formatBillMoney(porCobrar.vencido) %></strong>
+      </div>
     </div>
   <% } %>
 
@@ -110,7 +109,7 @@
               <td data-label="Ref. girador"><%= l.invoice_ref || '—' %></td>
               <td data-label="Giro"><%= formatBillDate(l.issue_date) %></td>
               <td data-label="Vencimiento"><%= formatBillDate(l.due_date) %></td>
-              <td data-label="Importe" class="num"><%= formatBillMoney(l.amount, l.currency_code) %></td>
+              <td data-label="Importe" class="num"><%= formatBillMoney(l.amount) %></td>
               <td data-label="Estado"><span class="letra-estado letra-estado--<%= estado.key %>"><%= estado.label %></span></td>
               <td class="letras-tabla__acciones">
                 <a href="/letras/<%= l.id %>/pdf" target="_blank" rel="noopener" class="letras-icono-btn" title="Imprimir <%= l.number %>" aria-label="Imprimir <%= l.number %>"><%- include('../partials/icon', { name: 'printer' }) %></a>
