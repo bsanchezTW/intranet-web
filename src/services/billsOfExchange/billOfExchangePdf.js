@@ -185,17 +185,61 @@ function drawAcceptorSignatures(doc) {
   line(doc, X0 + 158, Y0 + 8, X0 + 158, Y0 + 322, 0.6);
 }
 
-function drawHeader(doc) {
-  const logoWidth = 130;
-  if (fs.existsSync(LOGO_PATH)) {
-    doc.image(LOGO_PATH, MX + 36, Y0 + 1, { width: logoWidth });
-  }
-  fitText(doc, "Power and Telecom", MX + 36, Y0 + 37, logoWidth, { size: 8, color: BLUE, align: "center" });
+// Proporciones de logotw_blue.png (4000 × 1098): el dibujo ocupa del 12,1 %
+// al 87,8 % del alto y está centrado a lo ancho; el resto es aire. Se centra
+// por lo visible, no por la caja de la imagen, para que quede a la par del
+// texto de la derecha.
+const LOGO_RATIO = 1098 / 4000;
+const LOGO_INK_TOP = 0.121;
+const LOGO_INK_BOTTOM = 0.878;
+const LOGO_NAVY = "#2c3e66";
 
-  const titleX = MX + 250;
+// En Helvetica las mayúsculas miden 0,718 del cuerpo y pdfkit las apoya en
+// la `y` que recibe: el alto visible de una línea es size × CAP.
+const CAP = 0.718;
+
+/** Texto de una línea centrado en `cx`, con espaciado entre letras. */
+function centeredSpaced(doc, text, cx, y, { font = FONT, size, color, spacing = 0 }) {
+  doc.font(font).fontSize(size);
+  const w = doc.widthOfString(text, { characterSpacing: spacing }) - spacing;
+  doc.fillColor(color).text(text, cx - w / 2, y, { lineBreak: false, characterSpacing: spacing });
+}
+
+/**
+ * Encabezado: logo a la izquierda (centrado sobre NUMERO y REF. DEL GIRADOR)
+ * y razón social + RUC a la derecha (sobre las otras cuatro columnas). Los dos
+ * bloques comparten el mismo eje horizontal, a media altura de la franja que
+ * queda sobre la tabla.
+ */
+function drawHeader(doc) {
+  const axis = Y0 + 25;
+
+  // --- Logo + bajada --------------------------------------------------------
+  const logoW = 136;
+  const logoH = logoW * LOGO_RATIO;
+  const inkH = logoH * (LOGO_INK_BOTTOM - LOGO_INK_TOP);
+  const tagSize = 7.5;
+  const tagGap = 4;
+  const leftTop = axis - (inkH + tagGap + tagSize * CAP) / 2;
+  const leftCx = MX + (TABLE_COLUMNS[0].width + TABLE_COLUMNS[1].width) / 2;
+  if (fs.existsSync(LOGO_PATH)) {
+    doc.image(LOGO_PATH, leftCx - logoW / 2, leftTop - logoH * LOGO_INK_TOP, { width: logoW });
+  }
+  centeredSpaced(doc, "Power and Telecom", leftCx, leftTop + inkH + tagGap, {
+    size: tagSize, color: LOGO_NAVY, spacing: 0.8,
+  });
+
+  // --- Razón social + RUC ---------------------------------------------------
+  const titleX = MX + TABLE_COLUMNS[0].width + TABLE_COLUMNS[1].width;
   const titleW = MR - titleX;
-  fitText(doc, BILL_DRAWER.name, titleX, Y0 + 10, titleW, { font: FONT_BOLD, size: 12.5, color: BLUE, align: "center" });
-  fitText(doc, `R.U.C.: ${BILL_DRAWER.ruc}`, titleX, Y0 + 27, titleW, { size: 10, color: BLUE, align: "center" });
+  const nameSize = 12.5;
+  const rucSize = 10;
+  const rucGap = 6;
+  const rightTop = axis - (nameSize * CAP + rucGap + rucSize * CAP) / 2;
+  fitText(doc, BILL_DRAWER.name, titleX, rightTop, titleW, { font: FONT_BOLD, size: nameSize, color: BLUE, align: "center" });
+  fitText(doc, `R.U.C.: ${BILL_DRAWER.ruc}`, titleX, rightTop + nameSize * CAP + rucGap, titleW, {
+    size: rucSize, color: BLUE, align: "center",
+  });
 }
 
 const TABLE_COLUMNS = [
