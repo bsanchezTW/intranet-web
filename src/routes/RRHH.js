@@ -15,7 +15,7 @@ const {
   enrichAreaWithPill,
   normalizeHex,
 } = require("../constants/workAreas");
-const { buildTree, chainFrom, wouldCreateCycle } = require("../services/workAreaTree");
+const { buildTree, chainFrom, descendantIds, wouldCreateCycle } = require("../services/workAreaTree");
 const { isFeatureEnabled } = require("../config/features");
 const costCenterService = require("../services/costCenters/costCenterService");
 
@@ -1301,14 +1301,40 @@ router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
     const parent = await parseParentArea(req.body.parent_area_id, areaId);
     if (!parent.ok) return redirectAreasError(res, parent.error);
 
-    const { rowCount } = await db.query(
-      `UPDATE work_areas
-          SET area_name = $1, color = $2, manager_user_id = $3, parent_area_id = $4, sort_order = $5
-        WHERE id = $6`,
-      [areaName, color, manager.managerId, parent.parentId, sortOrder, areaId],
-    );
-    if (!rowCount) {
+    const { rows: todas } = await db.query("SELECT id, parent_area_id, color FROM work_areas");
+    const previa = todas.find((a) => Number(a.id) === areaId);
+    if (!previa) {
       return redirectAreasError(res, "El área no existe.");
+    }
+
+    // Las sub-áreas heredan el color: las que compartían el anterior siguen al
+    // nuevo. Una que RRHH pintó distinto conserva el suyo.
+    const colorAnterior = normalizeHex(previa.color);
+    const herederas = colorAnterior && colorAnterior !== color
+      ? [...descendantIds(todas, areaId)].filter((id) => {
+          const hija = todas.find((a) => Number(a.id) === id);
+          return hija && normalizeHex(hija.color) === colorAnterior;
+        })
+      : [];
+
+    const client = await db.getClient();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE work_areas
+            SET area_name = $1, color = $2, manager_user_id = $3, parent_area_id = $4, sort_order = $5
+          WHERE id = $6`,
+        [areaName, color, manager.managerId, parent.parentId, sortOrder, areaId],
+      );
+      if (herederas.length) {
+        await client.query("UPDATE work_areas SET color = $1 WHERE id = ANY($2::int[])", [color, herederas]);
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
     invalidarCachesDeArea();
     if (Number(req.session.user?.work_area_id) === areaId) {

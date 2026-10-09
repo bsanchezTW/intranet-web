@@ -20,7 +20,7 @@ const TOPE_STACK = 5;
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 %>
 
-<link rel="stylesheet" href="/css/areas.css?v=20261001d">
+<link rel="stylesheet" href="/css/areas.css?v=20261009c">
 
 <% if (successMsg || errorMsg) { %>
 <div hidden data-toast="<%= successMsg || errorMsg %>" data-toast-tone="<%= successMsg ? 'ok' : 'error' %>"></div>
@@ -89,34 +89,8 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     <% } %>
 
     <% if (listado.length) { %>
-    <div class="ac-toolbar">
-      <div class="ac-search">
-        <span class="ac-search__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'search' }) %></span>
-        <label class="sr-only" for="buscadorOrganigrama">Buscar área o colaborador</label>
-        <input type="search" id="buscadorOrganigrama" class="ac-search__input" data-org-buscar
-               placeholder="Buscar un área o un colaborador…" autocomplete="off">
-      </div>
-      <span class="org-conteo" data-org-conteo role="status" hidden></span>
-
-      <% if (enEdicion) { %>
-      <div class="ac-filtros" role="group" aria-label="Resaltar áreas">
-        <button type="button" class="ac-chip is-active" data-org-filtro="todas">Todas</button>
-        <button type="button" class="ac-chip" data-org-filtro="sin-aprobador">
-          Sin aprobador<% if (sinAprobador) { %> <span class="ac-chip__n"><%= sinAprobador %></span><% } %>
-        </button>
-        <button type="button" class="ac-chip" data-org-filtro="sin-jefe">
-          Sin jefe propio<% if (sinJefe) { %> <span class="ac-chip__n"><%= sinJefe %></span><% } %>
-        </button>
-        <button type="button" class="ac-chip" data-org-filtro="vacias">Sin colaboradores</button>
-      </div>
-      <% } %>
-    </div>
-
-    <p class="ac-sin-resultados" data-org-sin-resultados hidden>
-      Ningún área ni colaborador coincide con la búsqueda.
-    </p>
-
-    <%- include('partials/org_arbol', { arbol, editable: enEdicion }) %>
+    <%# La búsqueda y los filtros van en la cabecera del lienzo (org_arbol). %>
+    <%- include('partials/org_arbol', { arbol, editable: enEdicion, conteos: { sinAprobador, sinJefe } }) %>
     <% } %>
 
     <% if (enEdicion && sinArea) { %>
@@ -230,6 +204,9 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
             <input type="color" id="area_color_picker" value="<%= colorBase %>" aria-label="Elegir color personalizado">
             <input type="text" id="area_color" name="color" value="<%= colorBase %>" maxlength="7" pattern="#[0-9A-Fa-f]{6}" spellcheck="false">
           </div>
+          <p class="campo-form__ayuda area-jefe-ayuda">
+            Un área nueva parte con el color de la que depende. Al cambiarlo, las áreas dependientes que lo compartían cambian con ella.
+          </p>
         </div>
       </div>
       <footer class="modal-foot">
@@ -304,6 +281,7 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     area_name: a.area_name,
     parent_area_id: a.parent_area_id || null,
     sort_order: a.sort_order || null,
+    color: a.color || null,
     manager_user_id: a.manager_user_id || null,
     members: a.members.map((m) => m.id),
   })),
@@ -317,7 +295,7 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 }).replace(/</g, '\\u003c') %></script>
 <% } %>
 <script src="/js/ac-cards.js?v=20260916m" defer></script>
-<script src="/js/org-arbol.js?v=20261001b" defer></script>
+<script src="/js/org-arbol.js?v=20261009c" defer></script>
 <% if (enEdicion) { %>
-<script src="/js/areas.js?v=20261009a" defer></script>
+<script src="/js/areas.js?v=20261009c" defer></script>
 <% } %>

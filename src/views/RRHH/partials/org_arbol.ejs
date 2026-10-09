@@ -2,7 +2,8 @@
 /*
   Organigrama de áreas.
 
-  Locals: arbol (raíces de buildTree, con children), editable (bool).
+  Locals: arbol (raíces de buildTree, con children), editable (bool),
+          conteos ({ sinAprobador, sinJefe }: números de los filtros).
 
   El primer nivel se abre en columnas y de ahí hacia abajo cada rama es una
   lista con sangría: así el árbol entero cabe en el ancho de la página y se lee
@@ -14,6 +15,7 @@
   superior al que se escala, o una advertencia si nadie en la cadena lo es.
 */
 const TOPE_STACK = 3;
+const cuentas = (typeof conteos !== 'undefined' && conteos) || {};
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 const raices = arbol || [];
 const arboles = raices.filter(a => a.children.length);
@@ -34,6 +36,38 @@ function avatar(persona, clase) {
     <%- include('../../partials/monogram', { initials: persona.inicial, style: persona.monogramStyle, className: 'avatar-fallback ' + clase }) %>
   <% }
 }
+
+// Búsqueda y filtros: van en la cabecera del primer lienzo, junto a los
+// controles de zoom. Resaltan nodos de toda la página (org-arbol.js).
+function buscador() { %>
+  <div class="ac-search org-buscar">
+    <span class="ac-search__icon" aria-hidden="true"><%- include('../../partials/icon', { name: 'search' }) %></span>
+    <label class="sr-only" for="buscadorOrganigrama">Buscar área o colaborador</label>
+    <input type="search" id="buscadorOrganigrama" class="ac-search__input" data-org-buscar
+           placeholder="Buscar un área o un colaborador…" autocomplete="off">
+  </div>
+  <span class="org-conteo" data-org-conteo role="status" hidden></span>
+<% }
+
+function filtros() {
+  if (!editable) return; %>
+  <div class="ac-filtros" role="group" aria-label="Resaltar áreas">
+    <button type="button" class="ac-chip is-active" data-org-filtro="todas">Todas</button>
+    <button type="button" class="ac-chip" data-org-filtro="sin-aprobador">
+      Sin aprobador<% if (cuentas.sinAprobador) { %> <span class="ac-chip__n"><%= cuentas.sinAprobador %></span><% } %>
+    </button>
+    <button type="button" class="ac-chip" data-org-filtro="sin-jefe">
+      Sin jefe propio<% if (cuentas.sinJefe) { %> <span class="ac-chip__n"><%= cuentas.sinJefe %></span><% } %>
+    </button>
+    <button type="button" class="ac-chip" data-org-filtro="vacias">Sin colaboradores</button>
+  </div>
+<% }
+
+function sinResultados() { %>
+  <p class="ac-sin-resultados" data-org-sin-resultados hidden>
+    Ningún área ni colaborador coincide con la búsqueda.
+  </p>
+<% }
 
 // `enFila`: sus áreas dependientes se abren en columnas (sólo arriba del árbol).
 function nodo(area, enFila) {
@@ -164,12 +198,59 @@ function nodo(area, enFila) {
 <% } %>
 
 <div class="org" data-org>
-  <% arboles.forEach(raiz => { %>
-    <div class="org-scroll">
-      <ul class="org-tree" style="--org-columnas: <%= columnas(raiz) %>">
-        <% nodo(raiz, true) %>
-      </ul>
-    </div>
+  <%# Cada árbol va en un lienzo enmarcado. Sin JS el lienzo scrollea solo;
+      con JS (org-arbol.js) se acerca, aleja y desplaza con los controles de
+      arriba o arrastrando, sin barra de scroll al pie. %>
+  <% if (!arboles.length) { %>
+    <%# Sin árbol no hay lienzo: la búsqueda queda en su barra de siempre. %>
+    <div class="ac-toolbar"><% buscador(); filtros(); %></div>
+    <% sinResultados() %>
+  <% } %>
+
+  <% arboles.forEach((raiz, i) => { %>
+    <section class="org-lienzo" data-org-lienzo aria-label="Organigrama de <%= raiz.area_name %>">
+      <div class="org-lienzo__barra">
+        <div class="org-lienzo__fila">
+        <% if (i === 0) buscador(); %>
+        <div class="org-lienzo__controles" role="toolbar" aria-label="Vista del organigrama" data-org-controles hidden>
+          <div class="org-lienzo__grupo">
+            <button type="button" class="org-lienzo__btn" data-org-accion="izquierda" title="Mover a la izquierda" aria-label="Mover a la izquierda">
+              <%- include('../../partials/icon', { name: 'chevron-left' }) %>
+            </button>
+            <button type="button" class="org-lienzo__btn" data-org-accion="derecha" title="Mover a la derecha" aria-label="Mover a la derecha">
+              <%- include('../../partials/icon', { name: 'chevron-right' }) %>
+            </button>
+          </div>
+          <div class="org-lienzo__grupo">
+            <button type="button" class="org-lienzo__btn" data-org-accion="alejar" title="Alejar" aria-label="Alejar">
+              <%- include('../../partials/icon', { name: 'minus' }) %>
+            </button>
+            <button type="button" class="org-lienzo__zoom" data-org-accion="real" data-org-zoom
+                    title="Ver al 100 %" aria-label="Nivel de zoom; ver al 100 %">100%</button>
+            <button type="button" class="org-lienzo__btn" data-org-accion="acercar" title="Acercar" aria-label="Acercar">
+              <%- include('../../partials/icon', { name: 'plus' }) %>
+            </button>
+          </div>
+          <button type="button" class="org-lienzo__btn org-lienzo__btn--solo" data-org-accion="ajustar"
+                  title="Ajustar a la pantalla" aria-label="Ajustar el organigrama a la pantalla">
+            <%- include('../../partials/icon', { name: 'maximize' }) %>
+          </button>
+        </div>
+        </div>
+        <div class="org-lienzo__fila org-lienzo__fila--sec">
+          <% if (i === 0) filtros(); %>
+          <p class="org-lienzo__pista" data-org-pista hidden>Arrastra para desplazarte · <kbd>Ctrl</kbd> + rueda para acercar</p>
+        </div>
+        <% if (i === 0) sinResultados(); %>
+      </div>
+      <div class="org-lienzo__vista" data-org-vista>
+        <div class="org-lienzo__contenido" data-org-contenido>
+          <ul class="org-tree" style="--org-columnas: <%= columnas(raiz) %>">
+            <% nodo(raiz, true) %>
+          </ul>
+        </div>
+      </div>
+    </section>
   <% }) %>
 
   <% if (sueltas.length) { %>

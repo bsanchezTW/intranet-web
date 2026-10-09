@@ -213,7 +213,8 @@
       if (orden) orden.value = '';
       llenarJefes(null, areas, personas);
       llenarPadres(areas, null, padre ? padre.id : null);
-      setColorInputs(defaultColor);
+      // Las sub-áreas heredan el color de su área superior.
+      setColorInputs((padre && padre.color) || defaultColor);
       if (window.IntranetModal) window.IntranetModal.open(overlay);
       if (nombre) nombre.focus();
     }

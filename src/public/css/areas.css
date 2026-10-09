@@ -194,14 +194,255 @@
   gap: 28px;
 }
 
-/* Respaldo para un primer nivel con más columnas de las que caben: scrollea
-   dentro de su marco y no estira la página. El relleno deja sitio al anillo
-   de foco y de búsqueda, que el overflow recortaría. */
-.org-scroll {
-  margin: -6px;
-  padding: 6px;
+/* ── Lienzo ───────────────────────────────────────────────────────────────────
+   Marco del árbol. Sin JS la vista scrollea como respaldo; org-arbol.js le pone
+   .is-interactivo, recorta el desborde y mueve el contenido con transform:
+   acercar, alejar y desplazar desde la barra de arriba, sin scroll al pie. */
+
+.org-lienzo {
+  --lienzo-radio: 18px;
+  position: relative;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--lienzo-radio);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* Cabecera del lienzo: búsqueda y controles de vista arriba, filtros y pista
+   abajo. Sigue a la vista bajo la topbar mientras el árbol esté en pantalla. */
+.org-lienzo__barra {
+  position: sticky;
+  top: calc(var(--shell-height, 64px) + 10px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--lienzo-radio) var(--lienzo-radio) 0 0;
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.org-lienzo__fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+/* Sin filtros (lectura) y sin JS la segunda fila queda vacía: no ocupa sitio. */
+.org-lienzo__fila--sec:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.org-buscar {
+  flex: 1 1 280px;
+  max-width: 560px;
+}
+
+.org-lienzo__barra .ac-sin-resultados {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+.org-lienzo__controles[hidden],
+.org-lienzo__pista[hidden] {
+  display: none;
+}
+
+.org-lienzo__pista {
+  margin: 0 0 0 auto;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.org-lienzo__pista kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--color-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--color-surface-muted);
+  font: 600 0.72rem/1.2 inherit;
+  color: var(--color-text);
+}
+
+.org-lienzo__controles {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.org-lienzo__grupo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+}
+
+.org-lienzo__btn,
+.org-lienzo__zoom {
+  display: inline-grid;
+  place-items: center;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-heading);
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.org-lienzo__btn {
+  width: 32px;
+  font-size: 1.05rem;
+}
+
+/* El ajuste va suelto, con el mismo aro que los grupos. */
+.org-lienzo__btn--solo {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.org-lienzo__zoom {
+  min-width: 52px;
+  font: 700 0.8rem/1 inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.org-lienzo__btn:hover:not(:disabled),
+.org-lienzo__zoom:hover {
+  background: var(--color-surface);
+  box-shadow: 0 1px 3px rgba(13, 31, 51, 0.14);
+}
+
+.org-lienzo__btn:focus-visible,
+.org-lienzo__zoom:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.org-lienzo__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Fondo punteado: delimita el área de trabajo y se distingue de las tarjetas. */
+.org-lienzo__vista {
+  position: relative;
   overflow-x: auto;
-  overscroll-behavior-x: contain;
+  border-radius: 0 0 var(--lienzo-radio) var(--lienzo-radio);
+  background-color: var(--color-bg);
+  background-image: radial-gradient(var(--color-border-strong) 1.1px, transparent 1.3px);
+  background-size: 22px 22px;
+  background-position: 11px 11px;
+}
+
+.org-lienzo:not(.is-interactivo) .org-lienzo__vista {
+  border-radius: var(--lienzo-radio);
+}
+
+.org-lienzo__contenido {
+  box-sizing: border-box;
+  padding: 30px 24px 34px;
+  transform-origin: 0 0;
+}
+
+.org-lienzo.is-interactivo .org-lienzo__vista {
+  overflow: hidden;
+  /* Lo vertical sigue siendo de la página; lo horizontal, del lienzo. */
+  touch-action: pan-y;
+}
+
+.org-lienzo.is-interactivo .org-lienzo__contenido {
+  will-change: transform;
+}
+
+.org-lienzo.is-animado .org-lienzo__vista {
+  transition: height 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.org-lienzo.is-animado .org-lienzo__contenido {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.org-lienzo__vista.is-arrastrable {
+  cursor: grab;
+}
+
+.org-lienzo__vista.is-arrastrando {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* Sombras en los bordes: avisan que hay más organigrama hacia ese lado. */
+.org-lienzo__vista::before,
+.org-lienzo__vista::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 36px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.org-lienzo__vista::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(13, 31, 51, 0.12), transparent);
+}
+
+.org-lienzo__vista::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(13, 31, 51, 0.12), transparent);
+}
+
+.org-lienzo__vista.hay-izq::before,
+.org-lienzo__vista.hay-der::after {
+  opacity: 1;
+}
+
+@media (max-width: 640px) {
+  /* En el teléfono la cabecera ocupa tres filas: fija taparía media pantalla. */
+  .org-lienzo__barra {
+    position: static;
+  }
+
+  .org-lienzo__pista {
+    display: none;
+  }
+
+  .org-buscar {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .org-lienzo__controles {
+    margin-inline: auto;
+  }
+
+  .org-lienzo__contenido {
+    padding: 20px 14px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .org-lienzo.is-animado .org-lienzo__vista,
+  .org-lienzo.is-animado .org-lienzo__contenido {
+    transition: none;
+  }
 }
 
 .org-tree,
@@ -261,7 +502,7 @@
    dos medias líneas horizontales que juntas forman la barra que las une. */
 @media (min-width: 1024px) {
   /* Cada columna necesita al menos 250px; si no caben todas, el árbol crece
-     y scrollea dentro de .org-scroll. */
+     y el lienzo lo ajusta o se desplaza (.org-lienzo). */
   .org-tree {
     width: max(100%, calc(var(--org-columnas, 1) * 250px));
   }
@@ -380,6 +621,8 @@
   gap: 10px;
   padding: 13px 14px 12px;
   border: 1px solid var(--color-border);
+  /* El color del área (heredado por sus sub-áreas) corona cada tarjeta. */
+  border-top: 3px solid var(--area-color, var(--brand));
   border-radius: 14px;
   background: var(--color-surface);
   box-shadow: 0 1px 2px rgba(13, 31, 51, 0.05);
@@ -389,12 +632,14 @@
 
 .org-node:hover {
   border-color: var(--color-border-strong);
+  border-top-color: var(--area-color, var(--brand));
   box-shadow: var(--shadow);
 }
 
 .org-node--alerta,
 .org-node--alerta:hover {
   border-color: rgba(224, 163, 60, 0.6);
+  border-top-color: var(--area-color, var(--brand));
 }
 
 .org-node.is-match {
@@ -437,7 +682,7 @@
 /* La cabeza del árbol pesa un poco más que el resto. */
 .org-tree > .org-item > .org-node {
   padding: 15px 16px 14px;
-  border-top: 3px solid var(--area-color, var(--brand));
+  border-top-width: 4px;
 }
 
 .org-tree > .org-item > .org-node .org-node__nombre {
