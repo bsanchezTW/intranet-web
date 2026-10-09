@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261009a">
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -80,7 +80,12 @@
     <div class="vac-stat">
       <div class="vac-stat-label">Días vencidos</div>
       <div class="vac-stat-value <%= totals.availableDays > 0 ? 'danger' : '' %>"><%= totals.availableDays %></div>
-      <p class="vac-stat-note">Por tomar. Con trunco: <%= totals.severanceDays %> a liquidar.</p>
+      <p class="vac-stat-note">Ya generados y sin tomar.</p>
+    </div>
+    <div class="vac-stat vac-stat--quiet">
+      <div class="vac-stat-label">A liquidar</div>
+      <div class="vac-stat-value"><%= totals.severanceDays %></div>
+      <p class="vac-stat-note">Vencidos más el trunco del año en curso.</p>
     </div>
   </div>
 
@@ -97,7 +102,7 @@
       </div>
     </div>
 
-    <form class="vac-filters" method="GET" action="/RRHH/vacaciones/gestion/resumen">
+    <form class="vac-filters vac-filters--resumen" method="GET" action="/RRHH/vacaciones/gestion/resumen">
       <input
         type="search"
         name="q"
@@ -120,34 +125,50 @@
         <% } %>
       </p>
     <% } else { %>
-      <table class="vac-table vac-table--stack">
+      <%# Ocho columnas agrupadas por pregunta (quién, desde cuándo, cuánto
+          generó, cuánto tomó, cuánto debe, cuánto se pagaría, cuándo vence, si
+          cuadra con RR.HH.). Bajo 1200px cada fila pasa a ser una tarjeta. %>
+      <table class="vac-table vac-table--resumen">
         <thead>
           <tr>
-            <th>Colaborador</th><th>Ingreso</th><th>Servicio</th>
-            <th>Generados</th><th>Histórico</th><th>Intranet</th>
-            <th>Vencido</th><th>Trunco</th><th>A liquidar</th><th>Plazo legal</th>
-            <th>Referencia</th><th>Próximo derecho</th>
+            <th>Colaborador</th>
+            <th>Antigüedad</th>
+            <th class="vac-num">Generados</th>
+            <th class="vac-num">Gozados</th>
+            <th>Vencido</th>
+            <th class="vac-num">A liquidar</th>
+            <th>Plazo legal</th>
+            <th>Referencia</th>
           </tr>
         </thead>
         <tbody>
           <% rows.forEach(r => { %>
             <tr class="<%= r.overDrawn ? 'is-alerta' : (r.availableDays > 0 ? 'is-vencido' : '') %>">
-              <td data-label="Colaborador">
+              <td data-label="Colaborador" class="vac-col-colaborador">
                 <a class="vac-link-colaborador" href="/RRHH/vacaciones/gestion/<%= r.id %>"><%= r.name %></a>
-                <br><span class="vac-stat-unit"><%= r.nationalId %> · <%= r.area %></span>
+                <span class="vac-cell-sub"><%= r.nationalId %> · <%= r.area %></span>
               </td>
-              <td data-label="Ingreso" class="<%= r.hasHireDate ? '' : 'vac-nodata' %>"><%= r.hireDateFmt %></td>
-              <td data-label="Servicio"><%= r.serviceTime %></td>
-              <td data-label="Generados"><%= r.generatedDays %></td>
-              <td data-label="Histórico">
-                <%= r.historicalUsedDays %>
-                <% if (r.historyRecords) { %><span class="vac-stat-unit">(<%= r.historyRecords %>)</span><% } %>
-                <%# Días cargados que no caben en ningún período devengado. %>
-                <% if (r.unimputedDays > 0) { %>
-                  <br><span class="vac-stat-unit">+<%= r.unimputedDays %> sin período</span>
+              <td data-label="Antigüedad">
+                <% if (r.hasHireDate) { %>
+                  <span class="vac-cell-main"><%= r.serviceTime %></span>
+                  <span class="vac-cell-sub">Ingreso <%= r.hireDateFmt %></span>
+                  <% if (r.nextAccrualFmt !== '—') { %>
+                    <span class="vac-cell-sub">Nuevo derecho <%= r.nextAccrualFmt %></span>
+                  <% } %>
+                <% } else { %>
+                  <span class="vac-nodata">Sin fecha de ingreso</span>
                 <% } %>
               </td>
-              <td data-label="Intranet"><%= r.approvedUsedDays %></td>
+              <td data-label="Generados" class="vac-num"><span class="vac-cell-main"><%= r.generatedDays %></span></td>
+              <td data-label="Gozados" class="vac-num">
+                <span class="vac-cell-main"><%= Math.round((r.historicalUsedDays + r.approvedUsedDays) * 100) / 100 %></span>
+                <span class="vac-cell-sub"><%= r.historicalUsedDays %> antes<% if (r.historyRecords) { %> (<%= r.historyRecords %>)<% } %></span>
+                <span class="vac-cell-sub"><%= r.approvedUsedDays %> en la intranet</span>
+                <%# Días cargados que no caben en ningún período devengado. %>
+                <% if (r.unimputedDays > 0) { %>
+                  <span class="vac-cell-sub danger">+<%= r.unimputedDays %> sin período</span>
+                <% } %>
+              </td>
               <td data-label="Vencido">
                 <% if (r.availableDays > 0) { %>
                   <span class="vac-aviso-celda">
@@ -173,8 +194,12 @@
                   <strong class="<%= r.availableDays < 0 ? 'danger' : 'vac-nodata' %>"><%= r.availableDays %></strong>
                 <% } %>
               </td>
-              <td data-label="Trunco"><%= r.truncoDays %></td>
-              <td data-label="A liquidar"><%= r.severanceDays %></td>
+              <td data-label="A liquidar" class="vac-num">
+                <span class="vac-cell-main"><%= r.severanceDays %></span>
+                <% if (r.truncoDays > 0) { %>
+                  <span class="vac-cell-sub">incluye <%= r.truncoDays %> trunco</span>
+                <% } %>
+              </td>
               <td data-label="Plazo legal">
                 <% if (r.overdueDays <= 0 && !r.nextDeadlineFmt) { %>
                   <span class="vac-nodata">—</span>
@@ -183,41 +208,62 @@
                   <span class="vac-badge vac-badge-rejected"><%= r.overdueDays %> d fuera de plazo</span>
                 <% } %>
                 <% if (r.nextDeadlineFmt) { %>
-                  <% if (r.overdueDays > 0) { %><br><% } %>
                   <% if (r.dueSoonDays > 0) { %>
                     <span class="vac-badge vac-badge-pending">vence <%= r.nextDeadlineFmt %></span>
                   <% } else { %>
-                    <span class="vac-stat-unit">vence <%= r.nextDeadlineFmt %></span>
+                    <span class="vac-cell-sub">vence <%= r.nextDeadlineFmt %></span>
                   <% } %>
                 <% } %>
               </td>
               <td data-label="Referencia">
                 <% if (!r.reference) { %>
                   <span class="vac-nodata">—</span>
-                <% } else if (r.reference.matches) { %>
-                  <span class="vac-badge vac-badge-approved">Cuadra</span>
-                  <br><span class="vac-stat-unit"><%= r.reference.expected %> al <%= r.reference.asOfFmt %></span>
                 <% } else { %>
-                  <span class="vac-badge vac-badge-rejected"><%= r.reference.difference > 0 ? '+' : '' %><%= r.reference.difference %> d</span>
-                  <br><span class="vac-stat-unit"><%= r.reference.expected %> al <%= r.reference.asOfFmt %></span>
+                  <% if (r.reference.matches) { %>
+                    <span class="vac-badge vac-badge-approved">Cuadra</span>
+                  <% } else { %>
+                    <span class="vac-badge vac-badge-rejected"><%= r.reference.difference > 0 ? '+' : '' %><%= r.reference.difference %> d</span>
+                  <% } %>
+                  <span class="vac-cell-sub"><%= r.reference.expected %> al <%= r.reference.asOfFmt %></span>
                 <% } %>
               </td>
-              <td data-label="Próximo derecho" class="<%= r.nextAccrualFmt === '—' ? 'vac-nodata' : '' %>"><%= r.nextAccrualFmt %></td>
             </tr>
           <% }) %>
         </tbody>
       </table>
-      <p class="vac-panel-note">
-        «Generados» son los días de años de servicio ya cumplidos.
-        «Vencido» es lo que queda de esos días sin tomar: el colaborador
-        debe tomarlos. «Trunco» es el proporcional del año en curso: se paga
-        en una liquidación, pero todavía no se puede pedir como vacaciones.
-        La columna «A liquidar» es la suma de vencido y trunco. «Plazo legal»
-        es el año que da la ley para gozar cada período: «fuera de plazo»
-        significa que ya pasó y la demora genera indemnización; «vence» indica
-        el próximo plazo. «Referencia» compara con el último saldo anotado de
-        la planilla de RR.HH.
-      </p>
+
+      <details class="vac-details vac-leyenda">
+        <summary>Cómo leer la tabla</summary>
+        <dl>
+          <div>
+            <dt>Generados</dt>
+            <dd>Días de los años de servicio ya cumplidos.</dd>
+          </div>
+          <div>
+            <dt>Gozados</dt>
+            <dd>Días tomados: los cargados en el historial previo a la intranet (entre
+              paréntesis, cuántos registros) más los aprobados aquí.</dd>
+          </div>
+          <div>
+            <dt>Vencido</dt>
+            <dd>Lo que queda de los días generados sin tomar: el colaborador debe tomarlos.</dd>
+          </div>
+          <div>
+            <dt>A liquidar</dt>
+            <dd>Vencido más el trunco, el proporcional del año en curso. El trunco se paga
+              en una liquidación, pero todavía no se puede pedir como vacaciones.</dd>
+          </div>
+          <div>
+            <dt>Plazo legal</dt>
+            <dd>El año que da la ley para gozar cada período. «Fuera de plazo»: ya pasó y la
+              demora genera indemnización. «Vence»: el próximo plazo.</dd>
+          </div>
+          <div>
+            <dt>Referencia</dt>
+            <dd>Compara con el último saldo anotado en la planilla de RR.HH.</dd>
+          </div>
+        </dl>
+      </details>
     <% } %>
   </div>
 

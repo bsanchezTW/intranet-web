@@ -839,3 +839,131 @@ a.vac-btn { display: inline-block; text-decoration: none; }
   color: var(--subtle);
   font-size: 0.78rem;
 }
+
+/* ==========================================================================
+   Resumen consolidado: ocho columnas que caben en el contenedor, y tarjetas
+   bajo 1200px. Cada celda apila una cifra principal y su desglose.
+   ========================================================================== */
+
+.vac-table--resumen th,
+.vac-table--resumen td { padding: 12px 12px; vertical-align: top; }
+.vac-table--resumen th:first-child,
+.vac-table--resumen td:first-child { padding-left: 18px; }
+.vac-table--resumen th:last-child,
+.vac-table--resumen td:last-child { padding-right: 18px; }
+
+/* Los encabezados pueden partirse en dos líneas antes que empujar la tabla. */
+.vac-table--resumen th { white-space: normal; vertical-align: bottom; }
+
+.vac-table--resumen .vac-num { text-align: right; }
+
+.vac-cell-main {
+  display: block;
+  font-weight: 700;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.vac-cell-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--subtle);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.vac-cell-sub.danger { color: var(--down); }
+
+/* Fechas y desgloses en una línea; solo el área del colaborador puede partirse. */
+.vac-table--resumen .vac-cell-sub { white-space: nowrap; }
+.vac-table--resumen .vac-col-colaborador .vac-cell-sub { white-space: normal; }
+
+.vac-filters--resumen input[type="search"] { flex: 1 1 280px; max-width: 420px; }
+
+.vac-table--resumen .vac-badge + .vac-badge,
+.vac-table--resumen .vac-badge + .vac-cell-sub { margin-top: 4px; }
+.vac-table--resumen td > .vac-badge { display: table; }
+
+.vac-col-colaborador { min-width: 180px; }
+
+/* Leyenda plegada bajo la tabla: definiciones en rejilla, no un párrafo. */
+.vac-leyenda dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 0 18px 18px;
+}
+
+.vac-leyenda dt {
+  color: var(--color-heading);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.vac-leyenda dd {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 1199px) {
+  .vac-table--resumen thead { display: none; }
+
+  .vac-table--resumen,
+  .vac-table--resumen tbody { display: block; }
+
+  .vac-table--resumen tr {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr));
+    gap: 12px 16px;
+    margin: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-surface);
+  }
+
+  /* El tono de alerta pasa de las celdas a la tarjeta completa. */
+  .vac-table--resumen tbody tr td,
+  .vac-table--resumen tbody tr:hover td,
+  .vac-table--resumen tbody tr.is-alerta td,
+  .vac-table--resumen tbody tr.is-vencido td { background: transparent; }
+  .vac-table--resumen tbody tr.is-vencido { border-color: rgba(208, 92, 92, 0.35); box-shadow: inset 4px 0 0 var(--down); }
+  .vac-table--resumen tbody tr.is-alerta { border-color: var(--down); background: rgba(208, 92, 92, 0.06); box-shadow: inset 4px 0 0 var(--down); }
+
+  .vac-table--resumen td,
+  .vac-table--resumen td:first-child,
+  .vac-table--resumen td:last-child {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .vac-table--resumen td.vac-num { text-align: left; }
+  .vac-table--resumen .vac-cell-sub { white-space: normal; }
+
+  .vac-table--resumen td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: var(--subtle);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* El nombre encabeza la tarjeta, a lo ancho y sin etiqueta. */
+  .vac-table--resumen td.vac-col-colaborador {
+    grid-column: 1 / -1;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .vac-table--resumen td.vac-col-colaborador::before { content: none; }
+  .vac-table--resumen .vac-link-colaborador { font-size: 1rem; }
+}
