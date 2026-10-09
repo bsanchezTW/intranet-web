@@ -73,6 +73,8 @@ const COUNTRY_CONFIGS = {
     },
     supportEmail: "soporte@transworld.cl",
     hrEmail: "rrhh@transworld.cl",
+    // Áreas cuyos administradores gestionan RRHH (ver constants/rrhhArea.js).
+    rrhhAreaNames: ["rrhh", "recursos humanos"],
     noReplyEmail: "noreply@transworld.cl",
     contactEmail: "contacto@transworld.cl",
     // Login y navbar: /img/brand/{cl|pe}/. Fondos en JPG; logos en PNG.
@@ -123,6 +125,9 @@ const COUNTRY_CONFIGS = {
     // TODO(TI Perú): confirmar las casillas locales antes de salir a producción.
     supportEmail: "soporte@transworld.pe",
     hrEmail: "rrhh@transworld.pe",
+    // En Perú RRHH lo lleva la Administradora: su área gestiona el módulo
+    // completo (colaboradores, organigrama, vacaciones).
+    rrhhAreaNames: ["rrhh", "recursos humanos", "administradora", "administracion"],
     noReplyEmail: "noreply@transworld.pe",
     contactEmail: "contacto@transworld.pe",
     brand: {

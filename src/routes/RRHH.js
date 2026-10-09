@@ -221,6 +221,12 @@ function parseAreaColor(value) {
   return normalizeHex(value) || DEFAULT_COLOR;
 }
 
+/** Posición entre áreas hermanas: entero 1–999, o vacío (al final, por nombre). */
+function parseSortOrder(value) {
+  const n = parsePositiveInt(String(value ?? "").trim());
+  return n && n <= 999 ? n : null;
+}
+
 // Las áreas se editan dentro del organigrama: cada cambio vuelve a él en modo
 // edición, que es desde donde se hizo.
 const ORGANIGRAMA_EDICION = "/RRHH/organigrama?editar=1";
@@ -1072,7 +1078,7 @@ router.post("/eliminar/:id", requireRrhhManager(), async (req, res) => {
 async function cargarOrganigrama() {
   const [areasResult, peopleResult] = await Promise.all([
     db.query(
-      `SELECT w.id, w.area_name, w.color, w.manager_user_id, w.parent_area_id,
+      `SELECT w.id, w.area_name, w.color, w.manager_user_id, w.parent_area_id, w.sort_order,
               m.first_name AS manager_first_name,
               m.last_name  AS manager_last_name,
               m.photo      AS manager_photo,
@@ -1243,6 +1249,7 @@ async function parseParentArea(rawValue, areaId = null) {
 router.post("/areas", requireRrhhManager(), async (req, res) => {
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
+  const sortOrder = parseSortOrder(req.body.sort_order);
   if (!areaName) {
     return redirectAreasError(res, "El nombre del área es obligatorio.");
   }
@@ -1256,9 +1263,9 @@ router.post("/areas", requireRrhhManager(), async (req, res) => {
     // queryRetryIdCollision y no query: work_areas usa un id aleatorio de 4
     // dígitos y dos altas simultáneas pueden recibir el mismo candidato.
     await db.queryRetryIdCollision(
-      `INSERT INTO work_areas (area_name, color, parent_area_id, manager_user_id)
-       VALUES ($1, $2, $3, $4)`,
-      [areaName, color, parent.parentId, manager.managerId],
+      `INSERT INTO work_areas (area_name, color, parent_area_id, manager_user_id, sort_order)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [areaName, color, parent.parentId, manager.managerId, sortOrder],
     );
     invalidarCachesDeArea();
     return redirectAreasOk(
@@ -1280,6 +1287,7 @@ router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
   const areaId = parsePositiveInt(req.params.id);
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
+  const sortOrder = parseSortOrder(req.body.sort_order);
   if (!areaId) {
     return redirectAreasError(res, "Área inválida.");
   }
@@ -1295,9 +1303,9 @@ router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
 
     const { rowCount } = await db.query(
       `UPDATE work_areas
-          SET area_name = $1, color = $2, manager_user_id = $3, parent_area_id = $4
-        WHERE id = $5`,
-      [areaName, color, manager.managerId, parent.parentId, areaId],
+          SET area_name = $1, color = $2, manager_user_id = $3, parent_area_id = $4, sort_order = $5
+        WHERE id = $6`,
+      [areaName, color, manager.managerId, parent.parentId, sortOrder, areaId],
     );
     if (!rowCount) {
       return redirectAreasError(res, "El área no existe.");

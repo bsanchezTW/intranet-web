@@ -200,6 +200,13 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
             Si esta área no tiene jefe, o quien solicita es su jefe, aprueba el jefe del área de la que depende.
           </p>
         </div>
+        <div class="campo-form">
+          <label for="area_orden">Orden</label>
+          <input type="number" id="area_orden" name="sort_order" min="1" max="999" step="1" inputmode="numeric" placeholder="Al final">
+          <p class="campo-form__ayuda area-jefe-ayuda">
+            Posición entre las áreas que dependen de la misma. Vacío: van al final, por nombre.
+          </p>
+        </div>
         <div class="campo-form" id="campoJefe">
           <label for="area_manager">Jefe de área</label>
           <select id="area_manager" name="manager_user_id">
@@ -296,6 +303,7 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     id: a.id,
     area_name: a.area_name,
     parent_area_id: a.parent_area_id || null,
+    sort_order: a.sort_order || null,
     manager_user_id: a.manager_user_id || null,
     members: a.members.map((m) => m.id),
   })),
@@ -311,5 +319,5 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 <script src="/js/ac-cards.js?v=20260916m" defer></script>
 <script src="/js/org-arbol.js?v=20261001b" defer></script>
 <% if (enEdicion) { %>
-<script src="/js/areas.js?v=20261001c" defer></script>
+<script src="/js/areas.js?v=20261009a" defer></script>
 <% } %>

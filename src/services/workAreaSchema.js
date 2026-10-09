@@ -181,6 +181,8 @@ async function ensureWorkAreaSchema() {
     await installWorkAreaIdTrigger(client);
     await addWorkAreaIdRangeCheck(client);
     await addParentAreaColumn(client);
+    // Posición entre áreas hermanas en el organigrama; NULL va al final, por nombre.
+    await client.query("ALTER TABLE work_areas ADD COLUMN IF NOT EXISTS sort_order INTEGER");
 
     const names = Object.keys(WORK_AREA_COLORS);
     const colors = Object.values(WORK_AREA_COLORS);

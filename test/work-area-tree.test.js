@@ -155,6 +155,20 @@ describe("workAreaTree — estructura", () => {
     );
   });
 
+  it("ordena las hermanas por sort_order y deja al final, por nombre, las que no lo tienen", () => {
+    const roots = buildTree([
+      { id: 1, area_name: "Raíz" },
+      { id: 2, area_name: "Zeta", parent_area_id: 1, sort_order: 1 },
+      { id: 3, area_name: "Alfa", parent_area_id: 1, sort_order: 2 },
+      { id: 4, area_name: "Beta", parent_area_id: 1 },
+      { id: 5, area_name: "Abeja", parent_area_id: 1 },
+    ]);
+    assert.deepEqual(
+      roots[0].children.map((c) => c.area_name),
+      ["Zeta", "Alfa", "Abeja", "Beta"],
+    );
+  });
+
   it("dibuja como raíz un área cuyo padre no existe o está en un ciclo", () => {
     const roots = buildTree([
       { id: 1, area_name: "Huérfana", parent_area_id: 77 },

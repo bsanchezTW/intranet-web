@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS chile.work_areas (
   -- Organigrama: NULL es raíz. Sin jefe propio, aprueba el del ancestro más
   -- cercano. RESTRICT obliga a reubicar los hijos antes de borrar un padre.
   parent_area_id integer REFERENCES chile.work_areas(id) ON DELETE RESTRICT,
+  sort_order integer,
   CONSTRAINT work_areas_area_name_key UNIQUE (area_name),
   CONSTRAINT work_areas_parent_not_self CHECK (parent_area_id IS NULL OR parent_area_id <> id),
   CONSTRAINT work_areas_color_hex CHECK (color ~ '^#[0-9A-Fa-f]{6}$')

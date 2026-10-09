@@ -145,7 +145,15 @@
         raices.push(a);
       }
     });
+    // Mismo orden que el organigrama (compareAreas en services/workAreaTree).
     var porNombre = function (x, y) {
+      var ox = x.sort_order != null ? Number(x.sort_order) : null;
+      var oy = y.sort_order != null ? Number(y.sort_order) : null;
+      if (ox != null || oy != null) {
+        if (ox == null) return 1;
+        if (oy == null) return -1;
+        if (ox !== oy) return ox - oy;
+      }
       return String(x.area_name || '').localeCompare(String(y.area_name || ''), 'es');
     };
 
@@ -181,6 +189,7 @@
     var titulo = document.getElementById('modalAreaTitle');
     var submit = document.getElementById('modalAreaSubmit');
     var nombre = document.getElementById('area_name');
+    var orden = document.getElementById('area_orden');
     var defaultColor = config.defaultColor || '#5a6879';
     var areas = Array.isArray(config.areas) ? config.areas : [];
     var personas = Array.isArray(config.personas) ? config.personas : [];
@@ -201,6 +210,7 @@
       }
       if (submit) submit.textContent = 'Crear área';
       if (nombre) nombre.value = '';
+      if (orden) orden.value = '';
       llenarJefes(null, areas, personas);
       llenarPadres(areas, null, padre ? padre.id : null);
       setColorInputs(defaultColor);
@@ -213,6 +223,7 @@
       if (titulo) titulo.textContent = 'Editar área';
       if (submit) submit.textContent = 'Guardar cambios';
       if (nombre) nombre.value = datos.name || '';
+      if (orden) orden.value = datos.orden || '';
       llenarJefes(buscarArea(datos.id), areas, personas);
       llenarPadres(areas, datos.id, datos.parent || null);
       setColorInputs(datos.color || defaultColor);
@@ -239,6 +250,7 @@
         name: btn.dataset.name,
         color: btn.dataset.color,
         parent: btn.dataset.parent,
+        orden: btn.dataset.orden,
       });
     });
 

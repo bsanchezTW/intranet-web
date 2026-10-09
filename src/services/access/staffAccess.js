@@ -9,6 +9,9 @@ const { isRrhhAreaName } = require("../../constants/rrhhArea");
  *
  *   - Administrador de Informática → acceso total a la intranet (desarrollo).
  *   - Administrador de RRHH        → Administración de RRHH y colaboradores.
+ *     Cuenta quien trabaja en el área de RRHH y también quien la dirige: la
+ *     jefa puede figurar en otra área (Dirección) para que sus solicitudes
+ *     suban a la gerencia, y no por eso pierde el módulo.
  *
  * Igual que la mesa de ayuda y Finanzas, el área se resuelve contra la base y
  * no contra la sesión: un cambio de área o de rol vale sin volver a entrar. La
@@ -21,11 +24,14 @@ const FULL_ACCESS = Object.freeze({ informaticaAdmin: true, rrhhAdmin: false, ca
 
 let cache = { expiresAt: 0, byUserId: new Map() };
 
-/** Perfil de acceso de una fila usuario + área. Pura, para poder probarla. */
-function accessProfile({ role, area_name: areaName } = {}) {
+/**
+ * Perfil de acceso de una fila usuario + área. Pura, para poder probarla.
+ * `managed_area_names` son las áreas que dirige: sólo cuentan para RRHH.
+ */
+function accessProfile({ role, area_name: areaName, managed_area_names: managed } = {}, countryCode) {
   if (!isAdministrador(normalizeRole(role))) return NO_ACCESS;
   const informaticaAdmin = isSupportAreaName(areaName);
-  const rrhhAdmin = isRrhhAreaName(areaName);
+  const rrhhAdmin = [areaName, ...(managed || [])].some((name) => isRrhhAreaName(name, countryCode));
   return { informaticaAdmin, rrhhAdmin, canManageRrhh: informaticaAdmin || rrhhAdmin };
 }
 
@@ -39,9 +45,10 @@ function isMasterLogin(user) {
 
 async function fetchProfiles() {
   const { rows } = await db.query(
-    `SELECT u.id, u.role, w.area_name
+    `SELECT u.id, u.role, w.area_name,
+            ARRAY(SELECT m.area_name FROM work_areas m WHERE m.manager_user_id = u.id) AS managed_area_names
        FROM users u
-       JOIN work_areas w ON w.id = u.work_area_id
+       LEFT JOIN work_areas w ON w.id = u.work_area_id
       WHERE u.is_intranet_user = TRUE`,
   );
   const byUserId = new Map();

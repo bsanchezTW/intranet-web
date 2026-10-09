@@ -134,6 +134,7 @@ function nodo(area, enFila) {
                 data-name="<%= area.area_name %>"
                 data-color="<%= area.color %>"
                 data-parent="<%= area.parent_area_id || '' %>"
+                data-orden="<%= area.sort_order || '' %>"
                 title="Editar área" aria-label="Editar <%= area.area_name %>">
           <%- include('../../partials/icon', { name: 'edit' }) %>
         </button>

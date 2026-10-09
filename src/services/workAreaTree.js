@@ -110,11 +110,26 @@ function wouldCreateCycle(areas, areaId, parentId) {
 }
 
 /**
- * Árbol para pintar: raíces con `children` ordenados por nombre. Un área cuyo
- * padre no existe, o que quedó dentro de un ciclo, se dibuja como raíz para
- * que no desaparezca de la pantalla.
+ * Orden entre áreas hermanas: primero `sort_order` (el que RRHH fija para
+ * calcar el organigrama oficial), después las que no lo tienen, por nombre.
  */
-function buildTree(areas, { sortBy = (a, b) => String(a.area_name || "").localeCompare(String(b.area_name || ""), "es") } = {}) {
+function compareAreas(a, b) {
+  const oa = toId(a.sort_order);
+  const ob = toId(b.sort_order);
+  if (oa != null || ob != null) {
+    if (oa == null) return 1;
+    if (ob == null) return -1;
+    if (oa !== ob) return oa - ob;
+  }
+  return String(a.area_name || "").localeCompare(String(b.area_name || ""), "es");
+}
+
+/**
+ * Árbol para pintar: raíces con `children` ordenados con compareAreas. Un área
+ * cuyo padre no existe, o que quedó dentro de un ciclo, se dibuja como raíz
+ * para que no desaparezca de la pantalla.
+ */
+function buildTree(areas, { sortBy = compareAreas } = {}) {
   const list = areas || [];
   const byId = indexAreas(list);
   const nodes = new Map();
@@ -148,6 +163,7 @@ function buildTree(areas, { sortBy = (a, b) => String(a.area_name || "").localeC
 }
 
 module.exports = {
+  compareAreas,
   chainFrom,
   resolveApproverFromChain,
   descendantIds,
