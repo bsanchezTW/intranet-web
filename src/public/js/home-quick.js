@@ -30,11 +30,15 @@
   const idsOf = (list) =>
     Array.from(list.querySelectorAll("[data-quick-id]")).map((el) => el.dataset.quickId);
 
+  let statusTimer = null;
   const setStatus = (text, kind) => {
     if (!statusEl) return;
+    clearTimeout(statusTimer);
     statusEl.textContent = text || "";
     statusEl.classList.toggle("is-ok", kind === "ok");
     statusEl.classList.toggle("is-error", kind === "error");
+    // La confirmación vive bajo el título: se retira sola para no quedar fija.
+    if (kind === "ok") statusTimer = setTimeout(() => setStatus(""), 3500);
   };
 
   const syncEmpty = () => {

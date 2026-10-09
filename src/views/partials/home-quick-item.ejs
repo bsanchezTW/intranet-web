@@ -17,9 +17,9 @@
     <span class="home-quick__label"><%= item.label %></span>
   </a>
   <span class="home-quick__tools">
-    <button type="button" class="home-quick__tool" data-quick-move="-1" aria-label="Mover <%= item.label %> a la izquierda" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>‹</button>
-    <button type="button" class="home-quick__tool" data-quick-move="1" aria-label="Mover <%= item.label %> a la derecha" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>›</button>
-    <button type="button" class="home-quick__tool" data-quick-hide aria-label="Ocultar <%= item.label %>" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>Ocultar</button>
-    <button type="button" class="home-quick__tool" data-quick-show aria-label="Mostrar <%= item.label %>" tabindex="-1"<%= inHidden ? '' : ' hidden' %>>Mostrar</button>
+    <button type="button" class="home-quick__tool" data-quick-move="-1" aria-label="Mover <%= item.label %> a la izquierda" title="Mover a la izquierda" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>‹</button>
+    <button type="button" class="home-quick__tool" data-quick-move="1" aria-label="Mover <%= item.label %> a la derecha" title="Mover a la derecha" tabindex="-1"<%= inHidden ? ' hidden' : '' %>>›</button>
   </span>
+  <button type="button" class="home-quick__toggle home-quick__toggle--hide" data-quick-hide aria-label="Ocultar <%= item.label %>" title="Ocultar" tabindex="-1"<%= inHidden ? ' hidden' : '' %>><%- include('icon', { name: 'x' }) %></button>
+  <button type="button" class="home-quick__toggle home-quick__toggle--show" data-quick-show aria-label="Mostrar <%= item.label %>" title="Mostrar" tabindex="-1"<%= inHidden ? '' : ' hidden' %>><%- include('icon', { name: 'plus' }) %></button>
 </div>

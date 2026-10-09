@@ -129,33 +129,42 @@
     <div class="home-dash__main">
 
       <% if (features.homeQuickAccess && quickAccess) { %>
+      <% const quickLimit = 6; %>
       <!-- Accesos rápidos -->
-      <section class="home-section home-quick-section" id="homeQuick" aria-label="Accesos rápidos" data-visible-limit="6" data-default-order="<%= JSON.stringify(quickAccess.defaults) %>">
-        <div class="home-quick-card">
-          <div class="home-quick" id="homeQuickVisible">
-            <% quickAccess.visible.forEach(function (item) { %>
-              <%- include('partials/home-quick-item', { item: item, inHidden: false }) %>
-            <% }); %>
+      <section class="home-section home-quick-section" id="homeQuick" aria-labelledby="home-quick-title" data-visible-limit="<%= quickLimit %>" data-default-order="<%= JSON.stringify(quickAccess.defaults) %>">
+        <div class="home-card home-quick-card">
+          <div class="home-card__head home-quick__head">
+            <div class="home-quick__head-text">
+              <h2 class="home-card__title" id="home-quick-title">Accesos rápidos</h2>
+              <p class="home-quick__status" id="homeQuickStatus" role="status"></p>
+              <p class="home-quick__hint">Arrastra o usa las flechas para ordenar · hasta <%= quickLimit %> visibles</p>
+            </div>
+            <button type="button" class="home-quick__edit" id="homeQuickEdit" aria-pressed="false" aria-label="Personalizar accesos" title="Personalizar accesos">
+              <%- include('partials/icon', { name: 'edit' }) %>
+            </button>
+            <div class="home-quick__actions" id="homeQuickActions" hidden>
+              <button type="button" class="home-quick__action home-quick__action--link" data-quick-action="restore">Restaurar</button>
+              <button type="button" class="home-quick__action" data-quick-action="cancel">Cancelar</button>
+              <button type="button" class="home-quick__action home-quick__action--primary" data-quick-action="save">Guardar</button>
+            </div>
           </div>
-          <p class="home-quick__empty" id="homeQuickVisibleEmpty"<%= quickAccess.visible.length ? ' hidden' : '' %>>No hay accesos visibles.</p>
-          <button type="button" class="home-quick__edit" id="homeQuickEdit" aria-pressed="false" aria-label="Personalizar accesos" title="Personalizar">
-            <%- include('partials/icon', { name: 'edit' }) %>
-          </button>
-          <div class="home-quick__actions" id="homeQuickActions" hidden>
-            <button type="button" class="home-quick__action" data-quick-action="restore">Restaurar</button>
-            <button type="button" class="home-quick__action" data-quick-action="cancel">Cancelar</button>
-            <button type="button" class="home-quick__action home-quick__action--primary" data-quick-action="save">Guardar</button>
-          </div>
-          <div class="home-quick-hidden" id="homeQuickHiddenWrap" hidden>
-            <p class="home-quick-hidden__label">Ocultos</p>
-            <div class="home-quick home-quick--hidden" id="homeQuickHidden">
-              <% quickAccess.hidden.forEach(function (item) { %>
-                <%- include('partials/home-quick-item', { item: item, inHidden: true }) %>
+          <div class="home-quick__body">
+            <div class="home-quick" id="homeQuickVisible">
+              <% quickAccess.visible.forEach(function (item) { %>
+                <%- include('partials/home-quick-item', { item: item, inHidden: false }) %>
               <% }); %>
             </div>
-            <p class="home-quick__empty" id="homeQuickHiddenEmpty"<%= quickAccess.hidden.length ? ' hidden' : '' %>>No hay accesos ocultos.</p>
+            <p class="home-quick__empty" id="homeQuickVisibleEmpty"<%= quickAccess.visible.length ? ' hidden' : '' %>>No hay accesos visibles.</p>
+            <div class="home-quick-hidden" id="homeQuickHiddenWrap" hidden>
+              <p class="home-quick-hidden__label">Accesos ocultos</p>
+              <div class="home-quick home-quick--hidden" id="homeQuickHidden">
+                <% quickAccess.hidden.forEach(function (item) { %>
+                  <%- include('partials/home-quick-item', { item: item, inHidden: true }) %>
+                <% }); %>
+              </div>
+              <p class="home-quick__empty" id="homeQuickHiddenEmpty"<%= quickAccess.hidden.length ? ' hidden' : '' %>>No hay accesos ocultos.</p>
+            </div>
           </div>
-          <p class="home-quick__status" id="homeQuickStatus" role="status"></p>
         </div>
       </section>
       <% } %>
@@ -879,5 +888,5 @@
   })();
 </script>
 <% if (features.homeQuickAccess && quickAccess) { %>
-<script src="/js/home-quick.js?v=20261002a"></script>
+<script src="/js/home-quick.js?v=20261009a"></script>
 <% } %>
