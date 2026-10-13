@@ -846,10 +846,27 @@
   animation: fadeUp 0.45s ease both;
 }
 
-/* Misma cabecera que Noticias o Menú: título a la izquierda, acción a la derecha. */
+/* Una sola franja: los accesos y, al final, el lápiz. El título queda para
+   lectores de pantalla y reaparece al personalizar, cuando hace falta la
+   cabecera completa (título, ayuda y botones). */
+.home-quick-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+}
+
 .home-quick__head {
-  padding: 14px 20px;
-  flex-wrap: wrap;
+  order: 2;
+  flex: none;
+  gap: 8px;
+  padding: 0 4px 0 2px;
+  border-bottom: none;
+}
+
+.home-quick__body {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .home-quick__head-text {
@@ -857,6 +874,41 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+}
+
+.home-quick-section:not(.is-editing) .home-quick__head .home-card__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.home-quick-section.is-editing .home-quick-card {
+  display: block;
+  padding: 0;
+}
+
+.home-quick-section.is-editing .home-quick__head {
+  padding: 12px 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.home-quick-section.is-editing .home-quick__body {
+  padding: 10px;
+}
+
+/* Con flechas y botón cada ficha es más ancha: la fila se parte en vez de
+   esconder fichas detrás de un scroll. */
+.home-quick-section.is-editing .home-quick {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.home-quick-section.is-editing .home-quick__item {
+  flex: 0 0 auto;
 }
 
 .home-quick__hint,
@@ -981,15 +1033,11 @@
   cursor: default;
 }
 
-.home-quick__body {
-  padding: 12px 14px 14px;
-}
-
 .home-quick {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -1006,27 +1054,25 @@
   flex: 1 1 0;
   min-width: max-content;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
-  text-align: center;
-  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s;
+  transition: background 0.18s ease, border-color 0.18s;
   animation: itemUp 0.5s ease both;
 }
 
 .home-quick__link {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px 10px 10px;
+  gap: 9px;
+  flex: 1 1 auto;
+  padding: 6px 12px 6px 6px;
   border-radius: inherit;
   text-decoration: none;
-  text-align: center;
   color: inherit;
 }
 
@@ -1036,8 +1082,11 @@
 }
 
 .home-quick__item:hover {
-  transform: translateY(-2px);
   background: var(--surface2);
+}
+
+.home-quick__item:hover .home-quick__glyph {
+  transform: scale(1.06);
 }
 
 .home-quick__item:hover .home-quick__label {
@@ -1095,14 +1144,15 @@
 
 .home-quick__glyph {
   flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 800;
+  transition: transform 0.18s ease;
 }
 
 .home-quick__glyph--brand { background: var(--brand-soft); color: var(--brand); }
@@ -1117,7 +1167,7 @@
    dentro de la medida para que no queden más grandes que los íconos. */
 .home-quick__glyph.home-quick__glyph--logo {
   box-sizing: border-box;
-  padding: 5px;
+  padding: 3px;
   overflow: hidden;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -1128,16 +1178,16 @@
   height: 100%;
   object-fit: contain;
   display: block;
-  border-radius: 5px;
+  border-radius: 4px;
 }
 
 .home-quick__glyph .icon-svg {
-  width: 19px;
-  height: 19px;
+  width: 16px;
+  height: 16px;
 }
 
 .home-quick__label {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink);
   line-height: 1.2;
@@ -1152,20 +1202,20 @@
 
 .home-quick__item .badge-notif {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 0;
+  left: 26px;
 }
 
 .home-quick-section.is-editing .home-quick__item .badge-notif {
   display: none;
 }
 
+/* Editando, las flechas van al final de la ficha, en la misma línea. */
 .home-quick__tools {
   display: none;
-  justify-content: center;
-  gap: 4px;
-  width: 100%;
-  padding: 0 6px 8px;
+  flex: none;
+  gap: 3px;
+  padding-right: 8px;
 }
 
 .home-quick-section.is-editing .home-quick__tools {
@@ -1198,12 +1248,10 @@
   border-color: var(--brand-soft);
 }
 
-/* Ocultar / mostrar: botón redondo en la esquina de la ficha. */
+/* Ocultar / mostrar: botón redondo al final de la ficha. */
 .home-quick__toggle {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  z-index: 1;
+  flex: none;
+  margin-right: 8px;
   width: 20px;
   height: 20px;
   padding: 0;
@@ -1675,32 +1723,24 @@
     font-size: 1.3rem;
   }
 
-  .home-quick__head {
-    padding: 12px 16px;
-  }
-
-  .home-quick__body {
-    padding: 8px 6px 10px;
-  }
-
+  /* En el teléfono no caben seis fichas en fila: el rótulo baja bajo el ícono. */
   .home-quick {
-    gap: 2px;
+    gap: 0;
   }
 
   .home-quick__link {
-    padding: 10px 2px 8px;
-    gap: 6px;
-  }
-
-  .home-quick__glyph {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
-    font-size: 0.78rem;
+    flex-direction: column;
+    padding: 8px 2px 6px;
+    gap: 5px;
   }
 
   .home-quick__label {
-    font-size: 0.68rem;
+    font-size: 0.66rem;
+  }
+
+  .home-quick__item .badge-notif {
+    left: auto;
+    right: 4px;
   }
 
   .home-news__row {
