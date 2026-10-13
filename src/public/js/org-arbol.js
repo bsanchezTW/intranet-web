@@ -225,6 +225,25 @@
       pintar(false);
     }, { passive: false });
 
+    // La vista recorta pero el navegador igual puede desplazarla por dentro
+    // (Tab hacia un botón fuera de cuadro, scrollIntoView). Ese desplazamiento
+    // se pasa al transform para que el lienzo no quede descuadrado.
+    vista.addEventListener("scroll", function () {
+      if (!vista.scrollLeft && !vista.scrollTop) return;
+      estado.x -= vista.scrollLeft;
+      vista.scrollLeft = 0;
+      vista.scrollTop = 0;
+      pintar(false);
+    });
+
+    // Con Tab se puede llegar a un botón que quedó fuera de cuadro: el lienzo
+    // se desplaza hasta mostrarlo.
+    vista.addEventListener("focusin", function (evento) {
+      var rVista = vista.getBoundingClientRect();
+      var rFoco = evento.target.getBoundingClientRect();
+      if (rFoco.left < rVista.left || rFoco.right > rVista.right) centrar(evento.target);
+    });
+
     // Cambia el ancho de la ventana o el árbol termina de cargar (fuentes,
     // fotos): se reajusta si nadie tocó el zoom, si no sólo se reacomoda.
     var anchoPrevio = vista.clientWidth;
@@ -275,6 +294,33 @@
     }
   }
 
+  // ── Colaboradores en la tarjeta ─────────────────────────────────────────────
+
+  /**
+   * Las filas pasado el tope (data-extra) se ven si la lista está abierta con
+   * «Ver N más» o si la búsqueda dio con esa persona.
+   */
+  function sincronizarExtras(lista) {
+    var abierta = lista.dataset.abierta === "true";
+    todos("[data-extra]", lista).forEach(function (fila) {
+      fila.hidden = !abierta && !fila.classList.contains("is-match");
+    });
+  }
+
+  function initVerMas() {
+    document.addEventListener("click", function (evento) {
+      var boton = evento.target.closest && evento.target.closest("[data-org-mas]");
+      if (!boton) return;
+      var lista = boton.previousElementSibling;
+      if (!lista || !lista.hasAttribute("data-org-miembros")) return;
+      var abrir = lista.dataset.abierta !== "true";
+      lista.dataset.abierta = abrir ? "true" : "false";
+      sincronizarExtras(lista);
+      boton.setAttribute("aria-expanded", abrir ? "true" : "false");
+      boton.textContent = abrir ? "Ver menos" : boton.dataset.textoMas;
+    });
+  }
+
   // ── Búsqueda y filtros ──────────────────────────────────────────────────────
 
   var PREDICADOS = {
@@ -291,7 +337,11 @@
       if (lienzo) lienzos.set(marco, lienzo);
     });
 
+    initVerMas();
+
     var nodos = todos("[data-org-node]");
+    var filas = todos("[data-org-miembro]");
+    var listas = todos("[data-org-miembros]");
     if (!nodos.length) return;
 
     var input = document.querySelector("[data-org-buscar]");
@@ -319,6 +369,16 @@
           if (!primero) primero = nodo;
         }
       });
+
+      // Dentro de las tarjetas se marca a la persona buscada, aunque estuviera
+      // entre las que quedan bajo «Ver N más».
+      filas.forEach(function (fila) {
+        fila.classList.toggle(
+          "is-match",
+          Boolean(q) && normalizar(fila.dataset.buscar).indexOf(q) !== -1,
+        );
+      });
+      listas.forEach(sincronizarExtras);
 
       if (aviso) aviso.hidden = !activo || coincidencias > 0;
       if (conteo) {

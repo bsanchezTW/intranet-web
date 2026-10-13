@@ -16,11 +16,10 @@ const totalMiembros = listado.reduce((n, a) => n + (a.memberCount || 0), 0);
 const sinJefe = listado.filter(a => !a.managerName).length;
 const sinAprobador = listado.filter(a => (!a.managerName && !a.inheritedManagerName) || a.approverUnavailable).length;
 
-const TOPE_STACK = 5;
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 %>
 
-<link rel="stylesheet" href="/css/areas.css?v=20261009c">
+<link rel="stylesheet" href="/css/areas.css?v=20261009d">
 
 <% if (successMsg || errorMsg) { %>
 <div hidden data-toast="<%= successMsg || errorMsg %>" data-toast-tone="<%= successMsg ? 'ok' : 'error' %>"></div>
@@ -94,32 +93,15 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     <% } %>
 
     <% if (enEdicion && sinArea) { %>
-      <%
-        const visiblesSA = listaSinArea.slice(0, TOPE_STACK);
-        const restantesSA = listaSinArea.length - visiblesSA.length;
-      %>
       <section class="org-sin-area" aria-label="Colaboradores sin área">
-        <span class="org-sin-area__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
-        <div class="org-sin-area__texto">
-          <strong><%= plural(listaSinArea.length, 'colaborador sin área', 'colaboradores sin área') %></strong>
-          <span>Sin área no hay jefe que apruebe sus solicitudes.</span>
+        <div class="org-sin-area__cabeza">
+          <span class="org-sin-area__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
+          <div class="org-sin-area__texto">
+            <strong><%= plural(listaSinArea.length, 'colaborador sin área', 'colaboradores sin área') %></strong>
+            <span>Sin área no hay jefe que apruebe sus solicitudes. Asígnales una con el botón de cada fila.</span>
+          </div>
         </div>
-        <button type="button" class="area-resumen org-sin-area__btn" data-ver-miembros="sin-area">
-          <span class="area-stack" aria-hidden="true">
-            <% visiblesSA.forEach(m => { %>
-              <% if (m.photo) { %>
-                <img src="<%= m.photo %>" alt="" class="avatar area-stack__item" loading="lazy" decoding="async">
-              <% } else { %>
-                <%- include('../partials/monogram', { initials: m.inicial, style: m.monogramStyle, className: 'avatar-fallback area-stack__item' }) %>
-              <% } %>
-            <% }) %>
-            <% if (restantesSA > 0) { %>
-              <span class="area-stack__item area-stack__mas">+<%= restantesSA %></span>
-            <% } %>
-          </span>
-          <span class="area-resumen__txt">Ver y asignar</span>
-          <span class="area-resumen__chev" aria-hidden="true"><%- include('../partials/icon', { name: 'chevron-right' }) %></span>
-        </button>
+        <%- include('partials/org_miembros', { miembros: listaSinArea, editable: true, area: null, tope: 8 }) %>
       </section>
     <% } %>
   <% } %>
@@ -295,7 +277,7 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 }).replace(/</g, '\\u003c') %></script>
 <% } %>
 <script src="/js/ac-cards.js?v=20260916m" defer></script>
-<script src="/js/org-arbol.js?v=20261009c" defer></script>
+<script src="/js/org-arbol.js?v=20261009d" defer></script>
 <% if (enEdicion) { %>
 <script src="/js/areas.js?v=20261009c" defer></script>
 <% } %>

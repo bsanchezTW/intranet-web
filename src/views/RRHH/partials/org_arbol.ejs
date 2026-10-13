@@ -14,7 +14,8 @@
   La línea de jefatura dice quién aprueba: el jefe propio, el del área
   superior al que se escala, o una advertencia si nadie en la cadena lo es.
 */
-const TOPE_STACK = 3;
+// Colaboradores visibles en la tarjeta; el resto se despliega con «Ver N más».
+const TOPE_MIEMBROS = 5;
 const cuentas = (typeof conteos !== 'undefined' && conteos) || {};
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 const raices = arbol || [];
@@ -83,7 +84,6 @@ function nodo(area, enFila) {
   const equipo = jefeEsMiembro
     ? area.members.filter(m => Number(m.id) !== Number(area.manager_user_id))
     : area.members;
-  const visibles = equipo.slice(0, TOPE_STACK);
   const textoEquipo = equipo.length
     ? plural(equipo.length, 'colaborador', 'colaboradores')
     : (jefeEsMiembro ? 'Sin colaboradores a cargo' : 'Sin colaboradores');
@@ -136,21 +136,14 @@ function nodo(area, enFila) {
         <% } %>
       </div>
 
-      <% if (area.memberCount || editable) { %>
-      <button type="button" class="org-node__equipo" data-ver-miembros="<%= area.id %>"
-              aria-label="Ver colaboradores de <%= area.area_name %>">
-        <% if (visibles.length) { %>
-        <%# Sin burbuja «+N»: el total ya lo dice el texto de al lado. %>
-        <span class="area-stack" aria-hidden="true">
-          <% visibles.forEach(m => avatar(m, 'area-stack__item')) %>
-        </span>
+      <%# El equipo se lista en la tarjeta misma: ver quién está en cada área
+          es para lo que se abre el organigrama. %>
+      <div class="org-node__equipo">
+        <p class="org-node__equipo-txt"><%= textoEquipo %></p>
+        <% if (equipo.length) { %>
+          <%- include('org_miembros', { miembros: equipo, editable, area: { id: area.id, area_name: area.area_name }, tope: TOPE_MIEMBROS }) %>
         <% } %>
-        <span class="org-node__equipo-txt"><%= textoEquipo %></span>
-        <span class="org-node__equipo-chev" aria-hidden="true"><%- include('../../partials/icon', { name: 'chevron-right' }) %></span>
-      </button>
-      <% } else { %>
-      <p class="org-node__equipo org-node__equipo--vacio"><%= textoEquipo %></p>
-      <% } %>
+      </div>
 
       <% if (editable) { %>
       <footer class="org-node__acciones">

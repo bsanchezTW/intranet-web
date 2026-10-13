@@ -776,84 +776,186 @@
   cursor: help;
 }
 
-/* Resumen del equipo: abre la lista completa en un modal, para que un área
-   con cuarenta personas no deforme el árbol. */
+/* Equipo del área, listado en la tarjeta. Pasado el tope, «Ver N más»
+   despliega el resto ahí mismo; el lienzo se reacomoda solo al crecer. */
 .org-node__equipo {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 26px;
-  margin: 0;
-  padding: 10px 0 0;
-  box-sizing: content-box;
-  border: 0 none;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
   border-top: 1px solid var(--color-border);
-  border-radius: 0;
-  background: none;
-  color: var(--color-text-muted);
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: color 0.18s ease;
-}
-
-.org-node__equipo:hover {
-  color: var(--brand);
-}
-
-.org-node__equipo:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 3px;
-  border-radius: 6px;
-}
-
-.org-node__equipo--vacio {
-  font-weight: 500;
-  cursor: default;
-}
-
-.org-node__equipo--vacio:hover {
-  color: var(--color-text-muted);
 }
 
 .org-node__equipo-txt {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.org-node__equipo-chev {
-  flex: none;
-  display: inline-flex;
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--color-text-subtle);
-  transition: transform 0.18s ease, color 0.18s ease;
 }
 
-.org-node__equipo:hover .org-node__equipo-chev {
-  color: inherit;
-  transform: translateX(2px);
+.org-miembros {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.org-node .area-stack__item {
+.org-miembro {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin: 0 -6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  color: var(--color-text);
+  transition: background-color 0.15s ease;
+}
+
+.org-miembro[hidden] {
+  display: none;
+}
+
+.org-miembro:hover {
+  background: var(--color-surface-muted);
+}
+
+/* La búsqueda también marca a la persona, no sólo a su área. */
+.org-miembro.is-match {
+  background: var(--brand-soft);
+  font-weight: 700;
+}
+
+.org-miembro__foto {
+  flex: none;
   width: 24px;
   height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
-.org-node .avatar-fallback.area-stack__item {
-  font-size: 0.52rem;
+.avatar-fallback.org-miembro__foto {
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.55rem;
 }
 
-/* En una tarjeta angosta (ramas muy anidadas) las caras le quitan el sitio
-   al texto: se queda sólo la cuenta. */
-@container (max-width: 184px) {
-  .org-node .area-stack {
-    display: none;
+.org-miembro__nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-miembro--inactivo {
+  color: var(--color-text-subtle);
+}
+
+.org-miembro--inactivo .org-miembro__foto {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.org-miembro__estado {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+/* Mover y quitar aparecen al pasar por la fila, encima del final del nombre:
+   ocultos no le quitan ancho. En pantallas táctiles van siempre, en la fila. */
+.org-miembro__acciones {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-flex;
+  gap: 2px;
+  padding-left: 4px;
+  border-radius: 7px;
+  background: var(--color-surface-muted);
+  box-shadow: -12px 0 10px -6px var(--color-surface-muted);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.15s ease;
+}
+
+.org-miembro:hover .org-miembro__acciones,
+.org-miembro:focus-within .org-miembro__acciones {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .org-miembro__acciones {
+    position: static;
+    flex: none;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
   }
+}
+
+.org-miembro__form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.org-miembro__btn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.org-miembro__btn:hover {
+  background: var(--color-surface);
+  color: var(--brand);
+}
+
+.org-miembro__btn--danger:hover {
+  color: #c0392b;
+}
+
+.org-miembro__btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.org-miembros__mas {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: 600 0.78rem/1.3 inherit;
+  color: var(--brand);
+  cursor: pointer;
+}
+
+.org-miembros__mas:hover {
+  text-decoration: underline;
 }
 
 .org-node__acciones {
@@ -883,14 +985,25 @@
 
 .org-sin-area {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
   margin-top: 24px;
   padding: 12px 14px;
   border: 1px dashed var(--color-border-strong);
   border-radius: 14px;
   background: var(--color-surface);
+}
+
+.org-sin-area__cabeza {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.org-sin-area .org-miembros {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 2px 18px;
 }
 
 .org-sin-area__icono {
@@ -911,11 +1024,6 @@
 
 .org-sin-area__texto strong {
   color: var(--color-heading);
-}
-
-.org-sin-area .org-sin-area__btn {
-  width: auto;
-  margin-top: 0;
 }
 
 .area-card__count {

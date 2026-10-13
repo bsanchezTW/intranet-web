@@ -1,0 +1,57 @@
+<%
+/*
+  Colaboradores de un área, dentro de su tarjeta del organigrama: sin modal.
+
+  Locals: miembros (personas de cargarOrganigrama), editable (bool),
+          area ({ id, area_name }, o null para «Sin área»), tope (filas
+          visibles; el resto se despliega ahí mismo con «Ver N más»).
+
+  En edición cada fila trae mover (modal de areas.js) y quitar (confirmación
+  de ac-cards.js). En «Sin área» no hay de dónde quitar: sólo asignar.
+*/
+const lista = miembros || [];
+const limite = (typeof tope !== 'undefined' && tope) || 5;
+const ocultos = Math.max(0, lista.length - limite);
+const destino = (typeof area !== 'undefined' && area) || null;
+%>
+<ul class="org-miembros" data-org-miembros>
+  <% lista.forEach((m, i) => { %>
+  <li class="org-miembro<%= m.disponible === false ? ' org-miembro--inactivo' : '' %>"
+      data-org-miembro data-buscar="<%= m.nombreCompleto %>"<% if (i >= limite) { %> data-extra hidden<% } %>>
+    <% if (m.photo) { %>
+      <img src="<%= m.photo %>" alt="" class="avatar org-miembro__foto" loading="lazy" decoding="async">
+    <% } else { %>
+      <%- include('../../partials/monogram', { initials: m.inicial, style: m.monogramStyle, className: 'avatar-fallback org-miembro__foto' }) %>
+    <% } %>
+    <span class="org-miembro__nombre" title="<%= m.nombreCompleto %>"><%= m.nombreLista %></span>
+    <% if (m.disponible === false) { %>
+      <span class="org-miembro__estado" title="Su cuenta está deshabilitada">Inactivo</span>
+    <% } %>
+    <% if (editable) { %>
+    <span class="org-miembro__acciones">
+      <button type="button" class="org-miembro__btn" data-mover-miembro
+              data-user-id="<%= m.id %>" data-nombre="<%= m.nombreCompleto %>"
+              data-area-id="<%= destino ? destino.id : '' %>" data-area-name="<%= destino ? destino.area_name : '' %>"
+              title="<%= destino ? 'Cambiar de área' : 'Asignar a un área' %>"
+              aria-label="<%= destino ? 'Cambiar de área' : 'Asignar a un área' %>: <%= m.nombreCompleto %>">
+        <%- include('../../partials/icon', { name: 'repeat' }) %>
+      </button>
+      <% if (destino) { %>
+      <form method="POST" action="/RRHH/areas/<%= destino.id %>/miembros/<%= m.id %>/quitar" class="org-miembro__form">
+        <button type="submit" class="org-miembro__btn org-miembro__btn--danger"
+                data-ac-confirmar="¿Quitar a <%= m.nombreCompleto %> de «<%= destino.area_name %>»? Quedará sin área hasta que le asignes otra."
+                data-ac-confirmar-titulo="¿Quitar del área?" data-ac-confirmar-aceptar="Quitar" data-ac-confirmar-tono="peligro"
+                title="Quitar del área" aria-label="Quitar del área: <%= m.nombreCompleto %>">
+          <%- include('../../partials/icon', { name: 'x' }) %>
+        </button>
+      </form>
+      <% } %>
+    </span>
+    <% } %>
+  </li>
+  <% }) %>
+</ul>
+<% if (ocultos) { %>
+<button type="button" class="org-miembros__mas" data-org-mas aria-expanded="false"
+        data-texto-mas="Ver <%= ocultos %> más">Ver <%= ocultos %> más</button>
+<% } %>
