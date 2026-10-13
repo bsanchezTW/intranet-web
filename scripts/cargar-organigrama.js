@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 /**
- * Carga el organigrama de Chile en work_areas: jerarquía, jefes y miembros.
+ * Carga el organigrama oficial de un país en work_areas: jerarquía, jefes,
+ * miembros y orden. Cada país describe el suyo en scripts/organigramas/<país>.js.
  *
- *   node scripts/cargar-organigrama.js             → muestra el plan, no escribe
- *   node scripts/cargar-organigrama.js --aplicar   → lo aplica en una transacción
+ *   node scripts/cargar-organigrama.js --pais CL             → muestra el plan
+ *   node scripts/cargar-organigrama.js --pais PE --aplicar   → lo aplica en una transacción
+ *
+ * La forma de trabajar es la misma en todos los países: las áreas son
+ * departamentos (no cargos), cada una con su jefe, que también es miembro del
+ * área que dirige; las áreas cuelgan unas de otras y el orden de `hijas` es
+ * el del organigrama oficial (se guarda en sort_order). Un área sin jefe
+ * (`jefe: null`) escala sus solicitudes al jefe del área superior.
  *
  * Las áreas se buscan por nombre (sin acentos ni mayúsculas) y se reutilizan:
  * conservan su id, color y documentos. Sólo se crean las que faltan; una que
@@ -11,7 +18,11 @@
  * personas se buscan por primer nombre + inicio del apellido; si un nombre
  * calza con más de una persona el script se detiene sin tocar nada.
  *
- * Quien no figura en ORGANIGRAMA queda donde está. Quien figura pero no tiene
+ * `eliminar` lista áreas que dejan de existir (p. ej. cargos convertidos en
+ * departamentos). Sólo se borran si quedan vacías: sin personas, sin áreas
+ * dependientes y sin documentos; si no, el script se detiene sin tocar nada.
+ *
+ * Quien no figura en el organigrama queda donde está. Quien figura pero no tiene
  * cuenta se informa y se omite: volver a correr el script después de crearla
  * lo ubica. Correrlo dos veces seguidas no cambia nada la segunda.
  */
@@ -24,7 +35,18 @@ const { applyCountryPoolerUser } = require("../src/config/supabaseProjects");
 const ROOT = path.join(__dirname, "..");
 dotenv.config({ path: path.join(ROOT, ".env"), quiet: true });
 dotenv.config({ path: path.join(ROOT, ".env.local"), quiet: true });
-process.env.COUNTRY = "CL";
+function leerPais() {
+  const i = process.argv.indexOf("--pais");
+  const pais = String(i >= 0 ? process.argv[i + 1] || "" : "").toUpperCase();
+  if (!["CL", "PE"].includes(pais)) {
+    console.error("Indica el país: node scripts/cargar-organigrama.js --pais CL|PE [--aplicar]");
+    process.exit(1);
+  }
+  return pais;
+}
+
+const PAIS = leerPais();
+process.env.COUNTRY = PAIS;
 applyCountryPoolerUser(process.env);
 
 const db = require("../src/db");
@@ -39,136 +61,7 @@ const { isIdPrimaryKeyCollision } = require("../src/utils/idCollision");
 
 const APLICAR = process.argv.includes("--aplicar");
 
-// El jefe también queda como miembro del área que dirige: así sus propias
-// solicitudes suben al jefe del área superior. El orden de `hijas` es el de
-// izquierda a derecha (o de arriba abajo) del organigrama oficial y se guarda
-// en sort_order. `antes` es el nombre anterior de un área que se renombra.
-const ORGANIGRAMA = {
-  area: "Gerencia",
-  jefe: "Luciano Fernández",
-  miembros: [
-    "Teresa Garretón",
-    // Asesores y prevención de riesgos: dependen de la gerencia sin área propia.
-    "Miguel Salcedo",
-    "Fernando Abud",
-    "Marcelo Quijada",
-  ],
-  hijas: [
-    {
-      area: "Finanzas",
-      jefe: "Pablo Soto",
-      miembros: ["Fernanda Contreras"],
-      hijas: [
-        {
-          // Tesorería y RRHH. El nombre se mantiene: es el que habilita la
-          // Administración de RRHH a sus administradores.
-          area: "Recursos Humanos",
-          jefe: "Marcela Manzano",
-          miembros: [
-            "Francisco Aguilera",
-            "María Marcatinco",
-            "Claudia Valderrama",
-            "Elizabeth Nuñez",
-          ],
-        },
-        {
-          area: "Contabilidad",
-          jefe: "Paula Serrano",
-          miembros: ["Eduardo Zamora", "Nicolás Flores", "Javier Poveda", "Jessica Ibaceta"],
-        },
-        {
-          area: "Logística",
-          jefe: "Loreto Carvallo",
-          miembros: [],
-          hijas: [
-            {
-              area: "Bodega",
-              jefe: "Carlos Fuentes",
-              miembros: [
-                "Angelo Molina",
-                "Ricardo Pérez",
-                "Freddy Panicide",
-                "Gino Moyano",
-                "Richard Gómez",
-                "Marco Cartes",
-                "Carlos Becerra",
-                "Alejandro Meneses",
-                "Henry González",
-              ],
-            },
-            {
-              area: "Operaciones Logísticas",
-              antes: "Operaciones y Facturación",
-              jefe: "Corina Pino",
-              miembros: [],
-            },
-          ],
-        },
-        {
-          area: "Informática",
-          jefe: "Sebastián Quiroga",
-          miembros: ["Bastián Sánchez"],
-        },
-        {
-          area: "Control y Gestión",
-          jefe: "Rubén Haro",
-          miembros: ["Sofía Garrido"],
-        },
-      ],
-    },
-    {
-      area: "Eléctrica",
-      jefe: "Jorge De Geyter",
-      miembros: ["Alexander Medina", "Santiago Lozada"],
-    },
-    {
-      area: "Comercial",
-      jefe: "Vicente Fernández",
-      miembros: [],
-      hijas: [
-        {
-          area: "Infraestructura",
-          jefe: "Leonardo Muñoz",
-          miembros: [],
-        },
-        {
-          area: "Cableado y Conectividad",
-          jefe: "Sandra Dittmar",
-          miembros: ["Luis Torres", "Cristofer Velásquez", "Rosa Valdés"],
-        },
-        {
-          area: "Ventas",
-          jefe: "Ledwin Pacheco",
-          miembros: [
-            "Alan Cerda",
-            "Andrés Freire",
-            "Hernán Sánchez",
-            "Hernán Avendaño",
-            "Nicolás González",
-            "Marisol Martel",
-            "Angelo Crisóstomo",
-            "Michel Azoaje",
-          ],
-        },
-        {
-          area: "Tecnología",
-          jefe: "Williams Araya",
-          miembros: ["Javier Salgado", "Álvaro Alzola", "Ignacio Catalán"],
-        },
-        {
-          area: "Marketing",
-          jefe: "Erick Novoa",
-          miembros: ["Fermín Varas", "Felipe Reyes"],
-        },
-      ],
-    },
-    {
-      area: "Seguridad Industrial",
-      jefe: "Andrea Fernández",
-      miembros: ["Fausto Tanzella", "Sergio Temperoni"],
-    },
-  ],
-};
+const { arbol: ORGANIGRAMA, eliminar: ELIMINAR = [] } = require(`./organigramas/${PAIS.toLowerCase()}`);
 
 // ===========================================================================
 // Plan
@@ -207,10 +100,12 @@ function nombreDe(u) {
 }
 
 async function armarPlan() {
-  const [{ rows: areas }, { rows: users }] = await Promise.all([
+  const [{ rows: areas }, { rows: users }, { rows: docs }] = await Promise.all([
     db.query("SELECT id, area_name, color, parent_area_id, manager_user_id, sort_order FROM work_areas"),
     db.query("SELECT id, first_name, last_name, role, work_area_id FROM users"),
+    db.query("SELECT work_area_id, count(*)::int AS n FROM documents WHERE work_area_id IS NOT NULL GROUP BY work_area_id"),
   ]);
+  const docsPorArea = new Map(docs.map((d) => [Number(d.work_area_id), d.n]));
   const areaPorNombre = new Map(areas.map((a) => [normalizeAreaName(a.area_name), a]));
   const areaPorId = new Map(areas.map((a) => [Number(a.id), a]));
   const buscar = crearBuscador(users);
@@ -244,12 +139,43 @@ async function armarPlan() {
       areaPorNombre.get(normalizeAreaName(nodo.area)) ||
       (nodo.antes && areaPorNombre.get(normalizeAreaName(nodo.antes))) ||
       null;
-    const jefe = resolver(nodo.jefe, nodo.area);
+    const jefe = nodo.jefe ? resolver(nodo.jefe, nodo.area) : null;
     const miembros = [jefe, ...nodo.miembros.map((m) => resolver(m, nodo.area))].filter(Boolean);
-    return { ...nodo, existente, jefe, miembros };
+    return { ...nodo, jefeNombre: nodo.jefe, existente, jefe, miembros };
   });
 
-  return { plan, areaPorNombre, areaPorId, users, faltantes, ambiguos };
+  const borrar = planBorrado(plan, areas, users, docsPorArea, areaPorNombre, ambiguos);
+
+  return { plan, borrar, areaPorNombre, areaPorId, users, faltantes, ambiguos };
+}
+
+/**
+ * Áreas de `eliminar` que todavía existen y por qué no se podrían borrar:
+ * gente que se queda en ellas, áreas dependientes que el plan no reubica o
+ * documentos (se borrarían en cascada).
+ */
+function planBorrado(plan, areas, users, docsPorArea, areaPorNombre, ambiguos) {
+  const enPlan = new Set(plan.filter((n) => n.existente).map((n) => Number(n.existente.id)));
+  const destinoDe = new Map();
+  for (const nodo of plan) for (const u of nodo.miembros) destinoDe.set(Number(u.id), nodo.area);
+
+  const borrar = ELIMINAR.map((nombre) => areaPorNombre.get(normalizeAreaName(nombre))).filter(Boolean);
+  const idsBorrar = new Set(borrar.map((a) => Number(a.id)));
+
+  return borrar.map((area) => {
+    const id = Number(area.id);
+    if (enPlan.has(id)) ambiguos.push(`«${area.area_name}» figura en el organigrama y también en eliminar`);
+    const bloqueos = [];
+    const quedan = users.filter((u) => Number(u.work_area_id) === id && !destinoDe.has(Number(u.id)));
+    if (quedan.length) bloqueos.push(`le quedan ${quedan.map(nombreDe).join(", ")}`);
+    const hijas = areas.filter(
+      (a) => Number(a.parent_area_id) === id && !enPlan.has(Number(a.id)) && !idsBorrar.has(Number(a.id)),
+    );
+    if (hijas.length) bloqueos.push(`dependen de ella ${hijas.map((a) => a.area_name).join(", ")}`);
+    const nDocs = docsPorArea.get(id) || 0;
+    if (nDocs) bloqueos.push(`tiene ${nDocs} documento(s)`);
+    return { area, bloqueos };
+  });
 }
 
 /** Color de un área nueva: el de su nombre histórico o un tono claro del padre. */
@@ -261,7 +187,7 @@ function colorParaNueva(nombre, colorPadre) {
   return hslToHex(h, s, 58);
 }
 
-function imprimirPlan({ plan, areaPorId, users }) {
+function imprimirPlan({ plan, borrar, areaPorId, users }) {
   const nombreArea = (id) => (id ? areaPorId.get(Number(id))?.area_name || `#${id}` : "ninguna");
   const nombreUsuario = (id) => {
     if (!id) return "sin jefe";
@@ -297,8 +223,22 @@ function imprimirPlan({ plan, areaPorId, users }) {
       }
     }
     if (lineas.length) cambios += 1;
-    const jefe = nodo.jefe ? nombreDe(nodo.jefe) : "SIN JEFE (no encontrado)";
+    const jefe = nodo.jefe
+      ? nombreDe(nodo.jefe)
+      : nodo.jefeNombre
+        ? "SIN JEFE (no encontrado)"
+        : "— (aprueba el área superior)";
     console.log(`${sangria}${nodo.area} · jefe ${jefe}${lineas.length ? `   [${lineas.join("; ")}]` : ""}`);
+  }
+
+  if (borrar.length) {
+    console.log("");
+    console.log("Áreas que se eliminan");
+    console.log("─".repeat(72));
+    for (const { area, bloqueos } of borrar) {
+      cambios += 1;
+      console.log(`  ${area.area_name}${bloqueos.length ? `   [NO SE PUEDE: ${bloqueos.join("; ")}]` : ""}`);
+    }
   }
 
   console.log("");
@@ -359,7 +299,7 @@ async function insertarArea(client, nombre, color) {
   throw new Error(`No se pudo generar un id libre para «${nombre}».`);
 }
 
-async function aplicar({ plan }) {
+async function aplicar({ plan, borrar }) {
   const client = await db.getClient();
   try {
     await client.query("BEGIN");
@@ -393,6 +333,15 @@ async function aplicar({ plan }) {
       }
     }
 
+    // Las que se eliminan pueden depender unas de otras: se descuelgan antes
+    // de borrarlas para que el orden de borrado no importe.
+    const idsBorrar = borrar.map((b) => Number(b.area.id));
+    if (idsBorrar.length) {
+      await client.query("UPDATE work_areas SET parent_area_id = NULL WHERE id = ANY($1::int[])", [idsBorrar]);
+      await client.query("DELETE FROM work_areas WHERE id = ANY($1::int[])", [idsBorrar]);
+      for (const { area } of borrar) logger.info("organigrama", `Área eliminada: ${area.area_name} (#${area.id})`);
+    }
+
     await client.query("COMMIT");
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
@@ -408,13 +357,21 @@ async function main() {
   const datos = await armarPlan();
 
   if (datos.ambiguos.length) {
-    logger.error("organigrama", "Hay nombres ambiguos o repetidos; corrige ORGANIGRAMA antes de seguir:");
+    logger.error("organigrama", "Hay nombres ambiguos o repetidos; corrige el organigrama antes de seguir:");
     for (const linea of datos.ambiguos) console.log(`  ${linea}`);
     process.exitCode = 1;
     return;
   }
 
   const cambios = imprimirPlan(datos);
+
+  const bloqueadas = datos.borrar.filter((b) => b.bloqueos.length);
+  if (bloqueadas.length) {
+    console.log("");
+    logger.error("organigrama", "Hay áreas en eliminar que no quedan vacías; corrige el organigrama antes de seguir.");
+    process.exitCode = 1;
+    return;
+  }
 
   if (datos.faltantes.length) {
     console.log("");
