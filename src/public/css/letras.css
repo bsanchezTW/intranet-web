@@ -210,6 +210,16 @@
 
 .letras-icono-btn:hover { border-color: var(--brand); color: var(--brand); }
 
+button.letras-icono-btn {
+  padding: 0;
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.letras-icono-btn--peligro:hover { border-color: var(--down); color: var(--down); }
+
+.letras-tabla__acciones .letras-icono-btn + .letras-icono-btn { margin-left: 6px; }
+
 .letras-accion {
   height: 32px;
   padding: 0 10px;

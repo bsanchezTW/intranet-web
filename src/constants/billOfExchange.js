@@ -9,15 +9,15 @@
  * especiales en vertical, columnas de firma del aceptante, recuadro de firma
  * del girador). Ver services/billsOfExchange/billOfExchangePdf.js.
  *
- * En el recuadro del girador sólo se imprime el nombre del representante
+ * En el recuadro del girador se imprimen el nombre y el DNI del representante
  * legal: la razón social la pone el sello de la empresa y la firma va a mano.
- * El D.O.I. del representante queda en blanco hasta confirmarlo.
  */
 
 const BILL_DRAWER = Object.freeze({
   name: "TRANSWORLD POWER AND TELECOM S.A.C.",
   ruc: "20600956257",
   representative: "JORGE ALEJANDRO MARTIN MASSON PAZOS",
+  representativeDoc: "DNI N.° 08232345",
 });
 
 /** Cláusulas especiales del reverso izquierdo, tal como las trae el talonario. */

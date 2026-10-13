@@ -9,7 +9,7 @@ const {
 const { formatDisplay } = require("../../utils/vacationDateUtils");
 
 /**
- * PDF de letras de cambio: una letra por hoja A4 horizontal, en hoja blanca.
+ * PDF de letras de cambio: una letra por hoja A4 vertical, en hoja blanca.
  *
  * Dibuja el formulario completo del talonario de Transworld (no sólo los
  * datos), siguiendo la distribución de la letra física: cláusulas especiales
@@ -17,8 +17,16 @@ const { formatDisplay } = require("../../utils/vacationDateUtils");
  * número / fechas / importe, monto en letras, recuadros de aceptante, aval y
  * cuenta de cargo, y el recuadro de firma del representante legal.
  *
- * Todas las medidas están en puntos (1/72"). El formulario mide 794 × 372 y va
- * centrado arriba; la línea punteada que lo rodea es la guía de corte.
+ * La letra mide exactamente 21 × 11,6 cm y ocupa el borde superior de la hoja:
+ * el A4 vertical ya mide 21 cm de ancho, así que basta un corte horizontal en
+ * la línea punteada. Hay que imprimirla a tamaño real (100 %, sin "ajustar a
+ * la página").
+ *
+ * El diseño se dibuja en unidades lógicas (las del talonario apaisado
+ * original, 794 de ancho) y se lleva al tamaño real con una escala uniforme
+ * DESIGN_SCALE. Como la letra es proporcionalmente más alta que el diseño, las
+ * posiciones verticales se estiran con SY (Y() y V()); los textos no se
+ * deforman.
  */
 
 const LOGO_PATH = path.join(__dirname, "..", "..", "public", "img", "logotw_blue.png");
@@ -27,15 +35,39 @@ const BLUE = "#26388f";
 const INK = "#111111";
 const VOID_RED = "#c62828";
 
-const PAGE = { size: "A4", layout: "landscape" };
-const X0 = 24;
-const Y0 = 44;
+const PAGE = { size: "A4", layout: "portrait" };
+
+// --- Tamaño real (puntos PDF) ------------------------------------------------
+const CM = 72 / 2.54;
+const FORM_WIDTH = 21 * CM;
+const FORM_HEIGHT = 11.6 * CM;
+/** Aire alrededor del contenido: lo que la mayoría de impresoras no alcanza. */
+const PRINT_MARGIN = 0.6 * CM;
+
+// --- Diseño (unidades lógicas) ----------------------------------------------
 const W = 794;
-const H = 372;
+/** El contenido va de X0 + 8 a X0 + W - 8. */
+const CONTENT_INSET = 8;
+const DESIGN_SCALE = (FORM_WIDTH - 2 * PRINT_MARGIN) / (W - 2 * CONTENT_INSET);
+const X0 = PRINT_MARGIN / DESIGN_SCALE - CONTENT_INSET;
+/** Estiramiento vertical de las posiciones (no de los textos). */
+const SY = 1.2;
+/** El contenido empieza en la cota 6 del diseño. */
+const Y0 = PRINT_MARGIN / DESIGN_SCALE - 6 * SY;
+
+/** Cota vertical del diseño → posición en la hoja (unidades lógicas). */
+function Y(n) {
+  return Y0 + n * SY;
+}
+
+/** Alto del diseño → alto en la hoja. */
+function V(n) {
+  return n * SY;
+}
 
 // Zona principal (a la derecha de las cláusulas y las firmas del aceptante).
 const MX = X0 + 168;
-const MR = X0 + W - 8;
+const MR = X0 + W - CONTENT_INSET;
 const MW = MR - MX;
 
 // Columna derecha (cuenta de cargo y firma del girador).
@@ -46,8 +78,17 @@ const FONT = "Helvetica";
 const FONT_BOLD = "Helvetica-Bold";
 const FONT_ITALIC = "Helvetica-Oblique";
 
+// En Helvetica las mayúsculas miden 0,718 del cuerpo y pdfkit las apoya en
+// la `y` que recibe: el alto visible de una línea es size × CAP.
+const CAP = 0.718;
+
 function upper(value) {
   return String(value ?? "").toLocaleUpperCase("es-PE");
+}
+
+/** `y` para que un texto de `size` quede centrado en una franja. */
+function middle(top, height, size) {
+  return top + (height - size * CAP) / 2;
 }
 
 /** Recorta con "…" hasta que quepa en `width` con la fuente y tamaño actuales. */
@@ -80,6 +121,21 @@ function fitText(doc, text, x, y, width, opts = {}) {
   if (align === "center") dx = (width - w) / 2;
   else if (align === "right") dx = width - w;
   doc.fillColor(color).text(shown, x + dx, y, { lineBreak: false });
+}
+
+/**
+ * Una línea con tramos de distinta fuente, uno tras otro. Si no cabe en
+ * `width`, achica todos los tramos por igual.
+ */
+function richLine(doc, segments, x, y, width, { size = 8, minSize = 6, color = BLUE } = {}) {
+  const measure = (s) => segments.reduce((sum, [font, text]) => sum + doc.font(font).fontSize(s).widthOfString(text), 0);
+  let s = size;
+  while (s > minSize && measure(s) > width) s -= 0.25;
+  let cx = x;
+  for (const [font, text] of segments) {
+    doc.font(font).fontSize(s).fillColor(color).text(text, cx, y, { lineBreak: false });
+    cx += doc.widthOfString(text);
+  }
 }
 
 /** Parte un texto en líneas de `width` como máximo; la última se recorta. */
@@ -140,20 +196,28 @@ function verticalText(doc, x, y, length, draw) {
 // Bloques del formulario
 // ---------------------------------------------------------------------------
 
+/**
+ * Guía de corte a 11,6 cm del borde superior, en puntos reales (se dibuja
+ * fuera de la escala del diseño).
+ */
 function drawCutGuide(doc) {
+  const pageWidth = doc.page.width;
   doc.save()
     .lineWidth(0.4)
-    .strokeColor("#b5b5b5")
+    .strokeColor("#9e9e9e")
     .dash(3, { space: 3 })
-    .rect(X0 - 6, Y0 - 12, W + 12, H + 12)
+    .moveTo(0, FORM_HEIGHT)
+    .lineTo(pageWidth, FORM_HEIGHT)
     .stroke()
     .undash()
     .restore();
+  doc.font(FONT).fontSize(6).fillColor("#9e9e9e")
+    .text("Cortar por la línea punteada · letra de 21 × 11,6 cm", PRINT_MARGIN, FORM_HEIGHT + 4, { lineBreak: false });
 }
 
 function drawClauses(doc) {
-  const bottom = Y0 + 322;
-  verticalText(doc, X0 + 10, bottom, 314, (x, y, width) => {
+  const bottom = Y(322);
+  verticalText(doc, X0 + 10, bottom, V(314), (x, y, width) => {
     doc.font(FONT_BOLD).fontSize(6.8).fillColor(BLUE)
       .text("CLÁUSULAS ESPECIALES", x, y, { width, lineGap: 1.5 });
     doc.font(FONT).fontSize(6.1);
@@ -166,23 +230,24 @@ function drawClauses(doc) {
 /** Las dos columnas donde firma el aceptante (arriba y abajo). */
 function drawAcceptorSignatures(doc) {
   const blocks = [
-    [Y0 + 8, Y0 + 160],
-    [Y0 + 170, Y0 + 322],
+    [Y(8), Y(160)],
+    [Y(170), Y(322)],
   ];
+  const pad = V(18);
   for (const [top, bottom] of blocks) {
     const length = bottom - top;
-    line(doc, X0 + 104, top + 18, X0 + 104, bottom - 18, 0.7);
-    verticalText(doc, X0 + 107, bottom - 18, length - 36, (x, y, width) => {
+    line(doc, X0 + 104, top + pad, X0 + 104, bottom - pad, 0.7);
+    verticalText(doc, X0 + 107, bottom - pad, length - 2 * pad, (x, y, width) => {
       fitText(doc, "ACEPTANTE", x, y, width, { font: FONT_BOLD, size: 7.5, color: BLUE, align: "center" });
     });
-    verticalText(doc, X0 + 124, bottom - 4, length - 8, (x, y, width) => {
+    verticalText(doc, X0 + 124, bottom - V(4), length - V(8), (x, y, width) => {
       fitText(doc, "Nombre / Representante:", x, y, width, { size: 6.5, color: BLUE });
     });
-    verticalText(doc, X0 + 136, bottom - 4, length - 8, (x, y, width) => {
+    verticalText(doc, X0 + 136, bottom - V(4), length - V(8), (x, y, width) => {
       fitText(doc, "D.O.I.:", x, y, width, { size: 6.5, color: BLUE });
     });
   }
-  line(doc, X0 + 158, Y0 + 8, X0 + 158, Y0 + 322, 0.6);
+  line(doc, X0 + 158, Y(8), X0 + 158, Y(322), 0.6);
 }
 
 // Proporciones de logotw_blue.png (4000 × 1098): el dibujo ocupa del 12,1 %
@@ -193,10 +258,6 @@ const LOGO_RATIO = 1098 / 4000;
 const LOGO_INK_TOP = 0.121;
 const LOGO_INK_BOTTOM = 0.878;
 const LOGO_NAVY = "#2c3e66";
-
-// En Helvetica las mayúsculas miden 0,718 del cuerpo y pdfkit las apoya en
-// la `y` que recibe: el alto visible de una línea es size × CAP.
-const CAP = 0.718;
 
 /** Texto de una línea centrado en `cx`, con espaciado entre letras. */
 function centeredSpaced(doc, text, cx, y, { font = FONT, size, color, spacing = 0 }) {
@@ -212,7 +273,7 @@ function centeredSpaced(doc, text, cx, y, { font = FONT, size, color, spacing = 
  * queda sobre la tabla.
  */
 function drawHeader(doc) {
-  const axis = Y0 + 25;
+  const axis = Y(27);
 
   // --- Logo + bajada --------------------------------------------------------
   const logoW = 136;
@@ -252,10 +313,10 @@ const TABLE_COLUMNS = [
 ];
 
 function drawTopTable(doc, bill) {
-  const top = Y0 + 52;
-  const height = 50;
-  const headerH = 14;
-  const subH = 10;
+  const top = Y(52);
+  const height = V(50);
+  const headerH = V(14);
+  const subH = V(10);
   box(doc, MX, top, MW, height, 6);
   line(doc, MX, top + headerH, MR, top + headerH);
 
@@ -271,14 +332,17 @@ function drawTopTable(doc, bill) {
   let x = MX;
   TABLE_COLUMNS.forEach((col, i) => {
     if (i > 0) line(doc, x, top, x, top + height);
-    fitText(doc, col.title, x + 3, top + 4, col.width - 6, { size: 6.8, color: BLUE, align: "center" });
+    fitText(doc, col.title, x + 3, middle(top, headerH, 6.8), col.width - 6, { size: 6.8, color: BLUE, align: "center" });
     if (col.date) {
-      line(doc, x, top + headerH + subH, x + col.width, top + headerH + subH, 0.6);
-      fitText(doc, "DÍA / MES / AÑO", x + 3, top + headerH + 2.5, col.width - 6, { size: 5.8, color: BLUE, align: "center" });
-      fitText(doc, values[col.key], x + 4, top + headerH + subH + 8, col.width - 8, { font: FONT_BOLD, size: 10, align: "center" });
+      const valueTop = top + headerH + subH;
+      line(doc, x, valueTop, x + col.width, valueTop, 0.6);
+      fitText(doc, "DÍA / MES / AÑO", x + 3, middle(top + headerH, subH, 5.8), col.width - 6, { size: 5.8, color: BLUE, align: "center" });
+      fitText(doc, values[col.key], x + 4, middle(valueTop, top + height - valueTop, 10), col.width - 8, {
+        font: FONT_BOLD, size: 10, align: "center",
+      });
     } else {
       const size = col.key === "amount" ? 11 : 10;
-      fitText(doc, values[col.key], x + 4, top + headerH + (height - headerH - size) / 2 + 1, col.width - 8, {
+      fitText(doc, values[col.key], x + 4, middle(top + headerH, height - headerH, size), col.width - 8, {
         font: FONT_BOLD, size, align: "center",
       });
     }
@@ -287,31 +351,36 @@ function drawTopTable(doc, bill) {
 }
 
 function drawOrderAndAmount(doc, bill) {
-  const y = Y0 + 108;
-  doc.font(FONT).fontSize(8).fillColor(BLUE)
-    .text("Por esta ", MX, y, { continued: true, lineBreak: false })
-    .font(FONT_BOLD).text("LETRA DE CAMBIO", { continued: true })
-    .font(FONT).text(" se servirá(n) pagar incondicionalmente a la Orden de: ", { continued: true })
-    .font(FONT_BOLD).text(BILL_DRAWER.name, { continued: false });
+  richLine(doc, [
+    [FONT, "Por esta "],
+    [FONT_BOLD, "LETRA DE CAMBIO"],
+    [FONT, " se servirá(n) pagar incondicionalmente a la Orden de: "],
+    [FONT_BOLD, BILL_DRAWER.name],
+  ], MX, Y(108), MW);
 
-  const boxY = Y0 + 120;
-  box(doc, MX, boxY, MW, 20, 6);
-  label(doc, "La cantidad de:", MX + 8, boxY + 6.5);
-  fitText(doc, bill.amountWords, MX + 72, boxY + 5.5, MW - 80, { font: FONT_BOLD, size: 10, minSize: 6.5 });
+  const boxY = Y(120);
+  const boxH = V(20);
+  box(doc, MX, boxY, MW, boxH, 6);
+  label(doc, "La cantidad de:", MX + 8, middle(boxY, boxH, 7.5));
+  fitText(doc, bill.amountWords, MX + 72, middle(boxY, boxH, 10), MW - 80, { font: FONT_BOLD, size: 10, minSize: 6.5 });
 
-  label(doc, "En el siguiente lugar de pago, o con cargo en la cuenta del Banco:", MX, Y0 + 146);
+  label(doc, "En el siguiente lugar de pago, o con cargo en la cuenta del Banco:", MX, Y(146));
 }
 
 /** Cinco renglones subrayados dentro de un recuadro, como en el talonario. */
 const ROW_TOPS = [6, 20, 34, 48, 62];
 
+function rowTops(y) {
+  return ROW_TOPS.map((t) => y + V(t));
+}
+
 function drawAcceptor(doc, bill) {
   const x = MX;
-  const y = Y0 + 156;
+  const y = Y(156);
   const w = 362;
-  box(doc, x, y, w, 80, 8);
+  box(doc, x, y, w, V(80), 8);
   const right = x + w - 8;
-  const [r1, r2, r3, r4, r5] = ROW_TOPS.map((t) => y + t);
+  const [r1, r2, r3, r4, r5] = rowTops(y);
   const { acceptor } = bill;
 
   label(doc, "Aceptante", x + 8, r1 + 1.5);
@@ -347,12 +416,12 @@ function drawAcceptor(doc, bill) {
 }
 
 function drawBankAccount(doc, bill) {
-  fitText(doc, "Importe a debitar en la siguiente cuenta del BANCO que se indica", RX, Y0 + 158, RW, {
+  fitText(doc, "Importe a debitar en la siguiente cuenta del BANCO que se indica", RX, Y(158), RW, {
     size: 7, color: BLUE,
   });
-  const top = Y0 + 168;
-  const headerH = 13;
-  const height = 31;
+  const top = Y(168);
+  const headerH = V(13);
+  const height = V(31);
   const cols = [
     ["BANCO", bill.bank.name, 62],
     ["OFICINA", bill.bank.office, 52],
@@ -364,19 +433,19 @@ function drawBankAccount(doc, bill) {
   let x = RX;
   cols.forEach(([title, value, width], i) => {
     if (i > 0) line(doc, x, top, x, top + height, 0.7);
-    fitText(doc, title, x + 2, top + 3.5, width - 4, { size: 6.8, color: BLUE, align: "center" });
-    fitText(doc, upper(value), x + 3, top + headerH + 5, width - 6, { size: 8, minSize: 5.5, align: "center" });
+    fitText(doc, title, x + 2, middle(top, headerH, 6.8), width - 4, { size: 6.8, color: BLUE, align: "center" });
+    fitText(doc, upper(value), x + 3, middle(top + headerH, height - headerH, 8), width - 6, { size: 8, minSize: 5.5, align: "center" });
     x += width;
   });
 }
 
 function drawGuarantor(doc, bill) {
   const x = MX;
-  const y = Y0 + 242;
+  const y = Y(242);
   const w = 362;
-  box(doc, x, y, w, 80, 8);
+  box(doc, x, y, w, V(80), 8);
   const right = x + w - 8;
-  const [r1, r2, r3, r4, r5] = ROW_TOPS.map((t) => y + t);
+  const [r1, r2, r3, r4, r5] = rowTops(y);
   const { guarantor } = bill;
 
   label(doc, "Aval Permanente", x + 8, r1 + 1.5);
@@ -407,44 +476,51 @@ function drawGuarantor(doc, bill) {
   underline(doc, x + 240, right, r5 + 10.5);
 }
 
-/** Rótulo seguido de un renglón en blanco hasta el borde derecho. */
-function labelledBlank(doc, text, x, y, right) {
+/**
+ * Rótulo seguido de un renglón hasta el borde derecho; si hay `value`, se
+ * imprime sobre el renglón.
+ */
+function labelledLine(doc, text, x, y, right, value = "") {
   label(doc, text, x, y, 7);
   const end = x + doc.font(FONT).fontSize(7).widthOfString(text) + 4;
   underline(doc, end, right, y + 8.5);
+  if (value) fitText(doc, value, end + 2, y - 0.5, right - end - 4, { font: FONT_BOLD, size: 8 });
 }
 
 /**
  * Recuadro del girador, como en el talonario: la razón social la pone el
  * sello de la empresa (cae en el espacio libre del medio) y la firma va a
- * mano. Sólo el nombre del representante legal sale impreso.
+ * mano. El nombre y el DNI del representante legal salen impresos.
  */
 function drawDrawerSignature(doc) {
-  const y = Y0 + 206;
+  const y = Y(206);
+  const height = Y(322) - y;
   const left = RX + 8;
   const right = RX + RW - 8;
-  box(doc, RX, y, RW, 116, 8);
+  box(doc, RX, y, RW, height, 8);
 
-  labelledBlank(doc, "Nombre o Razón Social del Girador", left, y + 10, right);
+  labelledLine(doc, "Nombre o Razón Social del Girador", left, y + V(10), right);
 
-  line(doc, left, y + 70, right, y + 70, 0.6);
-  fitText(doc, "Firma", left, y + 73, right - left, { size: 6.5, color: BLUE, align: "center" });
+  const signY = y + V(72);
+  line(doc, left, signY, right, signY, 0.6);
+  fitText(doc, "Firma", left, signY + 3, right - left, { size: 6.5, color: BLUE, align: "center" });
 
-  label(doc, "Nombre del Representante Legal:", left, y + 84, 7);
-  fitText(doc, BILL_DRAWER.representative, left + 2, y + 93.5, right - left - 4, { font: FONT_BOLD, size: 8 });
-  underline(doc, left, right, y + 102);
-  labelledBlank(doc, "D.O.I.", left, y + 105, right);
+  const repY = y + V(86);
+  label(doc, "Nombre del Representante Legal:", left, repY, 7);
+  fitText(doc, BILL_DRAWER.representative, left + 2, repY + 9.5, right - left - 4, { font: FONT_BOLD, size: 8 });
+  underline(doc, left, right, repY + 18);
+  labelledLine(doc, "D.O.I.", left, repY + 22, right, BILL_DRAWER.representativeDoc);
 }
 
 function drawFooterRule(doc) {
-  line(doc, X0 + 8, Y0 + 332, X0 + W - 8, Y0 + 332, 0.9);
+  line(doc, X0 + CONTENT_INSET, Y(332), X0 + W - CONTENT_INSET, Y(332), 0.9);
   doc.font(FONT_ITALIC).fontSize(7).fillColor(BLUE)
-    .text("No escribir ni firmar debajo de esta línea", X0 + 40, Y0 + 336, { lineBreak: false });
+    .text("No escribir ni firmar debajo de esta línea", X0 + 40, Y(332) + 4, { lineBreak: false });
 }
 
 function drawVoidStamp(doc) {
   const cx = X0 + W / 2;
-  const cy = Y0 + H / 2 - 10;
+  const cy = Y(176);
   doc.save();
   doc.rotate(-14, { origin: [cx, cy] });
   doc.fillOpacity(0.18).fillColor(VOID_RED).font(FONT_BOLD).fontSize(96);
@@ -457,6 +533,8 @@ function drawVoidStamp(doc) {
 function drawBill(doc, bill) {
   doc.addPage({ ...PAGE, margin: 0 });
   drawCutGuide(doc);
+  doc.save();
+  doc.scale(DESIGN_SCALE);
   drawClauses(doc);
   drawAcceptorSignatures(doc);
   drawHeader(doc);
@@ -468,6 +546,7 @@ function drawBill(doc, bill) {
   drawDrawerSignature(doc);
   drawFooterRule(doc);
   if (bill.voided) drawVoidStamp(doc);
+  doc.restore();
 }
 
 /**
@@ -495,4 +574,4 @@ function renderBillsPdf(bills, { title = "Letras de cambio" } = {}) {
   });
 }
 
-module.exports = { renderBillsPdf };
+module.exports = { renderBillsPdf, FORM_WIDTH, FORM_HEIGHT };

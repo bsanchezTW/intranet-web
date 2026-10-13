@@ -34,7 +34,7 @@ const VIEW_HELPERS = {
   drawer: BILL_DRAWER,
 };
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/letras.css?v=20261006a"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/letras.css?v=20261013a"];
 
 function flashFrom(req) {
   return {
@@ -48,11 +48,12 @@ function parseId(value) {
   return /^\d{1,15}$/.test(raw) ? Number(raw) : null;
 }
 
+/** Sin `batchId` (lote eliminado) el historial enlaza al listado. */
 async function logChange(userId, action, batchId) {
   try {
     await db.query(
       "INSERT INTO change_log (user_id, action, section, link_path) VALUES ($1, $2, $3, $4)",
-      [userId, action, "Letras de cambio", `/letras/lote/${batchId}`],
+      [userId, action, "Letras de cambio", batchId ? `/letras/lote/${batchId}` : "/letras"],
     );
   } catch (err) {
     console.error("[Letras] No se pudo registrar en el historial:", err.message);
@@ -113,23 +114,45 @@ function defaultFormValues(today) {
   };
 }
 
-async function renderForm(res, { values, errors = {}, status = 200 }) {
+/**
+ * Formulario de emisión, o de edición si viene `lote`: en ese caso las
+ * cuotas se pintan desde las letras del lote (las vigentes con lo que traiga
+ * `values`) y no hay generador ni número inicial.
+ */
+async function renderForm(res, { values, errors = {}, status = 200, lote = null }) {
   const year = Number(String(values.issue_date || todayInCountry()).slice(0, 4)) || new Date().getFullYear();
   const [aceptantes, siguiente] = await Promise.all([
     bills.listAcceptors(),
-    bills.nextNumberFor(year),
+    lote ? null : bills.nextNumberFor(year),
   ]);
   res.status(status).render("letras/nueva", {
-    titulo: "Emitir letras de cambio",
+    titulo: lote ? "Editar letras de cambio" : "Emitir letras de cambio",
     values,
     errors,
     aceptantes,
-    siguiente: { year, seq: siguiente, number: formatBillNumber(year, siguiente) },
+    lote,
+    today: todayInCountry(),
+    siguiente: lote ? null : { year, seq: siguiente, number: formatBillNumber(year, siguiente) },
     maxCuotas: MAX_INSTALLMENTS,
     ...VIEW_HELPERS,
     extraCss: EXTRA_CSS,
-    extraJs: ["/js/letras-form.js?v=20261006a"],
+    extraJs: ["/js/letras-form.js?v=20261013a"],
   });
+}
+
+/** Valores del formulario de edición a partir del lote guardado. */
+function batchFormValues(lote) {
+  const fields = [
+    "invoice_ref", "issue_date", "issue_place",
+    "acceptor_doc", "acceptor_name", "acceptor_address", "acceptor_locality", "acceptor_phone",
+    "guarantor_name", "guarantor_doc", "guarantor_address", "guarantor_locality", "guarantor_phone",
+    "bank_name", "bank_office", "bank_account", "bank_dc",
+  ];
+  const values = Object.fromEntries(fields.map((f) => [f, lote[f] ?? ""]));
+  values.cuotas = lote.bills
+    .filter((b) => b.status === "issued")
+    .map((b) => ({ id: Number(b.id), installment: b.installment, due_date: b.due_date, amount: Number(b.amount).toFixed(2) }));
+  return values;
 }
 
 router.get("/nueva", async (req, res) => {
@@ -189,6 +212,81 @@ router.get("/api/siguiente", async (req, res) => {
   } catch (err) {
     console.error("[Letras] Error calculando el siguiente número:", err);
     return res.status(500).json({ error: "Error calculando el número" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Edición y eliminación
+// ---------------------------------------------------------------------------
+
+router.get("/lote/:id/editar", async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(404).render("404", { titulo: "Página no encontrada" });
+  try {
+    const lote = await bills.getBatch(id);
+    if (!lote) return res.status(404).render("404", { titulo: "Página no encontrada" });
+    return await renderForm(res, { values: batchFormValues(lote), lote });
+  } catch (err) {
+    console.error("[Letras] Error cargando la edición:", err);
+    return res.status(500).send("Error cargando el formulario");
+  }
+});
+
+router.post("/lote/:id", async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(404).render("404", { titulo: "Página no encontrada" });
+  const user = req.session.user;
+  try {
+    const lote = await bills.getBatch(id);
+    if (!lote) return res.status(404).render("404", { titulo: "Página no encontrada" });
+    const { values, errors, ok } = bills.normalizeBatchInput(req.body, { editing: true });
+    if (!ok) return await renderForm(res, { values, errors, lote, status: 422 });
+    try {
+      await bills.updateBatch(id, values, user.id);
+    } catch (err) {
+      if (err.code !== "BILL_EDIT_INVALID") throw err;
+      return await renderForm(res, { values, errors: { [err.field]: err.message }, lote, status: 409 });
+    }
+    const rango = lote.bills.length === 1 ? lote.bills[0].number : `${lote.bills[0].number} a ${lote.bills[lote.bills.length - 1].number}`;
+    await logChange(user.id, `Editó ${lote.bills.length === 1 ? "la letra" : "las letras"} ${rango} de ${values.acceptor_name}`, id);
+    return res.redirect(`/letras/lote/${id}?ok=1&msg=${encodeURIComponent("Cambios guardados.")}`);
+  } catch (err) {
+    console.error("[Letras] Error editando el lote:", err);
+    return res.status(500).send("Error guardando los cambios");
+  }
+});
+
+router.post("/lote/:id/eliminar", async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).send("Solicitud inválida");
+  try {
+    const deleted = await bills.deleteBatch(id);
+    if (!deleted) return res.status(404).send("No encontrado");
+    const { numbers, acceptorName } = deleted;
+    const rango = numbers.length === 1 ? numbers[0] : `${numbers[0]} a ${numbers[numbers.length - 1]}`;
+    await logChange(req.session.user.id, `Eliminó ${numbers.length === 1 ? "la letra" : `${numbers.length} letras`} ${rango} de ${acceptorName}`, null);
+    const msg = numbers.length === 1 ? `Letra ${rango} eliminada.` : `${numbers.length} letras eliminadas (${rango}).`;
+    return res.redirect(`/letras?ok=1&msg=${encodeURIComponent(msg)}`);
+  } catch (err) {
+    console.error("[Letras] Error eliminando el lote:", err);
+    return res.status(500).send("Error eliminando las letras");
+  }
+});
+
+/** Elimina una letra. `volver=lista` regresa al listado en vez de al lote. */
+router.post("/:id/eliminar", async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).send("Solicitud inválida");
+  try {
+    const deleted = await bills.deleteBill(id);
+    if (!deleted) return res.status(404).send("No encontrado");
+    await logChange(req.session.user.id, `Eliminó la letra ${deleted.number}`, deleted.batchDeleted ? null : deleted.batchId);
+    const msg = encodeURIComponent(`Letra ${deleted.number} eliminada.`);
+    const back = deleted.batchDeleted || req.body.volver === "lista" ? "/letras" : `/letras/lote/${deleted.batchId}`;
+    return res.redirect(`${back}?ok=1&msg=${msg}`);
+  } catch (err) {
+    console.error("[Letras] Error eliminando la letra:", err);
+    return res.status(500).send("Error eliminando la letra");
   }
 });
 

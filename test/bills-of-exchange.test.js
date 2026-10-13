@@ -5,6 +5,7 @@ process.env.COUNTRY = process.env.COUNTRY || "PE";
 
 const { integerToWords, amountToWords } = require("../src/utils/amountInWords");
 const {
+  BILL_DRAWER,
   formatBillNumber,
   formatBillAmount,
   formatBillMoney,
@@ -17,7 +18,7 @@ const {
   normalizeDoc,
   toPrintable,
 } = require("../src/services/billsOfExchange/billOfExchangeService");
-const { renderBillsPdf } = require("../src/services/billsOfExchange/billOfExchangePdf");
+const { renderBillsPdf, FORM_WIDTH, FORM_HEIGHT } = require("../src/services/billsOfExchange/billOfExchangePdf");
 const { isFeatureEnabled } = require("../src/config/features");
 
 describe("amountInWords — monto en letras", () => {
@@ -156,6 +157,41 @@ describe("billOfExchangeService — validación y cronograma", () => {
     assert.ok(errors.issue_date);
   });
 
+  it("al editar, toma sólo las cuotas del formulario con su id", () => {
+    const { ok, values } = normalizeBatchInput(
+      {
+        ...base,
+        start_number: "50",
+        cuotas: [
+          { id: "11", installment: "2", due_date: "2026-06-14", amount: "100" },
+          { id: "12", installment: "3", due_date: "2026-07-14", amount: "200.5" },
+        ],
+      },
+      { editing: true },
+    );
+    assert.equal(ok, true);
+    assert.equal(values.startNumber, null);
+    assert.deepEqual(values.cuotas, [
+      { id: 11, installment: 2, due_date: "2026-06-14", amount: "100" },
+      { id: 12, installment: 3, due_date: "2026-07-14", amount: "200.5" },
+    ]);
+  });
+
+  it("al editar sin letras vigentes, no exige cuotas ni generador", () => {
+    const { ok, values } = normalizeBatchInput({ ...base, total_amount: "", installments_count: "" }, { editing: true });
+    assert.equal(ok, true);
+    assert.deepEqual(values.cuotas, []);
+  });
+
+  it("al editar, nombra la letra por su cuota", () => {
+    const { ok, errors } = normalizeBatchInput(
+      { ...base, cuotas: [{ id: "11", installment: "3", due_date: "2026-04-01", amount: "100" }] },
+      { editing: true },
+    );
+    assert.equal(ok, false);
+    assert.match(errors.cuotas, /Letra 3: vence antes/);
+  });
+
   it("parsea montos y documentos", () => {
     assert.equal(parseCents("6,942.40"), 694240);
     assert.equal(parseCents("6942,4"), 694240);
@@ -191,6 +227,23 @@ describe("billOfExchangePdf — impresión", () => {
     assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
     const pages = pdf.toString("latin1").match(/\/Type \/Page\b/g) || [];
     assert.equal(pages.length, 3);
+  });
+
+  it("imprime en A4 vertical una letra de 21 × 11,6 cm", async () => {
+    assert.equal((FORM_WIDTH / 72) * 2.54, 21);
+    assert.ok(Math.abs((FORM_HEIGHT / 72) * 2.54 - 11.6) < 1e-9);
+    const pdf = await renderBillsPdf([
+      toPrintable(
+        { issue_date: "2026-04-15", issue_place: "Lima", acceptor_name: "X", acceptor_doc: "20606218762", acceptor_address: "Y" },
+        { number: "LT-00001-2026", due_date: "2026-05-15", amount: "10", status: "issued" },
+      ),
+    ]);
+    assert.match(pdf.toString("latin1"), /\/MediaBox \[0 0 595\.28 841\.89\]/);
+  });
+
+  it("lleva el DNI del representante legal", () => {
+    assert.equal(BILL_DRAWER.representativeDoc, "DNI N.° 08232345");
+    assert.equal(BILL_DRAWER.representative, "JORGE ALEJANDRO MARTIN MASSON PAZOS");
   });
 });
 

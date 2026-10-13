@@ -1,9 +1,11 @@
-/* Formulario de emisión de letras de cambio (/letras/nueva).
+/* Formulario de letras de cambio (/letras/nueva y /letras/lote/:id/editar).
  *
+ *  Al emitir:
  *  - Arma el cronograma (cuotas iguales, céntimos sobrantes en la última) a
  *    partir del total, la cantidad, el primer vencimiento y el intervalo.
  *  - Muestra el número que tendrá cada letra.
- *  - Completa los datos del aceptante si ya se le emitieron letras.
+ *  Al editar (data-modo="editar") sólo suma las cuotas: la numeración ya existe.
+ *  En ambos, completa los datos del aceptante si ya se le emitieron letras.
  *
  * El servidor valida todo de nuevo: esto sólo ahorra tipeo y errores.
  */
@@ -14,13 +16,20 @@
   if (!form) return;
 
   var $ = function (id) { return document.getElementById(id); };
+  var currencySymbol = form.dataset.currencySymbol || '';
+
+  if (form.dataset.modo === 'editar') {
+    initEdicion();
+    initAceptante();
+    return;
+  }
+
   var total = $('total_amount');
   var count = $('installments_count');
   var firstDue = $('first_due_date');
   var interval = $('interval_days');
   var issueDate = $('issue_date');
   var startNumber = $('start_number');
-  var currencySymbol = form.dataset.currencySymbol || '';
   var body = $('cuotasBody');
   var totalLabel = $('cronogramaTotal');
   var siguienteLibre = $('siguienteLibre');
@@ -205,57 +214,82 @@
     form.submit();
   });
 
-  // --- Aceptante conocido ----------------------------------------------------
-  var doc = $('acceptor_doc');
-  var ayuda = $('aceptanteAyuda');
-  var ayudaOriginal = ayuda ? ayuda.textContent : '';
-  var ultimoBuscado = '';
+  initAceptante();
 
-  var CAMPOS = [
-    'acceptor_name', 'acceptor_address', 'acceptor_locality', 'acceptor_phone',
-    'guarantor_name', 'guarantor_doc', 'guarantor_address', 'guarantor_locality', 'guarantor_phone',
-    'bank_name', 'bank_office', 'bank_account', 'bank_dc',
-  ];
-
-  function buscarAceptante() {
-    var valor = doc.value.replace(/\D/g, '');
-    if ((valor.length !== 8 && valor.length !== 11) || valor === ultimoBuscado) return;
-    ultimoBuscado = valor;
-    fetch('/letras/api/aceptante?doc=' + valor, { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        if (!data) {
-          if (ayuda) ayuda.textContent = 'Aceptante nuevo: completa sus datos.';
-          return;
-        }
-        var completados = 0;
-        CAMPOS.forEach(function (campo) {
-          var input = $(campo);
-          if (input && !input.value && data[campo]) {
-            input.value = data[campo];
-            completados += 1;
-          }
-        });
-        if (data.guarantor_name || data.guarantor_doc) {
-          var panel = $('guarantor_name').closest('details');
-          if (panel) panel.open = true;
-        }
-        if (data.bank_name || data.bank_account) {
-          var panelCuenta = $('bank_name').closest('details');
-          if (panelCuenta) panelCuenta.open = true;
-        }
-        if (ayuda) {
-          ayuda.textContent = completados
-            ? 'Datos completados desde la última letra emitida (' + data.acceptor_name + '). Revísalos.'
-            : ayudaOriginal;
-        }
-      })
-      .catch(function () {});
+  // --- Edición: total de las cuotas -------------------------------------------
+  function initEdicion() {
+    var cuerpo = $('cuotasBody');
+    var etiqueta = $('cronogramaTotal');
+    function sumar() {
+      var suma = 0;
+      var cantidad = 0;
+      Array.prototype.forEach.call(cuerpo.rows, function (tr) {
+        var input = tr.querySelector('input[type="number"]');
+        var fija = tr.querySelector('[data-importe]');
+        if (input) suma += toCents(input.value);
+        else if (fija) suma += toCents(fija.dataset.importe);
+        else return;
+        cantidad += 1;
+      });
+      etiqueta.textContent = cantidad + (cantidad === 1 ? ' letra · ' : ' letras · ') + money(suma);
+    }
+    cuerpo.addEventListener('input', sumar);
+    sumar();
   }
 
-  doc.addEventListener('change', buscarAceptante);
-  doc.addEventListener('input', function () {
-    var valor = doc.value.replace(/\D/g, '');
-    if (valor.length === 11) buscarAceptante();
-  });
+  // --- Aceptante conocido ----------------------------------------------------
+  function initAceptante() {
+    var doc = $('acceptor_doc');
+    var ayuda = $('aceptanteAyuda');
+    var ayudaOriginal = ayuda ? ayuda.textContent : '';
+    var ultimoBuscado = '';
+
+    var CAMPOS = [
+      'acceptor_name', 'acceptor_address', 'acceptor_locality', 'acceptor_phone',
+      'guarantor_name', 'guarantor_doc', 'guarantor_address', 'guarantor_locality', 'guarantor_phone',
+      'bank_name', 'bank_office', 'bank_account', 'bank_dc',
+    ];
+
+    function buscarAceptante() {
+      var valor = doc.value.replace(/\D/g, '');
+      if ((valor.length !== 8 && valor.length !== 11) || valor === ultimoBuscado) return;
+      ultimoBuscado = valor;
+      fetch('/letras/api/aceptante?doc=' + valor, { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) {
+            if (ayuda) ayuda.textContent = 'Aceptante nuevo: completa sus datos.';
+            return;
+          }
+          var completados = 0;
+          CAMPOS.forEach(function (campo) {
+            var input = $(campo);
+            if (input && !input.value && data[campo]) {
+              input.value = data[campo];
+              completados += 1;
+            }
+          });
+          if (data.guarantor_name || data.guarantor_doc) {
+            var panel = $('guarantor_name').closest('details');
+            if (panel) panel.open = true;
+          }
+          if (data.bank_name || data.bank_account) {
+            var panelCuenta = $('bank_name').closest('details');
+            if (panelCuenta) panelCuenta.open = true;
+          }
+          if (ayuda) {
+            ayuda.textContent = completados
+              ? 'Datos completados desde la última letra emitida (' + data.acceptor_name + '). Revísalos.'
+              : ayudaOriginal;
+          }
+        })
+        .catch(function () {});
+    }
+
+    doc.addEventListener('change', buscarAceptante);
+    doc.addEventListener('input', function () {
+      var valor = doc.value.replace(/\D/g, '');
+      if (valor.length === 11) buscarAceptante();
+    });
+  }
 })();

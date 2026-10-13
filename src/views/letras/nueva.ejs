@@ -6,6 +6,11 @@
   const cuotas = Array.isArray(v.cuotas) ? v.cuotas : [];
   const conAval = !!(v.guarantor_name || v.guarantor_doc || v.guarantor_address || err.guarantor_name || err.guarantor_doc);
   const conCuenta = !!(v.bank_name || v.bank_office || v.bank_account || v.bank_dc);
+  // Edición de un lote ya emitido: sin generador de cuotas ni número inicial.
+  const editando = !!lote;
+  const letrasLote = editando ? lote.bills : [];
+  const cuotaPorId = new Map(cuotas.filter((c) => c.id).map((c) => [String(c.id), c]));
+  const rango = letrasLote.length > 1 ? `${letrasLote[0].number} a ${letrasLote[letrasLote.length - 1].number}` : (letrasLote[0] ? letrasLote[0].number : '');
 
   function invalido(campo) { return err[campo] ? ' is-invalid' : ''; }
 %>
@@ -21,25 +26,42 @@
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
         <a href="/letras">Letras de cambio</a> <span aria-hidden="true">/</span>
-        <span>Emitir</span>
+        <% if (editando) { %>
+          <a href="/letras/lote/<%= lote.id %>"><%= rango %></a> <span aria-hidden="true">/</span>
+          <span>Editar</span>
+        <% } else { %>
+          <span>Emitir</span>
+        <% } %>
       </nav>
-      <h2 class="page-title">Emitir letras de cambio</h2>
-      <p class="page-description">
-        Giradas por <%= drawer.name %> a la orden de sí misma, en <%= currency.label.toLowerCase() %>. Divide una factura en cuotas y se numeran solas.
-      </p>
+      <% if (editando) { %>
+        <h2 class="page-title">Editar <%= letrasLote.length === 1 ? 'letra' : 'letras' %> <%= rango %></h2>
+        <p class="page-description">
+          Corrige los datos antes de imprimir. Los números no cambian; las letras pagadas o anuladas conservan su vencimiento e importe.
+        </p>
+      <% } else { %>
+        <h2 class="page-title">Emitir letras de cambio</h2>
+        <p class="page-description">
+          Giradas por <%= drawer.name %> a la orden de sí misma, en <%= currency.label.toLowerCase() %>. Divide una factura en cuotas y se numeran solas.
+        </p>
+      <% } %>
     </div>
   </div>
 
   <% if (hayErrores) { %>
     <div class="flash-msg flash-msg--error" role="alert">
       <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
-      <span>Revisa los campos marcados antes de emitir.</span>
+      <span>Revisa los campos marcados antes de <%= editando ? 'guardar' : 'emitir' %>.</span>
     </div>
   <% } %>
 
+  <% if (editando) { %>
+  <form method="post" action="/letras/lote/<%= lote.id %>" class="letras-form" id="letrasForm"
+        data-modo="editar" data-currency-symbol="<%= currency.symbol %>">
+  <% } else { %>
   <form method="post" action="/letras" class="letras-form" id="letrasForm"
         data-next-year="<%= siguiente.year %>" data-next-seq="<%= siguiente.seq %>"
         data-max-cuotas="<%= maxCuotas %>" data-currency-symbol="<%= currency.symbol %>">
+  <% } %>
 
     <!-- ═══════════ Aceptante ═══════════ -->
     <section class="letras-panel" aria-labelledby="panel-aceptante">
@@ -85,7 +107,11 @@
       <h3 class="letras-panel__titulo" id="panel-condiciones">
         <span class="letras-panel__num" aria-hidden="true">2</span> Importe y vencimientos
       </h3>
-      <p class="letras-panel__desc">El total se reparte en cuotas iguales; los céntimos que sobran van a la última. Puedes ajustar cada cuota abajo.</p>
+      <% if (editando) { %>
+        <p class="letras-panel__desc">Ajusta el vencimiento o el importe de cada letra vigente. Para quitar una letra, elimínala desde el detalle.</p>
+      <% } else { %>
+        <p class="letras-panel__desc">El total se reparte en cuotas iguales; los céntimos que sobran van a la última. Puedes ajustar cada cuota abajo.</p>
+      <% } %>
 
       <div class="campos-grid">
         <div class="campo-form<%= invalido('invoice_ref') %>">
@@ -102,6 +128,7 @@
           <label for="issue_place">Lugar de giro</label>
           <input type="text" id="issue_place" name="issue_place" value="<%= v.issue_place || '' %>" maxlength="80">
         </div>
+        <% if (!editando) { %>
         <div class="campo-form<%= invalido('total_amount') %>">
           <label for="total_amount">Importe total (<%= currency.symbol %>) <span class="required-mark">*</span></label>
           <input type="number" id="total_amount" name="total_amount" value="<%= v.total_amount || '' %>" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00">
@@ -128,6 +155,7 @@
           <% mensaje('start_number') %>
           <span class="campo-form__ayuda">Vacío: el siguiente libre (<span id="siguienteLibre"><%= siguiente.number %></span>).</span>
         </div>
+        <% } %>
       </div>
 
       <div class="letras-cronograma<%= err.cuotas ? ' is-invalid' : '' %>">
@@ -146,9 +174,32 @@
                 <th scope="col">Número</th>
                 <th scope="col">Vencimiento</th>
                 <th scope="col" class="num">Importe</th>
+                <% if (editando) { %><th scope="col">Estado</th><% } %>
               </tr>
             </thead>
             <tbody id="cuotasBody">
+              <% if (editando) { %>
+                <% letrasLote.forEach((b, i) => {
+                     const estado = billDisplayStatus(b.status, b.due_date, today);
+                     const c = cuotaPorId.get(String(b.id)) || { due_date: b.due_date, amount: Number(b.amount).toFixed(2) }; %>
+                  <tr>
+                    <td><%= b.installment %></td>
+                    <td><strong><%= b.number %></strong></td>
+                    <% if (b.status === 'issued') { %>
+                      <td>
+                        <input type="hidden" name="cuotas[<%= i %>][id]" value="<%= b.id %>">
+                        <input type="hidden" name="cuotas[<%= i %>][installment]" value="<%= b.installment %>">
+                        <input type="date" name="cuotas[<%= i %>][due_date]" value="<%= c.due_date %>" aria-label="Vencimiento de la letra <%= b.number %>">
+                      </td>
+                      <td class="num"><input type="number" name="cuotas[<%= i %>][amount]" value="<%= c.amount %>" min="0.01" step="0.01" inputmode="decimal" aria-label="Importe de la letra <%= b.number %>"></td>
+                    <% } else { %>
+                      <td><%= formatBillDate(b.due_date) %></td>
+                      <td class="num" data-importe="<%= b.amount %>"><%= formatBillMoney(b.amount) %></td>
+                    <% } %>
+                    <td><span class="letra-estado letra-estado--<%= estado.key %>"><%= estado.label %></span></td>
+                  </tr>
+                <% }) %>
+              <% } else { %>
               <% cuotas.forEach((c, i) => { %>
                 <tr>
                   <td><%= i + 1 %></td>
@@ -157,10 +208,13 @@
                   <td class="num"><input type="number" name="cuotas[<%= i %>][amount]" value="<%= c.amount %>" min="0.01" step="0.01" inputmode="decimal" aria-label="Importe de la letra <%= i + 1 %>"></td>
                 </tr>
               <% }) %>
+              <% } %>
             </tbody>
           </table>
         </div>
-        <noscript><p class="letras-nota">Sin JavaScript las cuotas se calculan al emitir, en partes iguales.</p></noscript>
+        <% if (!editando) { %>
+          <noscript><p class="letras-nota">Sin JavaScript las cuotas se calculan al emitir, en partes iguales.</p></noscript>
+        <% } %>
       </div>
     </section>
 
@@ -225,8 +279,8 @@
     </details>
 
     <div class="letras-form__acciones">
-      <a href="/letras" class="page-header-btn page-header-btn--secundario">Cancelar</a>
-      <button type="submit" class="page-header-btn" id="emitirBtn"><%- include('../partials/icon', { name: 'check' }) %> <span>Emitir letras</span></button>
+      <a href="<%= editando ? `/letras/lote/${lote.id}` : '/letras' %>" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+      <button type="submit" class="page-header-btn" id="emitirBtn"><%- include('../partials/icon', { name: 'check' }) %> <span><%= editando ? 'Guardar cambios' : 'Emitir letras' %></span></button>
     </div>
   </form>
 </div>

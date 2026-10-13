@@ -27,6 +27,17 @@
       </p>
     </div>
     <div class="page-header-actions">
+      <a href="/letras/lote/<%= lote.id %>/editar" class="page-header-btn page-header-btn--secundario">
+        <%- include('../partials/icon', { name: 'edit' }) %> Editar
+      </a>
+      <form method="post" action="/letras/lote/<%= lote.id %>/eliminar"
+            data-confirm="Se eliminarán <%= letrasLote.length === 1 ? `la letra ${rango}` : `las ${letrasLote.length} letras (${rango})` %> y sus datos. Esta acción no se puede deshacer."
+            data-confirm-title="¿Eliminar <%= letrasLote.length === 1 ? 'la letra' : 'todas las letras' %>?"
+            data-confirm-accept="Eliminar" data-confirm-tone="peligro">
+        <button type="submit" class="page-header-btn page-header-btn--secundario">
+          <%- include('../partials/icon', { name: 'trash' }) %> Eliminar
+        </button>
+      </form>
       <% if (imprimibles > 0) { %>
         <a href="/letras/lote/<%= lote.id %>/pdf" target="_blank" rel="noopener" class="page-header-btn">
           <%- include('../partials/icon', { name: 'printer' }) %>
@@ -96,7 +107,7 @@
           <span class="seccion__icon" aria-hidden="true"><%- include('../partials/icon', { name: 'calendar' }) %></span>
           Cronograma
         </h3>
-        <p class="seccion__desc">Marca cada letra como pagada cuando se cobre. Una letra anulada no se vuelve a usar.</p>
+        <p class="seccion__desc">Marca cada letra como pagada cuando se cobre. Una letra anulada no se vuelve a usar; una eliminada desaparece del registro.</p>
       </div>
     </div>
 
@@ -145,6 +156,11 @@
                     <button type="submit" class="letras-accion">Revertir pago</button>
                   </form>
                 <% } %>
+                <form method="post" action="/letras/<%= b.id %>/eliminar"
+                      data-confirm="La letra <%= b.number %> se borrará del registro<%= letrasLote.length === 1 ? ' junto con el lote' : '' %>. Esta acción no se puede deshacer."
+                      data-confirm-title="¿Eliminar la letra?" data-confirm-accept="Eliminar" data-confirm-tone="peligro">
+                  <button type="submit" class="letras-icono-btn letras-icono-btn--peligro" title="Eliminar <%= b.number %>" aria-label="Eliminar <%= b.number %>"><%- include('../partials/icon', { name: 'trash' }) %></button>
+                </form>
               </td>
             </tr>
           <% }) %>

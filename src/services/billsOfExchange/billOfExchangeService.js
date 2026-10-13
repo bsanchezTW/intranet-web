@@ -114,8 +114,12 @@ function rawInstallments(body) {
  * errores, y lo que se guarda si no los hay) y `errors` por campo. Si el
  * formulario trae las cuotas ya editadas, se respetan; si no (sin JS), se
  * calculan desde el total y la cantidad.
+ *
+ * Con `editing` (formulario de edición de un lote ya emitido) las cuotas son
+ * sólo las que vienen en el formulario, cada una con el `id` de su letra, y no
+ * se usan el generador ni el número inicial: la numeración ya existe.
  */
-function normalizeBatchInput(body = {}) {
+function normalizeBatchInput(body = {}, { editing = false } = {}) {
   const errors = {};
   const values = {};
 
@@ -160,7 +164,7 @@ function normalizeBatchInput(body = {}) {
   values.installments_count = cleanText(body.installments_count, 3);
   values.first_due_date = String(body.first_due_date || "").trim();
   values.interval_days = cleanText(body.interval_days, 4) || String(DEFAULT_INTERVAL_DAYS);
-  values.start_number = cleanText(body.start_number, 6);
+  values.start_number = editing ? "" : cleanText(body.start_number, 6);
 
   const startNumber = values.start_number ? parsePositiveInt(values.start_number) : null;
   if (values.start_number && (!startNumber || startNumber > MAX_SEQ)) {
@@ -170,12 +174,13 @@ function normalizeBatchInput(body = {}) {
   // --- Cuotas ------------------------------------------------------------
   let cuotas = [];
   const edited = rawInstallments(body);
-  if (edited.length) {
+  if (edited.length || editing) {
     if (edited.length > MAX_INSTALLMENTS) {
       errors.cuotas = `Máximo ${MAX_INSTALLMENTS} letras por emisión.`;
     }
     cuotas = edited.slice(0, MAX_INSTALLMENTS).map((row, i) => ({
-      installment: i + 1,
+      ...(editing ? { id: parsePositiveInt(row.id) } : {}),
+      installment: (editing && parsePositiveInt(row.installment)) || i + 1,
       due_date: String(row.due_date || "").trim(),
       amount: cleanText(row.amount, 20),
       cents: parseCents(row.amount),
@@ -210,18 +215,24 @@ function normalizeBatchInput(body = {}) {
   }
 
   const cuotaErrors = [];
-  cuotas.forEach((c, i) => {
+  cuotas.forEach((c) => {
     if (!isValidIsoDate(c.due_date)) {
-      cuotaErrors.push(`Letra ${i + 1}: falta el vencimiento.`);
+      cuotaErrors.push(`Letra ${c.installment}: falta el vencimiento.`);
     } else if (isValidIsoDate(values.issue_date) && c.due_date < values.issue_date) {
-      cuotaErrors.push(`Letra ${i + 1}: vence antes de la fecha de giro.`);
+      cuotaErrors.push(`Letra ${c.installment}: vence antes de la fecha de giro.`);
     }
-    if (!c.cents || c.cents <= 0) cuotaErrors.push(`Letra ${i + 1}: importe inválido.`);
+    if (!c.cents || c.cents <= 0) cuotaErrors.push(`Letra ${c.installment}: importe inválido.`);
+    if (editing && !c.id) cuotaErrors.push(`Letra ${c.installment}: no se reconoce.`);
   });
   if (cuotaErrors.length) errors.cuotas = cuotaErrors.join(" ");
   if (!cuotas.length && !errors.cuotas && edited.length) errors.cuotas = "Agrega al menos una letra.";
 
-  values.cuotas = cuotas.map(({ installment, due_date, amount }) => ({ installment, due_date, amount }));
+  values.cuotas = cuotas.map(({ id, installment, due_date, amount }) => ({
+    ...(editing ? { id } : {}),
+    installment,
+    due_date,
+    amount,
+  }));
   const totalCents = cuotas.reduce((sum, c) => sum + (c.cents || 0), 0);
   values.computed_total = centsToDecimal(totalCents);
   values.startNumber = startNumber;
@@ -472,6 +483,205 @@ async function changeStatus(billId, action, userId, reason = "") {
   return rows[0] ? withNumber(rows[0]) : null;
 }
 
+class BillEditError extends Error {
+  constructor(message, field = "cuotas") {
+    super(message);
+    this.code = "BILL_EDIT_INVALID";
+    this.field = field;
+  }
+}
+
+/** Ordena las cuotas que quedan en el lote como 1, 2, 3… y rehace el total. */
+async function compactBatch(client, batchId) {
+  // Dos pasos para no chocar con UNIQUE (batch_id, installment) a mitad del
+  // UPDATE: primero se corren todas fuera del rango y luego se bajan.
+  await client.query(
+    `UPDATE bills_of_exchange b
+        SET installment = r.rn + 10000
+       FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY installment) AS rn
+               FROM bills_of_exchange WHERE batch_id = $1) r
+      WHERE b.id = r.id`,
+    [batchId],
+  );
+  await client.query(
+    "UPDATE bills_of_exchange SET installment = installment - 10000 WHERE batch_id = $1",
+    [batchId],
+  );
+  await client.query(
+    `UPDATE bill_of_exchange_batches
+        SET total_amount = (SELECT SUM(amount) FROM bills_of_exchange WHERE batch_id = $1)
+      WHERE id = $1`,
+    [batchId],
+  );
+}
+
+/**
+ * Corrige un lote ya emitido: datos del aceptante, aval, cuenta, referencia,
+ * fecha y lugar de giro, y el vencimiento e importe de sus letras vigentes.
+ * Las pagadas y anuladas no se tocan. La numeración no cambia, por eso la
+ * fecha de giro tiene que quedar en el mismo año.
+ *
+ * `values` es la salida de normalizeBatchInput(body, { editing: true }) con
+ * ok = true. Devuelve false si el lote no existe.
+ */
+async function updateBatch(batchId, values, userId) {
+  const client = await db.getClient();
+  try {
+    await client.query("BEGIN");
+    const { rows: current } = await client.query(
+      "SELECT id, number_year, status FROM bills_of_exchange WHERE batch_id = $1 FOR UPDATE",
+      [batchId],
+    );
+    if (!current.length) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+
+    const year = Number(values.issue_date.slice(0, 4));
+    const numberYear = Number(current[0].number_year);
+    if (year !== numberYear) {
+      throw new BillEditError(
+        `Estas letras están numeradas en ${numberYear}: la fecha de giro tiene que quedar en ese año. Para cambiar de año, elimina el lote y vuelve a emitirlo.`,
+        "issue_date",
+      );
+    }
+
+    const editable = new Set(
+      current.filter((b) => b.status === BILL_STATUS.ISSUED).map((b) => Number(b.id)),
+    );
+    for (const c of values.cuotas) {
+      if (!editable.has(Number(c.id))) continue;
+      await client.query(
+        `UPDATE bills_of_exchange SET due_date = $2, amount = $3, updated_by = $4
+          WHERE id = $1 AND batch_id = $5`,
+        [c.id, c.due_date, Number(c.amount).toFixed(2), userId ?? null, batchId],
+      );
+    }
+
+    await client.query(
+      `UPDATE bill_of_exchange_batches SET
+         invoice_ref = $2, issue_date = $3, issue_place = $4,
+         acceptor_name = $5, acceptor_doc = $6, acceptor_address = $7, acceptor_locality = $8, acceptor_phone = $9,
+         guarantor_name = $10, guarantor_doc = $11, guarantor_address = $12, guarantor_locality = $13, guarantor_phone = $14,
+         bank_name = $15, bank_office = $16, bank_account = $17, bank_dc = $18,
+         total_amount = (SELECT SUM(amount) FROM bills_of_exchange WHERE batch_id = $1)
+       WHERE id = $1`,
+      [
+        batchId,
+        values.invoice_ref || null,
+        values.issue_date,
+        values.issue_place,
+        values.acceptor_name,
+        values.acceptor_doc,
+        values.acceptor_address,
+        values.acceptor_locality || null,
+        values.acceptor_phone || null,
+        values.guarantor_name || null,
+        values.guarantor_doc || null,
+        values.guarantor_address || null,
+        values.guarantor_locality || null,
+        values.guarantor_phone || null,
+        values.bank_name || null,
+        values.bank_office || null,
+        values.bank_account || null,
+        values.bank_dc || null,
+      ],
+    );
+
+    // Las letras pagadas o anuladas no pasan por el formulario: si la nueva
+    // fecha de giro queda después de alguno de sus vencimientos, se avisa.
+    const { rows: early } = await client.query(
+      `SELECT number_year, number_seq FROM bills_of_exchange
+        WHERE batch_id = $1 AND due_date < $2::date
+        ORDER BY installment LIMIT 1`,
+      [batchId, values.issue_date],
+    );
+    if (early.length) {
+      throw new BillEditError(
+        `La letra ${formatBillNumber(early[0].number_year, early[0].number_seq)} vence antes de esa fecha de giro.`,
+        "issue_date",
+      );
+    }
+
+    await client.query("COMMIT");
+    return true;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Elimina una letra. Las que quedan en el lote se renumeran como cuotas
+ * (1 de N…), no como letras: los números LT-… no cambian. Si era la última,
+ * se va el lote entero.
+ */
+async function deleteBill(billId) {
+  const client = await db.getClient();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(
+      "DELETE FROM bills_of_exchange WHERE id = $1 RETURNING batch_id, number_year, number_seq",
+      [billId],
+    );
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const batchId = Number(rows[0].batch_id);
+    const { rows: left } = await client.query(
+      "SELECT COUNT(*)::int AS n FROM bills_of_exchange WHERE batch_id = $1",
+      [batchId],
+    );
+    const batchDeleted = left[0].n === 0;
+    if (batchDeleted) {
+      await client.query("DELETE FROM bill_of_exchange_batches WHERE id = $1", [batchId]);
+    } else {
+      await compactBatch(client, batchId);
+    }
+    await client.query("COMMIT");
+    return { batchId, batchDeleted, number: formatBillNumber(rows[0].number_year, rows[0].number_seq) };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/** Elimina el lote con todas sus letras. Devuelve los números borrados, o null. */
+async function deleteBatch(batchId) {
+  const client = await db.getClient();
+  try {
+    await client.query("BEGIN");
+    const { rows: bills } = await client.query(
+      `DELETE FROM bills_of_exchange WHERE batch_id = $1
+       RETURNING installment, number_year, number_seq`,
+      [batchId],
+    );
+    const { rows } = await client.query(
+      "DELETE FROM bill_of_exchange_batches WHERE id = $1 RETURNING acceptor_name",
+      [batchId],
+    );
+    if (!rows.length) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    await client.query("COMMIT");
+    const numbers = bills
+      .sort((a, b) => a.installment - b.installment)
+      .map((b) => formatBillNumber(b.number_year, b.number_seq));
+    return { acceptorName: rows[0].acceptor_name, numbers };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /** Datos del último lote de ese RUC/DNI, para no volver a tipearlos. */
 async function findAcceptor(doc) {
   const normalized = normalizeDoc(doc);
@@ -549,8 +759,12 @@ module.exports = {
   getBatch,
   getBill,
   changeStatus,
+  updateBatch,
+  deleteBill,
+  deleteBatch,
   findAcceptor,
   listAcceptors,
   toPrintable,
   BillNumberError,
+  BillEditError,
 };
