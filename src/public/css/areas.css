@@ -209,10 +209,13 @@
 }
 
 /* Cabecera del lienzo: búsqueda y controles de vista arriba, filtros y pista
-   abajo. Sigue a la vista bajo la topbar mientras el árbol esté en pantalla. */
+   abajo. Sigue a la vista pegada a la topbar mientras el árbol esté en
+   pantalla. Es opaca y sin hueco arriba: el árbol pasa por debajo de ella y no
+   debe asomarse. Fija (org-arbol.js le pone .is-fija) pierde las esquinas
+   redondeadas, que dejarían ver las tarjetas por los costados. */
 .org-lienzo__barra {
   position: sticky;
-  top: calc(var(--shell-height, 64px) + 10px);
+  top: var(--shell-height, 64px);
   z-index: 3;
   display: flex;
   flex-direction: column;
@@ -220,9 +223,13 @@
   padding: 12px 12px 12px 14px;
   border-bottom: 1px solid var(--color-border);
   border-radius: var(--lienzo-radio) var(--lienzo-radio) 0 0;
-  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--color-surface);
+  transition: border-radius 0.15s ease, box-shadow 0.15s ease;
+}
+
+.org-lienzo__barra.is-fija {
+  border-radius: 0;
+  box-shadow: 0 10px 20px -12px rgba(13, 31, 51, 0.22);
 }
 
 .org-lienzo__fila {

@@ -269,12 +269,47 @@
     return { centrar: centrar };
   }
 
+  function altoTopbar() {
+    return parseFloat(
+      window.getComputedStyle(document.documentElement).getPropertyValue("--shell-height"),
+    ) || 64;
+  }
+
+  /**
+   * Marca la cabecera del lienzo con .is-fija mientras va pegada a la topbar
+   * (el CSS le quita las esquinas redondeadas y le da sombra).
+   */
+  function seguirBarras() {
+    var marcos = todos("[data-org-lienzo]").filter(function (marco) {
+      return marco.querySelector(".org-lienzo__barra");
+    });
+    if (!marcos.length) return;
+    var pendiente = false;
+    function revisar() {
+      pendiente = false;
+      var tope = altoTopbar();
+      marcos.forEach(function (marco) {
+        var barra = marco.querySelector(".org-lienzo__barra");
+        var fija =
+          window.getComputedStyle(barra).position === "sticky" &&
+          marco.getBoundingClientRect().top < tope - 0.5;
+        barra.classList.toggle("is-fija", fija);
+      });
+    }
+    function programar() {
+      if (pendiente) return;
+      pendiente = true;
+      window.requestAnimationFrame(revisar);
+    }
+    window.addEventListener("scroll", programar, { passive: true });
+    window.addEventListener("resize", programar);
+    revisar();
+  }
+
   /** Deja el nodo dentro de la ventana, debajo de la topbar y la cabecera fija del lienzo. */
   function mostrarEnVertical(nodo, marco) {
     var rect = nodo.getBoundingClientRect();
-    var topbar = parseFloat(
-      window.getComputedStyle(document.documentElement).getPropertyValue("--shell-height"),
-    ) || 64;
+    var topbar = altoTopbar();
     var barra = marco && marco.querySelector(".org-lienzo__barra");
     var margenSuperior = topbar + (barra ? barra.offsetHeight : 0) + 24;
     if (rect.top >= margenSuperior && rect.bottom <= window.innerHeight - 24) return;
@@ -338,6 +373,7 @@
     });
 
     initVerMas();
+    seguirBarras();
 
     var nodos = todos("[data-org-node]");
     var filas = todos("[data-org-miembro]");
