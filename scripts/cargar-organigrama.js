@@ -6,7 +6,8 @@
  *   node scripts/cargar-organigrama.js --aplicar   → lo aplica en una transacción
  *
  * Las áreas se buscan por nombre (sin acentos ni mayúsculas) y se reutilizan:
- * conservan su id, color y documentos. Sólo se crean las que faltan. Las
+ * conservan su id, color y documentos. Sólo se crean las que faltan; una que
+ * cambia de nombre se encuentra por `antes` y se renombra. Las
  * personas se buscan por primer nombre + inicio del apellido; si un nombre
  * calza con más de una persona el script se detiene sin tocar nada.
  *
@@ -39,11 +40,19 @@ const { isIdPrimaryKeyCollision } = require("../src/utils/idCollision");
 const APLICAR = process.argv.includes("--aplicar");
 
 // El jefe también queda como miembro del área que dirige: así sus propias
-// solicitudes suben al jefe del área superior.
+// solicitudes suben al jefe del área superior. El orden de `hijas` es el de
+// izquierda a derecha (o de arriba abajo) del organigrama oficial y se guarda
+// en sort_order. `antes` es el nombre anterior de un área que se renombra.
 const ORGANIGRAMA = {
   area: "Gerencia",
   jefe: "Luciano Fernández",
-  miembros: ["Teresa Garretón"],
+  miembros: [
+    "Teresa Garretón",
+    // Asesores y prevención de riesgos: dependen de la gerencia sin área propia.
+    "Miguel Salcedo",
+    "Fernando Abud",
+    "Marcelo Quijada",
+  ],
   hijas: [
     {
       area: "Finanzas",
@@ -58,25 +67,14 @@ const ORGANIGRAMA = {
           miembros: [
             "Francisco Aguilera",
             "María Marcatinco",
-            "Herta Schlegel",
-            "María Angélica San Martín",
-            "Ester Rosas",
+            "Claudia Valderrama",
+            "Elizabeth Nuñez",
           ],
         },
         {
           area: "Contabilidad",
           jefe: "Paula Serrano",
-          miembros: ["Eduardo Zamora", "Nicolás Flores"],
-        },
-        {
-          area: "Informática",
-          jefe: "Sebastián Quiroga",
-          miembros: ["Daniel Chiappe"],
-        },
-        {
-          area: "Control y Gestión",
-          jefe: "Rubén Haro",
-          miembros: ["Sofía Garrido"],
+          miembros: ["Eduardo Zamora", "Nicolás Flores", "Javier Poveda", "Jessica Ibaceta"],
         },
         {
           area: "Logística",
@@ -90,26 +88,38 @@ const ORGANIGRAMA = {
                 "Angelo Molina",
                 "Ricardo Pérez",
                 "Freddy Panicide",
-                "Richard Gómez",
-                "Carlos Becerra",
-                "Luis Arce",
                 "Gino Moyano",
+                "Richard Gómez",
+                "Marco Cartes",
+                "Carlos Becerra",
+                "Alejandro Meneses",
                 "Henry González",
               ],
             },
             {
-              area: "Operaciones y Facturación",
+              area: "Operaciones Logísticas",
+              antes: "Operaciones y Facturación",
               jefe: "Corina Pino",
-              miembros: ["Javier Poveda", "Jessica Ibaceta", "Rosa Valdés"],
+              miembros: [],
             },
           ],
+        },
+        {
+          area: "Informática",
+          jefe: "Sebastián Quiroga",
+          miembros: ["Bastián Sánchez"],
+        },
+        {
+          area: "Control y Gestión",
+          jefe: "Rubén Haro",
+          miembros: ["Sofía Garrido"],
         },
       ],
     },
     {
       area: "Eléctrica",
       jefe: "Jorge De Geyter",
-      miembros: ["Gabriel Villa", "David González", "Santiago Lozada"],
+      miembros: ["Alexander Medina", "Santiago Lozada"],
     },
     {
       area: "Comercial",
@@ -117,9 +127,14 @@ const ORGANIGRAMA = {
       miembros: [],
       hijas: [
         {
+          area: "Infraestructura",
+          jefe: "Leonardo Muñoz",
+          miembros: [],
+        },
+        {
           area: "Cableado y Conectividad",
           jefe: "Sandra Dittmar",
-          miembros: ["Luis Torres", "Cristofer Velásquez"],
+          miembros: ["Luis Torres", "Cristofer Velásquez", "Rosa Valdés"],
         },
         {
           area: "Ventas",
@@ -132,12 +147,13 @@ const ORGANIGRAMA = {
             "Nicolás González",
             "Marisol Martel",
             "Angelo Crisóstomo",
+            "Michel Azoaje",
           ],
         },
         {
           area: "Tecnología",
           jefe: "Williams Araya",
-          miembros: ["Javier Salgado", "Álvaro Alzola"],
+          miembros: ["Javier Salgado", "Álvaro Alzola", "Ignacio Catalán"],
         },
         {
           area: "Marketing",
@@ -163,9 +179,9 @@ function sinEspacios(value) {
 }
 
 /** Recorre el árbol en orden: cada área llega después de su padre. */
-function aplanar(nodo, padre = null, lista = []) {
-  lista.push({ ...nodo, padre });
-  for (const hija of nodo.hijas || []) aplanar(hija, nodo.area, lista);
+function aplanar(nodo, padre = null, orden = null, lista = []) {
+  lista.push({ ...nodo, padre, orden });
+  (nodo.hijas || []).forEach((hija, i) => aplanar(hija, nodo.area, i + 1, lista));
   return lista;
 }
 
@@ -192,7 +208,7 @@ function nombreDe(u) {
 
 async function armarPlan() {
   const [{ rows: areas }, { rows: users }] = await Promise.all([
-    db.query("SELECT id, area_name, color, parent_area_id, manager_user_id FROM work_areas"),
+    db.query("SELECT id, area_name, color, parent_area_id, manager_user_id, sort_order FROM work_areas"),
     db.query("SELECT id, first_name, last_name, role, work_area_id FROM users"),
   ]);
   const areaPorNombre = new Map(areas.map((a) => [normalizeAreaName(a.area_name), a]));
@@ -224,7 +240,10 @@ async function armarPlan() {
   }
 
   const plan = nodos.map((nodo) => {
-    const existente = areaPorNombre.get(normalizeAreaName(nodo.area)) || null;
+    const existente =
+      areaPorNombre.get(normalizeAreaName(nodo.area)) ||
+      (nodo.antes && areaPorNombre.get(normalizeAreaName(nodo.antes))) ||
+      null;
     const jefe = resolver(nodo.jefe, nodo.area);
     const miembros = [jefe, ...nodo.miembros.map((m) => resolver(m, nodo.area))].filter(Boolean);
     return { ...nodo, existente, jefe, miembros };
@@ -260,6 +279,9 @@ function imprimirPlan({ plan, areaPorId, users }) {
     if (!nodo.existente) {
       lineas.push("se crea");
     } else {
+      if (nodo.existente.area_name !== nodo.area) {
+        lineas.push(`nombre: ${nodo.existente.area_name} → ${nodo.area}`);
+      }
       const padreActual = nombreArea(nodo.existente.parent_area_id);
       const padreNuevo = nodo.padre || "ninguna";
       if (normalizeAreaName(padreActual) !== normalizeAreaName(padreNuevo)) {
@@ -268,6 +290,10 @@ function imprimirPlan({ plan, areaPorId, users }) {
       const jefeNuevo = nodo.jefe ? nodo.jefe.id : null;
       if (Number(nodo.existente.manager_user_id || 0) !== Number(jefeNuevo || 0)) {
         lineas.push(`jefe: ${nombreUsuario(nodo.existente.manager_user_id)} → ${nombreUsuario(jefeNuevo)}`);
+      }
+      const ordenActual = nodo.existente.sort_order == null ? null : Number(nodo.existente.sort_order);
+      if (ordenActual !== nodo.orden) {
+        lineas.push(`orden: ${ordenActual ?? "sin orden"} → ${nodo.orden ?? "sin orden"}`);
       }
     }
     if (lineas.length) cambios += 1;
@@ -356,8 +382,10 @@ async function aplicar({ plan }) {
       const id = idPorNombre.get(nodo.area);
       const padreId = nodo.padre ? idPorNombre.get(nodo.padre) : null;
       await client.query(
-        "UPDATE work_areas SET parent_area_id = $1, manager_user_id = $2 WHERE id = $3",
-        [padreId, nodo.jefe ? nodo.jefe.id : null, id],
+        `UPDATE work_areas
+            SET area_name = $1, parent_area_id = $2, manager_user_id = $3, sort_order = $4
+          WHERE id = $5`,
+        [nodo.area, padreId, nodo.jefe ? nodo.jefe.id : null, nodo.orden, id],
       );
       const ids = nodo.miembros.map((u) => u.id);
       if (ids.length) {
