@@ -32,12 +32,13 @@
     font-weight: 600;
   }
 
+  /* Una sola columna: a media página la tabla del ranking no cabe y se desplaza
+     en los dos sentidos dentro de la tarjeta. */
   .main-kpi-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 30px;
     margin-bottom: 40px;
-    align-items: start;
   }
 
   .kpi-card {
@@ -49,16 +50,31 @@
   }
 
   .kpi-card h2 {
-    color: #003a70;
-    margin-top: 0;
-    margin-bottom: 25px;
-    font-size: 1.5rem;
+    color: var(--color-heading);
+    margin: 0 0 18px;
+    font-size: 1.15rem;
     font-weight: 800;
-    border-bottom: 2px solid #f0f4f8;
-    padding-bottom: 15px;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 12px;
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+
+  .kpi-card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .kpi-card__head h2 {
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
 
   .chart-container {
@@ -82,15 +98,20 @@
     font-size: 0.92rem;
   }
 
-  .ranking-table th {
-    background-color: #003a70;
-    color: white;
-    padding: 12px 14px;
-    text-align: left;
+  .ranking-table th,
+  .integrante-table th {
     position: sticky;
     top: 0;
     z-index: 1;
-    font-weight: 600;
+    background: #f8fafc;
+    color: #475569;
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 2px solid #e2e8f0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .ranking-table td {
@@ -239,17 +260,6 @@
     font-size: 0.9rem;
   }
 
-  .integrante-table th {
-    background: #f8fafc;
-    color: #475569;
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 2px solid #e2e8f0;
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-  }
-
   .integrante-table td {
     padding: 11px 12px;
     border-bottom: 1px solid #edf2f7;
@@ -286,10 +296,18 @@
     font-size: 0.92rem;
   }
 
-  @media (max-width: 900px) {
-    .main-kpi-row {
-      grid-template-columns: 1fr;
-    }
+  .kpi-filtros {
+    row-gap: 18px;
+  }
+
+  .kpi-filtros .campo-form {
+    margin-bottom: 0;
+  }
+
+  .kpi-filtros select:disabled {
+    background: var(--color-surface-muted);
+    color: var(--color-text-subtle);
+    cursor: not-allowed;
   }
 </style>
 
@@ -371,8 +389,8 @@
   <div class="main-kpi-row">
     <div class="columna-izquierda" style="min-width: 0;">
       <div class="kpi-card">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
-          <h2 style="margin-bottom: 0; border: none; padding: 0;">Ranking: Cursos Realizados</h2>
+        <div class="kpi-card__head">
+          <h2>Ranking: Cursos Realizados</h2>
           <button id="btnToggleChart" class="btn-toggle-chart" onclick="toggleRankingChart()">Ver más...</button>
         </div>
         <div id="mainChartContainer" class="chart-container">
@@ -397,29 +415,29 @@
       </div>
     </div>
 
-    <div class="columna-derecha" style="min-width: 0; border-left: 5px solid #ff4500; padding-left: 30px;">
+    <div class="columna-derecha" style="min-width: 0;">
       <div class="kpi-card">
         <h2>Rendimiento por curso</h2>
-        <p class="filter-hint">Área y subárea provienen de los campos <strong>section</strong> y <strong>subsection</strong> de cada curso en la base de datos.</p>
+        <p class="filter-hint">Elige un área, una subárea y un curso para ver las diez mejores notas.</p>
 
-        <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
-          <div style="flex: 1; min-width: 120px;">
-            <label style="font-weight: bold; color: #003a70; display: block; margin-bottom: 8px; font-size: 0.9rem;">1. Área</label>
-            <select id="selectSeccion" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 0.9rem;">
+        <div class="campos-grid kpi-filtros">
+          <div class="campo-form">
+            <label for="selectSeccion">1. Área</label>
+            <select id="selectSeccion">
               <option value="">-- Área --</option>
             </select>
           </div>
 
-          <div style="flex: 1; min-width: 120px;">
-            <label style="font-weight: bold; color: #003a70; display: block; margin-bottom: 8px; font-size: 0.9rem;">2. Subárea</label>
-            <select id="selectSubseccion" disabled style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 0.9rem;">
+          <div class="campo-form">
+            <label for="selectSubseccion">2. Subárea</label>
+            <select id="selectSubseccion" disabled>
               <option value="">-- Subárea --</option>
             </select>
           </div>
 
-          <div style="flex: 1.5; min-width: 180px;">
-            <label style="font-weight: bold; color: #003a70; display: block; margin-bottom: 8px; font-size: 0.9rem;">3. Curso</label>
-            <select id="selectCurso" disabled style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 0.9rem;">
+          <div class="campo-form">
+            <label for="selectCurso">3. Curso</label>
+            <select id="selectCurso" disabled>
               <option value="">-- Curso --</option>
             </select>
           </div>
@@ -427,7 +445,7 @@
       </div>
 
       <div class="kpi-card" id="cursoChartWrapper" style="display: none; margin-top: 20px;">
-        <h2 id="tituloCursoSeleccionado" style="font-size: 1.1rem; margin-bottom: 15px; color: #003a70; border-bottom: 2px solid #f0f4f8; padding-bottom: 10px;">
+        <h2 id="tituloCursoSeleccionado">
           Seleccione un curso
         </h2>
         <p id="cursoChartEmpty" class="empty-msg" style="display: none;"></p>
@@ -443,8 +461,8 @@
   const chartColors = {
     blue: 'rgba(0, 58, 112, 0.8)',
     blueBorder: 'rgba(0, 58, 112, 1)',
-    green: 'rgba(40, 167, 69, 0.8)',
-    greenBorder: 'rgba(40, 167, 69, 1)'
+    green: 'rgba(166, 216, 74, 0.9)',
+    greenBorder: 'rgba(92, 143, 29, 1)'
   };
 
   function formatMedalName(name, index) {
@@ -487,6 +505,14 @@
   let chartGeneralInstance = null;
   let isShowingAll = false;
 
+  // En una barra corta la etiqueta blanca se sale sobre el fondo blanco: va
+  // afuera, a la derecha, en azul.
+  function etiquetaFueraDeLaBarra(context) {
+    const escala = context.chart.scales.x;
+    const valor = context.dataset.data[context.dataIndex] || 0;
+    return escala.getPixelForValue(valor) - escala.getPixelForValue(0) < 80;
+  }
+
   function renderRankingTable(data) {
     const tbody = document.getElementById('rankingTableBody');
     if (!tbody) return;
@@ -507,6 +533,7 @@
 
     const ctxGeneral = document.getElementById('chartGeneral').getContext('2d');
     Chart.register(ChartDataLabels);
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
 
     chartGeneralInstance = new Chart(ctxGeneral, {
       type: 'bar',
@@ -528,10 +555,10 @@
         plugins: {
           legend: { display: false },
           datalabels: {
-            color: '#ffffff',
+            color: (context) => etiquetaFueraDeLaBarra(context) ? chartColors.blueBorder : '#ffffff',
             anchor: 'end',
-            align: 'start',
-            offset: 10,
+            align: (context) => etiquetaFueraDeLaBarra(context) ? 'end' : 'start',
+            offset: (context) => etiquetaFueraDeLaBarra(context) ? 6 : 10,
             font: { weight: 'bold', size: 13 },
             formatter: function(value, context) {
               const datasetToUse = isShowingAll ? allRankingData : top10Data;
@@ -542,7 +569,7 @@
           }
         },
         scales: {
-          x: { beginAtZero: true, ticks: { stepSize: 10 }, grid: { color: '#f0f0f0' }, grace: '5%' },
+          x: { beginAtZero: true, ticks: { maxRotation: 0 }, grid: { color: '#f0f0f0' }, grace: '5%', title: { display: true, text: 'Puntaje' } },
           y: { grid: { display: false }, ticks: { font: { size: 14, weight: 'bold' } } }
         }
       }
@@ -676,6 +703,7 @@
     const ctx = canvas.getContext('2d');
 
     if (chartCursoInstance) chartCursoInstance.destroy();
+    document.getElementById('cursoChartContainer').style.height = Math.max(180, cursoInfo.top10.length * 36 + 60) + 'px';
 
     chartCursoInstance = new Chart(ctx, {
       type: 'bar',
@@ -687,7 +715,8 @@
           backgroundColor: chartColors.green,
           borderColor: chartColors.greenBorder,
           borderWidth: 1,
-          borderRadius: 4
+          borderRadius: 4,
+          maxBarThickness: 28
         }]
       },
       options: {

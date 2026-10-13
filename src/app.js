@@ -14,7 +14,7 @@ process.env.TZ = countryConfig.timezone;
 const express = require("express");
 const compression = require("compression");
 const path = require("path");
-const { pipeline } = require("stream/promises");
+const { createReadStream } = require("fs");
 const session = require("express-session");
 const expressLayouts = require("express-ejs-layouts");
 const db = require("./db");
@@ -39,6 +39,7 @@ const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
+const { isAreaManager } = require("./services/expenses/areaManager");
 const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
 const { migrateTicketCategories, ensureTicketReplyCorrelatives } = require("./services/tickets/ticketSchema");
 const { UPLOAD_LIMITS_MB } = require("./config/uploadLimits");
@@ -51,13 +52,26 @@ const claudeRoutes = isFeatureEnabled("claudeAssistant")
 const gastosRoutes = isFeatureEnabled("expenseRequests")
   ? require("./routes/gastos")
   : null;
+const letrasRoutes = isFeatureEnabled("billsOfExchange")
+  ? require("./routes/letras")
+  : null;
+const requireFinanceStaff = require("./middlewares/requireFinanceStaff");
+const { isFinanceStaff } = require("./services/expenses/financeTeam");
+const {
+  ensureBillOfExchangeSchema,
+} = require("./services/billsOfExchange/billOfExchangeSchema");
 const { syncUnverifiedUsersToDisabled } = require("./utils/syncDisabledUsers");
 const storageService = require("./services/storage/storageService");
 const fileStorage = require("./services/fileStorage");
 const {
   isActiveContentType,
   contentDispositionFor,
+  parseByteRange,
+  discardStoredStream,
+  pipeStoredStream,
 } = require("./services/storage/storageHttp");
+const contentCache = require("./services/storage/contentCache");
+const eventThumbnails = require("./services/media/eventThumbnails");
 const signedMedia = require("./services/media/signedMedia");
 const { ensureVacationSchema } = require("./services/vacations/vacationSchema");
 const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
@@ -109,6 +123,7 @@ app.locals.getMonogram = getMonogram;
 app.locals.ticketCategories = TICKET_CATEGORIES;
 app.locals.ticketCategoryLabel = ticketCategoryLabel;
 app.locals.maxTicketAttachmentMb = UPLOAD_LIMITS_MB.TICKET_ATTACHMENT;
+app.locals.eventPreviewUrl = (url) => eventThumbnails.previewUrl(url) || url;
 
 // ================================
 // Middlewares Básicos
@@ -151,13 +166,22 @@ function setStorageHeaders(res, file, fallbackContentType) {
   }
 }
 
-function storageRequestContext(req) {
+function storageRequestContext(req, res) {
   const controller = new AbortController();
-  const abort = () => controller.abort();
+  const abort = () => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+  const onResponseClose = () => {
+    if (!res.writableFinished) abort();
+  };
   req.once("aborted", abort);
+  res.once("close", onResponseClose);
   return {
     signal: controller.signal,
-    cleanup: () => req.removeListener("aborted", abort),
+    cleanup: () => {
+      req.removeListener("aborted", abort);
+      res.removeListener("close", onResponseClose);
+    },
   };
 }
 
@@ -204,7 +228,8 @@ app.use("/media", async (req, res, next) => {
       return res.end();
     }
 
-    requestContext = storageRequestContext(req);
+    requestContext = storageRequestContext(req, res);
+    if (res.destroyed || res.closed) return undefined;
     const file = await fileStorage.streamStoredObject(relativePath, {
       range: req.get("range") || undefined,
       signal: requestContext.signal,
@@ -214,7 +239,7 @@ app.use("/media", async (req, res, next) => {
     // Comprobación final: por esta ruta pública solo salen imágenes. Cubre los
     // adjuntos heredados sin extensión, donde la ruta no basta para decidirlo.
     if (!signedMedia.isSafeContentType(tipo)) {
-      file.stream.destroy();
+      discardStoredStream(file.stream);
       return res.status(404).send("No encontrado");
     }
 
@@ -222,14 +247,14 @@ app.use("/media", async (req, res, next) => {
     res.status(file.statusCode || 200);
     setStorageHeaders(res, file, tipo);
     res.set("Cache-Control", "public, max-age=31536000, immutable, no-transform");
-    await pipeline(file.stream, res);
+    await pipeStoredStream(file.stream, res, requestContext.signal);
     return undefined;
   } catch (err) {
     if (requestContext?.signal.aborted || err?.name === "AbortError") {
       return undefined;
     }
     if (res.headersSent) {
-      res.destroy(err);
+      if (!res.destroyed) res.destroy();
       return undefined;
     }
     if (err.statusCode === 404) return res.status(404).send("Archivo no encontrado");
@@ -259,6 +284,48 @@ app.use(
 
 // FIX: Unificado → <root>/public/uploads sirve /uploads/*
 app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads"), { maxAge: "7d", etag: true }));
+
+async function sendCachedEventImage(req, res, entry, relativePath) {
+  if (res.destroyed || res.closed || res.writableEnded) return undefined;
+  const size = entry.size;
+  const range = parseByteRange(req.get("range"), size);
+  if (range?.unsatisfiable) {
+    res.status(416);
+    res.set("Content-Range", `bytes */${size}`);
+    res.set("Accept-Ranges", "bytes");
+    return res.end();
+  }
+
+  const start = range ? range.start : 0;
+  const end = range ? range.end : Math.max(0, size - 1);
+  const length = size === 0 ? 0 : end - start + 1;
+  res.status(range ? 206 : 200);
+  setStorageHeaders(res, {
+    contentType: entry.contentType,
+    contentLength: length,
+    contentRange: range ? `bytes ${start}-${end}/${size}` : null,
+    etag: entry.etag,
+    lastModified: entry.lastModified,
+    relativePath,
+  });
+  res.set("Cache-Control", eventThumbnails.cacheControlFor(relativePath));
+  if (req.method === "HEAD" || length === 0) return res.end();
+  if (!entry.filePath) {
+    return res.end(range ? entry.buffer.subarray(start, end + 1) : entry.buffer);
+  }
+
+  const requestContext = storageRequestContext(req, res);
+  try {
+    const stream = createReadStream(
+      entry.filePath,
+      range ? { start, end } : undefined,
+    );
+    await pipeStoredStream(stream, res, requestContext.signal);
+  } finally {
+    requestContext.cleanup();
+  }
+  return undefined;
+}
 
 // Archivos multimedia y documentos desde Storage (/content/...)
 // Requiere sesión activa; no exponer contenido corporativo de forma pública.
@@ -293,28 +360,58 @@ app.use("/content", async (req, res, next) => {
     }
 
     if (req.method === "HEAD") {
+      if (eventThumbnails.isDiskCacheable(relativePath)) {
+        const cached = await contentCache.peek(relativePath);
+        if (cached) {
+          await sendCachedEventImage(req, res, cached, relativePath);
+          return undefined;
+        }
+      }
       const metadata = await fileStorage.statStoredObject(relativePath);
       setStorageHeaders(res, metadata);
-      res.set("Cache-Control", "private, max-age=300, no-transform");
+      res.set("Cache-Control", eventThumbnails.cacheControlFor(relativePath));
       return res.end();
     }
 
-    requestContext = storageRequestContext(req);
+    if (eventThumbnails.isDiskCacheable(relativePath)) {
+      const cached = await contentCache.load(relativePath, async () => {
+        const file = await fileStorage.streamStoredObject(relativePath);
+        try {
+          const buffer = await contentCache.readStreamToBuffer(file.stream);
+          return {
+            buffer,
+            contentType: file.contentType,
+            etag: file.etag,
+            lastModified: file.lastModified,
+          };
+        } catch (err) {
+          discardStoredStream(file.stream);
+          throw err;
+        }
+      });
+      if (cached) {
+        await sendCachedEventImage(req, res, cached, relativePath);
+        return undefined;
+      }
+    }
+
+    requestContext = storageRequestContext(req, res);
+    if (res.destroyed || res.closed) return undefined;
     const file = await fileStorage.streamStoredObject(relativePath, {
       range: req.get("range") || undefined,
       signal: requestContext.signal,
     });
     res.status(file.statusCode || 200);
     setStorageHeaders(res, file);
-    res.set("Cache-Control", "private, max-age=300, no-transform");
-    await pipeline(file.stream, res);
+    res.set("Cache-Control", eventThumbnails.cacheControlFor(relativePath));
+    await pipeStoredStream(file.stream, res, requestContext.signal);
     return undefined;
   } catch (err) {
     if (requestContext?.signal.aborted || err?.name === "AbortError") {
       return undefined;
     }
     if (res.headersSent) {
-      res.destroy(err);
+      if (!res.destroyed) res.destroy();
       return undefined;
     }
     if (err.statusCode === 400) {
@@ -374,6 +471,14 @@ app.use(async (req, res, next) => {
     // Administración de RRHH y colaboradores: admins de RRHH o de Informática.
     const gestionaRrhh = await canManageRrhh(user);
     res.locals.canManageRrhh = gestionaRrhh;
+    // Jefes del organigrama: ven su bandeja de aprobación de vacaciones.
+    res.locals.isAreaManager = isFeatureEnabled("vacations")
+      ? await isAreaManager(user).catch(() => false)
+      : false;
+    // Personal de Finanzas: ve las letras de cambio en el menú y en Procesos.
+    res.locals.canIssueBills = isFeatureEnabled("billsOfExchange")
+      ? await isFinanceStaff(user).catch(() => false)
+      : false;
 
     res.locals.can = {
       procedimientos_write: isAdministrador(role),
@@ -381,7 +486,6 @@ app.use(async (req, res, next) => {
       reglamento_write: isAdministrador(role),
       noticias_write: isAdministrador(role),
       personas_write: gestionaRrhh,
-      organigrama_write: isAdministrador(role),
       achs_write: isAdministrador(role),
       eventos_write: isAdministrador(role),
       tickets_reply: isAdministrador(role),
@@ -394,6 +498,8 @@ app.use(async (req, res, next) => {
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
     res.locals.canManageRrhh = false;
+    res.locals.isAreaManager = false;
+    res.locals.canIssueBills = false;
     res.locals.can = {};
     res.locals.unreadTickets = 0;
   }
@@ -440,8 +546,23 @@ app.use("/RRHH", requireAuth, personasRoutes);
 if (gastosRoutes) {
   app.use("/gastos", requireAuth, requireFeature("expenseRequests"), gastosRoutes);
 }
+if (letrasRoutes) {
+  app.use(
+    "/letras",
+    requireAuth,
+    requireFeature("billsOfExchange"),
+    requireFinanceStaff(),
+    letrasRoutes,
+  );
+}
 if (ticketsRoutes) {
-  app.use("/sistemas", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
+  app.use("/soporte", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
+  // La página se llamó /sistemas. Los enlaces y correos viejos conservan el camino.
+  app.use("/sistemas", requireAuth, requireFeature("supportTickets"), (req, res) => {
+    const suffix = req.url && req.url !== "/" ? req.url : "";
+    const target = suffix.startsWith("/?") ? `/soporte${suffix.slice(1)}` : `/soporte${suffix}`;
+    res.redirect(308, target);
+  });
 }
 app.use("/marketing", requireAuth, marketingRoutes);
 app.use("/docs", requireAuth, docsRoutes);
@@ -763,6 +884,18 @@ async function asegurarColumnaAppsOrden() {
   }
 }
 
+/** Preferencia de la banda del home. NULL conserva el orden del país. */
+async function asegurarColumnaAccesosHome() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS home_quick_access jsonb
+    `);
+  } catch (err) {
+    logger.error("home", err);
+  }
+}
+
 // ================================
 // INICIAR SERVIDOR
 // ================================
@@ -789,6 +922,14 @@ async function asegurarSchemaGastos() {
     await ensureExpenseSchema();
   } catch (err) {
     logger.error("gastos", err);
+  }
+}
+
+async function asegurarSchemaLetras() {
+  try {
+    await ensureBillOfExchangeSchema();
+  } catch (err) {
+    logger.error("letras", err);
   }
 }
 
@@ -821,10 +962,12 @@ function startBackgroundJobs() {
     asegurarCorreoUnico(),
     asegurarColumnaNoticiasDestacada(),
     asegurarColumnasApps(),
+    asegurarColumnaAccesosHome(),
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
     asegurarSchemaAreas(),
     isFeatureEnabled("supportTickets") ? asegurarSchemaTickets() : null,
+    isFeatureEnabled("billsOfExchange") ? asegurarSchemaLetras() : null,
     asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),
   ]).finally(() => {
     if (isFeatureEnabled("vacations")) iniciarTransicionesVacaciones();

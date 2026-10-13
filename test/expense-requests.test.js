@@ -13,10 +13,10 @@ const {
   expenseStageLabel,
   isExpenseKind,
 } = require("../src/constants/expenseStatuses");
-const { isFinanceAreaName, FINANCE_AREA_NAMES } = require("../src/constants/financeArea");
+const { isFinanceAreaName, FINANCE_AREA_NAMES, financeAreaIds } = require("../src/constants/financeArea");
 const { areaSlug, normalizeAreaName } = require("../src/constants/workAreas");
 const { isSupportAreaName } = require("../src/constants/supportArea");
-const { requiresAdminApproval } = require("../src/services/expenses/areaManager");
+const { requiresAdminApproval, isAvailableApprover } = require("../src/services/expenses/areaManager");
 const {
   parseAmount,
   normalizeItems,
@@ -116,6 +116,22 @@ describe("financeArea — quién aprueba en Finanzas", () => {
     assert.equal(isFinanceAreaName("finanzas"), true);
     assert.equal(isFinanceAreaName("  FINANZAS  "), true);
     assert.equal(isFinanceAreaName("Administración y Finanzas"), true);
+  });
+
+  it("las sub-áreas de Finanzas en el organigrama también cuentan", () => {
+    const areas = [
+      { id: 1111, area_name: "Gerencia", parent_area_id: null },
+      { id: 2222, area_name: "Finanzas", parent_area_id: 1111 },
+      { id: 3333, area_name: "Contabilidad", parent_area_id: 2222 },
+      { id: 4444, area_name: "Logística", parent_area_id: 2222 },
+      { id: 5555, area_name: "Bodega", parent_area_id: 4444 },
+      { id: 6666, area_name: "Comercial", parent_area_id: 1111 },
+    ];
+    assert.deepEqual(
+      [...financeAreaIds(areas)].sort(),
+      [2222, 3333, 4444, 5555],
+    );
+    assert.equal(financeAreaIds([]).size, 0);
   });
 
   it("no confunde Finanzas con otras áreas", () => {
@@ -855,6 +871,16 @@ describe("expenseRequestService — comprobantes por ítem", () => {
     ]);
     assert.equal(r.ok, true);
     assert.equal(r.items[0].clientKey, "k9");
+  });
+});
+
+describe("areaManager — jefe disponible para aprobar", () => {
+  it("un jefe deshabilitado o fuera de la intranet no puede atender solicitudes", () => {
+    assert.equal(isAvailableApprover({ role: "Administrador", is_intranet_user: true }), true);
+    assert.equal(isAvailableApprover({ role: "Usuario", is_intranet_user: true }), true);
+    assert.equal(isAvailableApprover({ role: "Deshabilitado", is_intranet_user: true }), false);
+    assert.equal(isAvailableApprover({ role: "Usuario", is_intranet_user: false }), false);
+    assert.equal(isAvailableApprover(null), false);
   });
 });
 

@@ -9,7 +9,7 @@ const navLinks = [
   { href: '/apps', label: 'Apps', icon: 'grid' },
 ];
 if (features.supportTickets) {
-  navLinks.push({ href: '/sistemas/tickets', label: 'Soporte', icon: 'headset', notif: true });
+  navLinks.push({ href: '/soporte', label: 'Soporte', icon: 'headset', notif: true });
 }
 const correoUsuario = currentUser && currentUser.email ? currentUser.email : '';
 const fotoUsuario = currentUser ? (currentUser.photo || currentUser.foto) : null;

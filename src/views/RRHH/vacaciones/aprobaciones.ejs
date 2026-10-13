@@ -1,0 +1,126 @@
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
+
+<div class="vac-wrap">
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'check-circle' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/RRHH">RRHH</a> <span aria-hidden="true">/</span>
+        <a href="/RRHH/vacaciones">Vacaciones</a> <span aria-hidden="true">/</span>
+        <span>Aprobaciones</span>
+      </nav>
+      <h2 class="page-title">Aprobaciones de vacaciones</h2>
+      <p class="page-description">
+        Solicitudes de tu equipo que el organigrama te asigna. Si un área a tu cargo no tiene jefe propio, sus solicitudes también llegan aquí.
+      </p>
+    </div>
+    <% if (esRrhh) { %>
+    <div class="page-header-actions">
+      <a class="page-header-btn page-header-btn--secundario" href="/RRHH/vacaciones/gestion">Gestión completa</a>
+    </div>
+    <% } %>
+  </div>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="flash-msg flash-msg--error" role="alert"><%= error %></div>
+  <% } %>
+
+  <div class="vac-panel">
+    <div class="vac-panel-head">Por aprobar</div>
+    <% if (!pending.length) { %>
+      <p class="vac-empty">No tienes solicitudes pendientes.</p>
+    <% } else { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Colaborador</th><th>Área</th><th>Período</th><th>Días</th>
+            <th>Comentario</th><th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% pending.forEach(r => { %>
+            <tr>
+              <td data-label="Colaborador">
+                <%= r.collaboratorName || 'Colaborador' %>
+                <% if (r.requester_deleted) { %><small>(usuario eliminado)</small><% } %>
+              </td>
+              <td data-label="Área"><%= r.area || '-' %></td>
+              <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
+              <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
+              <td data-label="Comentario"><%= r.requester_notes || '-' %></td>
+              <td data-label="">
+                <form class="vac-inline-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/aprobar" method="POST"
+                      data-confirm="Se aprobarán <%= r.days %> <%= r.dayUnit %> (<%= r.startDateFmt %> → <%= r.endDateFmt %>)."
+                      data-confirm-title="¿Aprobar la solicitud?"
+                      data-confirm-accept="Aprobar">
+                  <input type="hidden" name="volver" value="aprobaciones">
+                  <button type="submit" class="vac-btn vac-btn-approve vac-btn-sm">Aprobar</button>
+                </form>
+                <form class="vac-inline-form js-reject-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/rechazar" method="POST">
+                  <input type="hidden" name="volver" value="aprobaciones">
+                  <input type="hidden" name="reason">
+                  <button type="submit" class="vac-btn vac-btn-reject vac-btn-sm">Rechazar</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+
+  <div class="vac-panel">
+    <div class="vac-panel-head">Resueltas por ti</div>
+    <% if (!history.length) { %>
+      <p class="vac-empty">Aún no has resuelto solicitudes.</p>
+    <% } else { %>
+      <table class="vac-table vac-table--stack">
+        <thead>
+          <tr>
+            <th>Colaborador</th><th>Período</th><th>Días</th>
+            <th>Estado</th><th>Resuelta</th><th>Comentario</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% history.forEach(r => { %>
+            <tr>
+              <td data-label="Colaborador"><%= r.collaboratorName || 'Colaborador' %></td>
+              <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
+              <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
+              <td data-label="Estado"><span class="<%= r.statusBadge %>"><%= r.statusLabel %></span></td>
+              <td data-label="Resuelta"><%= r.reviewedAtFmt || '-' %></td>
+              <td data-label="Comentario"><%= r.reviewer_notes || '-' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.js-reject-form').forEach((form) => {
+    form.addEventListener('submit', async (e) => {
+      if (form.dataset.motivoListo === '1') {
+        delete form.dataset.motivoListo;
+        return;
+      }
+      e.preventDefault();
+      const reason = await IntranetDialog.prompt({
+        title: '¿Rechazar la solicitud?',
+        message: 'El colaborador verá este motivo.',
+        label: 'Motivo del rechazo',
+        multiline: true,
+        acceptLabel: 'Rechazar',
+        tone: 'peligro',
+      });
+      if (!reason) return;
+      form.querySelector('input[name="reason"]').value = reason;
+      form.dataset.motivoListo = '1';
+      form.requestSubmit();
+    });
+  });
+</script>

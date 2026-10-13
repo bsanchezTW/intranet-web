@@ -10,7 +10,7 @@
       <%- include('../../partials/icon', { name: 'image' }) %>
     </span>
     <% if (ev.image) { %>
-      <img src="<%= ev.image %>" alt="" loading="lazy" decoding="async" data-galeria-revelar>
+      <img src="<%= eventPreviewUrl(ev.image) %>" data-full="<%= ev.image %>" alt="" loading="lazy" decoding="async" data-galeria-revelar>
     <% } %>
     <div class="galeria-card__velo" aria-hidden="true"></div>
     <div class="galeria-card__encabezado">
@@ -22,6 +22,9 @@
         <% } %>
         <% if (ev.is_private) { %>
           <span class="galeria-card__fecha galeria-card__privado">Privado</span>
+        <% } %>
+        <% if (ev.visible_web && !ev.is_private) { %>
+          <span class="galeria-card__fecha galeria-card__web">En la web</span>
         <% } %>
       </span>
       <h3 class="galeria-card__titulo"><%= ev.name %></h3>

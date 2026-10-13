@@ -41,15 +41,22 @@ describe("área de soporte", () => {
 
 describe("redirección tras gestionar un ticket", () => {
   const { ticketModalUrl } = require("../src/utils/ticketRedirect");
-  const MODAL = "/sistemas/tickets?ticket=8188";
+  const MODAL = "/soporte?ticket=8188";
 
   it("la dirección de un ticket abre el modal de la lista", () => {
     assert.equal(ticketModalUrl(8188), MODAL);
   });
 
-  it("respeta rutas internas de la mesa de ayuda", () => {
-    assert.equal(safeTicketRedirect("/sistemas/tickets", 8188), "/sistemas/tickets");
-    assert.equal(safeTicketRedirect("/sistemas/tickets?ok=1", 8188), "/sistemas/tickets?ok=1");
+  it("respeta el listado y las rutas operativas de la mesa de ayuda", () => {
+    assert.equal(safeTicketRedirect("/soporte", 8188), "/soporte");
+    assert.equal(safeTicketRedirect("/soporte?ok=1", 8188), "/soporte?ok=1");
+    assert.equal(safeTicketRedirect("/soporte/tickets", 8188), "/soporte/tickets");
+    assert.equal(safeTicketRedirect("/soporte/tickets?ok=1", 8188), "/soporte/tickets?ok=1");
+    assert.equal(
+      safeTicketRedirect("/soporte/tickets/8188/confirmar", 8188),
+      "/soporte/tickets/8188/confirmar",
+    );
+    assert.equal(safeTicketRedirect("/sistemas", 8188), "/sistemas");
     assert.equal(safeTicketRedirect(MODAL, 8188), MODAL);
   });
 
@@ -57,14 +64,15 @@ describe("redirección tras gestionar un ticket", () => {
     assert.equal(safeTicketRedirect("/RRHH", 8188), MODAL);
     assert.equal(safeTicketRedirect("", 8188), MODAL);
     assert.equal(safeTicketRedirect(undefined, 8188), MODAL);
-    // Prefijo parecido pero otra ruta: /sistemas/ticketsfalsos no vale.
-    assert.equal(safeTicketRedirect("/sistemas/ticketsfalsos", 8188), MODAL);
+    assert.equal(safeTicketRedirect("/soporte/otra", 8188), MODAL);
+    // Prefijo parecido pero otra ruta: /soporte/ticketsfalsos no vale.
+    assert.equal(safeTicketRedirect("/soporte/ticketsfalsos", 8188), MODAL);
   });
 
   it("no permite salir del sitio (open redirect)", () => {
     assert.equal(safeTicketRedirect("//evil.com", 8188), MODAL);
     assert.equal(safeTicketRedirect("/\\evil.com", 8188), MODAL);
-    assert.equal(safeTicketRedirect("https://evil.com/sistemas/tickets", 8188), MODAL);
-    assert.equal(safeTicketRedirect("/sistemas/tickets\r\nSet-Cookie: x=1", 8188), MODAL);
+    assert.equal(safeTicketRedirect("https://evil.com/soporte/tickets", 8188), MODAL);
+    assert.equal(safeTicketRedirect("/soporte/tickets\r\nSet-Cookie: x=1", 8188), MODAL);
   });
 });

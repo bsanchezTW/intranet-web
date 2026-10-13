@@ -152,7 +152,8 @@ describe("env Perú — contrato de instancia (cPanel / dev:pe)", () => {
     assert.equal(features.lunchMenu, false);
     assert.equal(features.claudeAssistant, true);
     assert.equal(features.supportTickets, false);
-    assert.equal(features.homeQuickAccess, false);
+    assert.equal(features.homeQuickAccess, true);
+    assert.equal(features.expenseRequests, false);
     assert.equal(features.chileHrPortals, false);
   });
 

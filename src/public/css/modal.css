@@ -574,6 +574,15 @@
 
 /* ── Botones ─────────────────────────────────────────────────────────────── */
 
+/* El display de abajo le ganaría al atributo hidden: un botón que el JS oculta
+   (p. ej. «Agregar colaboradores» fuera del modo edición) debe desaparecer. */
+.modal-overlay .btn-primario[hidden],
+.modal-overlay .btn-secundario[hidden],
+.modal-overlay .btn-peligro[hidden],
+.modal-overlay .btn-peligro-suave[hidden] {
+  display: none;
+}
+
 .modal-overlay .btn-primario,
 .modal-overlay .btn-secundario,
 .modal-overlay .btn-peligro,

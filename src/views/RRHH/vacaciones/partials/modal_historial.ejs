@@ -1,0 +1,58 @@
+<%#
+  Editar una salida del historial. Las nuevas se cargan por lotes
+  (partials/carga_lote.ejs); este modal corrige una ya guardada.
+  vacaciones-historial.js fija la acción del formulario y rellena los campos.
+  Las fechas exactas son opcionales: nunca se inventan para rellenar.
+%>
+<form class="vac-modal-form" id="formHistorial" method="POST" action="<%= fichaPath %>/historial">
+  <header class="modal-head">
+    <h2 class="modal-title" id="modalHistorialTitulo">Editar salida</h2>
+    <p class="modal-subtitle" id="modalHistorialSubtitulo"></p>
+  </header>
+
+  <div class="modal-body">
+    <div class="campos-grid">
+      <div class="campo-form">
+        <label for="hist_month_mes">Mes y año *</label>
+        <div id="hist_month">
+          <%- include('selector_mes', {
+            monthNames,
+            minMonth: hireDateValue ? hireDateValue.slice(0, 7) : '',
+            maxMonth: currentMonth,
+            idPrefix: 'hist_month',
+            required: true,
+          }) %>
+        </div>
+      </div>
+      <div class="campo-form">
+        <label for="days_used">Días *</label>
+        <input type="number" id="days_used" name="days_used" min="0.5" step="0.5" required inputmode="decimal">
+      </div>
+    </div>
+
+    <div class="campos-grid">
+      <div class="campo-form">
+        <label for="hist_start_date">Desde</label>
+        <input type="date" id="hist_start_date" name="start_date">
+      </div>
+      <div class="campo-form">
+        <label for="hist_end_date">Hasta</label>
+        <input type="date" id="hist_end_date" name="end_date">
+      </div>
+    </div>
+    <span class="vac-hint" id="historialDiasHint">
+      Fechas opcionales. Con las dos, los días y el mes se calculan solos (días calendario).
+    </span>
+
+    <div class="campo-form">
+      <label for="observation">Observación</label>
+      <textarea id="observation" name="observation" rows="2"></textarea>
+      <span class="vac-hint">Nota interna. El colaborador no la ve.</span>
+    </div>
+  </div>
+
+  <footer class="modal-foot">
+    <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+    <button type="submit" class="btn-primario">Guardar cambios</button>
+  </footer>
+</form>

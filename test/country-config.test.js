@@ -70,6 +70,8 @@ describe("config/country — COUNTRY sin fallback", () => {
     assert.equal(cl.weather.locationName, "Huechuraba");
     assert.equal(pe.weather.locationName, "Lima");
     assert.match(pe.weather.detailUrl, /meteored\.pe/);
+    assert.equal(cl.corporateSite, "https://www.transworld.cl/");
+    assert.equal(pe.corporateSite, "https://transworld.pe/");
   });
 
   it("CFG-06: el dominio corporativo encabeza los dominios de login", () => {

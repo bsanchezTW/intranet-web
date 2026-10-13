@@ -28,6 +28,7 @@ const FEATURE_KEYS = [
   "expenseCenter",
   "expenseRequests",
   "vacations",
+  "billsOfExchange",
 ];
 
 const FEATURE_MATRIX = {
@@ -40,19 +41,24 @@ const FEATURE_MATRIX = {
     lunchMenu: true,
     // Asistente Claude (FAB + /claude).
     claudeAssistant: true,
-    // Ticketera de Soporte (/sistemas).
+    // Ticketera de Soporte (/soporte).
     supportTickets: true,
-    // Barra de accesos rápidos del home (sitio, Academy, Rex+, ACHS, Caja).
+    // Barra de accesos rápidos del home. El conjunto por país está en
+    // services/homeQuickAccess.js. En Chile los seis primeros son sitio,
+    // Academy, Rex+, ACHS, Caja y Soporte; organigrama, noticias, galería,
+    // apps y rendiciones quedan disponibles para personalizar.
     homeQuickAccess: true,
     // Portales RRHH chilenos: Rex+, ACHS y Caja Los Andes (home, menú, footer).
     chileHrPortals: true,
     // Centro de gastos: centros de costo en RRHH y base del módulo de gastos.
     expenseCenter: true,
     // Rendiciones y solicitudes de fondos (/gastos y sección Finanzas de
-    // Procesos). Apagado en producción mientras se termina en su rama.
-    expenseRequests: false,
+    // Procesos).
+    expenseRequests: true,
     // Vacaciones de la intranet: en Chile se solicitan en Rex+.
     vacations: false,
+    // Letras de cambio: el talonario y el girador (RUC) son de Transworld Perú.
+    billsOfExchange: false,
   },
   PE: {
     // Sin tabla linkedin_posts ni tokens; no se sincroniza el feed.
@@ -65,17 +71,21 @@ const FEATURE_MATRIX = {
     claudeAssistant: true,
     // Perú no opera ticketera ni mesa de ayuda en esta intranet.
     supportTickets: false,
-    // Sin barra de accesos rápidos en el home de Perú.
-    homeQuickAccess: false,
+    // Barra de accesos rápidos del home. En Perú el conjunto es sitio,
+    // Academy, vacaciones, organigrama, noticias, galería y apps.
+    homeQuickAccess: true,
     // Rex+, ACHS y Caja Los Andes son portales chilenos; no se ofrecen en Perú.
     chileHrPortals: false,
-    // El proceso de rendiciones es corporativo, no chileno.
-    expenseCenter: true,
-    // Igual que Chile: apagado en producción mientras se termina en su rama.
+    // Centros de costo en RRHH: por ahora sólo se usan en Chile (base de las
+    // rendiciones). No es la sección Finanzas de Procesos.
+    expenseCenter: false,
+    // Rendiciones y la sección Finanzas de Procesos son sólo de Chile.
     expenseRequests: false,
-    // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú en
-    // la rama features. Apagado en producción hasta que esté terminado.
-    vacations: false,
+    // Solicitud y gestión de vacaciones: el módulo se desarrolla para Perú.
+    vacations: true,
+    // Letras de cambio giradas por Transworld Power and Telecom S.A.C.
+    // (/letras, sección Finanzas de Procesos). Sólo el área de Finanzas.
+    billsOfExchange: true,
   },
 };
 

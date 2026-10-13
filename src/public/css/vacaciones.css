@@ -246,6 +246,8 @@
 
 .vac-btn:hover { transform: translateY(-1px); filter: brightness(1.05); }
 .vac-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.vac-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; filter: none; }
+a.vac-btn { display: inline-block; text-decoration: none; }
 
 .vac-btn-primary { background: var(--corp-blue); color: #fff; }
 .vac-btn-approve { background: var(--corp-green-dark); color: #fff; }
@@ -302,4 +304,666 @@
   .vac-grid { gap: 14px; }
   .vac-btn { width: 100%; }
   .vac-btn-sm { width: auto; }
+}
+
+/* ==========================================================================
+   Historial previo a la intranet: tablas que se vuelven tarjetas, carga por
+   lotes y resumen consolidado.
+   Todo el color sigue saliendo de los tokens de theme.css: aquí no hay ni un
+   valor nuevo de marca.
+   ========================================================================== */
+
+/* Acciones en la cabecera de un panel (la cabecera ya es flex). */
+.vac-panel-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Cifra secundaria bajo el valor de una tarjeta de saldo. */
+.vac-stat-note {
+  color: var(--subtle);
+  font-size: 0.78rem;
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+.vac-stat--quiet .vac-stat-value { color: var(--color-heading); }
+
+/* Dato sin valor conocido: el guion es información, no un hueco. */
+.vac-nodata { color: var(--subtle); }
+
+/* Texto de apoyo dentro de un panel. */
+.vac-panel-note {
+  padding: 0 18px 16px;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Tabla que se convierte en tarjetas bajo 720px.
+   Cada td lleva data-label con el nombre de su columna.
+   -------------------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .vac-table--stack thead { display: none; }
+
+  .vac-table--stack,
+  .vac-table--stack tbody { display: block; }
+
+  .vac-table--stack tr {
+    display: block;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    margin: 12px;
+    padding: 4px 0;
+    background: var(--color-surface);
+  }
+
+  .vac-table--stack tbody tr:hover td { background: transparent; }
+
+  .vac-table--stack td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 14px;
+    border-bottom: none;
+    padding: 7px 14px;
+    text-align: right;
+  }
+
+  .vac-table--stack td::before {
+    content: attr(data-label);
+    color: var(--subtle);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-align: left;
+    flex: 0 0 auto;
+  }
+
+  /* Celda de acciones: sin etiqueta y a lo ancho. */
+  .vac-table--stack td[data-label=""] { justify-content: flex-end; }
+  .vac-table--stack td[data-label=""]::before { content: none; }
+}
+
+/* Resumen numérico de la vista previa. */
+.vac-preview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.vac-preview-stat {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--surface2);
+}
+
+.vac-preview-stat__label {
+  color: var(--subtle);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vac-preview-stat__value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-heading);
+  margin-top: 2px;
+}
+
+.vac-preview-stat--ok .vac-preview-stat__value { color: var(--corp-green-dark); }
+.vac-preview-stat--error .vac-preview-stat__value { color: var(--down); }
+.vac-preview-stat--warn .vac-preview-stat__value { color: #b4700a; }
+
+/* Detalle de filas con problemas: una lista, no una tabla más. */
+.vac-rows {
+  margin: 0;
+  padding: 0 18px 18px;
+  list-style: none;
+}
+
+.vac-row-issue {
+  border-left: 3px solid var(--color-border);
+  padding: 8px 0 8px 12px;
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.vac-row-issue--error { border-left-color: var(--down); }
+.vac-row-issue--warn { border-left-color: #b4700a; }
+
+.vac-row-issue strong { color: var(--color-heading); }
+
+.vac-row-issue span {
+  display: block;
+  color: var(--color-text-muted);
+}
+
+.vac-rows details > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--brand);
+  padding: 6px 0;
+}
+
+.vac-rows details > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Botón de acción dentro de un panel, sin fondo. */
+.vac-btn-ghost {
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--brand);
+}
+
+.vac-btn-danger { background: var(--down); color: #fff; }
+
+/* Fila del resumen con el historial pasado del derecho generado. */
+.vac-table tbody tr.is-alerta td { background: rgba(208, 92, 92, 0.08); }
+
+/* Días vencidos: saldo de años cumplidos que el colaborador debe tomar. */
+.vac-table tbody tr.is-vencido td { background: rgba(208, 92, 92, 0.04); }
+.vac-table .danger { color: var(--down); }
+.vac-badge-vencido { font-weight: 700; white-space: nowrap; }
+.vac-stat--vencido { border-color: var(--down); box-shadow: inset 4px 0 0 var(--down), var(--shadow); }
+
+/* Aviso manual de días vencidos (ficha y resumen). */
+.vac-aviso-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.vac-aviso-form input[type="text"] {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--color-input-text);
+  background: var(--color-input-bg);
+}
+.vac-wrap .flash-msg > div { flex: 1 1 auto; min-width: 0; }
+.vac-aviso-ultimo { margin: 8px 0 0; font-size: 0.8rem; font-weight: 500; opacity: 0.85; }
+.vac-aviso-celda { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+
+/* Buscador del resumen consolidado. */
+.vac-filters input[type="search"],
+.vac-filters input[type="date"] {
+  padding: 9px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  color: var(--color-input-text);
+  background: var(--color-input-bg);
+  min-width: 200px;
+}
+
+.vac-filters input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.vac-filters__sep { flex: 1 1 auto; }
+
+/* Modal del historial: hereda de modal.css, solo ajusta el ancho. */
+.vac-modal-panel { max-width: 560px; }
+
+@media (max-width: 640px) {
+  .vac-panel-actions { width: 100%; }
+  .vac-panel-actions .vac-btn { flex: 1 1 auto; }
+  .vac-filters input[type="search"] { min-width: 0; width: 100%; }
+}
+
+/* --------------------------------------------------------------------------
+   Ficha del colaborador
+   -------------------------------------------------------------------------- */
+
+/* Subtítulo dentro de un panel (formularios de récord y ajuste, carga). */
+.vac-subhead {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-heading);
+}
+
+/* Datos para el cálculo: cuatro pares etiqueta/valor. */
+.vac-datos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+  padding: 16px 18px 12px;
+}
+
+.vac-datos dt {
+  color: var(--subtle);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vac-datos dd {
+  margin: 4px 0 0;
+  font-weight: 700;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A qué período se descontó cada salida: el equivalente a las columnas
+   "VACACIONES 20XX-20XX" del Excel de RR.HH. */
+.vac-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+
+.vac-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.vac-chip--alerta { background: rgba(208, 92, 92, 0.12); color: var(--down); }
+
+.vac-row-actions { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+.vac-table tfoot td {
+  padding: 11px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--surface2);
+  font-weight: 700;
+  color: var(--color-heading);
+}
+
+/* Formulario en una sola línea (saldo de referencia, feriados). */
+.vac-form-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Sin nada debajo, la línea se duplicaría con el borde del panel. */
+.vac-form-inline:last-child { border-bottom: 0; }
+
+.vac-form-inline .campo { flex: 0 1 180px; }
+.vac-form-inline .vac-form-inline__grow { flex: 1 1 260px; }
+.vac-form-inline .vac-btn { margin-bottom: 16px; }
+
+/* Récord y ajuste: se usan poco, quedan plegados bajo los períodos. */
+.vac-details { border-top: 1px solid var(--color-border); }
+
+.vac-details > summary {
+  cursor: pointer;
+  padding: 14px 18px;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.vac-details > summary:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.vac-details .vac-form + .vac-form { border-top: 1px solid var(--color-border); }
+
+.vac-audit { list-style: none; margin: 8px 0 0; padding: 0; }
+
+/* --------------------------------------------------------------------------
+   Carga por lotes del historial
+   -------------------------------------------------------------------------- */
+.vac-lote {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--surface2);
+  padding-bottom: 16px;
+}
+
+.vac-lote__intro { padding: 16px 18px 4px; }
+.vac-lote__intro .vac-hint { margin: 0; max-width: 72ch; }
+
+.vac-lote__tabla td { vertical-align: top; padding: 8px 6px; }
+.vac-lote__tabla td:first-child { padding-left: 18px; }
+.vac-lote__tabla th { background: transparent; padding: 10px 6px; }
+.vac-lote__tabla th:first-child { padding-left: 18px; }
+.vac-lote__tabla tbody tr:hover td { background: transparent; }
+
+/* Mes y año de una salida: dos listas en vez de <input type="month">. */
+.vac-selector-mes { display: flex; gap: 6px; min-width: 0; }
+.vac-selector-mes select { flex: 1 1 auto; min-width: 0; }
+.vac-selector-mes select[data-anio] { flex: 0 0 5.6em; }
+
+.vac-lote__tabla input,
+.vac-lote__tabla select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  color: var(--color-input-text);
+  background: var(--color-input-bg);
+}
+
+.vac-lote__tabla input:focus,
+.vac-lote__tabla select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+
+.vac-lote__tabla input[readonly] { background: var(--color-surface); color: var(--color-text-muted); }
+.vac-lote__tabla .vac-selector-mes { min-width: 210px; }
+.vac-lote__tabla input[name="days"] { width: 80px; }
+.vac-lote__tabla input[type="date"] { min-width: 140px; }
+
+.vac-lote__fila.is-error input,
+.vac-lote__fila.is-error select { border-color: var(--down); }
+
+.vac-lote__estado { min-width: 170px; font-size: 0.82rem; }
+
+.vac-lote__msg { display: block; margin-top: 4px; line-height: 1.35; font-weight: 600; }
+.vac-lote__msg--error { color: var(--down); }
+.vac-lote__msg--aviso { color: #b4700a; }
+
+.vac-lote__acciones {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 18px 0;
+}
+
+.vac-lote__acciones .vac-hint { margin: 0; }
+.vac-lote__resumen .vac-preview { margin: 12px 18px 0; }
+.vac-lote__nota { padding: 0 18px; margin: 0; }
+
+.vac-lote__pie {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px 0;
+}
+
+@media (max-width: 720px) {
+  .vac-lote__tabla td,
+  .vac-lote__tabla td:first-child { padding: 6px 14px; }
+  .vac-lote__tabla td { align-items: center; }
+  .vac-lote__tabla input,
+  .vac-lote__tabla input[name="days"],
+  .vac-lote__tabla input[type="date"],
+  .vac-lote__tabla .vac-selector-mes { width: 62%; min-width: 0; }
+  .vac-lote__tabla .vac-selector-mes select { width: auto; }
+  .vac-lote__estado { min-width: 0; flex-direction: column; align-items: flex-end !important; }
+  .vac-lote__fila.is-error { border-color: var(--down); }
+  .vac-form-inline .campo,
+  .vac-form-inline .vac-form-inline__grow { flex: 1 1 100%; }
+  .vac-lote__pie .vac-btn { flex: 1 1 auto; }
+}
+
+/* ==========================================================================
+   Calendario mensual del equipo
+   ========================================================================== */
+
+.vac-cal__title {
+  margin: 0;
+  flex: 1 1 auto;
+  text-align: center;
+  font-size: 1rem;
+  color: var(--color-heading);
+}
+
+.vac-cal-scroll { overflow-x: auto; }
+
+.vac-cal {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.vac-cal th {
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.vac-cal__day {
+  height: 108px;
+  padding: 6px;
+  vertical-align: top;
+  border-top: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.vac-cal tr .vac-cal__day:first-child { border-left: none; }
+
+.vac-cal__day.is-out {
+  background: var(--surface2);
+  color: var(--subtle);
+}
+
+.vac-cal__day.is-today { box-shadow: inset 0 0 0 2px var(--brand); }
+
+.vac-cal__num {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+.vac-cal__people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.vac-cal__person,
+.vac-cal__more {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 6px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.vac-cal__person {
+  background: var(--brand-soft);
+  color: var(--color-heading);
+}
+
+.vac-cal__more {
+  color: var(--subtle);
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Gestión de vacaciones: "Por aprobar" + "Historial"
+   ========================================================================== */
+
+/* Los filtros van solos en su panel, sobre los dos bloques. */
+.vac-filters--solo { border-bottom: 0; }
+
+/* Cuántas solicitudes faltan por resolver, junto al título del bloque. */
+.vac-panel-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.vac-nota-propia {
+  color: var(--subtle);
+  font-size: 0.78rem;
+}
+
+/* ==========================================================================
+   Resumen consolidado: ocho columnas que caben en el contenedor, y tarjetas
+   bajo 1200px. Cada celda apila una cifra principal y su desglose.
+   ========================================================================== */
+
+.vac-table--resumen th,
+.vac-table--resumen td { padding: 12px 12px; vertical-align: top; }
+.vac-table--resumen th:first-child,
+.vac-table--resumen td:first-child { padding-left: 18px; }
+.vac-table--resumen th:last-child,
+.vac-table--resumen td:last-child { padding-right: 18px; }
+
+/* Los encabezados pueden partirse en dos líneas antes que empujar la tabla. */
+.vac-table--resumen th { white-space: normal; vertical-align: bottom; }
+
+.vac-table--resumen .vac-num { text-align: right; }
+
+.vac-cell-main {
+  display: block;
+  font-weight: 700;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.vac-cell-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--subtle);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.vac-cell-sub.danger { color: var(--down); }
+
+/* Fechas y desgloses en una línea; solo el área del colaborador puede partirse. */
+.vac-table--resumen .vac-cell-sub { white-space: nowrap; }
+.vac-table--resumen .vac-col-colaborador .vac-cell-sub { white-space: normal; }
+
+.vac-filters--resumen input[type="search"] { flex: 1 1 280px; max-width: 420px; }
+
+.vac-table--resumen .vac-badge + .vac-badge,
+.vac-table--resumen .vac-badge + .vac-cell-sub { margin-top: 4px; }
+.vac-table--resumen td > .vac-badge { display: table; }
+
+.vac-col-colaborador { min-width: 180px; }
+
+/* Leyenda plegada bajo la tabla: definiciones en rejilla, no un párrafo. */
+.vac-leyenda dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 0 18px 18px;
+}
+
+.vac-leyenda dt {
+  color: var(--color-heading);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.vac-leyenda dd {
+  margin: 2px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 1199px) {
+  .vac-table--resumen thead { display: none; }
+
+  .vac-table--resumen,
+  .vac-table--resumen tbody { display: block; }
+
+  .vac-table--resumen tr {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr));
+    gap: 12px 16px;
+    margin: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-surface);
+  }
+
+  /* El tono de alerta pasa de las celdas a la tarjeta completa. */
+  .vac-table--resumen tbody tr td,
+  .vac-table--resumen tbody tr:hover td,
+  .vac-table--resumen tbody tr.is-alerta td,
+  .vac-table--resumen tbody tr.is-vencido td { background: transparent; }
+  .vac-table--resumen tbody tr.is-vencido { border-color: rgba(208, 92, 92, 0.35); box-shadow: inset 4px 0 0 var(--down); }
+  .vac-table--resumen tbody tr.is-alerta { border-color: var(--down); background: rgba(208, 92, 92, 0.06); box-shadow: inset 4px 0 0 var(--down); }
+
+  .vac-table--resumen td,
+  .vac-table--resumen td:first-child,
+  .vac-table--resumen td:last-child {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .vac-table--resumen td.vac-num { text-align: left; }
+  .vac-table--resumen .vac-cell-sub { white-space: normal; }
+
+  .vac-table--resumen td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: var(--subtle);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* El nombre encabeza la tarjeta, a lo ancho y sin etiqueta. */
+  .vac-table--resumen td.vac-col-colaborador {
+    grid-column: 1 / -1;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .vac-table--resumen td.vac-col-colaborador::before { content: none; }
+  .vac-table--resumen .vac-link-colaborador { font-size: 1rem; }
 }

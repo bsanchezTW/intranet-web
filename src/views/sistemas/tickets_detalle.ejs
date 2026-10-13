@@ -2,7 +2,7 @@
   const esModal = (typeof isModal !== 'undefined' && isModal);
   const puedeGestionar = (typeof canManageTickets !== 'undefined' && canManageTickets);
   const agentes = (typeof supportAgents !== 'undefined' && Array.isArray(supportAgents)) ? supportAgents : [];
-  const volverA = (typeof backTo !== 'undefined' && backTo) ? backTo : '/sistemas/tickets';
+  const volverA = (typeof backTo !== 'undefined' && backTo) ? backTo : '/soporte';
 
   const estadoLabels = { open: 'Abierto', in_progress: 'En curso', pending_close: 'Pendiente de cierre', closed: 'Cerrado' };
   const prioridadLabels = { low: 'Baja', medium: 'Media', high: 'Alta' };
@@ -164,10 +164,10 @@
         <h4 class="ticket-confirmar__title">TI marcó este ticket como pendiente de cierre</h4>
         <p class="ticket-confirmar__text">Confirma si tu problema quedó resuelto, o recházalo si aún necesitas ayuda.</p>
         <div class="ticket-confirmar__acciones">
-          <form action="/sistemas/tickets/<%= ticket.id %>/confirmar" method="POST">
+          <form action="/soporte/tickets/<%= ticket.id %>/confirmar" method="POST">
             <button type="submit" class="ticket-btn ticket-btn--ok">Confirmar solución</button>
           </form>
-          <form action="/sistemas/tickets/<%= ticket.id %>/rechazar" method="POST">
+          <form action="/soporte/tickets/<%= ticket.id %>/rechazar" method="POST">
             <button type="submit" class="ticket-btn ticket-btn--ghost" data-confirm="El ticket volverá a quedar abierto para que soporte lo revise." data-confirm-title="¿Reabrir el ticket?" data-confirm-accept="Reabrir">Aún tengo problemas</button>
           </form>
         </div>
@@ -183,7 +183,7 @@
 
   <% } else if (puedeGestionar) { %>
     <div class="ticket-foot">
-      <form id="form-upload-admin" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/actualizar" method="POST" data-ticket-id="<%= ticket.id %>">
+      <form id="form-upload-admin" class="ticket-gestion" action="/soporte/tickets/<%= ticket.id %>/actualizar" method="POST" data-ticket-id="<%= ticket.id %>">
         <input type="hidden" name="redirect_to" value="<%= volverA %>">
         <input type="hidden" name="accion" id="ticketAccion" value="guardar">
         <input type="hidden" name="assign_mode" id="ticketAssignMode" value="">
@@ -292,7 +292,7 @@
 
   <% } else if (esPropio) { %>
     <div class="ticket-foot">
-      <form id="form-upload-user" class="ticket-gestion" action="/sistemas/tickets/<%= ticket.id %>/responder" method="POST" data-ticket-id="<%= ticket.id %>">
+      <form id="form-upload-user" class="ticket-gestion" action="/soporte/tickets/<%= ticket.id %>/responder" method="POST" data-ticket-id="<%= ticket.id %>">
         <input type="hidden" name="redirect_to" value="<%= volverA %>">
         <input type="hidden" name="adjuntos_data" id="adjuntos_data_user">
 

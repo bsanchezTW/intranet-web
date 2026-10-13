@@ -1,0 +1,53 @@
+<%#
+  Corregir los datos de los que depende el cálculo: fecha de ingreso y
+  documento. Cambiar la fecha recalcula los períodos y vuelve a descontar el
+  historial; el motivo queda en la bitácora con el valor anterior.
+%>
+<form class="vac-modal-form" id="formDatos" method="POST" action="<%= fichaPath %>/datos">
+  <header class="modal-head">
+    <h2 class="modal-title" id="modalDatosTitulo">Corregir datos del cálculo</h2>
+    <p class="modal-subtitle"><%= nombre %></p>
+  </header>
+
+  <div class="modal-body">
+    <div class="campos-grid">
+      <div class="campo-form">
+        <label for="datos_hire_date">Fecha de ingreso *</label>
+        <input type="date" id="datos_hire_date" name="hire_date" value="<%= hireDateValue %>" max="<%= today %>" required>
+      </div>
+      <div class="campo-form">
+        <label for="datos_national_id"><%= documentLabel %></label>
+        <input
+          type="text"
+          id="datos_national_id"
+          name="national_id"
+          value="<%= profile.national_id || '' %>"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="12"
+        >
+      </div>
+    </div>
+
+    <div class="campo-form">
+      <label for="datos_reason">Motivo del cambio *</label>
+      <textarea
+        id="datos_reason"
+        name="reason"
+        rows="2"
+        required
+        placeholder="Ej: el Excel tenía 01-08-2025; el contrato dice 21-07-2025"
+      ></textarea>
+    </div>
+
+    <p class="vac-hint">
+      Al cambiar la fecha de ingreso se recalculan todos los períodos y el
+      historial se vuelve a descontar desde el más antiguo.
+    </p>
+  </div>
+
+  <footer class="modal-foot">
+    <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
+    <button type="submit" class="btn-primario">Guardar</button>
+  </footer>
+</form>

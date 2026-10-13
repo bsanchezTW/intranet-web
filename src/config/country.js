@@ -73,6 +73,8 @@ const COUNTRY_CONFIGS = {
     },
     supportEmail: "soporte@transworld.cl",
     hrEmail: "rrhh@transworld.cl",
+    // Áreas cuyos administradores gestionan RRHH (ver constants/rrhhArea.js).
+    rrhhAreaNames: ["rrhh", "recursos humanos"],
     noReplyEmail: "noreply@transworld.cl",
     contactEmail: "contacto@transworld.cl",
     // Login y navbar: /img/brand/{cl|pe}/. Fondos en JPG; logos en PNG.
@@ -111,7 +113,7 @@ const COUNTRY_CONFIGS = {
       // Fijos (1 Lima, 41–84 provincias): sólo en el teléfono de empresa.
       landline: { pattern: "^[1-8]\\d{7}$", groups: [1, 3, 4] },
     },
-    corporateSite: "https://www.transworld.cl/",
+    corporateSite: "https://transworld.pe/",
     weather: {
       latitude: -12.0464,
       longitude: -77.0428,
@@ -123,6 +125,9 @@ const COUNTRY_CONFIGS = {
     // TODO(TI Perú): confirmar las casillas locales antes de salir a producción.
     supportEmail: "soporte@transworld.pe",
     hrEmail: "rrhh@transworld.pe",
+    // En Perú RRHH lo lleva la Administradora: su área gestiona el módulo
+    // completo (colaboradores, organigrama, vacaciones).
+    rrhhAreaNames: ["rrhh", "recursos humanos", "administradora", "administracion"],
     noReplyEmail: "noreply@transworld.pe",
     contactEmail: "contacto@transworld.pe",
     brand: {

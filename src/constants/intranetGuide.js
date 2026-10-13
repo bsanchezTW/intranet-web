@@ -37,7 +37,7 @@ const GUIDE_ENTRIES = Object.freeze([
       "Panel de inicio con indicadores financieros, clima y noticias recientes.",
     featureNotes: {
       lunchMenu: "Muestra el menú semanal del casino.",
-      homeQuickAccess: "Tiene accesos rápidos a Academy, el sitio web y portales de RRHH.",
+      homeQuickAccess: "Tiene una banda de accesos rápidos. Cada persona puede ocultarlos y cambiar su orden.",
     },
   },
   {
@@ -53,8 +53,11 @@ const GUIDE_ENTRIES = Object.freeze([
     href: "/procesos",
     paths: [/^\/procesos\/?$/],
     summary:
-      "Portada con la sección Finanzas (rendir gastos, solicitar fondos, mis solicitudes), " +
-      "los documentos generales (reglamento interno y otros) y los procedimientos y protocolos por área.",
+      "Portada con los documentos generales (reglamento interno y otros) y los procedimientos y protocolos por área.",
+    featureNotes: {
+      expenseRequests:
+        "Incluye la sección Finanzas: rendir gastos, solicitar fondos y mis solicitudes.",
+    },
   },
   {
     id: "reglamento",
@@ -153,15 +156,11 @@ const GUIDE_ENTRIES = Object.freeze([
     title: "Organigrama",
     href: "/RRHH/organigrama",
     paths: [/^\/RRHH\/organigrama(\/|$)/],
-    summary: "Estructura general y departamentos de Transworld.",
-  },
-  {
-    id: "areas",
-    title: "Áreas de trabajo",
-    href: "/RRHH/areas",
-    access: ACCESS.RRHH_MANAGER,
-    paths: [/^\/RRHH\/areas(\/|$)/],
-    summary: "Áreas de trabajo de la empresa y quiénes pertenecen a cada una.",
+    summary:
+      "Áreas de trabajo de la empresa, quién dirige cada una, de qué área depende y quiénes pertenecen a ella. Se busca por área o por colaborador.",
+    notes: [
+      "Las áreas se administran aquí mismo, no hay una pantalla de Áreas aparte: quien gestiona RRHH ve el botón «Editar organigrama» para crear, editar y eliminar áreas, asignarles jefe y área superior, y mover colaboradores.",
+    ],
   },
   {
     id: "centros-costo",
@@ -200,7 +199,7 @@ const GUIDE_ENTRIES = Object.freeze([
     href: "/RRHH/vacaciones/calendario",
     feature: "vacations",
     paths: [/^\/RRHH\/vacaciones\/calendario(\/|$)/],
-    summary: "Calendario con las vacaciones del equipo.",
+    summary: "Calendario mensual con las vacaciones aprobadas de todo el equipo.",
   },
   {
     id: "vacaciones-gestion",
@@ -210,6 +209,17 @@ const GUIDE_ENTRIES = Object.freeze([
     access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/vacaciones\/gestion(\/|$)/],
     summary: "Aprobar o rechazar solicitudes de vacaciones y revisar los saldos del equipo.",
+  },
+  {
+    id: "vacaciones-resumen",
+    title: "Resumen de vacaciones",
+    href: "/RRHH/vacaciones/gestion/resumen",
+    feature: "vacations",
+    access: ACCESS.RRHH_MANAGER,
+    paths: [/^\/RRHH\/vacaciones\/gestion\/resumen(\/|$)/],
+    summary:
+      "Días vencidos que cada colaborador debe tomar, plazo legal, trunco, liquidación y exportación a Excel. " +
+      "Desde aquí se abre la ficha de cada uno para cargar sus vacaciones anteriores a la intranet.",
   },
   {
     id: "feriados",
@@ -250,9 +260,9 @@ const GUIDE_ENTRIES = Object.freeze([
   {
     id: "soporte",
     title: "Soporte",
-    href: "/sistemas/tickets",
+    href: "/soporte",
     feature: "supportTickets",
-    paths: [/^\/sistemas\/?$/, /^\/sistemas\/tickets\/?$/, /^\/sistemas\/tickets\/\d+(\/|$)/],
+    paths: [/^\/soporte\/?$/, /^\/soporte\/tickets\/?$/, /^\/soporte\/tickets\/\d+(\/|$)/],
     summary: "Autoayuda para problemas comunes y tus tickets con el equipo de TI (abiertos, en curso y cerrados). Un ticket nuevo se abre con «Abrir ticket» en la barra superior o pidiéndoselo al asistente.",
     steps: [
       "Entra a Soporte desde la barra superior.",

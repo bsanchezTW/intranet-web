@@ -147,7 +147,7 @@ router.get("/", async (req, res) => {
       ...VIEW_HELPERS,
       // procesos.css: las tarjetas de "Nueva solicitud" y el aviso de
       // requisitos son las de Procesos y Documentos.
-      extraCss: ["/css/procesos.css?v=20260916m", "/css/gastos.css?v=20260916m"],
+      extraCss: ["/css/procesos.css?v=20260916m", "/css/gastos.css?v=20261006a"],
       extraJs: formulario
         ? ["/js/gastos-lista.js?v=20260915i", "/js/gastos-form.js?v=20260917r"]
         : ["/js/gastos-lista.js?v=20260915i"],
@@ -190,11 +190,14 @@ async function requisitosParaRendir(user) {
       motivo: "No tienes un área asignada. Pídele a RRHH que te asigne una.",
     };
   }
-  if (!context.manager) {
+  if (context.unavailableManager) {
+    return { ...base, ok: false, motivo: context.blockedReason };
+  }
+  if (!context.manager && !context.requiresAdmin) {
     return {
       ...base,
       ok: false,
-      motivo: `El área ${context.area.area_name} aún no tiene un jefe asignado, y su aprobación es un requisito. Pídele a RRHH que designe uno.`,
+      motivo: `Ni el área ${context.area.area_name} ni sus áreas superiores tienen un jefe asignado, y su aprobación es un requisito. Pídele a RRHH que designe uno.`,
     };
   }
   if (!documento) {
@@ -423,7 +426,7 @@ router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
-      extraCss: ["/css/gastos.css?v=20260916m"],
+      extraCss: ["/css/gastos.css?v=20261006a"],
     extraJs: ["/js/gastos-lista.js?v=20260915i"],
     });
   } catch (err) {
@@ -508,7 +511,7 @@ router.get("/:id", async (req, res) => {
       user,
       ...VIEW_HELPERS,
       // procesos.css: las migas de navegación son las de Procesos.
-      extraCss: ["/css/procesos.css?v=20260916m", "/css/gastos.css?v=20260916m"],
+      extraCss: ["/css/procesos.css?v=20260916m", "/css/gastos.css?v=20261006a"],
     });
   } catch (err) {
     console.error("[Gastos] Error abriendo el detalle:", err);

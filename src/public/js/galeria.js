@@ -61,6 +61,14 @@
       img.classList.add("is-lista");
     }
     function fallo() {
+      var full = img.getAttribute("data-full");
+      if (full && !img.dataset.fullTried && img.getAttribute("src") !== full) {
+        img.dataset.fullTried = "1";
+        img.addEventListener("load", listo, { once: true });
+        img.addEventListener("error", fallo, { once: true });
+        img.src = full;
+        return;
+      }
       if (marco) {
         marco.classList.remove("is-cargando");
         marco.classList.add("is-error");
@@ -206,6 +214,12 @@
         portadaElegir.setAttribute("aria-expanded", abrir ? "true" : "false");
         if (!abrir) return;
         Array.prototype.forEach.call(portadaGaleria.querySelectorAll("img[data-src]"), function (img) {
+          var full = img.getAttribute("data-full");
+          img.addEventListener("error", function () {
+            if (!full || img.dataset.fullTried || img.getAttribute("src") === full) return;
+            img.dataset.fullTried = "1";
+            img.src = full;
+          });
           img.src = img.getAttribute("data-src");
           img.removeAttribute("data-src");
         });
@@ -222,7 +236,7 @@
         }
         portadaNueva = { tipo: "url", url: url };
         marcarOpcion(url);
-        pintarPortada(url);
+        pintarPortada(opcion.getAttribute("data-preview") || url);
       });
     }
 
@@ -256,6 +270,16 @@
       estadoPie.textContent = activo ? texto || "" : "";
     }
 
+    // Un evento privado no puede publicarse en la web: el interruptor se apaga y bloquea.
+    var interruptorPrivado = document.getElementById("eventoPrivado");
+    var interruptorWeb = document.getElementById("eventoWeb");
+    if (interruptorPrivado && interruptorWeb) {
+      interruptorPrivado.addEventListener("change", function () {
+        interruptorWeb.disabled = interruptorPrivado.checked;
+        if (interruptorPrivado.checked) interruptorWeb.checked = false;
+      });
+    }
+
     form.addEventListener("submit", async function (evento) {
       evento.preventDefault();
       if (enviando) return;
@@ -271,6 +295,8 @@
       var datos = { name: titulo, description: descripcion.value.trim() };
       var privado = document.getElementById("eventoPrivado");
       if (privado) datos.is_private = privado.checked ? "1" : "0";
+      var web = document.getElementById("eventoWeb");
+      if (web) datos.visible_web = web.checked && !web.disabled ? "1" : "0";
 
       if (!esEditar) {
         ocupado(true, "Creando evento…");

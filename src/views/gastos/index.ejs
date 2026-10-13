@@ -126,7 +126,7 @@
         </h3>
         <p class="seccion__desc">
           <% if (puedeSolicitar) { %>
-            Aprueba primero <strong><%= req.manager.name %></strong>, y después Finanzas.
+            Aprueba primero <strong><%= req.manager ? req.manager.name : 'un administrador' %></strong>, y después Finanzas.
           <% } else { %>
             Todavía falta un requisito para poder rendir.
           <% } %>

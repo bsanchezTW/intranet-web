@@ -58,6 +58,7 @@
     var buscador = document.getElementById('buscarColaborador');
     var chips = todos('[data-filtro-area]');
     var filas = todos('#tablaPersonal tbody tr');
+    var tablaScroll = document.querySelector('.personal-tabla-scroll');
     var sinResultados = document.getElementById('personalSinResultados');
     var contador = document.getElementById('contadorColaboradores');
     if (!filas.length) return;
@@ -76,6 +77,7 @@
       });
 
       if (contador) contador.textContent = String(visibles);
+      if (tablaScroll) tablaScroll.hidden = visibles === 0;
       if (sinResultados) sinResultados.hidden = visibles > 0;
     }
 

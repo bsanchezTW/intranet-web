@@ -6,6 +6,7 @@ const {
   eventSlugFromContentPath,
   isPrivateFlag,
   hasPrivacyField,
+  hasWebField,
   eventVisibleTo,
 } = require("../src/utils/eventAccess");
 
@@ -47,6 +48,12 @@ describe("galería compartida — visibilidad", () => {
     assert.equal(isPrivateFlag(undefined), false);
     assert.equal(hasPrivacyField({ name: "Aniversario" }), false);
     assert.equal(hasPrivacyField({ is_private: "0" }), true);
+  });
+
+  it("detecta el interruptor de la web solo si el formulario lo envía", () => {
+    assert.equal(hasWebField({ name: "Aniversario" }), false);
+    assert.equal(hasWebField({ visible_web: "0" }), true);
+    assert.equal(isPrivateFlag(["0", "1"]), true, "el mismo parser lee visible_web");
   });
 
   it("saca el slug de una ruta de la galería y no de otras carpetas", () => {

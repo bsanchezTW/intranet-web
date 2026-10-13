@@ -46,8 +46,77 @@ class PeruVacationStrategy extends BaseVacationStrategy {
     return countCalendarDays(startDate, endDate);
   }
 
-  getExpirationDate({ periodEnd }) {
-    return addDays(periodEnd, 365);
+  /**
+   * Los días no gozados NO caducan.
+   *
+   * El módulo nació con `fin de período + 365`, que es el plazo del art. 23
+   * para *gozarlas*, no un plazo para *perderlas*: vencido el año el derecho
+   * sigue vivo y lo que se gatilla es la indemnización. RRHH lleva el saldo
+   * acumulado (una persona con 7 años y 196 días tomados tiene 14 pendientes,
+   * no 14 "de los períodos que todavía no vencen") y es ese número el que se
+   * usa en una liquidación. Devolver null mantiene todos los períodos vigentes.
+   */
+  getExpirationDate() {
+    return null;
+  }
+
+  /**
+   * Solo cuentan los períodos ya cerrados: 30 días por cada año de servicios
+   * CUMPLIDO (art. 10 D.L. 713). El año en curso devenga trunco, que sirve
+   * para una liquidación pero no habilita a pedir días.
+   *
+   * Es la misma cuenta que lleva RR.HH. a mano: "2 años y 3 meses → 60 días
+   * acumulados", no 67,5.
+   */
+  isPeriodClaimable({ period, referenceDate }) {
+    const end = toDateOnly(period?.period_end);
+    const today = toDateOnly(referenceDate);
+    if (!end || !today) return false;
+    return end < today;
+  }
+
+  /**
+   * Plazo para gozar el descanso: dentro del año siguiente a aquel en que se
+   * generó el derecho (art. 23 D.L. 713). El derecho nace al terminar el
+   * período, así que el plazo vence un año después de period_end.
+   *
+   * Pasado el plazo los días NO caducan (ver getExpirationDate): lo que se
+   * gatilla es la indemnización vacacional. Por eso esto es una alerta para
+   * RR.HH., no un cambio en el saldo.
+   */
+  getEnjoymentDeadline({ periodEnd }) {
+    const end = toDateOnly(periodEnd);
+    if (!end) return null;
+    const [y, m, d] = end.split("-").map(Number);
+    // 29-feb + 1 año → 28-feb.
+    const lastDay = new Date(Date.UTC(y + 1, m, 0)).getUTCDate();
+    return `${y + 1}-${String(m).padStart(2, "0")}-${String(Math.min(d, lastDay)).padStart(2, "0")}`;
+  }
+
+  /**
+   * Imputa días YA GOZADOS (historial previo a la intranet) a los bloques del
+   * período, sin validar el art. 17.
+   *
+   * Un registro histórico es un hecho ocurrido, no una solicitud: buena parte
+   * viene de antes del D. Leg. 1405 (2018), cuando el fraccionamiento 15+15 ni
+   * existía. Por eso satura protegido y luego flexible, y nunca lanza: si el
+   * período no alcanza, devuelve lo que cupo y el resto se imputa al siguiente.
+   * Las solicitudes nuevas siguen pasando por allocateBlockDays().
+   */
+  allocateHistoricalBlockDays(period, days) {
+    const N = Math.max(0, Number(days) || 0);
+    const protectedRemaining = Math.max(
+      0,
+      PROTECTED_BLOCK_SIZE - Number(period.protected_block_days_used || 0),
+    );
+    const flexibleRemaining = Math.max(
+      0,
+      FLEXIBLE_BLOCK_SIZE - Number(period.flexible_block_days_used || 0),
+    );
+
+    const protectedDelta = Math.min(N, protectedRemaining);
+    const flexibleDelta = Math.min(N - protectedDelta, flexibleRemaining);
+    return { protectedDelta, flexibleDelta };
   }
 
   /** Vacaciones truncas al cese: proporcional a la fecha de término. */
@@ -79,6 +148,24 @@ class PeruVacationStrategy extends BaseVacationStrategy {
 
     if (N <= 0) {
       return { valid: false, error: VACATION_MESSAGES.noDays };
+    }
+
+    /**
+     * Período tocado por el historial previo a la intranet: el art. 17 no se
+     * le aplica al resto.
+     *
+     * El art. 17 dice cómo se PARTEN los 30 días de un período. Si 22 de esos
+     * 30 ya se gozaron antes —y no sabemos en qué tramos, porque el Excel de
+     * RR.HH. guarda "marzo, 15 días" y buena parte es anterior al D. Leg. 1405
+     * de 2018— los 8 que quedan son el resto del período, no un bloque flexible
+     * con su regla de 1 a 6 días. Exigírsela dejaría ese saldo imposible de
+     * pedir: ni cabe en un tramo corto ni alcanza para uno de 7 a 14.
+     *
+     * Los períodos que la intranet administró desde el principio no tienen
+     * historial y siguen validando el art. 17 completo.
+     */
+    if (Number(period.historical_used_days || 0) > 0) {
+      return { valid: true, requiresFractionAck: N < ANNUAL_ENTITLEMENT };
     }
 
     // Completar bloque protegido con tramo pequeño (ej. 7+6 inválido)
@@ -183,6 +270,13 @@ class PeruVacationStrategy extends BaseVacationStrategy {
       throw new Error("Saldo insuficiente en bloques del período.");
     }
 
+    // Período tocado por el historial: el art. 17 ya no lo gobierna (ver
+    // validateFractionAgainstPeriod). Se imputa saturando, igual que el
+    // historial, para que lo que la validación dejó pasar se pueda consumir.
+    if (Number(period.historical_used_days || 0) > 0) {
+      return this.allocateHistoricalBlockDays(period, N);
+    }
+
     // Art. 17.ii: tramos 1–6 solo contra bloque flexible
     if (N >= 1 && N <= 6) {
       if (N <= flexibleRemaining) {
@@ -260,6 +354,7 @@ class PeruVacationStrategy extends BaseVacationStrategy {
   }
 
   validateRequest({
+    user = null,
     request,
     availableBalance = 0,
     existingActiveRequests = [],
@@ -276,6 +371,22 @@ class PeruVacationStrategy extends BaseVacationStrategy {
     const start = toDateOnly(request.startDate);
     const end = toDateOnly(request.endDate);
     const days = this.countRequestDays({ startDate: start, endDate: end });
+
+    // Art. 10 D.L. 713: el descanso se gana al cumplir un año de servicios.
+    // El proporcional del año en curso es trunco (liquidación), no días
+    // pedibles, así que sin el año cumplido no hay solicitud posible.
+    if (user && user.hire_date && !this.isEligible({
+      hireDate: user.hire_date,
+      referenceDate: today,
+    })) {
+      return {
+        valid: false,
+        errors: [VACATION_MESSAGES.notEligibleYet],
+        warnings,
+        days,
+        requiresFractionAck: false,
+      };
+    }
 
     if (!start || !end) {
       errors.push(VACATION_MESSAGES.invalidDates);

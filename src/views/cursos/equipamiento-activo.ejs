@@ -1,21 +1,18 @@
 <%- include('header-cursos') %>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
-  
-  .cursos-main-content, 
-  .cursos-main-content * { font-family: 'Montserrat', sans-serif !important; }
-
   :root {
     --text: #333;
     --muted-text: #6b6b6b;
     --line: #e6e6e6;
-    --h-brown: #000000 !important;
-    --h-safety: #000000 !important;
+    --h-brown: var(--color-heading);
+    --h-safety: var(--color-heading);
   }
 
-  .cursos-main-content a[class*="btn"], 
-  .cursos-main-content a[class*="boton"],
-  .cursos-main-content button,
+  /* Los modales viven dentro de .cursos-main-content y traen sus propios
+     botones (Cancelar, cerrar): quedan fuera. */
+  .cursos-main-content a[class*="btn"]:not(.modal-overlay *),
+  .cursos-main-content a[class*="boton"]:not(.modal-overlay *),
+  .cursos-main-content button:not(.modal-overlay *),
   #btnPrincipal, 
   #btnResultados {
     background-color: #003a70 !important;
@@ -23,9 +20,9 @@
     border-color: #003a70 !important;
   }
   
-  .cursos-main-content a[class*="btn"]:hover, 
-  .cursos-main-content a[class*="boton"]:hover,
-  .cursos-main-content button:hover,
+  .cursos-main-content a[class*="btn"]:not(.modal-overlay *):hover,
+  .cursos-main-content a[class*="boton"]:not(.modal-overlay *):hover,
+  .cursos-main-content button:not(.modal-overlay *):hover,
   #btnPrincipal:hover, 
   #btnResultados:hover {
     background-color: #002850 !important;
@@ -48,39 +45,17 @@
   .soluciones-text h2 { margin: 0 0 15px; font-size: 26px; font-weight: 700; color: var(--h-brown); }
 
   /* GRID CATEGORÍAS */
-  .grid-categorias { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; margin: 20px auto 20px auto;
-  align-items: stretch; justify-content: center; max-width: 1000px; }
-  
-  .cat-card { 
-    display: flex; flex-direction: column;
-    align-items: center; 
-    background: transparent; 
-    border-radius: 10px; 
-    box-shadow: none;
-    border: 2px solid #003a70;
-    cursor: pointer; 
-    transition: transform 0.3s, box-shadow 0.3s, background 0.3s; 
-    position: relative;
-    padding-bottom: 50px; 
-  }
-  .cat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,58,112,0.15); }
-  .cat-card.active { transform: translateY(-4px); background: rgba(0, 58, 112, 0.03); box-shadow: 0 8px 25px rgba(0,58,112,0.25); }
-  
-  .cat-card-header { padding: 20px 20px 5px; width: 100%; box-sizing: border-box; display: flex; justify-content: center; align-items: center; position: relative; }
-  .cat-card-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: #003a70; text-align: center; padding: 0 25px; }
-  .toggle-icon { position: absolute; right: 20px; font-size: 16px; font-weight: bold; color: #003a70; transition: transform 0.3s ease; }
+  .grid-categorias { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; margin: 20px auto 20px auto; align-items: start; justify-content: center; max-width: 1000px; }
+  .cat-card { display: flex; flex-direction: column; align-items: center; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #eef3f9; cursor: pointer; transition: transform 0.3s, box-shadow 0.3s, border 0.3s; position: relative; }
+  .cat-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+  .cat-card.active { border: 2px solid #003a70; box-shadow: 0 8px 25px rgba(0,58,112,0.2); transform: translateY(-4px); }
+  .cat-card img { width: 100%; height: 220px; object-fit: contain; padding: 20px; box-sizing: border-box; background: #fcfcfc; }
+  .cat-card-header { padding: 20px; width: 100%; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; }
+  .cat-card-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: #003a70; }
+  .toggle-icon { font-size: 16px; font-weight: bold; color: #003a70; transition: transform 0.3s ease; }
   .cat-card.active .toggle-icon { transform: rotate(180deg); }
-  
-  .cat-card img { width: 100%; height: 180px; object-fit: contain; padding: 15px; box-sizing: border-box; }
-  
-  .btn-edit-sub { 
-    position: absolute; 
-    bottom: 15px;
-    right: 15px;
-    background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px;
-    padding: 6px 12px; font-size: 0.85rem; cursor: pointer; z-index: 10; 
-    color: #003a70; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; 
-  }
+
+  .btn-edit-sub { position: absolute; top: 15px; right: 15px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 12px; font-size: 0.85rem; cursor: pointer; z-index: 10; color: #003a70; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; }
   .btn-edit-sub:hover { background: #f8fafc; transform: scale(1.05); border-color: #003a70; }
 
   /* ZONA DE DESPLIEGUE */
@@ -135,18 +110,16 @@
        }
   %>
     <div class="cat-card" id="card-<%= index %>" onclick="mostrarCursos('<%= idLista %>', this, '<%= subseccion %>')">
-      
-      <div class="cat-card-header">
-        <h3><%= subseccion %></h3>
-        <span class="toggle-icon">▼</span>
-      </div>
-
-      <img src="<%= imgUrl %>" alt="<%= subseccion %>" onerror="this.src='/img/fondo-home.png'" />
 
       <% if (typeof can !== 'undefined' && can.cursos_write) { %>
         <button class="btn-edit-sub" onclick="event.stopPropagation(); abrirModalEditarSub('<%= subseccion %>', '<%= imgUrl %>')">Editar</button>
       <% } %>
-      
+
+      <img src="<%= imgUrl %>" alt="<%= subseccion %>" onerror="this.src='/img/fondo-home.png'" />
+      <div class="cat-card-header">
+        <h3><%= subseccion %></h3>
+        <span class="toggle-icon">▼</span>
+      </div>
     </div>
   <% }) %>
 </section>

@@ -297,9 +297,12 @@
   pointer-events: none;
 }
 
+/* El panel toma el ancho mínimo de sus columnas: un rótulo partido en dos baja
+   los enlaces de su columna y quedan desalineados con los de al lado. */
 .dropdown-menu .nav-menu-group__label {
   padding: 6px 10px 6px;
   color: var(--green-deep);
+  white-space: nowrap;
 }
 
 .dropdown-menu a {
@@ -937,9 +940,12 @@ body.menu-movil-abierto .claude-fab {
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* La primera columna lleva el rótulo más largo («Procesos y documentos»): con
+   cuatro columnas iguales se parte en dos líneas y sus enlaces quedan más abajo
+   que los de las demás. */
 .site-footer__cols {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.25fr) repeat(3, minmax(0, 1fr));
   gap: 32px;
 }
 

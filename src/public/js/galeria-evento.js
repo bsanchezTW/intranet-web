@@ -17,6 +17,16 @@
 
   var G = global.Galeria;
   var items = datos.items || [];
+
+  function alFallarUsarOriginal(img) {
+    var full = img.getAttribute("data-full");
+    if (!full) return;
+    img.addEventListener("error", function () {
+      if (img.dataset.fullTried || img.getAttribute("src") === full) return;
+      img.dataset.fullTried = "1";
+      img.src = full;
+    });
+  }
   var reducirMovimiento =
     global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -53,26 +63,39 @@
     function construir() {
       if (!raiz || !viewport) return;
 
-      var fotos = items.filter(function (i) { return i.tipo === "image"; }).map(function (i) { return i.url; });
+      var fotos = items.filter(function (i) { return i.tipo === "image"; }).map(function (i) {
+        return { url: i.url, preview: i.preview || i.url };
+      });
       if (!fotos.length) return;
 
       // La primera diapositiva ya la pintó el servidor (portada o primera
       // foto): se conserva para que no haya parpadeo y se barajan las demás.
+      // data-url sigue siendo el original: así coinciden la portada y el borrado.
       var inicial = viewport.querySelector(".galeria-hero__slide img");
-      var primera = inicial ? inicial.getAttribute("src") : null;
-      var resto = barajar(fotos.filter(function (u) { return u !== primera; }));
-      var urls = (primera ? [primera] : []).concat(resto).slice(0, MAX_SLIDES);
+      var primeraUrl = inicial
+        ? (inicial.getAttribute("data-full") || inicial.getAttribute("src"))
+        : null;
+      var primera = primeraUrl
+        ? (fotos.filter(function (foto) { return foto.url === primeraUrl; })[0] || {
+            url: primeraUrl,
+            preview: inicial.getAttribute("src") || primeraUrl,
+          })
+        : null;
+      var resto = barajar(fotos.filter(function (foto) { return foto.url !== primeraUrl; }));
+      var lista = (primera ? [primera] : []).concat(resto).slice(0, MAX_SLIDES);
 
       viewport.innerHTML = "";
-      slides = urls.map(function (url, i) {
+      slides = lista.map(function (foto, i) {
         var slide = document.createElement("div");
         slide.className = "galeria-hero__slide" + (i === 0 ? " is-active" : "");
-        slide.setAttribute("data-url", url);
+        slide.setAttribute("data-url", foto.url);
         var img = document.createElement("img");
         img.alt = "";
         img.decoding = "async";
-        if (i === 0) img.src = url;
-        else img.setAttribute("data-src", url);
+        if (foto.preview !== foto.url) img.setAttribute("data-full", foto.url);
+        alFallarUsarOriginal(img);
+        if (i === 0) img.src = foto.preview;
+        else img.setAttribute("data-src", foto.preview);
         slide.appendChild(img);
         viewport.appendChild(slide);
         return slide;
@@ -229,7 +252,15 @@
       media.src = src;
     } else {
       media.addEventListener("load", listo, { once: true });
-      media.addEventListener("error", fallo, { once: true });
+      media.addEventListener("error", function () {
+        var full = media.getAttribute("data-full");
+        if (full && !media.dataset.fullTried && media.getAttribute("src") !== full) {
+          media.dataset.fullTried = "1";
+          media.src = full;
+          return;
+        }
+        fallo();
+      });
       media.src = src;
       if (media.complete && media.naturalWidth) listo();
     }

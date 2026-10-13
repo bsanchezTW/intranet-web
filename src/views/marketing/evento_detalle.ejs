@@ -1,11 +1,15 @@
 <%
 /* Galería: detalle de un evento. Estilos en /css/galeria.css y lógica en
    /js/galeria-evento.js (slider, mosaico, visor y subida). */
-const items = (imagenes || []).map((item) => ({
-  url: item.url,
-  public_id: item.public_id,
-  tipo: item.resource_type === 'video' ? 'video' : 'image',
-}));
+const items = (imagenes || []).map((item) => {
+  const tipo = item.resource_type === 'video' ? 'video' : 'image';
+  return {
+    url: item.url,
+    preview: tipo === 'image' ? eventPreviewUrl(item.url) : item.url,
+    public_id: item.public_id,
+    tipo,
+  };
+});
 const totalFotos = items.filter((i) => i.tipo === 'image').length;
 const totalVideos = items.length - totalFotos;
 const fechaEvento = (() => {
@@ -15,7 +19,8 @@ const fechaEvento = (() => {
     day: 'numeric', month: 'long', year: 'numeric', timeZone: countryConfig.timezone,
   });
 })();
-const fondoHero = evento.image || (items.find((i) => i.tipo === 'image') || {}).url || '';
+const fondoHeroFull = evento.image || (items.find((i) => i.tipo === 'image') || {}).url || '';
+const fondoHero = fondoHeroFull ? eventPreviewUrl(fondoHeroFull) : '';
 const datosGaleria = {
   slug: evento.slug,
   portada: evento.image || '',
@@ -30,7 +35,7 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
     <div class="galeria-hero__viewport" id="galeriaHeroViewport">
       <% if (fondoHero) { %>
         <div class="galeria-hero__slide is-active">
-          <img src="<%= fondoHero %>" alt="" decoding="async">
+          <img src="<%= fondoHero %>" data-full="<%= fondoHeroFull %>" alt="" decoding="async">
         </div>
       <% } %>
     </div>
@@ -101,7 +106,7 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
               <svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><polygon points="7 4 20 12 7 20 7 4"/></svg>
             </span>
           <% } else { %>
-            <img data-src="<%= item.url %>" alt="" decoding="async">
+            <img data-src="<%= item.preview || item.url %>" data-full="<%= item.url %>" alt="" decoding="async">
           <% } %>
           <span class="galeria-tile__portada"<%= item.url === evento.image ? '' : ' hidden' %>>Portada</span>
         </button>

@@ -13,7 +13,18 @@ const {
  *
  * Modelo: un período por año laboral (aniversario de hire_date). Los años ya
  * cumplidos otorgan el derecho completo; el año en curso devenga proporcional.
- * Saldo de un período = entitled_days + adjusted_days - used_days (si record_met).
+ *
+ * Saldo de un período = entitled_days + adjusted_days − used_days − historical_used_days
+ *   · used_days            → solicitudes aprobadas EN la intranet
+ *   · historical_used_days → días gozados ANTES de la intranet (vacation_history)
+ *
+ * Las dos se restan igual, pero viven separadas: RR.HH. necesita ver de dónde
+ * viene cada día y reimputar el historial no debe tocar lo que ya aprobó la
+ * intranet.
+ *
+ * Qué períodos suman al saldo disponible lo decide la estrategia del país
+ * (isPeriodClaimable): en Perú solo los años cumplidos; el año en curso queda
+ * como trunco para liquidación.
  */
 
 function effectiveEntitled(period) {
@@ -21,11 +32,17 @@ function effectiveEntitled(period) {
   return Number(period.entitled_days);
 }
 
+/** Días del historial previo a la intranet imputados a este período. */
+function periodHistoricalUsed(period) {
+  return Number(period.historical_used_days || 0);
+}
+
 function periodAvailable(period) {
   return (
     effectiveEntitled(period) +
     Number(period.adjusted_days) -
-    Number(period.used_days)
+    Number(period.used_days) -
+    periodHistoricalUsed(period)
   );
 }
 
@@ -40,7 +57,7 @@ function addYears(value, years) {
 
 async function getUserVacationProfile(userId) {
   const { rows } = await db.query(
-    `SELECT id, first_name, last_name, email, hire_date,
+    `SELECT id, first_name, last_name, email, national_id, hire_date,
             manager_user_id, prior_years_credited, progressive_days_override,
             work_days_per_week
      FROM users WHERE id = $1`,
@@ -50,18 +67,137 @@ async function getUserVacationProfile(userId) {
 }
 
 /**
+ * Períodos que corresponden a una fecha de ingreso: uno por año cumplido y el
+ * año en curso al final. Solo fechas; el derecho lo pone recalculatePeriods.
+ */
+function expectedPeriodRanges(hireDate, referenceDate) {
+  const hire = toDateOnly(hireDate);
+  if (!hire) return [];
+  const yearsComplete = fullYearsBetween(hire, referenceDate);
+  const ranges = [];
+  for (let k = 1; k <= yearsComplete + 1; k += 1) {
+    ranges.push({
+      periodStart: addYears(hire, k - 1),
+      periodEnd: addDays(addYears(hire, k), -1),
+    });
+  }
+  return ranges;
+}
+
+/**
+ * ¿Los períodos guardados siguen calzando con la fecha de ingreso?
+ *
+ * Los períodos se identifican por su fecha de inicio, así que corregir la
+ * fecha de ingreso dejaba los viejos junto a los nuevos y el derecho se
+ * duplicaba. El período k-ésimo (el k-ésimo año de servicio) es el mismo
+ * aunque cambie su fecha: se mueve en su lugar y conserva lo consumido, los
+ * ajustes, el récord y las solicitudes que lo apuntan.
+ *
+ * Función pura. Los períodos que sobran (el ingreso se corrió hacia adelante)
+ * se borran solo si nada los usa; si alguno tiene consumo de la intranet,
+ * ajustes o récord marcado, se informa en `blocked` y no se toca nada.
+ *
+ * @returns {{ needed: boolean, moves: Array<{id,periodStart,periodEnd}>, deletions: number[], blocked: object[] }}
+ */
+function planPeriodRealignment({ existing, expected }) {
+  const sorted = [...(existing || [])].sort((a, b) =>
+    toDateOnly(a.period_start) < toDateOnly(b.period_start) ? -1 : 1,
+  );
+  const moves = [];
+  sorted.slice(0, expected.length).forEach((p, i) => {
+    const want = expected[i];
+    if (
+      toDateOnly(p.period_start) !== want.periodStart ||
+      toDateOnly(p.period_end) !== want.periodEnd
+    ) {
+      moves.push({ id: p.id, periodStart: want.periodStart, periodEnd: want.periodEnd });
+    }
+  });
+
+  const extra = sorted.slice(expected.length);
+  const blocked = extra.filter(
+    (p) =>
+      Number(p.used_days || 0) > 0.001 ||
+      Math.abs(Number(p.adjusted_days || 0)) > 0.001 ||
+      p.record_met === false,
+  );
+
+  return {
+    needed: moves.length > 0 || extra.length > 0,
+    moves,
+    deletions: extra.map((p) => p.id),
+    blocked,
+  };
+}
+
+/** Aplica un plan de planPeriodRealignment en una transacción. */
+async function applyPeriodRealignment(userId, plan) {
+  const client = await db.getClient();
+  try {
+    await client.query("BEGIN");
+    if (plan.deletions.length) {
+      await client.query(
+        `DELETE FROM vacation_periods WHERE user_id = $1 AND id = ANY($2::int[])`,
+        [userId, plan.deletions],
+      );
+    }
+    // Dos pasadas para no chocar con UNIQUE (user_id, period_start) cuando un
+    // período pasa a ocupar la fecha que tenía otro: primero una fecha
+    // provisional única por id, luego la definitiva.
+    for (const move of plan.moves) {
+      await client.query(
+        `UPDATE vacation_periods SET period_start = DATE '1000-01-01' + id WHERE id = $1`,
+        [move.id],
+      );
+    }
+    for (const move of plan.moves) {
+      await client.query(
+        `UPDATE vacation_periods
+            SET period_start = $1, period_end = $2, updated_at = NOW()
+          WHERE id = $3`,
+        [move.periodStart, move.periodEnd, move.id],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * Regenera/actualiza los períodos de un colaborador según su hire_date y país.
- * Idempotente: no duplica (UNIQUE user_id, period_start) y no pisa used/adjusted.
+ * Idempotente: no duplica (UNIQUE user_id, period_start) y no pisa
+ * used_days, adjusted_days ni historical_used_days.
+ *
+ * Si la fecha de ingreso cambió, primero realinea los períodos existentes
+ * (ver planPeriodRealignment) y reimputa el historial.
+ *
+ * @returns {Promise<{ realigned: boolean, blocked: object[] }>}
  */
 async function recalculatePeriods(userId) {
   const user = await getUserVacationProfile(userId);
-  if (!user || !user.hire_date) return;
+  if (!user || !user.hire_date) return { realigned: false, blocked: [] };
 
   const country = resolveCountryForUser(user);
   const strategy = getStrategy(country);
   const hire = toDateOnly(user.hire_date);
   const today = todayInCountry();
   const yearsComplete = fullYearsBetween(hire, today);
+
+  const plan = planPeriodRealignment({
+    existing: await listPeriods(userId),
+    expected: expectedPeriodRanges(hire, today),
+  });
+  if (plan.blocked.length > 0) {
+    // Hay días aprobados por la intranet en períodos que con la nueva fecha
+    // no existen. No se adivina a dónde moverlos: RR.HH. lo ve en la ficha.
+    return { realigned: false, blocked: plan.blocked };
+  }
+  if (plan.needed) await applyPeriodRealignment(userId, plan);
+
   const priorYears = Number(user.prior_years_credited) || 0;
   const progressiveOverride =
     user.progressive_days_override != null
@@ -100,17 +236,21 @@ async function recalculatePeriods(userId) {
     periodEnd: currentEnd,
     entitledDays: proportional,
     expiresAt: strategy.getExpirationDate({ periodEnd: currentEnd }),
-    onlyRaiseEntitled: true,
+    // Tras realinear, el proporcional guardado era el de la fecha anterior:
+    // se reemplaza en vez de quedarse con el mayor.
+    onlyRaiseEntitled: !plan.needed,
   });
 
-  // CL: limpiar expires_at obsoleto en períodos existentes
-  if (country === "CL") {
-    await db.query(
-      `UPDATE vacation_periods SET expires_at = NULL, updated_at = NOW()
-       WHERE user_id = $1 AND country_code = 'CL' AND expires_at IS NOT NULL`,
-      [userId],
-    );
-  }
+  // Limpia expires_at obsoleto: ni Chile ni Perú caducan (en Perú el derecho
+  // no se extingue, la mora genera indemnización — D.L. 713 art. 23).
+  await db.query(
+    `UPDATE vacation_periods SET expires_at = NULL, updated_at = NOW()
+     WHERE user_id = $1 AND expires_at IS NOT NULL`,
+    [userId],
+  );
+
+  if (plan.needed) await reimputeHistoricalDays(userId);
+  return { realigned: plan.needed, blocked: [] };
 }
 
 async function upsertPeriod({
@@ -149,32 +289,36 @@ async function listPeriods(userId) {
   return rows;
 }
 
-/** Períodos vigentes (no vencidos), ordenados FIFO (más antiguo primero). */
-async function listActivePeriodsFifo(userId, client = db) {
+/** ¿El saldo de este período se puede pedir hoy? Lo decide el país. */
+function isPeriodClaimable(period, strategy, today) {
+  return strategy.isPeriodClaimable({ period, referenceDate: today });
+}
+
+/**
+ * Períodos cuyo saldo se puede pedir, ordenados FIFO (más antiguo primero).
+ * En Perú excluye el año en curso: eso es trunco, no días pedibles.
+ */
+async function listClaimablePeriodsFifo(userId, client = db) {
   const today = todayInCountry();
+  const strategy = getStrategy(resolveCountryForUser());
   const { rows } = await client.query(
     `SELECT * FROM vacation_periods
      WHERE user_id = $1
-       AND (
-         country_code = 'CL'
-         OR expires_at IS NULL
-         OR expires_at >= $2
-       )
      ORDER BY period_start ASC`,
-    [userId, today],
+    [userId],
   );
-  return rows;
+  return rows.filter((p) => isPeriodClaimable(p, strategy, today));
 }
 
 /** Primer período FIFO con saldo disponible (para validación PE). */
 async function getPrimaryPeriodForRequest(userId) {
-  const periods = await listActivePeriodsFifo(userId);
+  const periods = await listClaimablePeriodsFifo(userId);
   return periods.find((p) => periodAvailable(p) > 0.001) || null;
 }
 
-/** Saldo disponible total (suma de períodos vigentes). */
+/** Saldo disponible total (suma de períodos exigibles). */
 async function getAvailableBalance(userId) {
-  const periods = await listActivePeriodsFifo(userId);
+  const periods = await listClaimablePeriodsFifo(userId);
   return periods.reduce((sum, p) => sum + periodAvailable(p), 0);
 }
 
@@ -198,56 +342,92 @@ function detectAccumulationAlert(periods, country) {
   return { alert: false, periodsWithBalance: withBalance.length, message: null };
 }
 
-/** Resumen de saldos para la UI. */
-async function getBalanceSummary(userId) {
-  const user = await getUserVacationProfile(userId);
-  const country = resolveCountryForUser(user);
-  const periods = await listPeriods(userId);
-  const today = todayInCountry();
-  let entitled = 0;
-  let used = 0;
+/**
+ * Resumen de saldos, calculado sobre una lista de períodos ya cargada.
+ *
+ * Función pura: recibe los períodos y la fecha de referencia, así que se puede
+ * probar sin base de datos y devuelve siempre lo mismo para la misma entrada.
+ */
+function summarizePeriods({ periods, country, referenceDate }) {
+  const strategy = getStrategy(country);
+  const today = toDateOnly(referenceDate) || toDateOnly(new Date());
+
+  let entitled = 0; // derecho de años cumplidos
+  let trunco = 0; // proporcional del año en curso
+  let truncoAvailable = 0;
+  let used = 0; // solicitudes aprobadas en la intranet
+  let historicalUsed = 0; // días gozados antes de la intranet
   let adjusted = 0;
   let available = 0;
-  let expiringSoon = 0;
+  let nextAccrualDate = null;
 
   for (const p of periods) {
-    const isActive =
-      country === "CL" ||
-      !p.expires_at ||
-      toDateOnly(p.expires_at) >= today;
-    entitled += effectiveEntitled(p);
+    const claimable = isPeriodClaimable(p, strategy, today);
+    const eff = effectiveEntitled(p);
+
     used += Number(p.used_days);
+    historicalUsed += periodHistoricalUsed(p);
     adjusted += Number(p.adjusted_days);
-    if (isActive) {
+
+    if (claimable) {
+      entitled += eff;
       available += periodAvailable(p);
-      if (country === "PE" && p.expires_at) {
-        const limit = addDays(today, 90);
-        if (toDateOnly(p.expires_at) <= limit) {
-          expiringSoon += periodAvailable(p);
-        }
+    } else {
+      trunco += eff;
+      truncoAvailable += periodAvailable(p);
+      // El próximo derecho llega cuando termina el período en curso.
+      const nextFromPeriod = addDays(toDateOnly(p.period_end), 1);
+      if (nextFromPeriod && (!nextAccrualDate || nextFromPeriod < nextAccrualDate)) {
+        nextAccrualDate = nextFromPeriod;
       }
     }
   }
 
   const accumulation = detectAccumulationAlert(periods, country);
+  const claimablePeriods = periods.filter((p) => isPeriodClaimable(p, strategy, today));
 
   return {
+    // --- nombres históricos, en uso por las vistas actuales ---------------
     entitled: round2(entitled),
     used: round2(used),
     adjusted: round2(adjusted),
     available: round2(available),
-    expiringSoon: round2(expiringSoon),
+    expiringSoon: 0, // ningún país caduca ya; se mantiene por compatibilidad
     periodsCount: periods.length,
-    activePeriodsCount: periods.filter(
-      (p) =>
-        country === "CL" ||
-        !p.expires_at ||
-        toDateOnly(p.expires_at) >= today,
-    ).length,
+    activePeriodsCount: claimablePeriods.length,
     accumulationAlert: accumulation.alert,
     accumulationMessage: accumulation.message,
     periodsWithBalance: accumulation.periodsWithBalance,
+
+    // --- vocabulario del módulo de historial -------------------------------
+    /** Días generados por años de servicio CUMPLIDOS. */
+    generatedDays: round2(entitled),
+    /** Proporcional del año en curso: liquidación, no días pedibles. */
+    truncoDays: round2(trunco),
+    /** Días gozados antes de la intranet (Excel de RR.HH.). */
+    historicalUsedDays: round2(historicalUsed),
+    /** Días gozados a través de la intranet (solicitudes aprobadas). */
+    approvedUsedDays: round2(used),
+    /** Total gozado, venga de donde venga. */
+    totalUsedDays: round2(historicalUsed + used),
+    adjustedDays: round2(adjusted),
+    availableDays: round2(available),
+    /** Lo que habría que pagar en una liquidación hoy: saldo + trunco. */
+    severanceDays: round2(available + truncoAvailable),
+    nextAccrualDate,
   };
+}
+
+/** Resumen de saldos para la UI (lee de base). */
+async function getBalanceSummary(userId, { referenceDate } = {}) {
+  const user = await getUserVacationProfile(userId);
+  const country = resolveCountryForUser(user);
+  const periods = await listPeriods(userId);
+  return summarizePeriods({
+    periods,
+    country,
+    referenceDate: referenceDate || todayInCountry(),
+  });
 }
 
 function round2(n) {
@@ -255,7 +435,7 @@ function round2(n) {
 }
 
 /**
- * Consume días de los períodos vigentes en orden FIFO (más antiguo primero).
+ * Consume días de los períodos exigibles en orden FIFO (más antiguo primero).
  * Para PE actualiza contadores de bloques protegido/flexible.
  * @returns {{ firstPeriodId: number|null, allocations: Array<{periodId,days,protectedDelta,flexibleDelta}> }}
  */
@@ -263,22 +443,17 @@ async function consumeDaysFifo(client, userId, days, countryCode) {
   let remaining = Number(days);
   let firstPeriodId = null;
   const allocations = [];
-  const strategy =
-    countryCode === "PE" ? getStrategy("PE") : null;
+  const strategy = getStrategy(countryCode);
 
   const today = todayInCountry();
-  const { rows: periods } = await client.query(
+  const { rows: allPeriods } = await client.query(
     `SELECT * FROM vacation_periods
      WHERE user_id = $1
-       AND (
-         country_code = 'CL'
-         OR expires_at IS NULL
-         OR expires_at >= $2
-       )
      ORDER BY period_start ASC
      FOR UPDATE`,
-    [userId, today],
+    [userId],
   );
+  const periods = allPeriods.filter((p) => isPeriodClaimable(p, strategy, today));
 
   for (const p of periods) {
     if (remaining <= 0.001) break;
@@ -289,7 +464,7 @@ async function consumeDaysFifo(client, userId, days, countryCode) {
     let protectedDelta = 0;
     let flexibleDelta = 0;
 
-    if (strategy && p.country_code === "PE") {
+    if (countryCode === "PE" && p.country_code === "PE") {
       ({ protectedDelta, flexibleDelta } = strategy.allocateBlockDays(p, take));
       await client.query(
         `UPDATE vacation_periods
@@ -408,6 +583,315 @@ async function releaseDays(client, periodId, days, countryCode) {
   );
 }
 
+// ===========================================================================
+// Historial previo a la intranet
+// ===========================================================================
+
+/**
+ * Reparte N días ya gozados sobre una lista de períodos, FIFO.
+ *
+ * Función pura, sin base de datos: es el corazón del cálculo y lo que prueban
+ * los tests. No valida el art. 17 —son hechos ocurridos, muchos anteriores a
+ * la norma— y si el historial excede el derecho generado devuelve el exceso en
+ * `overflow` en vez de fallar: RR.HH. lo ve y decide.
+ */
+function allocateHistoricalFifo({ days, periods, strategy }) {
+  let remaining = round2(Number(days) || 0);
+  const allocations = [];
+
+  for (const p of periods) {
+    if (remaining <= 0.001) break;
+    const room =
+      effectiveEntitled(p) +
+      Number(p.adjusted_days || 0) -
+      Number(p.used_days || 0) -
+      periodHistoricalUsed(p);
+    if (room <= 0.001) continue;
+
+    const take = round2(Math.min(room, remaining));
+    let protectedDelta = 0;
+    let flexibleDelta = 0;
+    if (strategy && typeof strategy.allocateHistoricalBlockDays === "function") {
+      ({ protectedDelta, flexibleDelta } = strategy.allocateHistoricalBlockDays(
+        p,
+        take,
+      ));
+    }
+
+    allocations.push({
+      periodId: p.id,
+      days: take,
+      protectedDelta,
+      flexibleDelta,
+    });
+
+    // Estado en memoria para el siguiente registro del mismo lote.
+    p.historical_used_days = round2(periodHistoricalUsed(p) + take);
+    p.protected_block_days_used = round2(
+      Number(p.protected_block_days_used || 0) + protectedDelta,
+    );
+    p.flexible_block_days_used = round2(
+      Number(p.flexible_block_days_used || 0) + flexibleDelta,
+    );
+    remaining = round2(remaining - take);
+  }
+
+  return { allocations, overflow: round2(Math.max(0, remaining)) };
+}
+
+/** Orden cronológico del historial: año, mes (sin mes va primero) y alta. */
+function compareHistoryRecords(a, b) {
+  const ya = Number(a.period_year);
+  const yb = Number(b.period_year);
+  if (ya !== yb) return ya - yb;
+  const ma = Number(a.period_month || 0);
+  const mb = Number(b.period_month || 0);
+  if (ma !== mb) return ma - mb;
+  // Los registros aún sin guardar (vista previa) no tienen id: van al final.
+  const ia = a.id == null ? Number.POSITIVE_INFINITY : Number(a.id);
+  const ib = b.id == null ? Number.POSITIVE_INFINITY : Number(b.id);
+  return ia - ib;
+}
+
+/**
+ * Imputa desde cero un historial completo sobre los períodos, FIFO.
+ *
+ * Función pura: es exactamente lo que hace reimputeHistoricalDays antes de
+ * escribir, y lo que usa la vista previa de la carga por lotes. Así lo que
+ * RR.HH. ve antes de guardar es lo mismo que queda guardado.
+ *
+ * @param {object[]} periods   Filas de vacation_periods (no se mutan).
+ * @param {object[]} records   Registros de historial { id?, period_year, period_month, days_used }.
+ * @param {Map}      approvedBlocks  Bloques 15+15 ya consumidos por solicitudes (ver approvedBlocksByPeriod).
+ * @returns {{ periods: object[], results: Array<{record, allocations, overflow}>, overflow: number }}
+ */
+function simulateHistoryImputation({ periods, records, strategy, approvedBlocks = new Map() }) {
+  const working = [...periods]
+    .sort((a, b) => (toDateOnly(a.period_start) < toDateOnly(b.period_start) ? -1 : 1))
+    .map((p) => {
+      const approved = approvedBlocks.get(p.id) || { protectedDelta: 0, flexibleDelta: 0 };
+      return {
+        ...p,
+        historical_used_days: 0,
+        protected_block_days_used: approved.protectedDelta,
+        flexible_block_days_used: approved.flexibleDelta,
+      };
+    });
+
+  const results = [];
+  let overflow = 0;
+  for (const record of [...records].sort(compareHistoryRecords)) {
+    const out = allocateHistoricalFifo({
+      days: record.days_used,
+      periods: working,
+      strategy,
+    });
+    overflow = round2(overflow + out.overflow);
+    results.push({ record, allocations: out.allocations, overflow: out.overflow });
+  }
+  return { periods: working, results, overflow };
+}
+
+/**
+ * Saldo a una fecha, con la misma cuenta que la hoja "Agendas" del Excel de
+ * RR.HH.: derecho de los años cumplidos a esa fecha (más ajustes) menos todo
+ * lo gozado hasta ese mes. No reparte por período: sirve para conciliar con
+ * un saldo que RR.HH. anotó, no para decidir qué se puede pedir.
+ *
+ * Puede dar negativo (adelantos de vacaciones), igual que el Excel.
+ *
+ * @param {object[]} periods   Filas de vacation_periods.
+ * @param {object[]} history   Registros vivos de vacation_history.
+ * @param {object[]} requests  Solicitudes que consumen días: { start_date, calendar_days }.
+ * @param {string}   asOf      'YYYY-MM-DD'
+ */
+function balanceAt({ periods = [], history = [], requests = [], asOf }) {
+  const ref = toDateOnly(asOf);
+  if (!ref) return null;
+  const refYear = Number(ref.slice(0, 4));
+  const refMonth = Number(ref.slice(5, 7));
+
+  let generated = 0;
+  for (const p of periods) {
+    if (toDateOnly(p.period_end) < ref) {
+      generated += effectiveEntitled(p) + Number(p.adjusted_days || 0);
+    }
+  }
+
+  let used = 0;
+  for (const h of history) {
+    const y = Number(h.period_year);
+    const m = Number(h.period_month || 12);
+    if (y < refYear || (y === refYear && m <= refMonth)) used += Number(h.days_used);
+  }
+  for (const r of requests) {
+    if (toDateOnly(r.start_date) <= ref) {
+      used += Number(r.calendar_days ?? r.days ?? 0);
+    }
+  }
+  return round2(generated - used);
+}
+
+/**
+ * Reconstruye desde cero la imputación del historial de un colaborador.
+ *
+ * Pone historical_used_days (y la parte histórica de los bloques) en cero y
+ * vuelve a repartir FIFO todos los registros vivos de vacation_history, del
+ * más antiguo al más nuevo. Es determinista: el mismo historial siempre
+ * produce el mismo saldo, sin importar en qué orden se cargó ni cuántas veces
+ * se corrigió.
+ *
+ * Se llama al crear/editar/borrar historial, al cargar un lote, al realinear
+ * los períodos tras cambiar la fecha de ingreso y cuando ensureHistoryImputed()
+ * detecta que los números no cuadran. NO se llama en cada carga de página.
+ */
+async function reimputeHistoricalDays(userId, externalClient = null) {
+  const client = externalClient || (await db.getClient());
+  const ownClient = !externalClient;
+  try {
+    if (ownClient) await client.query("BEGIN");
+
+    const { rows: periodRows } = await client.query(
+      `SELECT * FROM vacation_periods
+       WHERE user_id = $1
+       ORDER BY period_start ASC
+       FOR UPDATE`,
+      [userId],
+    );
+
+    // Los bloques 15+15 guardan protegido/flexible de TODO el consumo. Se
+    // reconstruyen desde las imputaciones reales de las solicitudes vigentes y
+    // luego se les suma el historial, para no arrastrar repartos viejos.
+    const approvedBlocks = await approvedBlocksByPeriod(client, userId);
+
+    const { rows: records } = await client.query(
+      `SELECT id, period_year, period_month, days_used FROM vacation_history
+       WHERE user_id = $1 AND deleted_at IS NULL`,
+      [userId],
+    );
+
+    const strategy = getStrategy(resolveCountryForUser());
+    const simulation = simulateHistoryImputation({
+      periods: periodRows,
+      records,
+      strategy,
+      approvedBlocks,
+    });
+
+    for (const { record, allocations } of simulation.results) {
+      await client.query(
+        `UPDATE vacation_history SET period_allocations = $1::jsonb, updated_at = NOW()
+         WHERE id = $2`,
+        [JSON.stringify(allocations), record.id],
+      );
+    }
+
+    for (const p of simulation.periods) {
+      await client.query(
+        `UPDATE vacation_periods
+         SET historical_used_days = $1,
+             protected_block_days_used = $2,
+             flexible_block_days_used = $3,
+             updated_at = NOW()
+         WHERE id = $4`,
+        [
+          periodHistoricalUsed(p),
+          Number(p.protected_block_days_used || 0),
+          Number(p.flexible_block_days_used || 0),
+          p.id,
+        ],
+      );
+    }
+
+    if (ownClient) await client.query("COMMIT");
+    return { overflow: simulation.overflow, records: records.length };
+  } catch (err) {
+    if (ownClient) await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    if (ownClient) client.release();
+  }
+}
+
+/**
+ * Bloques protegido/flexible que consumió cada período por solicitudes de la
+ * intranet, leídos de las imputaciones exactas que guardó la aprobación.
+ *
+ * No se puede deducir de used_days: un tramo de 1–6 días va al bloque
+ * flexible y uno de 7–14 al protegido (art. 17), así que dos períodos con los
+ * mismos días usados pueden tener contadores muy distintos. Reconstruirlos "a
+ * ojo" le devolvería al colaborador días sueltos que ya gastó.
+ *
+ * Una solicitud aprobada sin period_allocations (anterior a esa columna) no
+ * aporta bloques: Perú todavía no tiene solicitudes en producción, así que hoy
+ * no hay ninguna en ese caso. Si apareciera, RR.HH. lo corrige con un ajuste.
+ *
+ * @returns {Map<number, {protectedDelta:number, flexibleDelta:number}>}
+ */
+async function approvedBlocksByPeriod(client, userId) {
+  const { rows } = await client.query(
+    `SELECT period_allocations FROM vacation_requests
+      WHERE user_id = $1
+        AND status = ANY($2)
+        AND period_allocations IS NOT NULL`,
+    [userId, ["approved", "in_progress", "completed"]],
+  );
+
+  const porPeriodo = new Map();
+  for (const row of rows) {
+    let allocations = row.period_allocations;
+    if (typeof allocations === "string") {
+      try {
+        allocations = JSON.parse(allocations);
+      } catch {
+        continue;
+      }
+    }
+    if (!Array.isArray(allocations)) continue;
+
+    for (const alloc of allocations) {
+      const periodId = alloc.periodId ?? alloc.period_id;
+      if (!periodId) continue;
+      const acc = porPeriodo.get(periodId) || {
+        protectedDelta: 0,
+        flexibleDelta: 0,
+      };
+      acc.protectedDelta = round2(
+        acc.protectedDelta + Number(alloc.protectedDelta ?? alloc.protected_delta ?? 0),
+      );
+      acc.flexibleDelta = round2(
+        acc.flexibleDelta + Number(alloc.flexibleDelta ?? alloc.flexible_delta ?? 0),
+      );
+      porPeriodo.set(periodId, acc);
+    }
+  }
+  return porPeriodo;
+}
+
+/**
+ * Comprueba barato que la imputación del historial esté al día y la rehace si
+ * no lo está (por ejemplo, tras un nuevo aniversario que amplía el derecho).
+ * Una consulta de dos SUM; solo reimputa cuando los números no cuadran.
+ */
+async function ensureHistoryImputed(userId) {
+  const { rows } = await db.query(
+    `SELECT
+       (SELECT COALESCE(SUM(days_used), 0) FROM vacation_history
+         WHERE user_id = $1 AND deleted_at IS NULL) AS history_total,
+       (SELECT COALESCE(SUM(historical_used_days), 0) FROM vacation_periods
+         WHERE user_id = $1) AS imputed_total`,
+    [userId],
+  );
+  const row = rows[0] || {};
+  const historyTotal = round2(row.history_total || 0);
+  const imputedTotal = round2(row.imputed_total || 0);
+  if (Math.abs(historyTotal - imputedTotal) <= 0.001) {
+    return { reimputed: false, historyTotal, imputedTotal };
+  }
+  const result = await reimputeHistoricalDays(userId);
+  return { reimputed: true, historyTotal, imputedTotal, ...result };
+}
+
 /** Aplica un ajuste manual de saldo + auditoría. */
 async function applyAdjustment({ periodId, adjustedBy, daysDelta, reason }) {
   const client = await db.getClient();
@@ -454,18 +938,28 @@ async function updatePeriodRecord({
 
 module.exports = {
   effectiveEntitled,
+  periodHistoricalUsed,
   periodAvailable,
   getUserVacationProfile,
   recalculatePeriods,
   listPeriods,
-  listActivePeriodsFifo,
+  listClaimablePeriodsFifo,
   getPrimaryPeriodForRequest,
   getAvailableBalance,
   detectAccumulationAlert,
+  summarizePeriods,
   getBalanceSummary,
   consumeDaysFifo,
   releaseAllocations,
   releaseDays,
+  allocateHistoricalFifo,
+  simulateHistoryImputation,
+  balanceAt,
+  approvedBlocksByPeriod,
+  expectedPeriodRanges,
+  planPeriodRealignment,
+  reimputeHistoricalDays,
+  ensureHistoryImputed,
   applyAdjustment,
   updatePeriodRecord,
 };

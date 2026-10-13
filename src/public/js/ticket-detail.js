@@ -79,7 +79,7 @@
           else if (file.type.startsWith('image/')) dbType = 'image';
           else if (file.type === 'application/pdf') dbType = 'pdf';
 
-          const resUp = await fetch('/sistemas/tickets/upload', { method: 'POST', body: formData });
+          const resUp = await fetch('/soporte/tickets/upload', { method: 'POST', body: formData });
           if (!resUp.ok) throw new Error('Fallo subida');
           const data = await resUp.json();
 

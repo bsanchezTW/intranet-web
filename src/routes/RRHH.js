@@ -15,6 +15,7 @@ const {
   enrichAreaWithPill,
   normalizeHex,
 } = require("../constants/workAreas");
+const { buildTree, chainFrom, descendantIds, wouldCreateCycle } = require("../services/workAreaTree");
 const { isFeatureEnabled } = require("../config/features");
 const costCenterService = require("../services/costCenters/costCenterService");
 
@@ -57,9 +58,11 @@ const {
   maskEmail,
 } = require("../utils/contactEmails");
 const balanceService = require("../services/vacations/vacationBalanceService");
+const profileService = require("../services/vacations/vacationProfileService");
 const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
 const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
 const { invalidateStaffAccess } = require("../services/access/staffAccess");
+const { isAreaManager, isAvailableApprover } = require("../services/expenses/areaManager");
 
 function parsePriorYearsCredited(value) {
   const n = Number(value);
@@ -114,10 +117,6 @@ function redirectPersonalEditarError(res, id, message) {
 }
 
 const storage = multer.memoryStorage();
-const uploadOrganigram = multer({
-  storage,
-  limits: { fileSize: UPLOAD_LIMITS_BYTES.ORGANIGRAM },
-});
 const uploadProfilePhoto = multer({
   storage,
   limits: { fileSize: UPLOAD_LIMITS_BYTES.PROFILE_PHOTO },
@@ -128,28 +127,6 @@ const uploadProfilePhoto = multer({
     return cb(null, true);
   },
 });
-
-// Variables globales
-let urlOrganigramaActual = null;
-let versionCache = Date.now();
-
-// Función Auxiliar
-async function getOrganigramaUrl() {
-  if (urlOrganigramaActual) return `${urlOrganigramaActual}?v=${versionCache}`;
-
-  try {
-    const files = await fileStorage.listFiles("organigrama");
-    if (files && files.length > 0) {
-      files.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      urlOrganigramaActual = files[0].secure_url;
-      return `${urlOrganigramaActual}?v=${versionCache}`;
-    }
-    return null;
-  } catch (err) {
-    console.error("Error buscando organigrama:", err);
-    return null;
-  }
-}
 
 function parseFechaNacimiento(fecha) {
   if (!fecha) return null;
@@ -244,15 +221,25 @@ function parseAreaColor(value) {
   return normalizeHex(value) || DEFAULT_COLOR;
 }
 
+/** Posición entre áreas hermanas: entero 1–999, o vacío (al final, por nombre). */
+function parseSortOrder(value) {
+  const n = parsePositiveInt(String(value ?? "").trim());
+  return n && n <= 999 ? n : null;
+}
+
+// Las áreas se editan dentro del organigrama: cada cambio vuelve a él en modo
+// edición, que es desde donde se hizo.
+const ORGANIGRAMA_EDICION = "/RRHH/organigrama?editar=1";
+
 function redirectAreasOk(res, msg) {
   return res.redirect(
-    `/RRHH/areas?ok=1&msg=${encodeURIComponent(msg)}`,
+    `${ORGANIGRAMA_EDICION}&ok=1&msg=${encodeURIComponent(msg)}`,
   );
 }
 
 function redirectAreasError(res, message) {
   return res.redirect(
-    `/RRHH/areas?error=${encodeURIComponent(message)}`,
+    `${ORGANIGRAMA_EDICION}&error=${encodeURIComponent(message)}`,
   );
 }
 
@@ -265,23 +252,6 @@ function isUniqueViolation(err) {
  * y ambos servicios lo cachean 60 s. Cualquier cambio de área o de membresía
  * tiene que invalidarlos o el permiso queda desfasado hasta un minuto.
  */
-/**
- * Deja sin jefe a cualquier área cuyo jefe ya no pertenezca a ella. Se llama
- * después de reasignar a alguien: una jefatura que apunta fuera del área es
- * exactamente el estado que impide aprobar con criterio.
- */
-async function limpiarJefaturaHuerfana(userId) {
-  await db.query(
-    `UPDATE work_areas w
-        SET manager_user_id = NULL
-       FROM users u
-      WHERE w.manager_user_id = $1
-        AND u.id = $1
-        AND (u.work_area_id IS NULL OR u.work_area_id <> w.id)`,
-    [userId],
-  );
-}
-
 function invalidarCachesDeArea() {
   invalidateFinanceTeam();
   invalidateSupportTeam();
@@ -290,28 +260,20 @@ function invalidarCachesDeArea() {
 
 /**
  * Valida al jefe propuesto para un área. Devuelve { ok, managerId } o
- * { ok: false, error }. Un jefe que no pertenece al área que dirige no puede
- * aprobar sus gastos con criterio, así que se exige la pertenencia.
+ * { ok: false, error }. No se exige que pertenezca al área: gerentes y
+ * administradores dirigen varias áreas desde la suya, y la jefatura no cambia
+ * cuando la persona cambia de área.
  */
-async function parseAreaManager(rawValue, areaId) {
+async function parseAreaManager(rawValue) {
   const raw = String(rawValue ?? "").trim();
   if (!raw) return { ok: true, managerId: null };
 
   const managerId = parsePositiveInt(raw);
   if (!managerId) return { ok: false, error: "Jefe de área inválido." };
 
-  const { rows } = await db.query(
-    "SELECT id, work_area_id FROM users WHERE id = $1",
-    [managerId],
-  );
+  const { rows } = await db.query("SELECT id FROM users WHERE id = $1", [managerId]);
   if (!rows.length) {
     return { ok: false, error: "El colaborador elegido como jefe no existe." };
-  }
-  if (Number(rows[0].work_area_id) !== Number(areaId)) {
-    return {
-      ok: false,
-      error: "El jefe de área debe pertenecer al área que dirige.",
-    };
   }
   return { ok: true, managerId };
 }
@@ -853,7 +815,7 @@ router.post(
       }
 
       const { rows: prev } = await db.query(
-        "SELECT photo AS foto, password_hash, email_confirmed, role, email FROM users WHERE id = $1",
+        "SELECT photo AS foto, password_hash, email_confirmed, role, email, hire_date, national_id FROM users WHERE id = $1",
         [id],
       );
       if (!prev.length) {
@@ -943,6 +905,23 @@ router.post(
         `UPDATE users SET ${setClauses.join(", ")} WHERE id=$${values.length}`,
         values,
       );
+
+      // La fecha de ingreso y el documento mueven el cálculo de vacaciones:
+      // el cambio queda en la bitácora de la ficha de vacaciones.
+      if (isFeatureEnabled("vacations")) {
+        profileService
+          .auditProfileChange(db, {
+            userId: id,
+            actorId: req.session.user?.id,
+            before: profileService.profileSnapshot(prevUser),
+            after: profileService.profileSnapshot({
+              hire_date: hireVal,
+              national_id: documentoVal,
+            }),
+            reason: "Editado desde Personal",
+          })
+          .catch((e) => console.error("[Vacaciones] bitácora al editar:", e.message));
+      }
 
       // La ficha muestra el conjunto completo de centros activos, así que lo
       // que venga marcado es el estado final; sin casillas, ninguno.
@@ -1089,168 +1068,211 @@ router.post("/eliminar/:id", requireRrhhManager(), async (req, res) => {
   }
 });
 
-// ==========================================
-// RUTAS DE ORGANIGRAMA
-// ==========================================
+/**
+ * Áreas con sus miembros, más el árbol del organigrama.
+ *
+ * Cada área sin jefe propio trae a quién se le escalan sus solicitudes
+ * (inheritedManagerName): es lo que decide si su gente puede pedir fondos o
+ * vacaciones, y conviene verlo en el nodo y no descubrirlo al solicitar.
+ */
+async function cargarOrganigrama() {
+  const [areasResult, peopleResult] = await Promise.all([
+    db.query(
+      `SELECT w.id, w.area_name, w.color, w.manager_user_id, w.parent_area_id, w.sort_order,
+              m.first_name AS manager_first_name,
+              m.last_name  AS manager_last_name,
+              m.photo      AS manager_photo,
+              m.work_area_id AS manager_work_area_id,
+              m.role AS manager_role,
+              m.is_intranet_user AS manager_is_intranet_user
+       FROM work_areas w
+       LEFT JOIN users m ON m.id = w.manager_user_id
+       ORDER BY w.area_name ASC`,
+    ),
+    db.query(
+      `SELECT u.id, u.first_name, u.last_name, u.photo, u.work_area_id,
+              u.role, u.is_intranet_user,
+              at.area_name, at.color AS area_color
+       FROM users u
+       LEFT JOIN work_areas at ON at.id = u.work_area_id
+       ORDER BY u.last_name ASC NULLS LAST, u.first_name ASC`,
+    ),
+  ]);
 
-router.get("/organigrama", async (req, res) => {
-  const organigramaUrl = await getOrganigramaUrl();
-  res.render("RRHH/organigrama", {
-    titulo: "Organigrama",
-    organigramaUrl,
-    user: req.session.user,
+  const people = peopleResult.rows.map((row) => ({
+    ...formatAreaMember(row),
+    disponible: isAvailableApprover(row),
+  }));
+  const peopleByArea = new Map();
+  const unassigned = [];
+  for (const person of people) {
+    const areaId = person.work_area_id ? Number(person.work_area_id) : null;
+    if (areaId) {
+      const list = peopleByArea.get(areaId) || [];
+      list.push(person);
+      peopleByArea.set(areaId, list);
+    } else {
+      unassigned.push(person);
+    }
+  }
+
+  const areas = areasResult.rows.map((area) => {
+    const members = peopleByArea.get(Number(area.id)) || [];
+    const managerName = [area.manager_first_name, area.manager_last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return {
+      ...enrichAreaWithPill(area),
+      members,
+      memberCount: members.length,
+      managerName: managerName || null,
+      managerAvailable: area.manager_user_id
+        ? isAvailableApprover({ role: area.manager_role, is_intranet_user: area.manager_is_intranet_user })
+        : null,
+    };
   });
-});
 
-router.post(
-  "/organigrama/subir",
-  requireRole.administrador(),
-  uploadOrganigram.single("organigrama"),
-  async (req, res) => {
-    if (!req.file) return res.status(400).send("No se subió archivo.");
-
-    try {
-      await fileStorage.deleteFolder("organigrama");
-
-      const result = await fileStorage.saveFile(
-        req.file.buffer,
-        "organigrama",
-        req.file.originalname,
-      );
-
-      urlOrganigramaActual = result.secure_url;
-      versionCache = Date.now();
-
-      if (req.session.user && req.session.user.id) {
-        await db.query(
-          "INSERT INTO change_log (user_id, action, section, link_path) VALUES ($1, $2, $3, $4)",
-          [
-            req.session.user.id,
-            "actualizó",
-            "Organigrama",
-            "/RRHH/organigrama",
-          ],
-        );
-      }
-
-      res.redirect("/RRHH/organigrama");
-    } catch (err) {
-      console.error("Error en subida de organigrama:", err);
-      res.status(500).send("Error subiendo archivo.");
+  const porId = new Map(areas.map((a) => [Number(a.id), a]));
+  const personaPorId = new Map(people.map((p) => [Number(p.id), p]));
+  const areasPorJefe = new Map();
+  for (const area of areas) {
+    if (!area.manager_user_id) continue;
+    const clave = Number(area.manager_user_id);
+    areasPorJefe.set(clave, (areasPorJefe.get(clave) || []).concat(area.area_name));
+  }
+  for (const area of areas) {
+    const padre = area.parent_area_id ? porId.get(Number(area.parent_area_id)) : null;
+    area.parentName = padre ? padre.area_name : null;
+    // Un gerente puede dirigir áreas en las que no trabaja: el nodo dice desde
+    // dónde viene y qué más dirige, para que no parezca un error de datos.
+    area.managerOtherAreas = area.manager_user_id
+      ? (areasPorJefe.get(Number(area.manager_user_id)) || []).filter((n) => n !== area.area_name)
+      : [];
+    area.managerHomeArea = null;
+    if (area.manager_user_id && Number(area.manager_work_area_id) !== Number(area.id)) {
+      const casa = porId.get(Number(area.manager_work_area_id));
+      area.managerHomeArea = casa ? casa.area_name : "Sin área";
     }
-  },
-);
-
-router.post(
-  "/organigrama/eliminar",
-  requireRole.administrador(),
-  async (req, res) => {
-    try {
-      await fileStorage.deleteFolder("organigrama");
-      urlOrganigramaActual = null;
-      res.redirect("/RRHH/organigrama");
-    } catch (e) {
-      console.error("Error eliminando:", e);
-      res.status(500).send("Error al eliminar.");
-    }
-  },
-);
-
-// ==========================================
-// ÁREAS DE TRABAJO
-// ==========================================
-
-router.get("/areas", requireRrhhManager(), async (req, res) => {
-  try {
-    const [areasResult, peopleResult] = await Promise.all([
-      db.query(
-        `SELECT w.id, w.area_name, w.color, w.manager_user_id,
-                m.first_name AS manager_first_name,
-                m.last_name  AS manager_last_name
-         FROM work_areas w
-         LEFT JOIN users m ON m.id = w.manager_user_id
-         ORDER BY w.area_name ASC`,
-      ),
-      db.query(
-        `SELECT u.id, u.first_name, u.last_name, u.photo, u.work_area_id,
-                at.area_name, at.color AS area_color
-         FROM users u
-         LEFT JOIN work_areas at ON at.id = u.work_area_id
-         ORDER BY u.last_name ASC NULLS LAST, u.first_name ASC`,
-      ),
-    ]);
-
-    const people = peopleResult.rows.map((row) => formatAreaMember(row));
-    const peopleByArea = new Map();
-    const unassigned = [];
-    for (const person of people) {
-      const areaId = person.work_area_id ? Number(person.work_area_id) : null;
-      if (areaId) {
-        const list = peopleByArea.get(areaId) || [];
-        list.push(person);
-        peopleByArea.set(areaId, list);
-      } else {
-        unassigned.push(person);
-      }
-    }
-
-    const areas = areasResult.rows.map((area) => {
-      const members = peopleByArea.get(Number(area.id)) || [];
-      const managerName = [area.manager_first_name, area.manager_last_name]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
-      return {
-        ...enrichAreaWithPill(area),
-        members,
-        memberCount: members.length,
-        managerName: managerName || null,
-      };
-    });
-
-    const successMsg =
-      req.query.ok === "1"
-        ? decodeURIComponent(req.query.msg || "Operación exitosa")
-        : null;
-    const errorMsg = req.query.error
-      ? decodeURIComponent(req.query.error)
+    // Quien aprueba, para pintar su foto o monograma en el nodo: el jefe
+    // propio o, si no hay, el del área superior al que se escala.
+    area.approverPerson = area.manager_user_id
+      ? personaPorId.get(Number(area.manager_user_id)) || null
       : null;
+    area.inheritedManagerName = null;
+    area.inheritedFromName = null;
+    area.inheritedManagerAvailable = null;
+    if (!area.manager_user_id) {
+      const superior = chainFrom(areas, area.id)
+        .slice(1)
+        .find((a) => a.manager_user_id);
+      if (superior) {
+        area.inheritedManagerName = superior.managerName;
+        area.inheritedFromName = superior.area_name;
+        area.inheritedManagerAvailable = superior.managerAvailable;
+        area.approverPerson = personaPorId.get(Number(superior.manager_user_id)) || null;
+      }
+    }
+    // El aprobador existe pero no puede iniciar sesión: su gente no puede
+    // enviar solicitudes hasta que RRHH habilite la cuenta o cambie el jefe.
+    area.approverUnavailable = area.manager_user_id
+      ? area.managerAvailable === false
+      : area.inheritedManagerAvailable === false;
+  }
 
-    res.render("RRHH/areas", {
-      titulo: "Áreas de trabajo",
+  return { areas, arbol: buildTree(areas), people, unassigned };
+}
+
+// ==========================================
+// ORGANIGRAMA Y ÁREAS DE TRABAJO
+// ==========================================
+
+// Una sola pantalla: todos leen el organigrama y quien gestiona RRHH lo edita
+// ahí mismo con ?editar=1 (áreas, jefes, dependencias y colaboradores).
+router.get("/organigrama", async (req, res) => {
+  try {
+    const { areas, arbol, people, unassigned } = await cargarOrganigrama();
+    const editando =
+      Boolean(res.locals.canManageRrhh) && req.query.editar === "1";
+
+    res.render("RRHH/organigrama", {
+      titulo: "Organigrama",
       areas,
+      arbol,
       people,
       unassigned,
+      editando,
       colorPalette: COLOR_PALETTE,
       defaultColor: DEFAULT_COLOR,
       user: req.session.user,
-      success: successMsg,
-      error: errorMsg,
+      success:
+        req.query.ok === "1"
+          ? String(req.query.msg || "Operación exitosa")
+          : null,
+      error: req.query.error ? String(req.query.error) : null,
     });
   } catch (err) {
-    console.error("Error consultando áreas:", err);
-    res.status(500).send("Error consultando áreas");
+    console.error("Error cargando organigrama:", err);
+    res.status(500).send("Error cargando el organigrama");
   }
 });
+
+// La pantalla de Áreas se fundió con el organigrama: los enlaces y marcadores
+// viejos caen en su modo edición (que sólo se activa para quien gestiona RRHH).
+router.get("/areas", (req, res) => res.redirect(ORGANIGRAMA_EDICION));
+
+/**
+ * Valida el área de la que depende `areaId` (null al crear). Devuelve
+ * { ok, parentId } o { ok: false, error }. Colgar un área de sí misma o de una
+ * de sus hijas cerraría un ciclo y dejaría a esa rama sin raíz ni aprobador.
+ */
+async function parseParentArea(rawValue, areaId = null) {
+  const raw = String(rawValue ?? "").trim();
+  if (!raw) return { ok: true, parentId: null };
+
+  const parentId = parsePositiveInt(raw);
+  if (!parentId) return { ok: false, error: "Área superior inválida." };
+
+  const { rows } = await db.query("SELECT id, parent_area_id FROM work_areas");
+  if (!rows.some((r) => Number(r.id) === parentId)) {
+    return { ok: false, error: "El área superior elegida no existe." };
+  }
+  if (areaId != null && wouldCreateCycle(rows, areaId, parentId)) {
+    return {
+      ok: false,
+      error: "Un área no puede depender de sí misma ni de una de sus áreas dependientes.",
+    };
+  }
+  return { ok: true, parentId };
+}
 
 router.post("/areas", requireRrhhManager(), async (req, res) => {
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
+  const sortOrder = parseSortOrder(req.body.sort_order);
   if (!areaName) {
     return redirectAreasError(res, "El nombre del área es obligatorio.");
   }
 
   try {
+    const parent = await parseParentArea(req.body.parent_area_id);
+    if (!parent.ok) return redirectAreasError(res, parent.error);
+    const manager = await parseAreaManager(req.body.manager_user_id);
+    if (!manager.ok) return redirectAreasError(res, manager.error);
+
     // queryRetryIdCollision y no query: work_areas usa un id aleatorio de 4
     // dígitos y dos altas simultáneas pueden recibir el mismo candidato.
     await db.queryRetryIdCollision(
-      "INSERT INTO work_areas (area_name, color) VALUES ($1, $2)",
-      [areaName, color],
+      `INSERT INTO work_areas (area_name, color, parent_area_id, manager_user_id, sort_order)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [areaName, color, parent.parentId, manager.managerId, sortOrder],
     );
-    // El área nace sin jefe: todavía no tiene miembros entre los cuales elegirlo.
+    invalidarCachesDeArea();
     return redirectAreasOk(
       res,
-      "Área creada. Asígnale colaboradores y luego designa a su jefe.",
+      manager.managerId
+        ? "Área creada. Ahora asígnale colaboradores."
+        : "Área creada. Asígnale colaboradores y designa a su jefe.",
     );
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -1265,6 +1287,7 @@ router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
   const areaId = parsePositiveInt(req.params.id);
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
+  const sortOrder = parseSortOrder(req.body.sort_order);
   if (!areaId) {
     return redirectAreasError(res, "Área inválida.");
   }
@@ -1273,17 +1296,45 @@ router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
   }
 
   try {
-    const manager = await parseAreaManager(req.body.manager_user_id, areaId);
+    const manager = await parseAreaManager(req.body.manager_user_id);
     if (!manager.ok) return redirectAreasError(res, manager.error);
+    const parent = await parseParentArea(req.body.parent_area_id, areaId);
+    if (!parent.ok) return redirectAreasError(res, parent.error);
 
-    const { rowCount } = await db.query(
-      `UPDATE work_areas
-          SET area_name = $1, color = $2, manager_user_id = $3
-        WHERE id = $4`,
-      [areaName, color, manager.managerId, areaId],
-    );
-    if (!rowCount) {
+    const { rows: todas } = await db.query("SELECT id, parent_area_id, color FROM work_areas");
+    const previa = todas.find((a) => Number(a.id) === areaId);
+    if (!previa) {
       return redirectAreasError(res, "El área no existe.");
+    }
+
+    // Las sub-áreas heredan el color: las que compartían el anterior siguen al
+    // nuevo. Una que RRHH pintó distinto conserva el suyo.
+    const colorAnterior = normalizeHex(previa.color);
+    const herederas = colorAnterior && colorAnterior !== color
+      ? [...descendantIds(todas, areaId)].filter((id) => {
+          const hija = todas.find((a) => Number(a.id) === id);
+          return hija && normalizeHex(hija.color) === colorAnterior;
+        })
+      : [];
+
+    const client = await db.getClient();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE work_areas
+            SET area_name = $1, color = $2, manager_user_id = $3, parent_area_id = $4, sort_order = $5
+          WHERE id = $6`,
+        [areaName, color, manager.managerId, parent.parentId, sortOrder, areaId],
+      );
+      if (herederas.length) {
+        await client.query("UPDATE work_areas SET color = $1 WHERE id = ANY($2::int[])", [color, herederas]);
+      }
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
     }
     invalidarCachesDeArea();
     if (Number(req.session.user?.work_area_id) === areaId) {
@@ -1317,6 +1368,16 @@ router.post(
         return redirectAreasError(
           res,
           "No se puede eliminar un área con colaboradores. Muévelos primero.",
+        );
+      }
+      const { rows: hijas } = await db.query(
+        "SELECT COUNT(*)::int AS n FROM work_areas WHERE parent_area_id = $1",
+        [areaId],
+      );
+      if (hijas[0].n > 0) {
+        return redirectAreasError(
+          res,
+          "No se puede eliminar un área de la que dependen otras. Primero cuélgalas de otra área superior.",
         );
       }
 
@@ -1396,10 +1457,6 @@ router.post(
         "UPDATE users SET work_area_id = $1 WHERE id = ANY($2::int[])",
         [areaId, userIds],
       );
-      // Quien venía de otra área y allí era jefe deja esa jefatura vacante.
-      for (const userId of userIds) {
-        await limpiarJefaturaHuerfana(userId);
-      }
       invalidarCachesDeArea();
       await refreshSessionIdentity(req, req.session.user?.id);
       return redirectAreasOk(
@@ -1426,41 +1483,23 @@ router.post(
     }
 
     try {
-      const client = await db.getClient();
-      let eraJefe = false;
-      try {
-        await client.query("BEGIN");
-        const { rowCount } = await client.query(
-          `UPDATE users
-           SET work_area_id = NULL
-           WHERE id = $1 AND work_area_id = $2`,
-          [userId, areaId],
-        );
-        if (!rowCount) {
-          await client.query("ROLLBACK");
-          return redirectAreasError(res, "Colaborador no encontrado en esta área.");
-        }
-        // En la misma transacción: quien sale del área no puede seguir siendo
-        // su jefe, y dejar la FK apuntando fuera bloquearía las aprobaciones.
-        const { rowCount: jefaturas } = await client.query(
-          "UPDATE work_areas SET manager_user_id = NULL WHERE id = $1 AND manager_user_id = $2",
-          [areaId, userId],
-        );
-        eraJefe = jefaturas > 0;
-        await client.query("COMMIT");
-      } catch (err) {
-        await client.query("ROLLBACK").catch(() => {});
-        throw err;
-      } finally {
-        client.release();
+      const { rowCount } = await db.query(
+        `UPDATE users
+         SET work_area_id = NULL
+         WHERE id = $1 AND work_area_id = $2`,
+        [userId, areaId],
+      );
+      if (!rowCount) {
+        return redirectAreasError(res, "Colaborador no encontrado en esta área.");
       }
 
       invalidarCachesDeArea();
       await refreshSessionIdentity(req, userId);
+      const sigueJefe = await isAreaManager({ id: userId });
       return redirectAreasOk(
         res,
-        eraJefe
-          ? "Colaborador quitado del área. El área quedó sin jefe: designa uno para que su gente pueda rendir gastos."
+        sigueJefe
+          ? "Colaborador quitado del área. Sigue siendo jefe de las áreas que dirige: cámbialo al editar cada área."
           : "Colaborador quitado del área.",
       );
     } catch (err) {
@@ -1505,36 +1544,14 @@ router.post(
         return redirectAreasError(res, "Colaborador no encontrado en esta área.");
       }
 
-      const client = await db.getClient();
-      let eraJefe = false;
-      try {
-        await client.query("BEGIN");
-        await client.query("UPDATE users SET work_area_id = $1 WHERE id = $2", [
-          targetAreaId,
-          userId,
-        ]);
-        const { rowCount: jefaturas } = await client.query(
-          "UPDATE work_areas SET manager_user_id = NULL WHERE id = $1 AND manager_user_id = $2",
-          [areaId, userId],
-        );
-        eraJefe = jefaturas > 0;
-        await client.query("COMMIT");
-      } catch (err) {
-        await client.query("ROLLBACK").catch(() => {});
-        throw err;
-      } finally {
-        client.release();
-      }
+      await db.query("UPDATE users SET work_area_id = $1 WHERE id = $2", [
+        targetAreaId,
+        userId,
+      ]);
 
       invalidarCachesDeArea();
       await refreshSessionIdentity(req, userId);
       const destName = targetResult.rows[0].area_name;
-      if (eraJefe) {
-        return redirectAreasOk(
-          res,
-          `Colaborador movido a «${destName}». Su área anterior quedó sin jefe: designa uno.`,
-        );
-      }
       return redirectAreasOk(
         res,
         destName
@@ -1559,7 +1576,8 @@ router.get("/vacaciones/feriados", (req, res) => res.redirect(301, "/RRHH/feriad
 const vacationsRouter = require("./vacations");
 router.use("/vacaciones", requireFeature("vacations"), vacationsRouter);
 
+// Centros de costo sólo donde existen (hoy, Chile).
 const costCentersRouter = require("./costCenters");
-router.use("/centros-costo", requireRrhhManager(), costCentersRouter);
+router.use("/centros-costo", requireFeature("expenseCenter"), requireRrhhManager(), costCentersRouter);
 
 module.exports = router;

@@ -52,26 +52,27 @@ describe("config/features — capacidades por país", () => {
     });
   });
 
-  it("Perú no incluye LinkedIn, UF, menú, tickets, accesos del home ni portales RRHH chilenos", () => {
+  it("Perú no incluye LinkedIn, UF, menú, tickets ni portales RRHH chilenos", () => {
     withCountry("PE", () => {
       assert.equal(isFeatureEnabled("linkedinFeed"), false);
       assert.equal(isFeatureEnabled("chileUfIndicator"), false);
       assert.equal(isFeatureEnabled("lunchMenu"), false);
       assert.equal(isFeatureEnabled("claudeAssistant"), true);
       assert.equal(isFeatureEnabled("supportTickets"), false);
-      assert.equal(isFeatureEnabled("homeQuickAccess"), false);
+      assert.equal(isFeatureEnabled("homeQuickAccess"), true);
       assert.equal(isFeatureEnabled("chileHrPortals"), false);
     });
   });
 
-  it("Vacaciones y rendiciones siguen ocultas en ambos países en producción", () => {
+  it("Vacaciones y la barra del home existen en Perú; las rendiciones sólo en Chile", () => {
     withCountry("CL", () => {
       assert.equal(isFeatureEnabled("vacations"), false);
-      assert.equal(isFeatureEnabled("expenseRequests"), false);
+      assert.equal(isFeatureEnabled("expenseRequests"), true);
     });
     withCountry("PE", () => {
-      assert.equal(isFeatureEnabled("vacations"), false);
+      assert.equal(isFeatureEnabled("vacations"), true);
       assert.equal(isFeatureEnabled("expenseRequests"), false);
+      assert.equal(isFeatureEnabled("homeQuickAccess"), true);
     });
   });
 });

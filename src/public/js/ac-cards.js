@@ -1,5 +1,5 @@
 /**
- * Tarjetas de agrupación (Áreas de trabajo y Centros de costo).
+ * Tarjetas de agrupación (áreas del Organigrama y Centros de costo).
  *
  * Las dos pantallas comparten el mismo problema: un grupo con cuarenta
  * personas hacía una tarjeta diez veces más alta que la de al lado. La
@@ -8,7 +8,7 @@
  * tarjetas miden lo mismo y abrir una no deja aire bajo las demás.
  *
  * Todo lo que cambia entre una vista y otra viaja en el JSON #ac-config, así
- * que este archivo no sabe si está en Áreas o en Centros de costo.
+ * que este archivo no sabe si está en el Organigrama o en Centros de costo.
  */
 (function () {
   "use strict";
@@ -224,7 +224,7 @@
       var acciones = document.createElement("div");
       acciones.className = "ac-lista__acciones";
 
-      // Mover de grupo: sólo Áreas lo ofrece, y lo resuelve su propio modal.
+      // Mover de grupo: sólo el Organigrama lo ofrece, y lo resuelve su propio modal.
       if (config.permiteMover) {
         var mover = document.createElement("button");
         mover.type = "button";
@@ -477,7 +477,7 @@
         evento.preventDefault();
         return;
       }
-      // Agregar a alguien que ya está en otro grupo lo mueve; en Áreas eso le
+      // Agregar a alguien que ya está en otro grupo lo mueve; en el Organigrama eso le
       // cambia quién le aprueba los gastos, así que se avisa antes.
       var mueven = marcados.filter(function (c) {
         return c.dataset.mueve === "true";

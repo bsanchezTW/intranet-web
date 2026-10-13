@@ -3,24 +3,41 @@ const router = express.Router();
 const db = require("../db");
 const requireRole = require("../middlewares/requireRole");
 const requireRrhhManager = require("../middlewares/requireRrhhManager");
+const { canManageRrhh } = require("../services/access/staffAccess");
+const areaManager = require("../services/expenses/areaManager");
 const {
   getStrategy,
   resolveCountryForUser,
 } = require("../services/vacations/VacationEngine");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const requestService = require("../services/vacations/vacationRequestService");
+const historyService = require("../services/vacations/vacationHistoryService");
+const referenceService = require("../services/vacations/vacationReferenceService");
+const profileService = require("../services/vacations/vacationProfileService");
+const settingsService = require("../services/vacations/vacationSettingsService");
+const reportService = require("../services/vacations/vacationReportService");
 const notificationService = require("../services/vacations/vacationNotificationService");
+const { excelFileName, sendWorkbook } = require("../services/exports/excelWorkbook");
 const {
   mapVacationRequestForView,
   mapVacationPeriodForView,
+  mapVacationHistoryForView,
+  mapHistoryAuditForView,
 } = require("../utils/schemaMappers");
+const { nationalIdClientConfig } = require("../utils/nationalId");
 const { countryLabel } = require("../constants/vacationStatuses");
 const { VACATION_MESSAGES } = require("../constants/vacationMessages");
+const { MONTH_NAMES } = require("../constants/vacationHistory");
 const {
   toDateOnly,
   addDays,
+  parseDateOnly,
+  eachDay,
+  formatDisplay,
   todayInCountry,
+  zonedDateOnly,
 } = require("../utils/vacationDateUtils");
+const { getTimezone } = require("../config/country");
 
 // ---------- helpers de redirect con flash ----------
 function redirectOk(res, path, msg) {
@@ -46,6 +63,15 @@ async function logChange(req, action, linkPath) {
   } catch (err) {
     console.error("[Vacaciones] Error en change_log:", err.message);
   }
+}
+
+/** Último aviso de días vencidos, listo para la vista ("28-09-2026 · Patricia"). */
+function reminderForView(row) {
+  if (!row) return null;
+  return {
+    dateFmt: formatDisplay(zonedDateOnly(row.created_at, getTimezone())),
+    actorName: [row.actor_first_name, row.actor_last_name].filter(Boolean).join(" ") || null,
+  };
 }
 
 async function getAreas() {
@@ -75,6 +101,9 @@ router.get("/mis-vacaciones", requireRole.intranetActivo(), async (req, res) => 
     const profile = await balanceService.getUserVacationProfile(userId);
     if (profile && profile.hire_date) {
       await balanceService.recalculatePeriods(userId);
+      // Mantiene al día el historial previo a la intranet (dos SUM; solo
+      // reimputa cuando dejó de cuadrar, p. ej. tras un aniversario).
+      await balanceService.ensureHistoryImputed(userId);
     }
 
     const [summary, periods, requests] = await Promise.all([
@@ -98,6 +127,9 @@ router.get("/mis-vacaciones", requireRole.intranetActivo(), async (req, res) => 
       dayUnit: strategy.getDayUnit(),
       dayUnitLabel: strategy.getDayUnit() === "business" ? "días hábiles" : "días calendario",
       hasHireDate: Boolean(profile?.hire_date),
+      nextAccrualFmt: summary.nextAccrualDate
+        ? formatDisplay(summary.nextAccrualDate)
+        : null,
       ...readFlash(req),
     });
   } catch (err) {
@@ -134,6 +166,11 @@ router.post("/mis-vacaciones/solicitar", requireRole.intranetActivo(), async (re
       request: result.request,
       user: profile,
       accumulationAlert: Boolean(result.accumulationAlert),
+    });
+    notificationService.notifyApprover({
+      request: result.request,
+      user: profile,
+      approver: result.approver,
     });
 
     return redirectOk(
@@ -192,28 +229,176 @@ router.get("/gestion", requireRrhhManager(), async (req, res) => {
   }
 });
 
+// ==========================================================
+// RESUMEN CONSOLIDADO Y EXPORTACIONES (ADMIN)
+// ==========================================================
+// Ojo con el orden: estas rutas tienen que declararse ANTES de
+// /gestion/:userId, si no "resumen" y "historial" se interpretan como el id
+// de un colaborador.
+
+const RESUMEN_PATH = "/RRHH/vacaciones/gestion/resumen";
+
+router.get("/gestion/resumen", requireRrhhManager(), async (req, res) => {
+  try {
+    const search = req.query.q || "";
+    const [report, settings] = await Promise.all([
+      reportService.buildTeamReport({ search }),
+      settingsService.getSettings(),
+    ]);
+    const reminders = await historyService.lastRemindersByUser(report.rows.map((r) => r.id));
+
+    res.render("RRHH/vacaciones/resumen", {
+      titulo: "Resumen de vacaciones",
+      user: req.session.user,
+      rows: report.rows.map((r) => ({ ...r, lastReminder: reminderForView(reminders.get(r.id)) })),
+      totals: report.totals,
+      referenceDateFmt: formatDisplay(report.referenceDate),
+      cutoffDate: settings.historyCutoffDate,
+      cutoffDateFmt: settings.historyCutoffDate
+        ? formatDisplay(settings.historyCutoffDate)
+        : null,
+      search,
+      ...readFlash(req),
+    });
+  } catch (err) {
+    console.error("Error en resumen de vacaciones:", err);
+    res.status(500).send(VACATION_MESSAGES.loadReportFailed);
+  }
+});
+
+router.get("/gestion/resumen/exportar", requireRrhhManager(), async (req, res) => {
+  try {
+    const buffer = await reportService.exportTeamReport();
+    await logChange(req, "exportó el resumen de vacaciones", RESUMEN_PATH);
+    return sendWorkbook(res, buffer, excelFileName("vacaciones-resumen"));
+  } catch (err) {
+    console.error("Error exportando resumen:", err);
+    return redirectErr(res, RESUMEN_PATH, VACATION_MESSAGES.exportFailed);
+  }
+});
+
+router.get("/gestion/exportar", requireRrhhManager(), async (req, res) => {
+  try {
+    const buffer = await reportService.exportRequests({
+      workAreaId: req.query.area || null,
+      status: req.query.status || null,
+    });
+    await logChange(req, "exportó el historial de solicitudes", "/RRHH/vacaciones/gestion");
+    return sendWorkbook(res, buffer, excelFileName("vacaciones-solicitudes"));
+  } catch (err) {
+    console.error("Error exportando solicitudes:", err);
+    return redirectErr(res, "/RRHH/vacaciones/gestion", VACATION_MESSAGES.exportFailed);
+  }
+});
+
+router.get("/gestion/historial/exportar", requireRrhhManager(), async (req, res) => {
+  try {
+    const buffer = await reportService.exportHistory();
+    await logChange(req, "exportó el historial de vacaciones", RESUMEN_PATH);
+    return sendWorkbook(res, buffer, excelFileName("vacaciones-historial"));
+  } catch (err) {
+    console.error("Error exportando historial:", err);
+    return redirectErr(res, RESUMEN_PATH, VACATION_MESSAGES.exportFailed);
+  }
+});
+
+router.post("/gestion/corte", requireRrhhManager(), async (req, res) => {
+  const backTo = RESUMEN_PATH;
+  try {
+    const result = await settingsService.setCutoffDate({
+      cutoffDate: req.body.cutoff_date,
+      updatedBy: req.session.user.id,
+    });
+    if (!result.ok) return redirectErr(res, backTo, VACATION_MESSAGES.cutoffInvalid);
+    await logChange(req, "actualizó la fecha de corte del historial", backTo);
+    return redirectOk(res, backTo, VACATION_MESSAGES.cutoffSaved);
+  } catch (err) {
+    console.error("Error guardando fecha de corte:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.cutoffFailed);
+  }
+});
+
 router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
   const { userId } = req.params;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
     if (!profile) return res.status(404).send(VACATION_MESSAGES.collaboratorNotFound);
-    if (profile.hire_date) await balanceService.recalculatePeriods(userId);
+    let periodsBlocked = false;
+    if (profile.hire_date) {
+      const recalc = await balanceService.recalculatePeriods(userId);
+      periodsBlocked = recalc.blocked.length > 0;
+      await balanceService.ensureHistoryImputed(userId);
+    }
 
-    const [summary, periods, requests] = await Promise.all([
-      balanceService.getBalanceSummary(userId),
-      balanceService.listPeriods(userId),
-      requestService.listForUser(userId),
-    ]);
+    const [summary, periods, requests, history, historyAudit, settings, references, consuming, reminders] =
+      await Promise.all([
+        balanceService.getBalanceSummary(userId),
+        balanceService.listPeriods(userId),
+        requestService.listForUser(userId),
+        historyService.listForUser(userId),
+        historyService.listAudit(userId, 50),
+        settingsService.getSettings(),
+        referenceService.listForUser(userId),
+        referenceService.consumingRequestsByUser([Number(userId)]),
+        historyService.lastRemindersByUser([Number(userId)]),
+      ]);
 
     const country = resolveCountryForUser(profile);
+    const today = todayInCountry();
+
+    // Días del historial que no caben en ningún período devengado. La
+    // imputación FIFO llena hasta donde hay derecho; sin esto, cargar de más
+    // deja el saldo en cero y el sobrante desaparece sin avisar.
+    const historyTotalDays =
+      Math.round(history.reduce((sum, h) => sum + Number(h.days_used), 0) * 100) / 100;
+    const unimputedDays =
+      Math.round((historyTotalDays - summary.historicalUsedDays) * 100) / 100;
+
+    const periodViews = periods.map(mapVacationPeriodForView);
+    const periodLabels = new Map(periodViews.map((p) => [p.id, p.periodLabel]));
+    const requestsForBalance = consuming.get(Number(userId)) || [];
+    const referenceViews = references.map((r) => ({
+      ...r,
+      asOfFmt: formatDisplay(r.as_of_date),
+      createdByName:
+        [r.created_by_first_name, r.created_by_last_name].filter(Boolean).join(" ") || null,
+      ...referenceService.compareReference({
+        reference: r,
+        periods,
+        history,
+        requests: requestsForBalance,
+      }),
+    }));
 
     res.render("RRHH/vacaciones/detalle_colaborador", {
       titulo: "Detalle de vacaciones",
       user: req.session.user,
       profile,
       summary,
-      periods: periods.map(mapVacationPeriodForView),
+      periods: periodViews,
+      overduePeriods: periodViews.filter((p) => p.overdue),
+      dueSoonPeriods: periodViews.filter((p) => p.dueSoon),
+      periodsBlockedMessage: periodsBlocked ? VACATION_MESSAGES.periodsBlocked : null,
       requests: requests.map(mapVacationRequestForView),
+      history: history.map((h) => mapVacationHistoryForView(h, periodLabels)),
+      historyAudit: historyAudit.map(mapHistoryAuditForView),
+      historyTotalDays,
+      unimputedDays: unimputedDays > 0.001 ? unimputedDays : 0,
+      references: referenceViews,
+      today,
+      serviceTime: reportService.serviceTimeLabel(profile.hire_date, today),
+      hireDateValue: toDateOnly(profile.hire_date) || "",
+      nextAccrualFmt: summary.nextAccrualDate
+        ? formatDisplay(summary.nextAccrualDate)
+        : null,
+      cutoffDateFmt: settings.historyCutoffDate
+        ? formatDisplay(settings.historyCutoffDate)
+        : null,
+      currentMonth: today.slice(0, 7),
+      monthNames: MONTH_NAMES,
+      lastReminder: reminderForView(reminders.get(Number(userId))),
+      hasEmail: Boolean(profile.email),
+      documentLabel: nationalIdClientConfig().label,
       employmentCountry: country,
       countryLabel: countryLabel(country),
       ...readFlash(req),
@@ -221,6 +406,273 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
   } catch (err) {
     console.error("Error en detalle colaborador:", err);
     res.status(500).send(VACATION_MESSAGES.loadDetailFailed);
+  }
+});
+
+// ---------- aviso manual de días vencidos ----------
+
+/**
+ * RR.HH. avisa por correo al colaborador los días vencidos que debe tomar.
+ * Es manual a propósito (así lo pidió RR.HH.): decide a quién y cuándo.
+ * `volver=resumen` regresa al resumen en vez de a la ficha.
+ */
+router.post("/gestion/:userId/avisar-vencidos", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const fichaPath = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  const backTo = req.body.volver === "resumen" ? RESUMEN_PATH : fichaPath;
+  try {
+    const profile = await balanceService.getUserVacationProfile(userId);
+    if (!profile) return redirectErr(res, RESUMEN_PATH, VACATION_MESSAGES.collaboratorNotFound);
+    if (!profile.hire_date) return redirectErr(res, backTo, VACATION_MESSAGES.reminderNoHireDate);
+    if (!profile.email) return redirectErr(res, backTo, VACATION_MESSAGES.reminderNoEmail);
+
+    await balanceService.recalculatePeriods(userId);
+    await balanceService.ensureHistoryImputed(userId);
+    const [summary, periods] = await Promise.all([
+      balanceService.getBalanceSummary(userId),
+      balanceService.listPeriods(userId),
+    ]);
+    if (!(summary.availableDays > 0)) {
+      return redirectErr(res, backTo, VACATION_MESSAGES.reminderNoPending);
+    }
+
+    const note = String(req.body.nota || "").trim().slice(0, 500);
+    await notificationService.sendPendingReminder({
+      user: profile,
+      summary,
+      periods: periods.map(mapVacationPeriodForView),
+      note,
+    });
+    await historyService.recordReminder({
+      userId: Number(userId),
+      actorId: req.session.user.id,
+      email: profile.email,
+      days: summary.availableDays,
+      note: note || null,
+    });
+    await logChange(req, "avisó días de vacaciones vencidos", fichaPath);
+    return redirectOk(res, backTo, VACATION_MESSAGES.reminderSent(profile.email));
+  } catch (err) {
+    console.error("Error enviando aviso de días vencidos:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.reminderFailed);
+  }
+});
+
+// ---------- historial previo a la intranet, por colaborador ----------
+
+/** Campos del modal de edición → entrada del servicio. */
+function historyInputFromBody(body) {
+  return {
+    yearMonth: body.month,
+    startDate: body.start_date || null,
+    endDate: body.end_date || null,
+    daysUsed: body.days_used,
+    observation: body.observation,
+  };
+}
+
+/** La vista previa sin los valores normalizados, que solo usa el servidor. */
+function publicPreview({ values, ...preview }) {
+  return preview;
+}
+
+/** Filas de la carga por lotes, tal como las manda vacaciones-historial.js. */
+function batchRowsFromBody(body) {
+  return Array.isArray(body?.rows)
+    ? body.rows.map((r) => ({
+        month: r?.month,
+        days: r?.days,
+        start: r?.start,
+        end: r?.end,
+        observation: r?.observation,
+      }))
+    : null;
+}
+
+router.post(
+  "/gestion/:userId/historial/lote/previsualizar",
+  requireRrhhManager(),
+  async (req, res) => {
+    try {
+      const result = await historyService.previewHistoryBatch({
+        userId: req.params.userId,
+        rows: batchRowsFromBody(req.body),
+        cutoffDate: await settingsService.getCutoffDate(),
+      });
+      if (!result.ok) return res.status(400).json({ errors: result.errors });
+      return res.json(publicPreview(result.preview));
+    } catch (err) {
+      console.error("Error en vista previa del lote:", err);
+      return res.status(500).json({ errors: [VACATION_MESSAGES.historyCreateFailed] });
+    }
+  },
+);
+
+router.post("/gestion/:userId/historial/lote", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  try {
+    const result = await historyService.createHistoryBatch({
+      userId,
+      rows: batchRowsFromBody(req.body),
+      actorId: req.session.user.id,
+      cutoffDate: await settingsService.getCutoffDate(),
+    });
+    if (!result.ok) {
+      return res.status(400).json({
+        errors: result.errors,
+        preview: result.preview ? publicPreview(result.preview) : null,
+      });
+    }
+    await logChange(req, "registró vacaciones históricas", backTo);
+    const msg = VACATION_MESSAGES.historyBatchCreated(result.created);
+    return res.json({
+      ok: true,
+      redirect: `${backTo}?ok=1&msg=${encodeURIComponent(msg)}#historial`,
+    });
+  } catch (err) {
+    console.error("Error registrando historial:", err);
+    return res.status(500).json({ errors: [VACATION_MESSAGES.historyCreateFailed] });
+  }
+});
+
+router.post(
+  "/gestion/:userId/historial/:historyId/editar",
+  requireRrhhManager(),
+  async (req, res) => {
+    const { userId, historyId } = req.params;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    try {
+      const cutoffDate = await settingsService.getCutoffDate();
+      const result = await historyService.updateHistory({
+        historyId,
+        userId,
+        input: historyInputFromBody(req.body),
+        actorId: req.session.user.id,
+        cutoffDate,
+      });
+      if (!result.ok) {
+        return redirectErr(res, backTo, result.errors.join(" "));
+      }
+      await logChange(req, "editó un período histórico de vacaciones", backTo);
+      return redirectOk(res, backTo, VACATION_MESSAGES.historyUpdated);
+    } catch (err) {
+      console.error("Error editando historial:", err);
+      return redirectErr(res, backTo, VACATION_MESSAGES.historyUpdateFailed);
+    }
+  },
+);
+
+router.post(
+  "/gestion/:userId/historial/:historyId/eliminar",
+  requireRrhhManager(),
+  async (req, res) => {
+    const { userId, historyId } = req.params;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    try {
+      const result = await historyService.deleteHistory({
+        historyId,
+        userId,
+        actorId: req.session.user.id,
+      });
+      if (!result.ok) return redirectErr(res, backTo, result.error);
+      await logChange(req, "eliminó un período histórico de vacaciones", backTo);
+      return redirectOk(res, backTo, VACATION_MESSAGES.historyDeleted);
+    } catch (err) {
+      console.error("Error eliminando historial:", err);
+      return redirectErr(res, backTo, VACATION_MESSAGES.historyDeleteFailed);
+    }
+  },
+);
+
+// ---------- datos del cálculo y saldo de referencia ----------
+
+router.post("/gestion/:userId/datos", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  try {
+    const result = await profileService.updateCalculationData({
+      userId,
+      hireDate: req.body.hire_date,
+      nationalId: req.body.national_id,
+      reason: req.body.reason,
+      actorId: req.session.user.id,
+    });
+    if (!result.ok) return redirectErr(res, backTo, result.errors.join(" "));
+    await logChange(req, "corrigió los datos de cálculo de vacaciones", backTo);
+    return redirectOk(
+      res,
+      backTo,
+      [VACATION_MESSAGES.profileSaved, ...result.warnings].join(" "),
+    );
+  } catch (err) {
+    console.error("Error actualizando datos de cálculo:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.profileFailed);
+  }
+});
+
+router.post("/gestion/:userId/referencia", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  try {
+    const profile = await balanceService.getUserVacationProfile(userId);
+    if (!profile) {
+      return redirectErr(res, RESUMEN_PATH, VACATION_MESSAGES.collaboratorNotFound);
+    }
+    const result = await referenceService.createReference({
+      userId,
+      asOfDate: req.body.as_of_date,
+      expectedDays: req.body.expected_days,
+      note: req.body.note,
+      actorId: req.session.user.id,
+    });
+    if (!result.ok) return redirectErr(res, backTo, result.errors.join(" "));
+    await logChange(req, "registró un saldo de referencia de vacaciones", backTo);
+    return redirectOk(res, backTo, VACATION_MESSAGES.referenceSaved);
+  } catch (err) {
+    console.error("Error guardando saldo de referencia:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.referenceFailed);
+  }
+});
+
+router.post(
+  "/gestion/:userId/referencia/:referenceId/eliminar",
+  requireRrhhManager(),
+  async (req, res) => {
+    const { userId, referenceId } = req.params;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    try {
+      const result = await referenceService.deleteReference({
+        userId,
+        referenceId,
+        actorId: req.session.user.id,
+      });
+      if (!result.ok) return redirectErr(res, backTo, result.error);
+      await logChange(req, "eliminó un saldo de referencia de vacaciones", backTo);
+      return redirectOk(res, backTo, VACATION_MESSAGES.referenceDeleted);
+    } catch (err) {
+      console.error("Error eliminando saldo de referencia:", err);
+      return redirectErr(res, backTo, VACATION_MESSAGES.referenceFailed);
+    }
+  },
+);
+
+/** Rehace períodos e imputación del historial desde cero. */
+router.post("/gestion/:userId/recalcular", requireRrhhManager(), async (req, res) => {
+  const { userId } = req.params;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  try {
+    await balanceService.recalculatePeriods(userId);
+    const result = await balanceService.reimputeHistoricalDays(userId);
+    await logChange(req, "recalculó el saldo de vacaciones", backTo);
+    const extra =
+      result.overflow > 0
+        ? ` Quedaron ${result.overflow} día(s) del historial sin período que los respalde: revisa la fecha de ingreso.`
+        : "";
+    return redirectOk(res, backTo, `Saldo recalculado.${extra}`);
+  } catch (err) {
+    console.error("Error recalculando saldo:", err);
+    return redirectErr(res, backTo, VACATION_MESSAGES.adjustFailed);
   }
 });
 
@@ -283,8 +735,78 @@ router.post("/gestion/:userId/periodo/:periodId/record", requireRrhhManager(), a
   }
 });
 
-router.post("/gestion/solicitud/:id/aprobar", requireRrhhManager(), async (req, res) => {
-  const backTo = "/RRHH/vacaciones/gestion";
+// ==========================================================
+// APROBACIONES DEL JEFE (organigrama)
+// ==========================================================
+// La gestión completa sigue siendo de RRHH. Aquí el jefe sólo ve lo que el
+// organigrama le asignó al crearse la solicitud.
+
+const APROBACIONES_PATH = "/RRHH/vacaciones/aprobaciones";
+
+router.get("/aprobaciones", requireRole.intranetActivo(), async (req, res) => {
+  const user = req.session.user;
+  try {
+    // Quien gestiona RRHH aprueba dentro de la Gestión de vacaciones, que ya
+    // muestra todo lo pendiente. Se conserva la query (?ok=…&msg=…) y el
+    // enlace de los correos sigue sirviendo para ambos perfiles.
+    if (await canManageRrhh(user)) {
+      const query = req.originalUrl.includes("?")
+        ? req.originalUrl.slice(req.originalUrl.indexOf("?"))
+        : "";
+      return res.redirect(`/RRHH/vacaciones/gestion${query}`);
+    }
+    const [inbox, esJefe] = await Promise.all([
+      requestService.listForApprover(user.id),
+      areaManager.isAreaManager(user),
+    ]);
+    if (!esJefe && !inbox.pending.length && !inbox.history.length) {
+      return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    }
+    res.render("RRHH/vacaciones/aprobaciones", {
+      titulo: "Aprobaciones de vacaciones",
+      user,
+      pending: inbox.pending.map(mapVacationRequestForView),
+      history: inbox.history.map(mapVacationRequestForView),
+      esRrhh: false,
+      ...readFlash(req),
+    });
+  } catch (err) {
+    console.error("Error en aprobaciones de vacaciones:", err);
+    res.status(500).send(VACATION_MESSAGES.loadGestionFailed);
+  }
+});
+
+/**
+ * Aprobar y rechazar: el jefe asignado por el organigrama o RRHH. El resto de
+ * la gestión sigue cerrada con requireRrhhManager.
+ */
+function requireVacationReviewer() {
+  return async (req, res, next) => {
+    const backTo = reviewBackTo(req);
+    try {
+      const request = await requestService.getRequestById(req.params.id);
+      if (!request) return redirectErr(res, backTo, VACATION_MESSAGES.requestNotFound);
+      const isRrhhManager = await canManageRrhh(req.session.user);
+      if (!requestService.canReviewRequest(request, req.session.user.id, { isRrhhManager })) {
+        return redirectErr(res, backTo, VACATION_MESSAGES.notYourApproval);
+      }
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+}
+
+function reviewBackTo(req) {
+  return req.body && req.body.volver === "aprobaciones"
+    ? APROBACIONES_PATH
+    : "/RRHH/vacaciones/gestion";
+}
+
+const reviewGuards = [requireRole.intranetActivo(), requireVacationReviewer()];
+
+router.post("/gestion/solicitud/:id/aprobar", ...reviewGuards, async (req, res) => {
+  const backTo = reviewBackTo(req);
   try {
     const result = await requestService.approveRequest({
       requestId: req.params.id,
@@ -294,7 +816,10 @@ router.post("/gestion/solicitud/:id/aprobar", requireRrhhManager(), async (req, 
     if (!result.ok) return redirectErr(res, backTo, result.error);
 
     const profile = await balanceService.getUserVacationProfile(result.request.user_id);
-    notificationService.notifyApproved({ request: result.request, user: profile });
+    // El saldo ya descontado va en la constancia: es lo primero que pregunta
+    // el colaborador al recibirla.
+    const balance = await balanceService.getBalanceSummary(result.request.user_id);
+    notificationService.notifyApproved({ request: result.request, user: profile, balance });
     await logChange(req, "aprobó una solicitud de vacaciones", backTo);
 
     return redirectOk(res, backTo, VACATION_MESSAGES.requestApproved);
@@ -304,8 +829,8 @@ router.post("/gestion/solicitud/:id/aprobar", requireRrhhManager(), async (req, 
   }
 });
 
-router.post("/gestion/solicitud/:id/rechazar", requireRrhhManager(), async (req, res) => {
-  const backTo = "/RRHH/vacaciones/gestion";
+router.post("/gestion/solicitud/:id/rechazar", ...reviewGuards, async (req, res) => {
+  const backTo = reviewBackTo(req);
   try {
     const result = await requestService.rejectRequest({
       requestId: req.params.id,
@@ -328,25 +853,106 @@ router.post("/gestion/solicitud/:id/rechazar", requireRrhhManager(), async (req,
 // ==========================================================
 // CALENDARIO
 // ==========================================================
+
+const CALENDAR_VISIBLE = 3;
+const CALENDAR_WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+function monthParam(year, month) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function shiftMonth(year, month, delta) {
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1, 12));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
+}
+
+function parseCalendarMonth(value, today) {
+  const match = /^(\d{4})-(\d{2})$/.exec(String(value || ""));
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
+      return { year, month };
+    }
+  }
+  const iso = toDateOnly(today);
+  return { year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) };
+}
+
+function calendarMonthLabel(year, month) {
+  return `${MONTH_NAMES[month - 1]} ${year}`;
+}
+
+function personChip(event) {
+  const full = event.collaboratorName || "Colaborador";
+  return {
+    label: full.split(/\s+/)[0] || full,
+    title: `${full} · ${event.startDateFmt} → ${event.endDateFmt}`,
+    sort: full,
+  };
+}
+
+function eventCoversDay(event, iso) {
+  const start = toDateOnly(event.start_date);
+  const end = toDateOnly(event.end_date);
+  return Boolean(start && end && start <= iso && end >= iso);
+}
+
+/** Semanas lun–dom del mes, con los días del mes anterior y siguiente que cierran la grilla. */
+function buildCalendarWeeks({ year, month, today, events }) {
+  const start = `${monthParam(year, month)}-01`;
+  const lead = (parseDateOnly(start).getUTCDay() + 6) % 7;
+  const next = shiftMonth(year, month, 1);
+  const end = addDays(`${monthParam(next.year, next.month)}-01`, -1);
+  const trail = (7 - ((parseDateOnly(end).getUTCDay() + 6) % 7) - 1) % 7;
+  const prefix = monthParam(year, month);
+  const days = eachDay(addDays(start, -lead), addDays(end, trail)).map((iso) => {
+    const people = events
+      .filter((event) => eventCoversDay(event, iso))
+      .map(personChip)
+      .sort((a, b) => a.sort.localeCompare(b.sort, "es"));
+    const hidden = people.slice(CALENDAR_VISIBLE);
+    return {
+      iso,
+      number: Number(iso.slice(8)),
+      inMonth: iso.startsWith(prefix),
+      isToday: iso === today,
+      people: people.slice(0, CALENDAR_VISIBLE),
+      extra: hidden.length,
+      extraTitle: hidden.map((person) => person.title).join(" · "),
+    };
+  });
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+  return weeks;
+}
+
 router.get("/calendario", requireRole.intranetActivo(), async (req, res) => {
   try {
-    const isAdmin = Boolean(res.locals.isAdministrador);
     const today = todayInCountry();
-    const start = req.query.from ? toDateOnly(req.query.from) : addDays(today, -30);
-    const end = req.query.to ? toDateOnly(req.query.to) : addDays(today, 90);
+    const { year, month } = parseCalendarMonth(req.query.mes, today);
+    const next = shiftMonth(year, month, 1);
+    const rangeEnd = addDays(`${monthParam(next.year, next.month)}-01`, -1);
 
     const events = await requestService.listApprovedInRange({
-      startDate: start,
-      endDate: end,
-      userId: isAdmin ? null : req.session.user.id,
+      startDate: `${monthParam(year, month)}-01`,
+      endDate: rangeEnd,
     });
 
+    const prev = shiftMonth(year, month, -1);
     res.render("RRHH/vacaciones/calendario", {
       titulo: "Calendario de vacaciones",
       user: req.session.user,
-      isAdmin,
-      events: events.map(mapVacationRequestForView),
-      range: { from: start, to: end },
+      monthLabel: calendarMonthLabel(year, month),
+      prevMes: monthParam(prev.year, prev.month),
+      nextMes: monthParam(next.year, next.month),
+      weekdays: CALENDAR_WEEKDAYS,
+      weeks: buildCalendarWeeks({
+        year,
+        month,
+        today,
+        events: events.map(mapVacationRequestForView),
+      }),
       ...readFlash(req),
     });
   } catch (err) {

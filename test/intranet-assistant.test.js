@@ -24,7 +24,7 @@ const {
 } = require("../src/services/assistant/directorySearch");
 
 const CL_FEATURES = { supportTickets: true, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: true, lunchMenu: true };
-const PE_FEATURES = { supportTickets: false, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: false, lunchMenu: false };
+const PE_FEATURES = { supportTickets: false, expenseCenter: false, expenseRequests: true, vacations: true, chileHrPortals: false, lunchMenu: false };
 const ids = (entries) => entries.map((entry) => entry.id);
 
 describe("intranetGuide — catálogo filtrado", () => {
@@ -51,7 +51,13 @@ describe("intranetGuide — catálogo filtrado", () => {
     assert.ok(rrhh.includes("rex"));
     const otroAdmin = ids(guideForUser({ features: chile, isAdmin: true }));
     assert.equal(otroAdmin.includes("feriados"), false);
-    assert.equal(otroAdmin.includes("areas"), false);
+  });
+
+  it("las áreas se administran en el organigrama: no tienen página propia", () => {
+    const rrhh = guideForUser({ features: CL_FEATURES, isAdmin: true, canManageRrhh: true });
+    assert.equal(ids(rrhh).includes("areas"), false);
+    assert.equal(findEntryForPath("/RRHH/organigrama", rrhh).id, "organigrama");
+    assert.equal(findEntryForPath("/RRHH/areas", rrhh), null);
   });
 
   it("la gestión de gastos es para revisores y administradores", () => {
@@ -165,7 +171,7 @@ describe("assistantTools — ejecución en el servidor", () => {
     const result = JSON.parse((await executor.execute("list_self_help_tools")).content);
     assert.equal(result.total, 1);
     assert.deepEqual(result.herramientas[0].descargas, { windows: "/content/apps/impresora.exe" });
-    assert.equal(result.herramientas[0].enlace, "/sistemas/tickets");
+    assert.equal(result.herramientas[0].enlace, "/soporte");
 
     const sinSoporte = createToolExecutor({ entries, currentPath: "/", selfHelp: async () => apps });
     assert.equal((await sinSoporte.execute("list_self_help_tools")).isError, true);
@@ -398,7 +404,8 @@ describe("claudeService.runAssistantTurn — ciclo de tools", () => {
 
   it("las instrucciones piden revisar la autoayuda antes de ofrecer un ticket", () => {
     const [instrucciones] = claudeService.buildSystemPrompt();
-    assert.match(instrucciones.text, /Asistente de Transworld/);
+    assert.match(instrucciones.text, /Tu nombre es Luna/);
+    assert.match(instrucciones.text, /asistente de la Intranet de Transworld/);
     assert.match(instrucciones.text, /list_self_help_tools antes de ofrecer un ticket/);
     assert.match(instrucciones.text, /Reparación de Impresora/);
   });
