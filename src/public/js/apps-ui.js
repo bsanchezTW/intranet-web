@@ -255,7 +255,6 @@
     if (grid.dataset.ordenBound === 'true') return;
     grid.dataset.ordenBound = 'true';
 
-    const estado = barra.querySelector('[data-orden-estado]');
     const btnGuardar = barra.querySelector('[data-orden-guardar]');
     const btnCancelar = barra.querySelector('[data-orden-cancelar]');
     const catalogo = grid.dataset.ordenCatalogo || 'support';
@@ -267,12 +266,9 @@
     const items = () => Array.from(grid.querySelectorAll('[data-orden-item]'));
     const idsActuales = () => items().map((el) => el.dataset.ordenItem);
 
-    const aviso = (texto, clase) => {
-      if (!estado) return;
-      estado.textContent = texto || '';
-      estado.className = clase
-        ? `apps-orden-barra__estado ${clase}`
-        : 'apps-orden-barra__estado';
+    // El resultado de guardar sale como aviso flotante (js/toast.js).
+    const aviso = (texto, tono) => {
+      if (window.IntranetToast) window.IntranetToast.show(texto, { tone: tono || 'ok' });
     };
 
     const setActivo = (valor) => {
@@ -287,10 +283,7 @@
           b.tabIndex = valor ? 0 : -1;
         });
       });
-      if (valor) {
-        ordenOriginal = idsActuales();
-        aviso('');
-      }
+      if (valor) ordenOriginal = idsActuales();
     };
 
     const restaurar = () => {
@@ -327,7 +320,6 @@
       if (paso < 0) grid.insertBefore(tarjeta, lista[hasta]);
       else grid.insertBefore(lista[hasta], tarjeta);
 
-      aviso('');
       tarjeta.focus?.();
     });
 
@@ -363,7 +355,6 @@
 
       if (despues) destino.after(arrastrando);
       else destino.before(arrastrando);
-      aviso('');
     });
 
     grid.addEventListener('drop', (e) => {
@@ -373,7 +364,8 @@
     btnGuardar?.addEventListener('click', async () => {
       const ids = idsActuales();
       btnGuardar.disabled = true;
-      aviso('Guardando…');
+      const etiqueta = btnGuardar.textContent;
+      btnGuardar.textContent = 'Guardando…';
 
       try {
         const res = await fetch('/apps/orden', {
@@ -385,13 +377,14 @@
         if (!res.ok || !data.ok) throw new Error(data.error || 'Error al guardar');
 
         ordenOriginal = ids;
-        aviso('Orden guardado', 'apps-orden-barra__estado--ok');
-        setTimeout(() => setActivo(false), 700);
+        aviso('Orden guardado');
+        setActivo(false);
       } catch (err) {
         console.error(err);
-        aviso('No se pudo guardar el orden', 'apps-orden-barra__estado--error');
+        aviso('No se pudo guardar el orden', 'error');
       } finally {
         btnGuardar.disabled = false;
+        btnGuardar.textContent = etiqueta;
       }
     });
 

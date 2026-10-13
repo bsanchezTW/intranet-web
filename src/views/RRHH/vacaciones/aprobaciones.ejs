@@ -25,7 +25,7 @@
     <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (typeof error !== 'undefined' && error) { %>
-    <div class="flash-msg flash-msg--error" role="alert"><%= error %></div>
+    <div hidden data-toast="<%= error %>" data-toast-tone="error"></div>
   <% } %>
 
   <div class="vac-panel">

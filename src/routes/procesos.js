@@ -9,6 +9,7 @@ const { isAdministrador, normalizeRole } = require("../constants/roles");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { areaSlug, enrichAreaWithPill } = require("../constants/workAreas");
 const { isFeatureEnabled } = require("../config/features");
+const { withQueryParam } = require("../utils/returnTo");
 const { folderForUpload, SLUG_SIN_AREA } = require("../services/documents/processDocumentStorage");
 const areaManager = require("../services/expenses/areaManager");
 const financeTeam = require("../services/expenses/financeTeam");
@@ -480,10 +481,10 @@ router.post("/documento/editar", requireRole.administrador(), async (req, res) =
   try {
     const tabla = seccion_base === "otros" ? "other_documents" : "documents";
     await db.query(`UPDATE ${tabla} SET name = $1 WHERE id = $2`, [nuevo_nombre, id]);
-    res.redirect(`${destino}?ok=Editado`);
+    res.redirect(withQueryParam(destino, "ok", "Documento renombrado"));
   } catch (err) {
     console.error("[Procesos] Error editando documento:", err);
-    res.redirect(destino);
+    res.redirect(withQueryParam(destino, "error", "No se pudo renombrar el documento"));
   }
 });
 
@@ -501,10 +502,10 @@ router.post("/eliminar", requireRole.administrador(), async (req, res) => {
       [req.session.user.id, "eliminó un documento", seccion_base || "Procesos", destino],
     );
 
-    res.redirect(destino);
+    res.redirect(withQueryParam(destino, "ok", "Documento eliminado"));
   } catch (err) {
     console.error("[Procesos] Error eliminando documento:", err);
-    res.status(500).send("Error eliminando");
+    res.redirect(withQueryParam(destino, "error", "No se pudo eliminar el documento"));
   }
 });
 

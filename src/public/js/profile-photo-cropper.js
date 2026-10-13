@@ -161,20 +161,21 @@
       }
     }
 
-    function avisar(titulo, mensaje) {
-      if (window.IntranetDialog) window.IntranetDialog.alert({ title: titulo, message: mensaje });
+    // Un archivo que no sirve se avisa con un toast de error (js/toast.js).
+    function avisar(mensaje) {
+      if (window.IntranetToast) window.IntranetToast.show(mensaje, { tone: "error" });
       else window.alert(mensaje);
     }
 
     function handleFileSelected(file) {
       if (!file) return;
       if (!file.type.startsWith("image/")) {
-        avisar("Archivo no válido", "Selecciona un archivo de imagen válido (JPG, PNG, WebP o GIF).");
+        avisar("Selecciona una imagen JPG, PNG, WebP o GIF");
         fileInput.value = "";
         return;
       }
       if (file.size > maxSizeMb * 1024 * 1024) {
-        avisar("Imagen demasiado pesada", "La imagen no puede superar " + maxSizeMb + " MB.");
+        avisar("La imagen no puede superar " + maxSizeMb + " MB");
         fileInput.value = "";
         return;
       }

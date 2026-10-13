@@ -510,7 +510,7 @@
         marcarPortada(item.url);
         G.aviso("Portada actualizada");
       } catch (error) {
-        G.alertar("No se pudo cambiar la portada", error.message);
+        G.aviso("No se pudo cambiar la portada: " + error.message, "error");
       } finally {
         ocupado = false;
         pintar();
@@ -539,7 +539,7 @@
       } catch (error) {
         ocupado = false;
         btnEliminar.disabled = false;
-        G.alertar("No se pudo eliminar", error.message);
+        G.aviso("No se pudo eliminar: " + error.message, "error");
         return;
       }
 
@@ -667,9 +667,9 @@
 
       var espacio = MAX_ARCHIVOS - pendientes.length;
       if (nuevos.length > espacio) {
-        G.alertar(
-          "Demasiados archivos",
-          "Puedes subir hasta " + MAX_ARCHIVOS + " archivos a la vez. Se agregaron los primeros " + Math.max(espacio, 0) + "."
+        G.aviso(
+          "Puedes subir hasta " + MAX_ARCHIVOS + " archivos a la vez: se agregaron los primeros " + Math.max(espacio, 0),
+          "info"
         );
         nuevos = nuevos.slice(0, Math.max(espacio, 0));
       }
@@ -848,13 +848,12 @@
         return;
       }
 
+      // Subida parcial: la galería se recarga con lo subido y los dos avisos.
       if (subidos.length) {
-        await G.alertar(
-          "Algunos archivos no se subieron",
-          plural(subidos.length, "archivo se subió", "archivos se subieron") + " y " +
-            plural(fallidos, "falló", "fallaron") + ". La galería se actualizará para mostrar lo subido."
-        );
-        global.location.reload();
+        global.location.href =
+          global.location.pathname +
+          "?ok=" + encodeURIComponent(plural(subidos.length, "archivo subido", "archivos subidos")) +
+          "&error=" + encodeURIComponent(plural(fallidos, "archivo no se subió", "archivos no se subieron"));
         return;
       }
 

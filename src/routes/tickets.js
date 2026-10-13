@@ -35,6 +35,11 @@ const {
   normalizeTicketCategory,
 } = require("../constants/ticketCategories");
 const { safeTicketRedirect, ticketModalUrl } = require("../utils/ticketRedirect");
+const { withQueryParam } = require("../utils/returnTo");
+
+// Cada acción vuelve con ?ok= o ?error=, que el layout muestra como aviso.
+const conAviso = (url, mensaje) => withQueryParam(url, "ok", mensaje);
+const conError = (url, mensaje) => withQueryParam(url, "error", mensaje);
 const {
   listSupportAgents,
   isSupportAgent,
@@ -277,7 +282,7 @@ async function renderSupportHome(req, res) {
       canManageTickets: puedeGestionar,
       user: user,
       ok: req.query.ok,
-      extraCss: ["/css/apps.css?v=20260916m", "/css/tickets.css?v=20260916g"],
+      extraCss: ["/css/apps.css?v=20261013b", "/css/tickets.css?v=20260916g"],
       extraJs: ["/js/tickets-list.js"],
     });
   } catch (err) {
@@ -306,13 +311,13 @@ router.post("/tickets/crear", receiveTicketAttachments(), async (req, res) => {
       priority: req.body.priority ?? req.body.prioridad,
       files: req.files || [],
     });
-    if (!result.ok) return res.status(400).send(result.error);
+    if (!result.ok) return res.redirect(conError("/soporte", result.error));
 
     invalidateNotificationCount(req);
-    res.redirect(ticketModalUrl(result.id));
+    res.redirect(conAviso(ticketModalUrl(result.id), "Ticket enviado"));
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error al procesar el ticket.");
+    res.redirect(conError("/soporte", "No se pudo enviar el ticket"));
   }
 });
 
@@ -376,7 +381,7 @@ router.post(
 
     try {
       const asignacion = await resolveAssignment(req);
-      if (asignacion.error) return res.status(400).send(asignacion.error);
+      if (asignacion.error) return res.redirect(conError(ticketModalUrl(id), asignacion.error));
 
       let sql = `UPDATE support_tickets SET category = $1, priority = $2, status = $3`;
       const params = [category, priority, status];
@@ -434,10 +439,12 @@ router.post(
       }
 
       invalidateNotificationCount(req);
-      res.redirect(safeTicketRedirect(req.body.redirect_to, id));
+      res.redirect(
+        conAviso(safeTicketRedirect(req.body.redirect_to, id), cerrar ? "Ticket cerrado" : "Ticket actualizado"),
+      );
     } catch (err) {
       console.error(err);
-      res.status(500).send("Error actualizando ticket");
+      res.redirect(conError(ticketModalUrl(id), "No se pudo actualizar el ticket"));
     }
   },
 );
@@ -458,10 +465,10 @@ router.post("/tickets/:id/confirmar", async (req, res) => {
       `UPDATE support_tickets SET status = 'closed', closed_at = NOW(), auto_closed = FALSE WHERE id = $1`,
       [id],
     );
-    res.redirect(ticketModalUrl(id));
+    res.redirect(conAviso(ticketModalUrl(id), "Solución confirmada, ticket cerrado"));
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error");
+    res.redirect(conError(ticketModalUrl(id), "No se pudo confirmar la solución"));
   }
 });
 
@@ -500,10 +507,10 @@ router.post("/tickets/:id/rechazar", async (req, res) => {
         null,
       ),
     });
-    res.redirect(ticketModalUrl(id));
+    res.redirect(conAviso(ticketModalUrl(id), "Ticket reabierto"));
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error");
+    res.redirect(conError(ticketModalUrl(id), "No se pudo reabrir el ticket"));
   }
 });
 
@@ -569,10 +576,10 @@ router.post("/tickets/:id/responder", async (req, res) => {
     }
 
     invalidateNotificationCount(req);
-    res.redirect(safeTicketRedirect(req.body.redirect_to, id));
+    res.redirect(conAviso(safeTicketRedirect(req.body.redirect_to, id), "Respuesta enviada"));
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error procesando respuesta.");
+    res.redirect(conError(ticketModalUrl(id), "No se pudo enviar la respuesta"));
   }
 });
 

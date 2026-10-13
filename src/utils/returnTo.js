@@ -54,4 +54,17 @@ function consumeReturnTo(session, fallback = FALLBACK) {
   return dest;
 }
 
-module.exports = { safeReturnTo, rememberReturnTo, consumeReturnTo };
+/**
+ * Agrega (o reemplaza) un parámetro a una ruta interna conservando su query y
+ * su ancla. Sirve para volver con ?ok= o ?error=, que el layout muestra como
+ * aviso flotante, a una ruta que ya puede traer otros parámetros.
+ */
+function withQueryParam(url, key, value) {
+  const [sinAncla, ancla] = String(url).split("#");
+  const [ruta, query] = sinAncla.split("?");
+  const params = new URLSearchParams(query || "");
+  params.set(key, value);
+  return `${ruta}?${params.toString()}${ancla !== undefined ? `#${ancla}` : ""}`;
+}
+
+module.exports = { safeReturnTo, rememberReturnTo, consumeReturnTo, withQueryParam };

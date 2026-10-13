@@ -149,7 +149,7 @@ router.get("/", async (req, res) => {
       // requisitos son las de Procesos y Documentos.
       extraCss: ["/css/procesos.css?v=20260916m", "/css/gastos.css?v=20261006a"],
       extraJs: formulario
-        ? ["/js/gastos-lista.js?v=20260915i", "/js/gastos-form.js?v=20260917r"]
+        ? ["/js/gastos-lista.js?v=20260915i", "/js/gastos-form.js?v=20261013b"]
         : ["/js/gastos-lista.js?v=20260915i"],
     });
   } catch (err) {

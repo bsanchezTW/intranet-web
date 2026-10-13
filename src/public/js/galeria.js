@@ -10,14 +10,9 @@
      Utilidades
      ====================================================================== */
 
+  // Todo resultado de una acción sale como aviso flotante (js/toast.js).
   function aviso(mensaje, tono) {
     if (global.IntranetToast) global.IntranetToast.show(mensaje, { tone: tono });
-  }
-
-  function alertar(titulo, mensaje) {
-    if (global.IntranetDialog) return global.IntranetDialog.alert({ title: titulo, message: mensaje });
-    global.alert(mensaje);
-    return Promise.resolve();
   }
 
   /** POST urlencoded que espera JSON. Lanza Error con el mensaje del servidor. */
@@ -316,7 +311,8 @@
           try {
             await subirPortada(creado.slug, portadaNueva.archivo);
           } catch (error) {
-            await alertar("El evento se creó sin portada", error.message);
+            // El layout muestra los dos avisos al llegar al evento.
+            destino += "&error=" + encodeURIComponent("El evento se creó sin portada: " + error.message);
           }
         }
         global.location.href = destino;
@@ -423,5 +419,5 @@
     iniciar();
   }
 
-  global.Galeria = { aviso: aviso, alertar: alertar, enviar: enviar, rutaEvento: rutaEvento };
+  global.Galeria = { aviso: aviso, enviar: enviar, rutaEvento: rutaEvento };
 })(window);

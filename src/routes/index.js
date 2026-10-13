@@ -35,6 +35,7 @@ const {
 const requireRole = require("../middlewares/requireRole");
 const requireFeature = require("../middlewares/requireFeature");
 const { toTitleCase } = require("../utils/formatName");
+const { safeReturnTo, withQueryParam } = require("../utils/returnTo");
 const { applyIdentityToSession, getMonogram } = require("../utils/monogram");
 const {
   toTelHref,
@@ -935,6 +936,15 @@ router.get("/cursos/safety-machine", async (req, res) => {
 // CRUD: MATERIAL DE ESTUDIO
 // ==========================================
 
+/**
+ * Vuelve a la página del curso desde la que se hizo la acción, con el aviso
+ * (?ok= o ?error=) que el layout muestra como toast. return_url viene del
+ * formulario: sólo se aceptan rutas internas.
+ */
+function volverACursos(res, returnUrl, tipo, mensaje) {
+  return res.redirect(withQueryParam(safeReturnTo(returnUrl, "/cursos"), tipo, mensaje));
+}
+
 router.post(
   "/cursos/material/nuevo",
   requireRole.administrador(),
@@ -942,7 +952,7 @@ router.post(
   async (req, res) => {
     const { nombre, seccion, return_url } = req.body;
     try {
-      if (!req.file) return res.status(400).send("Debe adjuntar un archivo");
+      if (!req.file) return volverACursos(res, return_url, "error", "Debes adjuntar un archivo");
 
       const result = await fileStorage.saveFile(
         req.file.buffer,
@@ -960,10 +970,10 @@ router.post(
           result.resource_type || "file",
         ],
       );
-      res.redirect(return_url || "/cursos");
+      volverACursos(res, return_url, "ok", "Material subido");
     } catch (err) {
       console.error("Error subiendo material:", err);
-      res.status(500).send("Error interno");
+      volverACursos(res, return_url, "error", "No se pudo subir el material");
     }
   },
 );
@@ -1001,10 +1011,10 @@ router.post(
           [nombre, id],
         );
       }
-      res.redirect(return_url || "/cursos");
+      volverACursos(res, return_url, "ok", "Material actualizado");
     } catch (err) {
       console.error("Error editando material:", err);
-      res.status(500).send("Error interno");
+      volverACursos(res, return_url, "error", "No se pudo actualizar el material");
     }
   },
 );
@@ -1024,10 +1034,10 @@ router.post(
         await fileStorage.deleteFile(rows[0].public_id);
       }
       await db.query("DELETE FROM study_materials WHERE id = $1", [id]);
-      res.redirect(return_url || "/cursos");
+      volverACursos(res, return_url, "ok", "Material eliminado");
     } catch (err) {
       console.error("Error eliminando material:", err);
-      res.status(500).send("Error interno");
+      volverACursos(res, return_url, "error", "No se pudo eliminar el material");
     }
   },
 );
@@ -1081,10 +1091,10 @@ router.post(
         [nombre_final, imageUrl],
       );
 
-      res.redirect(return_url || "/cursos");
+      volverACursos(res, return_url, "ok", "Subsección actualizada");
     } catch (err) {
       console.error("Error editando subsección:", err);
-      res.status(500).send("Error editando la subsección.");
+      volverACursos(res, return_url, "error", "No se pudo editar la subsección");
     }
   },
 );
@@ -1658,15 +1668,11 @@ router.post(
         ],
       );
 
-      res.redirect(
-        `${appCatalogPath(catalog)}?ok=Aplicación+registrada+correctamente`,
-      );
+      res.redirect(withQueryParam(appCatalogPath(catalog), "ok", "Aplicación registrada"));
     } catch (err) {
       console.error("Error al guardar aplicación:", err);
-      if (err.statusCode === 400) {
-        return res.status(400).send(err.message);
-      }
-      res.status(500).send("Error al guardar en la base de datos.");
+      const mensaje = err.statusCode === 400 ? err.message : "No se pudo registrar la aplicación";
+      res.redirect(withQueryParam(appCatalogPath(catalog), "error", mensaje));
     }
   },
 );
@@ -1734,15 +1740,11 @@ router.post(
         });
       }
 
-      res.redirect(
-        `${appCatalogPath(catalog)}?ok=Aplicación+actualizada+correctamente`,
-      );
+      res.redirect(withQueryParam(appCatalogPath(catalog), "ok", "Aplicación actualizada"));
     } catch (err) {
       console.error("Error al editar aplicación:", err);
-      if (err.statusCode === 400) {
-        return res.status(400).send(err.message);
-      }
-      res.status(500).send("Error al actualizar la base de datos.");
+      const mensaje = err.statusCode === 400 ? err.message : "No se pudo actualizar la aplicación";
+      res.redirect(withQueryParam(appCatalogPath(req.body.catalog), "error", mensaje));
     }
   },
 );
@@ -1770,10 +1772,10 @@ router.post(
           });
       }
 
-      res.redirect(`${appCatalogPath(catalog)}?ok=Aplicación+eliminada+con+éxito`);
+      res.redirect(withQueryParam(appCatalogPath(catalog), "ok", "Aplicación eliminada"));
     } catch (err) {
       console.error("Error al eliminar aplicación:", err);
-      res.status(500).send("Error al eliminar la aplicación.");
+      res.redirect(withQueryParam(appCatalogPath(req.body.catalog), "error", "No se pudo eliminar la aplicación"));
     }
   },
 );
@@ -1842,10 +1844,10 @@ router.post("/apps/notificar/:id", requireRole.administrador(), async (req, res)
       });
     }
 
-    res.redirect(`${rutaCatalogo}?ok=Notificación+enviada+con+éxito`);
+    res.redirect(withQueryParam(rutaCatalogo, "ok", "Notificación enviada"));
   } catch (err) {
     console.error("Error al notificar app:", err);
-    res.status(500).send("Error al enviar la notificación.");
+    res.redirect(withQueryParam(appCatalogPath(req.body.catalog), "error", "No se pudo enviar la notificación"));
   }
 });
 

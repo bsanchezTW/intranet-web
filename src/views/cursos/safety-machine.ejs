@@ -471,7 +471,7 @@
             fetch(`/cursos/api/reintentar/${idCurso}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => { if(data.success) window.location.href = `/cursos/reproductor/${idCurso}`; })
-            .catch(() => IntranetDialog.alert({ title: 'No se pudo reiniciar', message: 'Intenta de nuevo en un momento.' }));
+            .catch(() => IntranetToast.show('No se pudo reiniciar el curso, intenta de nuevo', { tone: 'error' }));
         };
     } else if (estadoCurso && estadoCurso.seconds_watched > 0) {
         btnPrincipal.innerText = 'Reanudar curso';

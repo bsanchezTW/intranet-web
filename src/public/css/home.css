@@ -848,7 +848,8 @@
 
 /* Una sola franja: los accesos y, al final, el lápiz. El título queda para
    lectores de pantalla y reaparece al personalizar, cuando hace falta la
-   cabecera completa (título, ayuda y botones). */
+   cabecera completa (título, ayuda y botones). Los resultados de guardar
+   salen como aviso flotante (js/toast.js), no dentro de la barra. */
 .home-quick-card {
   display: flex;
   align-items: center;
@@ -911,35 +912,15 @@
   flex: 0 0 auto;
 }
 
-.home-quick__hint,
-.home-quick__status {
+.home-quick__hint {
+  display: none;
   margin: 0;
   font-size: 0.75rem;
   color: var(--muted);
 }
 
-.home-quick__hint {
-  display: none;
-}
-
 .home-quick-section.is-editing .home-quick__hint {
   display: block;
-}
-
-/* Un aviso (error, guardado) reemplaza a la ayuda mientras está visible. */
-.home-quick__status:empty,
-.home-quick__status:not(:empty) + .home-quick__hint {
-  display: none;
-}
-
-.home-quick__status.is-ok {
-  color: var(--green-deep);
-  font-weight: 600;
-}
-
-.home-quick__status.is-error {
-  color: var(--down);
-  font-weight: 600;
 }
 
 /* Igual al lápiz del Menú semanal. */

@@ -304,7 +304,8 @@
           crear("div", "vac-preview vac-preview-error", (data.errors || []).join(" ") || "No se pudo guardar."),
         );
       } catch {
-        pintarErrorGeneral("No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.");
+        // Falla de red: no hay nada que corregir en las filas, sólo reintentar.
+        window.IntranetToast?.show("No se pudo guardar, revisa tu conexión e inténtalo de nuevo", { tone: "error" });
       } finally {
         guardando = false;
         if (btnGuardar.textContent === "Guardando…") btnGuardar.textContent = texto;

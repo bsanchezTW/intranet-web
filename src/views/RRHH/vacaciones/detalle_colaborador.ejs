@@ -32,7 +32,7 @@
     <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (typeof error !== 'undefined' && error) { %>
-    <div class="flash-msg flash-msg--error" role="alert"><%= error %></div>
+    <div hidden data-toast="<%= error %>" data-toast-tone="error"></div>
   <% } %>
 
   <% if (summary && summary.accumulationAlert) { %>
@@ -569,4 +569,4 @@
   body: include('partials/modal_datos', { fichaPath, nombre })
 }) %>
 
-<script src="/js/vacaciones-historial.js?v=20260929a" defer></script>
+<script src="/js/vacaciones-historial.js?v=20261013b" defer></script>

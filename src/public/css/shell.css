@@ -1067,8 +1067,16 @@ body.menu-movil-abierto .claude-fab {
   animation: toastEntra 0.45s var(--shell-ease) backwards;
 }
 
+/* js/toast.js fija el alto antes de agregar la clase: así el colapso tiene
+   desde dónde partir. El margen negativo se come el gap de la pila. */
 .toast.is-saliendo {
-  animation: toastSale 0.28s ease forwards;
+  pointer-events: none;
+  animation: toastSale 0.42s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.toast.is-saliendo .toast__progreso {
+  animation: none;
+  opacity: 0;
 }
 
 .toast__icono {
@@ -1157,7 +1165,26 @@ body.menu-movil-abierto .claude-fab {
 }
 
 @keyframes toastSale {
-  to { opacity: 0; transform: translateY(10px) scale(0.96); }
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  55% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
+    margin-top: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
+    height: 0;
+    margin-top: -8px;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-width: 0;
+  }
 }
 
 @keyframes toastIcono {

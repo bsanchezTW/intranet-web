@@ -496,15 +496,6 @@
   flex-wrap: wrap;
 }
 
-.apps-orden-barra__estado {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.apps-orden-barra__estado--ok { color: var(--green-ink); }
-.apps-orden-barra__estado--error { color: var(--down); }
-
 .apps-orden-accion {
   padding: 9px 16px;
   border-radius: 10px;

@@ -233,11 +233,11 @@
       var btnCancelar = document.getElementById("btnCancelarSubida");
 
       if (!fileInput.files.length) {
-        return IntranetDialog.alert({ title: "Falta el archivo", message: "Selecciona un archivo para subir." });
+        return IntranetToast.show("Selecciona un archivo para subir", { tone: "error" });
       }
       var file = fileInput.files[0];
       if (file.size > MAX_BYTES) {
-        return IntranetDialog.alert({ title: "Archivo demasiado grande", message: "El archivo excede el límite de 20 MB." });
+        return IntranetToast.show("El archivo excede el límite de 20 MB", { tone: "error" });
       }
 
       function setStatus(msg, subiendo) {
@@ -276,11 +276,14 @@
         var saveData = await saveRes.json().catch(function () { return {}; });
         if (!saveRes.ok) throw new Error(saveData.error || "Error al guardar el registro.");
 
-        location.reload();
+        // El aviso de éxito lo muestra el layout al volver a cargar (?ok=).
+        var destino = new URL(location.href);
+        destino.searchParams.set("ok", "Documento subido");
+        location.href = destino.toString();
       } catch (err) {
         console.error(err);
         setStatus("Error en la subida", false);
-        IntranetDialog.alert({ title: "No se pudo subir el documento", message: err.message });
+        IntranetToast.show("No se pudo subir el documento: " + err.message, { tone: "error" });
       }
     });
   })();

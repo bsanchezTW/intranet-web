@@ -189,7 +189,7 @@
         }
     } catch (err) {
         console.error(err);
-        IntranetDialog.alert({ title: "No se pudo enviar la evaluación", message: "Intenta de nuevo en un momento. Tus respuestas siguen marcadas." });
+        IntranetToast.show("No se pudo enviar la evaluación: tus respuestas siguen marcadas, intenta de nuevo", { tone: "error" });
         btnSubmit.innerText = "Enviar Evaluación";
         btnSubmit.disabled = false;
     }
@@ -210,7 +210,7 @@
                   window.location.href = `/cursos/reproductor/${cursoId}`;
               }
           } catch (e) {
-              IntranetDialog.alert({ title: "No se pudo reiniciar el curso", message: "Intenta de nuevo en un momento." });
+              IntranetToast.show("No se pudo reiniciar el curso, intenta de nuevo", { tone: "error" });
           }
       }
   }

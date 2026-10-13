@@ -752,10 +752,11 @@
             restantes[0].querySelector("input").checked = true;
           }
           aplicarSeleccion();
+          avisar("Cuenta eliminada");
         })
         .catch(function (err) {
           btn.disabled = false;
-          mostrarError(mensajeDeRed(err, "No se pudo eliminar la cuenta."));
+          avisar(mensajeDeRed(err, "No se pudo eliminar la cuenta"), "error");
         });
     }
 
@@ -1141,6 +1142,13 @@
     errorEl.style.display = "none";
   }
 
+  /* Lo que falta o está mal en el formulario se marca dentro del modal
+     (mostrarError); el resultado de guardar, enviar o eliminar sale como
+     aviso flotante. */
+  function avisar(msg, tono) {
+    if (window.IntranetToast) window.IntranetToast.show(msg, { tone: tono || "ok" });
+  }
+
   function fallar(problema) {
     if (problema.campo && problema.campo.focus) {
       problema.campo.focus();
@@ -1460,9 +1468,10 @@
       estado.listaDesactualizada = true;
       btnEliminarBorrador.hidden = false;
       mostrarEstado(textoBorrador(data.id, data.updatedAt));
+      avisar("Borrador guardado");
     } catch (err) {
       refrescarListasAdjuntos();
-      mostrarError(mensajeDeRed(err, "No se pudo guardar el borrador."));
+      avisar(mensajeDeRed(err, "No se pudo guardar el borrador"), "error");
     } finally {
       ocupar(false);
     }
@@ -1485,10 +1494,10 @@
       await enviar(cuerpo);
       subidosSinGuardar = [];
       estado.sucio = false;
-      window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Solicitud enviada.");
+      window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Solicitud enviada");
     } catch (err) {
       refrescarListasAdjuntos();
-      mostrarError(mensajeDeRed(err, "No se pudo enviar la solicitud."));
+      avisar(mensajeDeRed(err, "No se pudo enviar la solicitud"), "error");
       ocupar(false);
     }
   });
@@ -1518,9 +1527,9 @@
         throw new Error(data.error || "No se pudo eliminar el borrador.");
       }
       estado.sucio = false;
-      window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Borrador eliminado.");
+      window.location.href = "/gastos?ok=1&msg=" + encodeURIComponent("Borrador eliminado");
     } catch (err) {
-      mostrarError(mensajeDeRed(err, "No se pudo eliminar el borrador."));
+      avisar(mensajeDeRed(err, "No se pudo eliminar el borrador"), "error");
       ocupar(false);
     }
   });
@@ -1543,9 +1552,8 @@
         abrir(borrador.kind, borrador);
       })
       .catch(function (err) {
-        window.IntranetDialog.alert({
-          title: "No se pudo abrir el borrador",
-          message: mensajeDeRed(err, "Intenta de nuevo en un momento."),
+        window.IntranetToast.show(mensajeDeRed(err, "No se pudo abrir el borrador"), {
+          tone: "error",
         });
       });
   }

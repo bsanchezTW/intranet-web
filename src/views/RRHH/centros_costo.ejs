@@ -46,10 +46,7 @@
     <div hidden data-toast="<%= success %>"></div>
   <% } %>
   <% if (error) { %>
-    <div class="flash-msg flash-msg--error" role="alert">
-      <span class="flash-msg__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'alert-triangle' }) %></span>
-      <span><%= error %></span>
-    </div>
+    <div hidden data-toast="<%= error %>" data-toast-tone="error"></div>
   <% } %>
 
   <%# Confundir centro de costo con área de trabajo es el error más probable

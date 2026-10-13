@@ -91,7 +91,8 @@
         form.submit();
       } catch (err) {
         console.error(err);
-        setUploadStatus(statusEl, 'Error al subir. Inténtalo de nuevo.', 'ticket-status-text--error');
+        setUploadStatus(statusEl, '', 'ticket-status-text');
+        if (window.IntranetToast) window.IntranetToast.show('No se pudieron subir los archivos, inténtalo de nuevo', { tone: 'error' });
         if (btnSubmit && window.IntranetModal) window.IntranetModal.ocuparBoton(btnSubmit, false);
       }
     });

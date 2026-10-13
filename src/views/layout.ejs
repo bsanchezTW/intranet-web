@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><%= formatPageTitle(titulo) %></title>
     <link rel="stylesheet" href="/css/intranet.css?v=20261006b">
-    <link rel="stylesheet" href="/css/shell.css?v=20261006a">
+    <link rel="stylesheet" href="/css/shell.css?v=20261013b">
     <link rel="stylesheet" href="/css/modal.css?v=20261009a">
     <% if (features.supportTickets) { %>
     <link rel="stylesheet" href="/css/ticket-modal.css?v=20260916m">
@@ -16,7 +16,7 @@
         <link rel="stylesheet" href="<%= href %>">
       <% }) %>
     <% } %>
-    <link rel="stylesheet" href="/css/home.css?v=20261013a">
+    <link rel="stylesheet" href="/css/home.css?v=20261013b">
     <% if (typeof usuario !== 'undefined' && usuario && features.claudeAssistant) { %>
     <link rel="stylesheet" href="/css/claude-assistant.css?v=20261006a">
     <% } %>
@@ -42,10 +42,10 @@
     </script>
     <noscript><style>.cargando-pagina { display: none; }</style></noscript>
     <script src="/js/modal.js?v=20260925a" defer></script>
-    <script src="/js/toast.js?v=20260917b" defer></script>
+    <script src="/js/toast.js?v=20261013b" defer></script>
     <% if (features.supportTickets) { %>
     <script src="/js/ticket-create-form.js?v=20260917r" defer></script>
-    <script src="/js/ticket-detail.js?v=20260917r" defer></script>
+    <script src="/js/ticket-detail.js?v=20261013b" defer></script>
     <% } %>
 </head>
 
@@ -217,17 +217,24 @@
     });
 
 
-    // --- AVISO DE ÉXITO (?ok=...) ---
+    // --- AVISOS DE RESULTADO (?ok=... / ?error=...) ---
+    // Toda acción que vuelve con un redirect avisa con un toast. Si la vista
+    // ya pintó el mismo aviso (data-toast), toast.js no lo repite.
     const urlParams = new URLSearchParams(window.location.search);
-    const okMsg = urlParams.get('ok');
     const flashMsg = urlParams.get('msg');
     // ok=1&msg=... lo maneja la vista (p. ej. listado de personal); evita toast duplicado.
-    // Claves tipo correo_enviado las traduce la propia página (nt-aviso), no el toast.
-    const okEsClave = okMsg && /_/.test(okMsg);
-    if (okMsg && !okEsClave && !(okMsg === '1' && flashMsg) && window.IntranetToast) {
+    // Claves tipo correo_enviado las traduce la propia página, no el toast.
+    const esClave = (valor) => /_/.test(valor) || (valor === '1' && flashMsg);
+    let limpiar = false;
+    [['ok', 'ok'], ['error', 'error']].forEach(([param, tono]) => {
+      const valor = urlParams.get(param);
+      if (!valor || esClave(valor) || !window.IntranetToast) return;
       // URLSearchParams ya decodifica %20 y "+" como espacios.
-      window.IntranetToast.show(okMsg);
-      urlParams.delete('ok');
+      window.IntranetToast.show(valor, { tone: tono });
+      urlParams.delete(param);
+      limpiar = true;
+    });
+    if (limpiar) {
       const resto = urlParams.toString();
       window.history.replaceState({}, document.title, window.location.pathname + (resto ? '?' + resto : '') + window.location.hash);
     }

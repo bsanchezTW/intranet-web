@@ -34,17 +34,34 @@
     return pila;
   }
 
+  // Al salir, el aviso baja y se desvanece, y después cede su alto: los que
+  // quedan encima bajan suavemente en vez de saltar a su nuevo lugar.
+  var SALIDA_MS = 420;
+
   function cerrar(toast) {
     if (!toast || toast.classList.contains("is-saliendo")) return;
     clearTimeout(toast._timer);
+    // La animación de colapso parte del alto real: sin él no hay desde dónde
+    // interpolar y el hueco desaparece de golpe.
+    toast.style.height = toast.offsetHeight + "px";
     toast.classList.add("is-saliendo");
     var quitar = function () { toast.remove(); };
-    toast.addEventListener("animationend", quitar, { once: true });
-    setTimeout(quitar, 400);
+    toast.addEventListener("animationend", function (evento) {
+      if (evento.target === toast) quitar();
+    });
+    setTimeout(quitar, SALIDA_MS + 120);
+  }
+
+  // Los avisos son rótulos, no oraciones: sin punto final. Los puntos
+  // suspensivos («Guardando…» o «...») se respetan.
+  function sinPuntoFinal(texto) {
+    var limpio = String(texto).trim();
+    return /[^.]\.$/.test(limpio) ? limpio.slice(0, -1) : limpio;
   }
 
   function show(mensaje, opciones) {
     if (!mensaje) return null;
+    mensaje = sinPuntoFinal(mensaje);
     // Un mismo aviso puede llegar dos veces en la misma carga (?ok= en la URL
     // y el flash que pinta la vista): se muestra una sola vez.
     var visibles = contenedor().querySelectorAll(".toast:not(.is-saliendo) .toast__mensaje");

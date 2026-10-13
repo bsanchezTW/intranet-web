@@ -17,7 +17,7 @@ const { isPrivateFlag, hasPrivacyField, hasWebField } = require('../utils/eventA
 const router = express.Router();
 const WRITE_ROLES = ['admin'];
 
-const ASSET_VERSION = '20261006a';
+const ASSET_VERSION = '20261013b';
 const ASSETS_LISTA = {
   extraCss: [`/css/galeria.css?v=${ASSET_VERSION}`],
   extraJs: [`/js/galeria.js?v=${ASSET_VERSION}`],

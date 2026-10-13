@@ -825,7 +825,7 @@
       integrantePanel.classList.add('is-visible');
     } catch (err) {
       console.error(err);
-      IntranetDialog.alert({ title: 'No se pudo cargar el detalle', message: 'Intenta de nuevo en un momento.' });
+      IntranetToast.show('No se pudo cargar el detalle, intenta de nuevo', { tone: 'error' });
     }
   }
 </script>

@@ -37,10 +37,7 @@
   <% } %>
 
   <% if (errorPerfil) { %>
-    <div class="flash-msg flash-msg--error" role="alert">
-      <span class="flash-msg__icono" aria-hidden="true"><%- include('partials/icon', { name: 'alert-triangle' }) %></span>
-      <span><%= errorPerfil %></span>
-    </div>
+    <div hidden data-toast="<%= errorPerfil %>" data-toast-tone="error"></div>
   <% } %>
 
   <div class="perfil-layout">
@@ -202,7 +199,7 @@
 <script src="/js/phone.js?v=20260910n"></script>
 <script type="application/json" id="national-id-config"><%- JSON.stringify(documentoConfig).replace(/</g, '\\u003c') %></script>
 <script src="/js/national-id.js?v=20260910n"></script>
-<script src="/js/profile-photo-cropper.js?v=20260916m"></script>
+<script src="/js/profile-photo-cropper.js?v=20261013b"></script>
 <script src="/js/password-strength.js?v=20260916q"></script>
 <script src="/js/change-password-modal.js?v=20260917r"></script>
 <script>
@@ -277,13 +274,13 @@
         })
           .then(function (res) {
             if (res.ok) {
-              window.location.href = '/perfil';
+              window.location.href = '/perfil?ok=' + encodeURIComponent('Foto de perfil actualizada');
               return;
             }
             throw new Error('Error del servidor');
           })
           .catch(function () {
-            helpers.showError('No se pudo guardar la foto. Intenta de nuevo.');
+            IntranetToast.show('No se pudo guardar la foto, intenta de nuevo', { tone: 'error' });
             helpers.resetSaveButton();
           });
       }
@@ -305,13 +302,13 @@
       })
         .then(function (res) {
           if (res.ok) {
-            window.location.href = '/perfil';
+            window.location.href = '/perfil?ok=' + encodeURIComponent('Foto de perfil quitada');
             return;
           }
           throw new Error('Error del servidor');
         })
         .catch(function () {
-          IntranetDialog.alert({ title: 'No se pudo quitar la foto', message: 'Intenta de nuevo en un momento.' });
+          IntranetToast.show('No se pudo quitar la foto, intenta de nuevo', { tone: 'error' });
         });
     });
   });

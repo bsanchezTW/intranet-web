@@ -8,7 +8,6 @@
   const hiddenWrap = document.getElementById("homeQuickHiddenWrap");
   const emptyVisible = document.getElementById("homeQuickVisibleEmpty");
   const emptyHidden = document.getElementById("homeQuickHiddenEmpty");
-  const statusEl = document.getElementById("homeQuickStatus");
   const editBtn = document.getElementById("homeQuickEdit");
   const actionsEl = document.getElementById("homeQuickActions");
   const restoreBtn = section.querySelector('[data-quick-action="restore"]');
@@ -30,15 +29,10 @@
   const idsOf = (list) =>
     Array.from(list.querySelectorAll("[data-quick-id]")).map((el) => el.dataset.quickId);
 
-  let statusTimer = null;
-  const setStatus = (text, kind) => {
-    if (!statusEl) return;
-    clearTimeout(statusTimer);
-    statusEl.textContent = text || "";
-    statusEl.classList.toggle("is-ok", kind === "ok");
-    statusEl.classList.toggle("is-error", kind === "error");
-    // La confirmación vive bajo el título: se retira sola para no quedar fija.
-    if (kind === "ok") statusTimer = setTimeout(() => setStatus(""), 3500);
+  // Los resultados (guardado, errores, el tope de accesos) salen como aviso
+  // flotante; la barra no muestra mensajes propios.
+  const notify = (text, tone) => {
+    if (window.IntranetToast) window.IntranetToast.show(text, { tone: tone || "ok" });
   };
 
   const syncEmpty = () => {
@@ -102,10 +96,7 @@
     section.querySelectorAll(".home-quick__link").forEach((link) => {
       link.tabIndex = value ? -1 : 0;
     });
-    if (value) {
-      snapshot = capture();
-      setStatus("");
-    }
+    if (value) snapshot = capture();
     syncEmpty();
   };
 
@@ -123,7 +114,6 @@
   cancelBtn?.addEventListener("click", () => {
     if (snapshot) apply(snapshot);
     setEditing(false);
-    setStatus("");
   });
 
   section.addEventListener("click", (event) => {
@@ -147,7 +137,6 @@
       if (!item) return;
       setSlot(item, true);
       hiddenEl.appendChild(item);
-      setStatus("");
       syncEmpty();
       return;
     }
@@ -158,12 +147,11 @@
       const item = showBtn.closest("[data-quick-id]");
       if (!item) return;
       if (idsOf(visibleEl).length >= visibleLimit) {
-        setStatus("Puedes dejar hasta " + visibleLimit + " accesos en la barra.", "error");
+        notify("Puedes dejar hasta " + visibleLimit + " accesos en la barra", "info");
         return;
       }
       setSlot(item, false);
       visibleEl.appendChild(item);
-      setStatus("");
       syncEmpty();
     }
   });
@@ -212,20 +200,27 @@
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
-      throw new Error(data.error || "No se pudo guardar.");
+      throw new Error(data.error || "No se pudo guardar");
     }
     return data;
   }
 
-  function setBusy(busy) {
+  // Mientras se guarda, el propio botón dice qué está pasando.
+  function setBusy(busy, button, busyLabel) {
     [saveBtn, cancelBtn, restoreBtn, editBtn].forEach((btn) => {
       if (btn) btn.disabled = busy;
     });
+    if (!button) return;
+    if (busy) {
+      button.dataset.label = button.textContent;
+      button.textContent = busyLabel;
+    } else if (button.dataset.label) {
+      button.textContent = button.dataset.label;
+    }
   }
 
   saveBtn?.addEventListener("click", async () => {
-    setBusy(true);
-    setStatus("Guardando…");
+    setBusy(true, saveBtn, "Guardando…");
     try {
       const data = await postPreference({
         order: idsOf(visibleEl),
@@ -234,28 +229,27 @@
       if (!data.persisted) {
         if (snapshot) apply(snapshot);
         setEditing(false);
-        setStatus("Esta cuenta no guarda la personalización.", "error");
+        notify("Esta cuenta no guarda la personalización", "error");
         return;
       }
       snapshot = capture();
       setEditing(false);
-      setStatus("Guardado", "ok");
+      notify("Accesos rápidos guardados");
     } catch (err) {
-      setStatus(err.message || "No se pudo guardar.", "error");
+      notify(err.message || "No se pudo guardar", "error");
     } finally {
-      setBusy(false);
+      setBusy(false, saveBtn);
     }
   });
 
   restoreBtn?.addEventListener("click", async () => {
-    setBusy(true);
-    setStatus("Restaurando…");
+    setBusy(true, restoreBtn, "Restaurando…");
     try {
       const data = await postPreference({ reset: true });
       if (!data.persisted) {
         if (snapshot) apply(snapshot);
         setEditing(false);
-        setStatus("Esta cuenta no guarda la personalización.", "error");
+        notify("Esta cuenta no guarda la personalización", "error");
         return;
       }
       if (!defaults.length) {
@@ -268,11 +262,11 @@
       });
       snapshot = capture();
       setEditing(false);
-      setStatus("Orden del país restaurado", "ok");
+      notify("Orden del país restaurado");
     } catch (err) {
-      setStatus(err.message || "No se pudo guardar.", "error");
+      notify(err.message || "No se pudo guardar", "error");
     } finally {
-      setBusy(false);
+      setBusy(false, restoreBtn);
     }
   });
 
