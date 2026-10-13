@@ -84,9 +84,13 @@ function nodo(area, enFila) {
   const equipo = jefeEsMiembro
     ? area.members.filter(m => Number(m.id) !== Number(area.manager_user_id))
     : area.members;
-  const textoEquipo = equipo.length
-    ? plural(equipo.length, 'colaborador', 'colaboradores')
-    : (jefeEsMiembro ? 'Sin colaboradores a cargo' : 'Sin colaboradores');
+  // Un jefe puede tener a cargo áreas en vez de personas (Logística, Comercial):
+  // eso también es equipo y no debe leerse como «sin colaboradores».
+  const textoEquipo = [
+    equipo.length ? plural(equipo.length, 'colaborador', 'colaboradores') : '',
+    area.children.length ? plural(area.children.length, 'área a cargo', 'áreas a cargo') : '',
+  ].filter(Boolean).join(' · ')
+    || (jefeEsMiembro ? 'Sin colaboradores a cargo' : 'Sin colaboradores');
 
   let rol, ayuda;
   if (noDisponible) {
