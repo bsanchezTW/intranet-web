@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261015a">
 
 <%
   const nombre = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || ('#' + profile.id);
@@ -62,28 +62,53 @@
     </div>
   <% } %>
 
-  <%# Días vencidos = saldo de años cumplidos: hay que tomarlos. El plazo
-      legal (art. 23) es el segundo nivel: pasado, genera indemnización. %>
-  <% if (summary.availableDays > 0) { %>
-    <%
-      const pendientes = periods.filter(p => !p.inProgress && p.available > 0);
-    %>
-    <div class="flash-msg flash-msg--error" role="alert">
+  <%# Las cuatro cifras de la hoja de RR.HH. en una tarjeta. Días vencidos =
+      saldo de años cumplidos: hay que tomarlos. El plazo legal (art. 23) es el
+      segundo nivel: pasado, genera indemnización. %>
+  <% const pendientesVencidos = periods.filter(p => !p.inProgress && p.available > 0); %>
+  <section class="vac-hero<%= summary.availableDays > 0 ? ' vac-hero--alerta' : '' %>" aria-labelledby="vacHeroLabel">
+    <div class="vac-hero__main">
+      <span class="vac-hero__label" id="vacHeroLabel">Días vencidos</span>
+      <span class="vac-hero__value"><%= summary.availableDays %> <small>días</small></span>
+      <p class="vac-hero__msg">
+        <% if (summary.availableDays > 0) { %>
+          <span>
+            <strong>Debe tomarlos.</strong>
+            <% if (pendientesVencidos.length > 0) { %>
+              <%= pendientesVencidos.map(p => p.periodLabel + ': ' + p.available + ' d').join(' · ') %>.
+            <% } %>
+            <% if (overduePeriods.length > 0) { %>
+              <br>Fuera del plazo legal:
+              <%= overduePeriods.map(p => p.available + ' d de ' + p.periodLabel).join(' · ') %>.
+              No se pierden, pero la demora genera indemnización.
+            <% } %>
+            <% if (dueSoonPeriods.length > 0) { %>
+              <br>Vence pronto el plazo de
+              <%= dueSoonPeriods.map(p => p.available + ' d de ' + p.periodLabel + ' (hasta el ' + p.enjoyByFmt + ')').join(' · ') %>.
+            <% } %>
+          </span>
+        <% } else { %>
+          Al día: no tiene días de años cumplidos pendientes.
+        <% } %>
+      </p>
+    </div>
+    <dl class="vac-hero__facts">
       <div>
-        <strong>Tiene <%= summary.availableDays %> día(s) vencidos: debe tomarlos.</strong>
-        <% if (pendientes.length > 0) { %>
-          (<%= pendientes.map(p => p.periodLabel + ': ' + p.available + ' d').join(' · ') %>)
-        <% } %>
-        <% if (overduePeriods.length > 0) { %>
-          <br>Fuera del plazo legal para gozarlos:
-          <%= overduePeriods.map(p => p.available + ' d de ' + p.periodLabel).join(' · ') %>.
-          Los días no se pierden, pero la demora genera indemnización vacacional.
-        <% } %>
-        <% if (dueSoonPeriods.length > 0) { %>
-          <br>Vence pronto el plazo legal de
-          <%= dueSoonPeriods.map(p => p.available + ' d de ' + p.periodLabel + ' (hasta el ' + p.enjoyByFmt + ')').join(' · ') %>.
-        <% } %>
+        <dt>Generados</dt>
+        <dd><%= summary.generatedDays %><small><%= nextAccrualFmt ? 'Próximo: ' + nextAccrualFmt : 'Años cumplidos' %></small></dd>
+      </div>
+      <div>
+        <dt>Gozados antes de la intranet</dt>
+        <dd><%= summary.historicalUsedDays %><small><%= history.length %> salida(s)<% if (unimputedDays > 0) { %>, <%= unimputedDays %> d sin período<% } %></small></dd>
+      </div>
+      <div>
+        <dt>Gozados actualmente</dt>
+        <dd><%= summary.approvedUsedDays %><small>Solicitudes aprobadas</small></dd>
+      </div>
+    </dl>
 
+    <% if (summary.availableDays > 0) { %>
+      <div class="vac-hero__extra">
         <%# Aviso manual por correo: RR.HH. decide a quién y cuándo. %>
         <% if (hasEmail) { %>
           <form
@@ -108,41 +133,25 @@
           <% } %>
         </p>
       </div>
-    </div>
-  <% } %>
+    <% } %>
+  </section>
 
-  <%# Las cuatro cifras de la hoja de RR.HH., en el mismo orden. %>
-  <div class="vac-balance-grid">
-    <div class="vac-stat vac-stat--quiet">
-      <div class="vac-stat-label">Días generados</div>
-      <div class="vac-stat-value"><%= summary.generatedDays %></div>
-      <p class="vac-stat-note">Por años de servicio cumplidos.</p>
+  <div class="vac-tabs" data-vac-tabs>
+    <div class="vac-tabs__list" role="tablist" aria-label="Secciones de la ficha">
+      <button type="button" class="vac-tabs__tab" role="tab" id="tab-resumen" aria-controls="resumen" aria-selected="true">Resumen</button>
+      <button type="button" class="vac-tabs__tab" role="tab" id="tab-historial" aria-controls="historial" aria-selected="false" tabindex="-1">
+        Historial previo
+        <% if (history.length) { %><span class="vac-tabs__count<%= unimputedDays > 0 ? ' vac-tabs__count--alerta' : '' %>"><%= history.length %></span><% } %>
+      </button>
+      <button type="button" class="vac-tabs__tab" role="tab" id="tab-periodos" aria-controls="periodos" aria-selected="false" tabindex="-1">Períodos</button>
+      <button type="button" class="vac-tabs__tab" role="tab" id="tab-solicitudes" aria-controls="solicitudes" aria-selected="false" tabindex="-1">
+        Solicitudes
+        <% if (requests.length) { %><span class="vac-tabs__count"><%= requests.length %></span><% } %>
+      </button>
+      <button type="button" class="vac-tabs__tab" role="tab" id="tab-conciliacion" aria-controls="conciliacion" aria-selected="false" tabindex="-1">Conciliación</button>
     </div>
-    <div class="vac-stat vac-stat--quiet">
-      <div class="vac-stat-label">Gozados antes de la intranet</div>
-      <div class="vac-stat-value"><%= summary.historicalUsedDays %></div>
-      <p class="vac-stat-note">
-        <%= history.length %> salida(s) registradas.
-        <% if (unimputedDays > 0) { %>
-          <br>Otros <%= unimputedDays %> día(s) no caben en ningún período.
-        <% } %>
-      </p>
-    </div>
-    <div class="vac-stat vac-stat--quiet">
-      <div class="vac-stat-label">Gozados por la intranet</div>
-      <div class="vac-stat-value"><%= summary.approvedUsedDays %></div>
-      <p class="vac-stat-note">Solicitudes aprobadas aquí.</p>
-    </div>
-    <div class="vac-stat <%= summary.availableDays > 0 ? 'vac-stat--vencido' : '' %>">
-      <div class="vac-stat-label">Días vencidos</div>
-      <div class="vac-stat-value <%= summary.availableDays !== 0 ? 'danger' : '' %>"><%= summary.availableDays %></div>
-      <p class="vac-stat-note">
-        <% if (summary.availableDays > 0) { %><strong>Debe tomarlos.</strong><br><% } %>
-        <% if (nextAccrualFmt) { %>Próximo derecho: <%= nextAccrualFmt %><% } else { %>Días calendario<% } %>
-      </p>
-    </div>
-  </div>
 
+  <section class="vac-tabpanel" id="resumen" role="tabpanel" aria-labelledby="tab-resumen">
   <%# ======================== Datos para el cálculo ======================== %>
   <div class="vac-panel">
     <div class="vac-panel-head">
@@ -175,8 +184,43 @@
     </p>
   </div>
 
+  <%# Trunco y liquidación: lo que RR.HH. manda al abogado. %>
+  <% if (isPeru) { %>
+    <div class="vac-panel">
+      <div class="vac-panel-head">
+        Liquidación
+        <span class="vac-stat-unit">Cálculo a hoy</span>
+      </div>
+      <dl class="vac-datos">
+        <div>
+          <dt>Días vencidos</dt>
+          <dd><%= summary.availableDays %></dd>
+        </div>
+        <div>
+          <dt>Trunco del año en curso</dt>
+          <dd><%= summary.truncoDays %></dd>
+        </div>
+        <div>
+          <dt>Total a liquidar</dt>
+          <dd class="vac-datos__destacado"><%= summary.severanceDays %></dd>
+        </div>
+        <div>
+          <dt>Ajustes aplicados</dt>
+          <dd><%= summary.adjustedDays %></dd>
+        </div>
+      </dl>
+      <p class="vac-panel-note">
+        Los días vencidos son los de años ya cumplidos sin tomar. El trunco es el
+        proporcional del año en curso: se paga en una liquidación, pero todavía
+        no se puede pedir como vacaciones.
+      </p>
+    </div>
+  <% } %>
+  </section>
+
   <%# ===================== Historial previo a la intranet ===================== %>
-  <div class="vac-panel" id="historial">
+  <section class="vac-tabpanel" id="historial" role="tabpanel" aria-labelledby="tab-historial" hidden>
+  <div class="vac-panel">
     <div class="vac-panel-head">
       Vacaciones anteriores a la intranet
       <div class="vac-panel-actions">
@@ -278,8 +322,10 @@
       </p>
     <% } %>
   </div>
+  </section>
 
   <%# ========================= Saldo de referencia ========================== %>
+  <section class="vac-tabpanel" id="conciliacion" role="tabpanel" aria-labelledby="tab-conciliacion" hidden>
   <div class="vac-panel" id="referencia">
     <div class="vac-panel-head">Saldo de referencia</div>
     <form class="vac-form vac-form-inline" method="POST" action="<%= fichaPath %>/referencia">
@@ -346,7 +392,30 @@
     </p>
   </div>
 
+  <%# ============================== Bitácora ============================== %>
+  <% if (historyAudit && historyAudit.length) { %>
+  <div class="vac-panel">
+    <div class="vac-panel-head">Bitácora</div>
+    <div class="vac-rows">
+      <details>
+        <summary>Ver los últimos <%= historyAudit.length %> cambios</summary>
+        <ul class="vac-audit">
+          <% historyAudit.forEach(a => { %>
+            <li class="vac-row-issue">
+              <strong><%= a.actionLabel %></strong> · <%= a.actorName %> · <%= a.createdAtFmt %>
+              <% a.details.forEach(d => { %><span><%= d %></span><% }) %>
+              <% if (a.note) { %><span>Motivo / origen: <%= a.note %></span><% } %>
+            </li>
+          <% }) %>
+        </ul>
+      </details>
+    </div>
+  </div>
+  <% } %>
+  </section>
+
   <%# ============================ Períodos ============================== %>
+  <section class="vac-tabpanel" id="periodos" role="tabpanel" aria-labelledby="tab-periodos" hidden>
   <div class="vac-panel">
     <div class="vac-panel-head">
       Períodos de devengo
@@ -473,40 +542,10 @@
     <% } %>
   </div>
 
-  <%# Trunco y liquidación: lo que RR.HH. manda al abogado. %>
-  <% if (isPeru) { %>
-    <div class="vac-panel">
-      <div class="vac-panel-head">
-        Liquidación
-        <span class="vac-stat-unit">Cálculo a hoy</span>
-      </div>
-      <table class="vac-table vac-table--stack">
-        <thead>
-          <tr>
-            <th>Días vencidos</th>
-            <th>Trunco del año en curso</th>
-            <th>Total a liquidar</th>
-            <th>Ajustes aplicados</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td data-label="Días vencidos"><%= summary.availableDays %></td>
-            <td data-label="Trunco del año en curso"><%= summary.truncoDays %></td>
-            <td data-label="Total a liquidar"><strong><%= summary.severanceDays %></strong></td>
-            <td data-label="Ajustes aplicados"><%= summary.adjustedDays %></td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="vac-panel-note">
-        Los días vencidos son los de años ya cumplidos sin tomar. El trunco es el
-        proporcional del año en curso: se paga en una liquidación, pero todavía
-        no se puede pedir como vacaciones.
-      </p>
-    </div>
-  <% } %>
+  </section>
 
   <%# ====================== Solicitudes de la intranet ====================== %>
+  <section class="vac-tabpanel" id="solicitudes" role="tabpanel" aria-labelledby="tab-solicitudes" hidden>
   <div class="vac-panel">
     <div class="vac-panel-head">Solicitudes gestionadas por la intranet</div>
     <% if (!requests || requests.length === 0) { %>
@@ -530,27 +569,8 @@
       </table>
     <% } %>
   </div>
-
-  <%# ============================== Bitácora ============================== %>
-  <% if (historyAudit && historyAudit.length) { %>
-  <div class="vac-panel">
-    <div class="vac-panel-head">Bitácora</div>
-    <div class="vac-rows">
-      <details>
-        <summary>Ver los últimos <%= historyAudit.length %> cambios</summary>
-        <ul class="vac-audit">
-          <% historyAudit.forEach(a => { %>
-            <li class="vac-row-issue">
-              <strong><%= a.actionLabel %></strong> · <%= a.actorName %> · <%= a.createdAtFmt %>
-              <% a.details.forEach(d => { %><span><%= d %></span><% }) %>
-              <% if (a.note) { %><span>Motivo / origen: <%= a.note %></span><% } %>
-            </li>
-          <% }) %>
-        </ul>
-      </details>
-    </div>
+  </section>
   </div>
-  <% } %>
 </div>
 
 <%- include('../../partials/modal', {
@@ -569,4 +589,5 @@
   body: include('partials/modal_datos', { fichaPath, nombre })
 }) %>
 
+<script src="/js/vacaciones-tabs.js?v=20261015a" defer></script>
 <script src="/js/vacaciones-historial.js?v=20261013b" defer></script>

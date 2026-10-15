@@ -17,8 +17,12 @@ const VACATION_MESSAGES = {
   overlap:
     "Esas fechas se cruzan con otra solicitud tuya que aún está activa.",
 
-  minNotice(days) {
-    return `Pide tus vacaciones con al menos ${formatDays(days)} días de anticipación.`;
+  shortNotice(minDays, noticeDays) {
+    const quedan =
+      noticeDays > 0
+        ? `Quedan ${formatDays(noticeDays)} día(s) hábil(es) antes de que empiecen.`
+        : "Empiezan sin días hábiles de anticipación.";
+    return `${quedan} Lo recomendado es pedirlas con al menos ${formatDays(minDays)} días hábiles; igual puedes enviarla y tu jefatura decide.`;
   },
   insufficientBalance(requested, available) {
     return `No te alcanzan los días. Pediste ${formatDays(requested)} y te quedan ${formatDays(available)}.`;

@@ -40,6 +40,17 @@ async function getActiveRequests(userId, excludeRequestId = null) {
   return rows;
 }
 
+/**
+ * Feriados entre mañana y el inicio: Perú cuenta en días calendario, pero la
+ * anticipación recomendada se mide en días hábiles.
+ */
+async function noticeHolidaysFor(country, start) {
+  if (country !== "PE" || !start) return new Set();
+  const today = todayInCountry();
+  if (start <= today) return new Set();
+  return holidayService.getHolidaySet(country, today, start);
+}
+
 function vacationConfigForValidation() {
   return {
     minNoticeDaysCL: VACATION_CONFIG.minNoticeDaysCL,
@@ -111,6 +122,7 @@ async function createRequest({
     primaryPeriod,
     fifoPeriods,
     fractionAcknowledged,
+    noticeHolidays: await noticeHolidaysFor(country, start),
   });
 
   if (!result.valid) {
@@ -185,6 +197,7 @@ async function createRequest({
     approver: approver.manager,
     days: result.days,
     warnings,
+    notices: result.notices || [],
     accumulationAlert: (await balanceService.getBalanceSummary(userId)).accumulationAlert,
   };
 }
@@ -415,6 +428,7 @@ async function previewRequest({
     primaryPeriod,
     fifoPeriods,
     fractionAcknowledged,
+    noticeHolidays: await noticeHolidaysFor(country, start),
   });
 
   return {
@@ -422,6 +436,7 @@ async function previewRequest({
     days: result.days,
     errors: result.errors,
     warnings: result.warnings || [],
+    notices: result.notices || [],
     requiresFractionAck: Boolean(result.requiresFractionAck),
     unit: strategy.getDayUnit(),
     unitLabel:

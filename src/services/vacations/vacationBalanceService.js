@@ -418,9 +418,12 @@ function summarizePeriods({ periods, country, referenceDate }) {
   };
 }
 
-/** Resumen de saldos para la UI (lee de base). */
-async function getBalanceSummary(userId, { referenceDate } = {}) {
-  const user = await getUserVacationProfile(userId);
+/**
+ * Resumen de saldos para la UI (lee de base). `user` evita volver a leer la
+ * ficha cuando quien llama ya la tiene.
+ */
+async function getBalanceSummary(userId, { referenceDate, user: knownUser } = {}) {
+  const user = knownUser || (await getUserVacationProfile(userId));
   const country = resolveCountryForUser(user);
   const periods = await listPeriods(userId);
   return summarizePeriods({

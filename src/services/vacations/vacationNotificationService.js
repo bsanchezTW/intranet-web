@@ -18,10 +18,22 @@ function rangeText(request) {
   return `${formatDisplay(request.start_date)} al ${formatDisplay(request.end_date)} (${requestDays(request)} día(s))`;
 }
 
+/** Sobre este tiempo, la llamada a Brevo queda en el log del servidor. */
+const SLOW_MAIL_MS = 3000;
+
 function safeSend(payload) {
-  return sendMail(payload).catch((err) =>
-    console.error("[Vacaciones] Error enviando correo:", err.message),
-  );
+  const startedAt = Date.now();
+  return sendMail(payload)
+    .then((result) => {
+      const ms = Date.now() - startedAt;
+      if (ms > SLOW_MAIL_MS) {
+        console.warn(`[Vacaciones] Brevo tardó ${ms} ms en aceptar «${payload.subject}».`);
+      }
+      return result;
+    })
+    .catch((err) =>
+      console.error("[Vacaciones] Error enviando correo:", err.message),
+    );
 }
 
 /** Nueva solicitud → RRHH. Opcional: alerta de acumulación CL. */

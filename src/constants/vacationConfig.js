@@ -12,7 +12,8 @@ function intEnv(name, fallback) {
 }
 
 const VACATION_CONFIG = {
-  // Anticipación mínima para solicitar (días)
+  // Anticipación para solicitar. Chile: mínimo obligatorio (días hábiles).
+  // Perú: recomendación en días hábiles; con menos solo se avisa.
   minNoticeDaysCL: intEnv("VACATION_MIN_NOTICE_DAYS_CL", 15),
   minNoticeDaysPE: intEnv("VACATION_MIN_NOTICE_DAYS_PE", 7),
 

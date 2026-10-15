@@ -967,3 +967,383 @@ a.vac-btn { display: inline-block; text-decoration: none; }
   .vac-table--resumen td.vac-col-colaborador::before { content: none; }
   .vac-table--resumen .vac-link-colaborador { font-size: 1rem; }
 }
+
+/* ==========================================================================
+   Saldo en una sola tarjeta: la cifra que importa grande y el resto como
+   datos de apoyo (Mis vacaciones y ficha del colaborador).
+   ========================================================================== */
+
+.vac-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 20px 32px;
+  align-items: center;
+  padding: 22px 26px;
+  margin-bottom: 22px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.vac-hero--alerta {
+  border-color: rgba(208, 92, 92, 0.35);
+  box-shadow: inset 4px 0 0 var(--down), var(--shadow);
+}
+
+.vac-hero__label,
+.vac-hero__facts dt {
+  display: block;
+  color: var(--subtle);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vac-hero__value {
+  display: block;
+  margin-top: 4px;
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+.vac-hero__value small { font-size: 0.95rem; font-weight: 600; color: var(--subtle); }
+.vac-hero--alerta .vac-hero__value { color: var(--down); }
+
+.vac-hero__msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 10px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.vac-hero__msg svg { flex: 0 0 auto; width: 1.05em; height: 1.05em; margin-top: 2px; }
+.vac-hero--alerta .vac-hero__msg { color: #8f2f2f; }
+
+.vac-hero__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.vac-hero__facts > div {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface2);
+}
+
+.vac-hero__facts dd {
+  margin: 4px 0 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.vac-hero__facts dd small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--subtle);
+}
+
+.vac-hero__facts dd.danger { color: var(--down); }
+
+/* La cifra que se lleva el par etiqueta/valor (total a liquidar). */
+.vac-datos dd.vac-datos__destacado { color: var(--brand); font-size: 1.15rem; }
+
+/* Acciones al pie de la tarjeta (aviso de días vencidos en la ficha). */
+.vac-hero__extra {
+  grid-column: 1 / -1;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.vac-hero__extra .vac-aviso-form { margin-top: 0; }
+
+@media (max-width: 760px) {
+  .vac-hero { grid-template-columns: 1fr; padding: 18px; }
+  .vac-hero__value { font-size: 2.2rem; }
+}
+
+/* ==========================================================================
+   Pestañas: una sección a la vez en vez de todo apilado.
+   ========================================================================== */
+
+.vac-tabs__list {
+  display: flex;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 18px;
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--surface2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.vac-tabs__list::-webkit-scrollbar { display: none; }
+
+.vac-tabs__tab {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vac-tabs__tab:hover { color: var(--brand); }
+
+.vac-tabs__tab[aria-selected="true"] {
+  background: var(--color-surface);
+  color: var(--brand);
+  box-shadow: 0 1px 2px rgba(13, 31, 51, 0.08), 0 2px 8px rgba(13, 31, 51, 0.06);
+}
+
+.vac-tabs__tab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.vac-tabs__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.vac-tabs__count--alerta { background: var(--down); }
+
+.vac-tabpanel { animation: fadeUp 0.25s ease both; }
+.vac-tabpanel > .vac-panel:last-child { margin-bottom: 0; }
+
+@media (max-width: 640px) {
+  .vac-tabs__list { width: 100%; }
+  .vac-tabs__tab { flex: 1 0 auto; justify-content: center; padding: 9px 12px; }
+}
+
+/* ==========================================================================
+   Solicitar: formulario y ayuda lado a lado.
+   ========================================================================== */
+
+.vac-solicitar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.vac-solicitar .vac-panel { margin-bottom: 0; overflow: visible; }
+
+.vac-form--solicitud { padding: 20px 22px 22px; }
+
+.vac-form__titulo,
+.vac-ayuda__titulo {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-heading);
+}
+
+.vac-form__hint { margin: -6px 0 16px; }
+.vac-form__pie { display: flex; justify-content: flex-end; }
+.vac-opcional { font-weight: 500; color: var(--subtle); }
+
+/* Lo que responde el servidor al elegir fechas: resumen, error o aviso. */
+.vac-resultado {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.vac-resultado--ok {
+  background: var(--green-soft);
+  border-color: rgba(92, 143, 29, 0.28);
+  color: var(--green-ink);
+}
+
+.vac-resultado--error {
+  background: rgba(208, 92, 92, 0.08);
+  border-color: rgba(208, 92, 92, 0.3);
+  color: #8f2f2f;
+}
+
+.vac-resultado--aviso {
+  background: #fdf6e7;
+  border-color: rgba(180, 112, 10, 0.3);
+  color: #7a4b05;
+}
+
+.vac-ayuda {
+  padding: 18px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.vac-medidor + .vac-medidor { margin-top: 14px; }
+
+.vac-medidor__cabeza {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.vac-medidor__cabeza strong {
+  font-size: 1.05rem;
+  color: var(--color-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.vac-medidor__cabeza small { font-size: 0.75rem; font-weight: 600; color: var(--subtle); }
+
+.vac-medidor__barra {
+  height: 6px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface2);
+}
+
+.vac-medidor__barra span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand);
+}
+
+.vac-medidor__nota { margin: 4px 0 0; font-size: 0.78rem; color: var(--subtle); }
+
+.vac-ayuda__nota {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.vac-ayuda__lista {
+  margin: 14px 0 0;
+  padding: 14px 0 0 1.1rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.vac-ayuda__nota--primera { margin-top: 0; }
+.vac-ayuda__titulo + .vac-ayuda__lista { margin-top: 0; padding-top: 0; border-top: 0; }
+.vac-ayuda__lista li + li { margin-top: 6px; }
+
+@media (max-width: 900px) {
+  .vac-solicitar { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   Acciones de fila (aprobar, rechazar, cancelar): mismo alto y ancho; el
+   color dice qué hace y el ícono lo refuerza.
+   ========================================================================== */
+
+.vac-acciones {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.vac-acciones > form { display: flex; margin: 0; }
+
+.vac-accion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 34px;
+  min-width: 108px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.vac-accion svg { flex: 0 0 auto; width: 15px; height: 15px; }
+.vac-accion:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.vac-accion--aprobar {
+  background: var(--green-soft);
+  border-color: rgba(92, 143, 29, 0.38);
+  color: var(--green-ink);
+}
+
+.vac-accion--aprobar:hover {
+  background: var(--corp-green-dark);
+  border-color: var(--corp-green-dark);
+  color: #fff;
+}
+
+.vac-accion--rechazar {
+  background: var(--color-surface);
+  border-color: rgba(208, 92, 92, 0.45);
+  color: #b42318;
+}
+
+.vac-accion--rechazar:hover {
+  background: rgba(208, 92, 92, 0.1);
+  border-color: var(--down);
+}
+
+.vac-accion--neutra {
+  min-width: 0;
+  background: var(--color-surface);
+  border-color: var(--border2);
+  color: var(--color-text-muted);
+}
+
+.vac-accion--neutra:hover { border-color: var(--down); color: #b42318; }
+
+@media (max-width: 720px) {
+  .vac-table--stack td[data-label=""] .vac-acciones { width: 100%; }
+  .vac-acciones > form { flex: 1 1 0; }
+  .vac-acciones .vac-accion { width: 100%; }
+}

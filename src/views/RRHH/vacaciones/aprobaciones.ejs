@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="/css/vacaciones.css?v=20261006a">
+<link rel="stylesheet" href="/css/vacaciones.css?v=20261015a">
 
 <div class="vac-wrap">
   <div class="page-header">
@@ -37,7 +37,7 @@
         <thead>
           <tr>
             <th>Colaborador</th><th>Área</th><th>Período</th><th>Días</th>
-            <th>Comentario</th><th>Acciones</th>
+            <th>Comentario</th><th><span class="sr-only">Acciones</span></th>
           </tr>
         </thead>
         <tbody>
@@ -52,18 +52,24 @@
               <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
               <td data-label="Comentario"><%= r.requester_notes || '-' %></td>
               <td data-label="">
-                <form class="vac-inline-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/aprobar" method="POST"
-                      data-confirm="Se aprobarán <%= r.days %> <%= r.dayUnit %> (<%= r.startDateFmt %> → <%= r.endDateFmt %>)."
-                      data-confirm-title="¿Aprobar la solicitud?"
-                      data-confirm-accept="Aprobar">
-                  <input type="hidden" name="volver" value="aprobaciones">
-                  <button type="submit" class="vac-btn vac-btn-approve vac-btn-sm">Aprobar</button>
-                </form>
-                <form class="vac-inline-form js-reject-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/rechazar" method="POST">
-                  <input type="hidden" name="volver" value="aprobaciones">
-                  <input type="hidden" name="reason">
-                  <button type="submit" class="vac-btn vac-btn-reject vac-btn-sm">Rechazar</button>
-                </form>
+                <div class="vac-acciones">
+                  <form action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/aprobar" method="POST"
+                        data-confirm="Se aprobarán <%= r.days %> días <%= r.dayUnit %> (<%= r.startDateFmt %> → <%= r.endDateFmt %>)."
+                        data-confirm-title="¿Aprobar la solicitud?"
+                        data-confirm-accept="Aprobar">
+                    <input type="hidden" name="volver" value="aprobaciones">
+                    <button type="submit" class="vac-accion vac-accion--aprobar">
+                      <%- include('../../partials/icon', { name: 'check' }) %>Aprobar
+                    </button>
+                  </form>
+                  <form class="js-reject-form" action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/rechazar" method="POST">
+                    <input type="hidden" name="volver" value="aprobaciones">
+                    <input type="hidden" name="reason">
+                    <button type="submit" class="vac-accion vac-accion--rechazar">
+                      <%- include('../../partials/icon', { name: 'x' }) %>Rechazar
+                    </button>
+                  </form>
+                </div>
               </td>
             </tr>
           <% }) %>

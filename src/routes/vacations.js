@@ -40,11 +40,17 @@ const {
 const { getTimezone } = require("../config/country");
 
 // ---------- helpers de redirect con flash ----------
+// La ruta puede traer "#pestaña": la query va antes del hash para que el
+// navegador la lea y la vista abra esa sección.
+function withQuery(path, query) {
+  const [base, hash] = String(path).split("#");
+  return `${base}?${query}${hash ? `#${hash}` : ""}`;
+}
 function redirectOk(res, path, msg) {
-  return res.redirect(`${path}?ok=1&msg=${encodeURIComponent(msg)}`);
+  return res.redirect(withQuery(path, `ok=1&msg=${encodeURIComponent(msg)}`));
 }
 function redirectErr(res, path, msg) {
-  return res.redirect(`${path}?error=${encodeURIComponent(msg)}`);
+  return res.redirect(withQuery(path, `error=${encodeURIComponent(msg)}`));
 }
 function readFlash(req) {
   return {
@@ -63,6 +69,23 @@ async function logChange(req, action, linkPath) {
   } catch (err) {
     console.error("[Vacaciones] Error en change_log:", err.message);
   }
+}
+
+/**
+ * Correos y bitácora que siguen a una solicitud, aprobación o rechazo.
+ *
+ * Corren después de responder: antes la redirección esperaba a que se
+ * leyeran la ficha y el saldo del colaborador (cuatro idas y vueltas a la
+ * base, el doble si el pooler obliga a fijar search_path en cada consulta) y
+ * recién entonces salía el correo.
+ * Así el correo parte apenas termina la operación y la pantalla no lo espera.
+ */
+function afterResponse(label, task) {
+  setImmediate(() => {
+    Promise.resolve()
+      .then(task)
+      .catch((err) => console.error(`[Vacaciones] ${label}:`, err.message || err));
+  });
 }
 
 /** Último aviso de días vencidos, listo para la vista ("28-09-2026 · Patricia"). */
@@ -161,23 +184,27 @@ router.post("/mis-vacaciones/solicitar", requireRole.intranetActivo(), async (re
       return redirectErr(res, "/RRHH/vacaciones/mis-vacaciones", result.errors.join(" "));
     }
 
-    const profile = await balanceService.getUserVacationProfile(userId);
-    notificationService.notifyNewRequest({
-      request: result.request,
-      user: profile,
-      accumulationAlert: Boolean(result.accumulationAlert),
-    });
-    notificationService.notifyApprover({
-      request: result.request,
-      user: profile,
-      approver: result.approver,
-    });
-
-    return redirectOk(
+    redirectOk(
       res,
-      "/RRHH/vacaciones/mis-vacaciones",
+      "/RRHH/vacaciones/mis-vacaciones#solicitudes",
       VACATION_MESSAGES.requestSent,
     );
+    afterResponse("aviso de nueva solicitud", async () => {
+      const profile = await balanceService.getUserVacationProfile(userId);
+      await Promise.all([
+        notificationService.notifyNewRequest({
+          request: result.request,
+          user: profile,
+          accumulationAlert: Boolean(result.accumulationAlert),
+        }),
+        notificationService.notifyApprover({
+          request: result.request,
+          user: profile,
+          approver: result.approver,
+        }),
+      ]);
+    });
+    return undefined;
   } catch (err) {
     console.error("Error creando solicitud:", err);
     return redirectErr(res, "/RRHH/vacaciones/mis-vacaciones", VACATION_MESSAGES.sendFailed);
@@ -192,12 +219,12 @@ router.post("/mis-vacaciones/cancelar/:id", requireRole.intranetActivo(), async 
       userId,
     });
     if (!result.ok) {
-      return redirectErr(res, "/RRHH/vacaciones/mis-vacaciones", result.error);
+      return redirectErr(res, "/RRHH/vacaciones/mis-vacaciones#solicitudes", result.error);
     }
-    return redirectOk(res, "/RRHH/vacaciones/mis-vacaciones", VACATION_MESSAGES.requestCancelled);
+    return redirectOk(res, "/RRHH/vacaciones/mis-vacaciones#solicitudes", VACATION_MESSAGES.requestCancelled);
   } catch (err) {
     console.error("Error cancelando solicitud:", err);
-    return redirectErr(res, "/RRHH/vacaciones/mis-vacaciones", VACATION_MESSAGES.cancelFailed);
+    return redirectErr(res, "/RRHH/vacaciones/mis-vacaciones#solicitudes", VACATION_MESSAGES.cancelFailed);
   }
 });
 
@@ -541,7 +568,7 @@ router.post(
   requireRrhhManager(),
   async (req, res) => {
     const { userId, historyId } = req.params;
-    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#historial`;
     try {
       const cutoffDate = await settingsService.getCutoffDate();
       const result = await historyService.updateHistory({
@@ -568,7 +595,7 @@ router.post(
   requireRrhhManager(),
   async (req, res) => {
     const { userId, historyId } = req.params;
-    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#historial`;
     try {
       const result = await historyService.deleteHistory({
         historyId,
@@ -613,7 +640,7 @@ router.post("/gestion/:userId/datos", requireRrhhManager(), async (req, res) => 
 
 router.post("/gestion/:userId/referencia", requireRrhhManager(), async (req, res) => {
   const { userId } = req.params;
-  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#conciliacion`;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
     if (!profile) {
@@ -640,7 +667,7 @@ router.post(
   requireRrhhManager(),
   async (req, res) => {
     const { userId, referenceId } = req.params;
-    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+    const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#conciliacion`;
     try {
       const result = await referenceService.deleteReference({
         userId,
@@ -660,7 +687,7 @@ router.post(
 /** Rehace períodos e imputación del historial desde cero. */
 router.post("/gestion/:userId/recalcular", requireRrhhManager(), async (req, res) => {
   const { userId } = req.params;
-  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#periodos`;
   try {
     await balanceService.recalculatePeriods(userId);
     const result = await balanceService.reimputeHistoricalDays(userId);
@@ -679,7 +706,7 @@ router.post("/gestion/:userId/recalcular", requireRrhhManager(), async (req, res
 router.post("/gestion/:userId/ajustar", requireRrhhManager(), async (req, res) => {
   const { userId } = req.params;
   const { period_id, days_delta, reason } = req.body;
-  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#periodos`;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
     if (!profile) {
@@ -711,7 +738,7 @@ router.post("/gestion/:userId/ajustar", requireRrhhManager(), async (req, res) =
 router.post("/gestion/:userId/periodo/:periodId/record", requireRrhhManager(), async (req, res) => {
   const { userId, periodId } = req.params;
   const { record_met, record_notes } = req.body;
-  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
+  const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#periodos`;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
     if (!profile) {
@@ -815,14 +842,21 @@ router.post("/gestion/solicitud/:id/aprobar", ...reviewGuards, async (req, res) 
     });
     if (!result.ok) return redirectErr(res, backTo, result.error);
 
-    const profile = await balanceService.getUserVacationProfile(result.request.user_id);
-    // El saldo ya descontado va en la constancia: es lo primero que pregunta
-    // el colaborador al recibirla.
-    const balance = await balanceService.getBalanceSummary(result.request.user_id);
-    notificationService.notifyApproved({ request: result.request, user: profile, balance });
-    await logChange(req, "aprobó una solicitud de vacaciones", backTo);
-
-    return redirectOk(res, backTo, VACATION_MESSAGES.requestApproved);
+    redirectOk(res, backTo, VACATION_MESSAGES.requestApproved);
+    afterResponse("constancia de aprobación", async () => {
+      const userId = result.request.user_id;
+      const profile = await balanceService.getUserVacationProfile(userId);
+      // El saldo ya descontado va en la constancia: es lo primero que pregunta
+      // el colaborador al recibirla.
+      const balance = profile
+        ? await balanceService.getBalanceSummary(userId, { user: profile })
+        : null;
+      await Promise.all([
+        notificationService.notifyApproved({ request: result.request, user: profile, balance }),
+        logChange(req, "aprobó una solicitud de vacaciones", backTo),
+      ]);
+    });
+    return undefined;
   } catch (err) {
     console.error("Error aprobando solicitud:", err);
     return redirectErr(res, backTo, VACATION_MESSAGES.approveFailed);
@@ -839,11 +873,15 @@ router.post("/gestion/solicitud/:id/rechazar", ...reviewGuards, async (req, res)
     });
     if (!result.ok) return redirectErr(res, backTo, result.error);
 
-    const profile = await balanceService.getUserVacationProfile(result.request.user_id);
-    notificationService.notifyRejected({ request: result.request, user: profile });
-    await logChange(req, "rechazó una solicitud de vacaciones", backTo);
-
-    return redirectOk(res, backTo, VACATION_MESSAGES.requestRejected);
+    redirectOk(res, backTo, VACATION_MESSAGES.requestRejected);
+    afterResponse("aviso de rechazo", async () => {
+      const profile = await balanceService.getUserVacationProfile(result.request.user_id);
+      await Promise.all([
+        notificationService.notifyRejected({ request: result.request, user: profile }),
+        logChange(req, "rechazó una solicitud de vacaciones", backTo),
+      ]);
+    });
+    return undefined;
   } catch (err) {
     console.error("Error rechazando solicitud:", err);
     return redirectErr(res, backTo, VACATION_MESSAGES.rejectFailed);

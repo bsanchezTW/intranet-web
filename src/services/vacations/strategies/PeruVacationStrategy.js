@@ -1,6 +1,7 @@
 const BaseVacationStrategy = require("./BaseVacationStrategy");
 const {
   countCalendarDays,
+  countBusinessDays,
   fullYearsBetween,
   fullMonthsBetween,
   addDays,
@@ -201,8 +202,10 @@ class PeruVacationStrategy extends BaseVacationStrategy {
       if (need <= protectedRemaining) {
         return { valid: true, requiresFractionAck: N < PROTECTED_BLOCK_SIZE * 2 };
       }
+      // Llenar el protegido y desbordar al flexible no es fraccionar si se
+      // toma el período entero (30 días seguidos).
       if (protectedRemaining + flexibleRemaining >= N) {
-        return { valid: true, requiresFractionAck: true };
+        return { valid: true, requiresFractionAck: N < ANNUAL_ENTITLEMENT };
       }
       return {
         valid: false,
@@ -364,9 +367,12 @@ class PeruVacationStrategy extends BaseVacationStrategy {
     primaryPeriod = null,
     fifoPeriods = null,
     fractionAcknowledged = false,
+    noticeHolidays = new Set(),
   }) {
     const errors = [];
     const warnings = [];
+    // Avisos informativos: se muestran, pero no bloquean ni piden confirmación.
+    const notices = [];
     const today = toDateOnly(referenceDate) || toDateOnly(new Date());
     const start = toDateOnly(request.startDate);
     const end = toDateOnly(request.endDate);
@@ -383,6 +389,7 @@ class PeruVacationStrategy extends BaseVacationStrategy {
         valid: false,
         errors: [VACATION_MESSAGES.notEligibleYet],
         warnings,
+        notices,
         days,
         requiresFractionAck: false,
       };
@@ -390,7 +397,7 @@ class PeruVacationStrategy extends BaseVacationStrategy {
 
     if (!start || !end) {
       errors.push(VACATION_MESSAGES.invalidDates);
-      return { valid: false, errors, warnings, days: 0, requiresFractionAck: false };
+      return { valid: false, errors, warnings, notices, days: 0, requiresFractionAck: false };
     }
     if (end < start) {
       errors.push(VACATION_MESSAGES.endBeforeStart);
@@ -402,11 +409,15 @@ class PeruVacationStrategy extends BaseVacationStrategy {
       errors.push(VACATION_MESSAGES.pastDates);
     }
 
+    // La anticipación es una recomendación, no un requisito: con menos días
+    // hábiles la solicitud sale igual y la jefatura decide. Solo se avisa.
     const minNotice = Number(config.minNoticeDaysPE ?? 7);
     if (!allowPast && start >= today) {
-      const noticeDays = countCalendarDays(addDays(today, 1), start);
+      const noticeDays = start > today
+        ? countBusinessDays(addDays(today, 1), addDays(start, -1), noticeHolidays)
+        : 0;
       if (noticeDays < minNotice) {
-        errors.push(VACATION_MESSAGES.minNotice(minNotice));
+        notices.push(VACATION_MESSAGES.shortNotice(minNotice, noticeDays));
       }
     }
 
@@ -439,7 +450,10 @@ class PeruVacationStrategy extends BaseVacationStrategy {
         if (!frac.valid) {
           errors.push(frac.error);
         } else {
-          requiresFractionAck = Boolean(frac.requiresFractionAck);
+          // 30 días o más de una vez no son vacaciones «en partes», aunque se
+          // descuenten de dos períodos: no se pide la casilla.
+          requiresFractionAck =
+            days < ANNUAL_ENTITLEMENT && Boolean(frac.requiresFractionAck);
         }
       }
     }
@@ -452,6 +466,7 @@ class PeruVacationStrategy extends BaseVacationStrategy {
       valid: errors.length === 0,
       errors,
       warnings,
+      notices,
       days,
       requiresFractionAck,
     };

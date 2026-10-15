@@ -96,6 +96,89 @@ describe("PeruVacationStrategy — fraccionamiento art. 17", () => {
   });
 });
 
+describe("PeruVacationStrategy — casilla «en partes» y anticipación", () => {
+  const fresh = () => ({
+    entitled_days: 30,
+    adjusted_days: 0,
+    used_days: 0,
+    record_met: true,
+    available: 30,
+    protected_block_days_used: 0,
+    flexible_block_days_used: 0,
+  });
+  // Lunes 3 de agosto de 2026; las fechas de inicio se eligen con holgura.
+  const base = {
+    availableBalance: 60,
+    existingActiveRequests: [],
+    referenceDate: "2026-08-03",
+    config: { minNoticeDaysPE: 7, suggestedMinFractionDaysPE: 7 },
+  };
+
+  it("PE-ack-01: 30 días seguidos en un período nuevo no piden la casilla", () => {
+    const r = pe.validateRequest({
+      ...base,
+      request: { startDate: "2026-09-01", endDate: "2026-09-30" },
+      fifoPeriods: [fresh()],
+    });
+    assert.equal(r.requiresFractionAck, false);
+    assert.equal(r.valid, true);
+  });
+
+  it("PE-ack-02: 30 días que se descuentan de dos períodos tampoco", () => {
+    const first = { ...fresh(), available: 12, historical_used_days: 18, protected_block_days_used: 15, flexible_block_days_used: 3 };
+    const r = pe.validateRequest({
+      ...base,
+      request: { startDate: "2026-09-01", endDate: "2026-09-30" },
+      fifoPeriods: [first, fresh()],
+    });
+    assert.equal(r.requiresFractionAck, false);
+    assert.equal(r.valid, true);
+  });
+
+  it("PE-ack-03: 20 días sí piden la casilla", () => {
+    const r = pe.validateRequest({
+      ...base,
+      request: { startDate: "2026-09-01", endDate: "2026-09-20" },
+      fifoPeriods: [fresh()],
+    });
+    assert.equal(r.requiresFractionAck, true);
+    assert.equal(r.valid, false);
+    assert.ok(r.errors.some((e) => /casilla/.test(e)));
+  });
+
+  it("PE-notice-01: con menos de 7 días hábiles la solicitud es válida y solo avisa", () => {
+    // Del martes 4 al viernes 7 hay 4 días hábiles antes de empezar el lunes 10.
+    const r = pe.validateRequest({
+      ...base,
+      request: { startDate: "2026-08-10", endDate: "2026-09-08" },
+      fifoPeriods: [fresh()],
+    });
+    assert.equal(r.valid, true);
+    assert.equal(r.errors.length, 0);
+    assert.equal(r.warnings.length, 0);
+    assert.equal(r.notices.length, 1);
+    assert.match(r.notices[0], /4 día\(s\) hábil\(es\)/);
+  });
+
+  it("PE-notice-02: los feriados no cuentan como días de anticipación", () => {
+    const r = pe.validateRequest({
+      ...base,
+      request: { startDate: "2026-08-14", endDate: "2026-09-12" },
+      fifoPeriods: [fresh()],
+      noticeHolidays: new Set(["2026-08-06"]),
+    });
+    // 4..13 de agosto: 8 hábiles menos el feriado = 7, ya no avisa.
+    assert.equal(r.notices.length, 0);
+    const r2 = pe.validateRequest({
+      ...base,
+      request: { startDate: "2026-08-13", endDate: "2026-09-11" },
+      fifoPeriods: [fresh()],
+      noticeHolidays: new Set(["2026-08-06"]),
+    });
+    assert.equal(r2.notices.length, 1);
+  });
+});
+
 describe("PeruVacationStrategy — allocateBlockDays", () => {
   const emptyPeriod = {
     protected_block_days_used: 0,

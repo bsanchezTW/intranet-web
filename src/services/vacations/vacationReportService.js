@@ -262,7 +262,7 @@ async function exportTeamReport({ referenceDate = null } = {}) {
         { header: "Tiempo de servicio", key: "serviceTime", width: 20 },
         { header: "Días generados", key: "generatedDays", width: 15, numFmt: "0.##" },
         { header: "Gozados antes de la intranet", key: "historicalUsedDays", width: 26, numFmt: "0.##" },
-        { header: "Gozados por la intranet", key: "approvedUsedDays", width: 22, numFmt: "0.##" },
+        { header: "Gozados actualmente", key: "approvedUsedDays", width: 22, numFmt: "0.##" },
         { header: "Total gozado", key: "totalUsedDays", width: 14, numFmt: "0.##" },
         { header: "Ajustes", key: "adjustedDays", width: 10, numFmt: "0.##" },
         { header: "Días vencidos (debe tomar)", key: "availableDays", width: 26, numFmt: "0.##" },
