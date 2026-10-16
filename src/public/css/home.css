@@ -1187,6 +1187,28 @@
   left: 26px;
 }
 
+/* Si las fichas no caben en una fila (columna angosta, rótulos largos),
+   js/home-quick.js marca la sección como compacta y el rótulo baja bajo el
+   ícono, igual que en el teléfono, en vez de cortar la última ficha. */
+.home-quick-section.is-compact .home-quick {
+  gap: 0;
+}
+
+.home-quick-section.is-compact .home-quick__link {
+  flex-direction: column;
+  padding: 8px 2px 6px;
+  gap: 5px;
+}
+
+.home-quick-section.is-compact .home-quick__label {
+  font-size: 0.66rem;
+}
+
+.home-quick-section.is-compact .home-quick__item .badge-notif {
+  left: auto;
+  right: 4px;
+}
+
 .home-quick-section.is-editing .home-quick__item .badge-notif {
   display: none;
 }

@@ -98,6 +98,7 @@
     });
     if (value) snapshot = capture();
     syncEmpty();
+    fit();
   };
 
   const moveItem = (item, step) => {
@@ -269,6 +270,22 @@
       setBusy(false, restoreBtn);
     }
   });
+
+  // Si los accesos no caben en una fila, pasan al formato compacto (rótulo
+  // bajo el ícono) en vez de quedar cortados. Se mide sin la clase para saber
+  // si vuelven a caber al ensancharse. Editando, la fila ya se parte sola.
+  const fit = () => {
+    section.classList.remove("is-compact");
+    if (editing) return;
+    if (visibleEl.scrollWidth > visibleEl.clientWidth + 1) {
+      section.classList.add("is-compact");
+    }
+  };
+  fit();
+  if (window.ResizeObserver) new ResizeObserver(fit).observe(section);
+  else window.addEventListener("resize", fit);
+  document.fonts?.ready.then(fit);
+  window.addEventListener("load", fit);
 
   requestAnimationFrame(() => section.classList.add("is-settled"));
 })();
