@@ -25,7 +25,7 @@ const { withQueryParam } = require("../utils/returnTo");
  */
 
 const BASE = "/permisos";
-const CSS = ["/css/permisos.css?v=20261019b"];
+const CSS = ["/css/permisos.css?v=20261019c"];
 const JS = ["/js/permisos.js?v=20261019b"];
 
 router.use((req, res, next) => {

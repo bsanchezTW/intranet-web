@@ -668,6 +668,40 @@ details[open] > .perm-abrir {
   margin-right: auto;
 }
 
+/* Agregar superadmin: un selector y su botón, sin ocupar todo el ancho. */
+.perm-agregar {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.perm-agregar > label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.perm-agregar__fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.perm-agregar select {
+  flex: 0 1 320px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--color-text);
+}
+
 .perm-form select[multiple] {
   min-height: 120px;
 }

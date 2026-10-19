@@ -139,20 +139,20 @@ const TARJETAS = [
         </tbody>
       </table>
 
-      <form class="perm-form" action="/permisos/superadmin" method="POST"
+      <form class="perm-agregar" action="/permisos/superadmin" method="POST"
             data-confirm="La persona tendrá todos los permisos de la intranet y podrá administrar este módulo."
             data-confirm-title="¿Agregar superadmin?" data-confirm-accept="Agregar">
         <input type="hidden" name="valor" value="1">
-        <div class="campo-form perm-form__ancho">
-          <label for="nuevo-superadmin">Agregar superadmin</label>
+        <label for="nuevo-superadmin">Agregar superadmin</label>
+        <div class="perm-agregar__fila">
           <select id="nuevo-superadmin" name="user_id" required>
-            <option value="">Elige…</option>
+            <option value="">Elige a una persona…</option>
             <% activeUsers.filter(function (u) { return !u.is_superadmin; }).forEach(function (u) { %>
               <option value="<%= u.id %>"><%= u.name %></option>
             <% }) %>
           </select>
+          <button type="submit" class="perm-btn perm-btn--sec"><%- icono('plus') %> Agregar</button>
         </div>
-        <div class="perm-form__acciones"><button type="submit" class="perm-btn"><%- icono('plus') %> Agregar</button></div>
       </form>
     </div>
   </section>
