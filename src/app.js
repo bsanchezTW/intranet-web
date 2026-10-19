@@ -77,6 +77,11 @@ const eventThumbnails = require("./services/media/eventThumbnails");
 const signedMedia = require("./services/media/signedMedia");
 const { ensureVacationSchema } = require("./services/vacations/vacationSchema");
 const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
+const { ensurePermissionSchema } = require("./services/permissions/permissionSchema");
+const permissions = require("./services/permissions/permissionService");
+const { emptyPermissions } = require("./services/permissions/resolver");
+const { getCatalog } = require("./services/permissions/catalog");
+const { buildViewCan } = require("./services/permissions/viewCan");
 const { ensureExpenseSchema } = require("./services/expenses/expenseSchema");
 const {
   ensureCostCenterSchema,
@@ -514,7 +519,17 @@ app.use(async (req, res, next) => {
       ? await isFinanceStaff(user).catch(() => false)
       : false;
 
-    res.locals.can = {
+    // Gestión de Permisos: req.perms para rutas y políticas, can('clave') en
+    // las vistas. Las propiedades *_write de abajo son las reglas antiguas,
+    // que siguen mandando hasta que cada módulo se migre.
+    try {
+      req.perms = await permissions.resolve(user);
+    } catch (err) {
+      logger.error("permisos", err);
+      req.perms = emptyPermissions(getCatalog(), user.id);
+    }
+    res.locals.perms = req.perms;
+    res.locals.can = buildViewCan(req.perms, {
       procedimientos_write: isAdministrador(role),
       protocolos_write: isAdministrador(role),
       reglamento_write: isAdministrador(role),
@@ -528,13 +543,15 @@ app.use(async (req, res, next) => {
       vacaciones_write: gestionaRrhh,
       vacaciones_request:
         role === ROLES.USUARIO || isAdministrador(role),
-    };
+    });
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
     res.locals.canManageRrhh = false;
     res.locals.isAreaManager = false;
     res.locals.canIssueBills = false;
-    res.locals.can = {};
+    req.perms = emptyPermissions(getCatalog());
+    res.locals.perms = req.perms;
+    res.locals.can = buildViewCan(req.perms);
     res.locals.unreadTickets = 0;
   }
   next();
@@ -975,6 +992,15 @@ async function asegurarSchemaAreas() {
   }
 }
 
+// Va después de asegurarSchemaAreas: las asignaciones apuntan a work_areas.
+async function asegurarSchemaPermisos() {
+  try {
+    await ensurePermissionSchema();
+  } catch (err) {
+    logger.error("permisos", err);
+  }
+}
+
 async function asegurarSchemaTickets() {
   try {
     await ensureTicketReplyCorrelatives();
@@ -999,7 +1025,7 @@ function startBackgroundJobs() {
     asegurarColumnaAccesosHome(),
     sincronizarUsuariosDeshabilitados(),
     asegurarSchemaVacaciones(),
-    asegurarSchemaAreas(),
+    asegurarSchemaAreas().then(asegurarSchemaPermisos),
     isFeatureEnabled("supportTickets") ? asegurarSchemaTickets() : null,
     isFeatureEnabled("billsOfExchange") ? asegurarSchemaLetras() : null,
     asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),

@@ -63,6 +63,7 @@ const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
 const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
 const { invalidateStaffAccess } = require("../services/access/staffAccess");
 const { invalidateAccountStatus } = require("../services/access/accountStatus");
+const { invalidatePermissions } = require("../services/permissions/permissionService");
 const { isAreaManager, isAvailableApprover } = require("../services/expenses/areaManager");
 
 function parsePriorYearsCredited(value) {
@@ -259,6 +260,8 @@ function invalidarCachesDeArea() {
   invalidateSupportTeam();
   invalidateStaffAccess();
   invalidateAccountStatus();
+  // Área, jefatura y rol cambian quién recibe qué en Gestión de Permisos.
+  invalidatePermissions();
 }
 
 /**
