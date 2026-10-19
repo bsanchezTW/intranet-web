@@ -1,0 +1,137 @@
+<%
+// Ítems guardados por clave: { plain: bool, scopes: Map(scope → item) }.
+const porClave = new Map();
+set.items.forEach(function (i) {
+  if (!porClave.has(i.permission_key)) porClave.set(i.permission_key, new Map());
+  porClave.get(i.permission_key).set(i.scope || '', i);
+});
+const opcionesArea = [];
+(function aplanar(nodos, nivel) {
+  nodos.forEach(function (n) {
+    opcionesArea.push({ id: n.id, label: '  '.repeat(nivel) + n.area_name });
+    aplanar(n.children || [], nivel + 1);
+  });
+})(areaTree, 0);
+const huerfanos = set.items.filter(function (i) { return !catalog.byKey.has(i.permission_key); });
+%>
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: set.name,
+    descripcion: set.description || 'Conjunto de permisos.',
+    seccion: 'conjuntos',
+    migas: [{ href: '/permisos/conjuntos', label: 'Conjuntos' }, { label: set.name }],
+  }) %>
+
+  <section class="seccion">
+    <div class="panel">
+      <form class="perm-form" action="/permisos/conjuntos/<%= set.id %>" method="POST" style="margin-top:0">
+        <div class="campo-form">
+          <label for="set-nombre">Nombre</label>
+          <input type="text" id="set-nombre" name="name" value="<%= set.name %>" maxlength="120" required>
+        </div>
+        <div class="campo-form">
+          <label for="set-desc">Descripción</label>
+          <input type="text" id="set-desc" name="description" value="<%= set.description || '' %>" maxlength="300">
+        </div>
+        <label class="perm-check campo-form">
+          <input type="checkbox" name="active" value="1"<% if (set.active) { %> checked<% } %>> Activo (desactivado no concede nada, pero conserva sus asignaciones)
+        </label>
+        <div class="perm-form__acciones">
+          <span class="perm-muted">Código: <code><%= set.code %></code></span>
+          <button type="submit" class="perm-btn perm-btn--sec">Guardar datos</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="seccion">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title">Permisos del conjunto</h3>
+        <p class="seccion__desc">Marca lo que concede. En los permisos con alcance, marca sobre qué registros vale (puedes marcar más de uno).</p>
+      </div>
+    </div>
+
+    <% if (huerfanos.length) { %>
+      <div class="perm-note perm-note--warn">
+        <%= huerfanos.length %> permiso(s) de este conjunto no existen en la intranet de este país y no conceden nada. Se eliminan al guardar.
+      </div>
+    <% } %>
+
+    <form class="perm-tree" action="/permisos/conjuntos/<%= set.id %>/permisos" method="POST">
+      <% catalog.modules.forEach(function (m) { %>
+        <% const marcados = m.permissions.filter(function (p) { return porClave.has(p.key); }).length; %>
+        <details<% if (marcados) { %> open<% } %>>
+          <summary><span><%= m.label %></span><span class="perm-muted"><%= marcados %> de <%= m.permissions.length %></span></summary>
+          <div class="perm-tree__body">
+            <% m.permissions.forEach(function (p) { %>
+              <% const guardado = porClave.get(p.key) || new Map(); %>
+              <div class="perm-item" data-perm-item>
+                <div>
+                  <% if (!p.scopes) { %>
+                    <label class="perm-check">
+                      <input type="checkbox" name="perm" value="<%= p.key %>"<% if (guardado.has('')) { %> checked<% } %>>
+                      <%= p.label %>
+                    </label>
+                  <% } else { %>
+                    <span><%= p.label %></span>
+                  <% } %>
+                  <span class="perm-key"><%= p.key %></span>
+                </div>
+                <% if (p.scopes) { %>
+                  <div class="perm-item__scopes">
+                    <% p.scopes.forEach(function (s) { %>
+                      <label class="perm-check">
+                        <input type="checkbox" name="scope:<%= p.key %>" value="<%= s %>"<% if (guardado.has(s)) { %> checked<% } %>>
+                        <%= scopeLabels[s] %>
+                      </label>
+                    <% }) %>
+                  </div>
+                  <% if (p.scopes.indexOf('areas') !== -1) { %>
+                    <% const enAreas = guardado.get('areas'); const elegidas = enAreas ? enAreas.scope_area_ids.map(Number) : []; %>
+                    <div class="perm-item__areas" data-perm-item-areas>
+                      <select name="areas:<%= p.key %>" multiple aria-label="Áreas elegidas para <%= p.label %>">
+                        <% opcionesArea.forEach(function (a) { %>
+                          <option value="<%= a.id %>"<% if (elegidas.indexOf(a.id) !== -1) { %> selected<% } %>><%= a.label %></option>
+                        <% }) %>
+                      </select>
+                      <label class="perm-check">
+                        <input type="checkbox" name="subareas:<%= p.key %>" value="1"<% if (enAreas && enAreas.scope_include_subareas) { %> checked<% } %>> Con sus subáreas
+                      </label>
+                    </div>
+                  <% } %>
+                <% } %>
+              </div>
+            <% }) %>
+          </div>
+        </details>
+      <% }) %>
+      <div class="perm-sticky-save">
+        <button type="submit" class="perm-btn">Guardar permisos</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="seccion">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title">Asignado a</h3>
+        <p class="seccion__desc">Para asignarlo, ve a Global, Áreas, Jefes o la ficha de una persona.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <%- include('partials/tabla_asignaciones', {
+        assignments: assignments,
+        volver: '/permisos/conjuntos/' + set.id,
+        mostrarQue: false,
+        vacio: 'Este conjunto no está asignado a nadie.',
+      }) %>
+    </div>
+  </section>
+
+  <form action="/permisos/conjuntos/<%= set.id %>/eliminar" method="POST"
+        data-confirm="Se elimina «<%= set.name %>» y sus <%= assignments.length %> asignación(es). Quienes lo tenían pierden esos permisos."
+        data-confirm-title="¿Eliminar el conjunto?" data-confirm-accept="Eliminar" data-confirm-tone="peligro">
+    <button type="submit" class="perm-btn perm-btn--peligro">Eliminar conjunto</button>
+  </form>
+</div>

@@ -1,0 +1,101 @@
+<%
+const u = detail.user;
+const esYo = u.id === actorId;
+const volverA = '/permisos/usuarios/' + u.id;
+const deshabilitada = !u.role || /^deshabilitado$/i.test(String(u.role).trim());
+%>
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: u.name,
+    descripcion: [u.email, detail.area ? 'Trabaja en ' + detail.area.area_name : 'Sin área', detail.managed.length ? 'Jefe de ' + detail.managed.map(function (a) { return a.area_name; }).join(', ') : null].filter(Boolean).join(' · '),
+    seccion: 'usuarios',
+    migas: [{ href: '/permisos/usuarios', label: 'Personas' }, { label: u.name }],
+  }) %>
+
+  <% if (deshabilitada) { %>
+    <div class="perm-note perm-note--warn">La cuenta está deshabilitada: no tiene ningún permiso mientras siga así.</div>
+  <% } %>
+
+  <div class="perm-stat">
+    <span><b><%= detail.grantedCount %></b> de <b><%= catalog.byKey.size %></b> permisos</span>
+    <span>Superadmin: <b><%= detail.superadmin ? 'sí' : 'no' %></b></span>
+    <% if (!esYo && !deshabilitada) { %>
+      <form class="perm-inline" action="/permisos/superadmin" method="POST"
+            data-confirm="<%= detail.superadmin ? u.name + ' dejará de tener todos los permisos.' : u.name + ' tendrá todos los permisos y podrá administrar este módulo.' %>"
+            data-confirm-title="<%= detail.superadmin ? '¿Quitar superadmin?' : '¿Hacer superadmin?' %>"
+            data-confirm-accept="<%= detail.superadmin ? 'Quitar' : 'Hacer superadmin' %>"
+            <% if (detail.superadmin) { %>data-confirm-tone="peligro"<% } %>>
+        <input type="hidden" name="user_id" value="<%= u.id %>">
+        <input type="hidden" name="valor" value="<%= detail.superadmin ? '0' : '1' %>">
+        <input type="hidden" name="volver" value="<%= volverA %>">
+        <button type="submit" class="perm-btn perm-btn--sec perm-btn--sm"><%= detail.superadmin ? 'Quitar superadmin' : 'Hacer superadmin' %></button>
+      </form>
+    <% } %>
+  </div>
+
+  <section class="seccion">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title">Asignado directamente</h3>
+        <p class="seccion__desc">Lo que se le dio o negó a esta persona. Lo que recibe por Global, su área o por ser jefe se ve abajo, en cada permiso.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <%- include('partials/tabla_asignaciones', {
+        assignments: detail.direct,
+        volver: volverA,
+        mostrarQuien: false,
+        vacio: 'Nada asignado directamente.',
+      }) %>
+      <% if (esYo) { %>
+        <p class="perm-muted">No puedes cambiar tus propias asignaciones.</p>
+      <% } else if (!detail.superadmin) { %>
+        <details>
+          <summary class="perm-btn perm-btn--sec perm-btn--sm" style="margin-top:12px">Asignar o denegar a <%= u.first_name || u.name %></summary>
+          <%- include('partials/form_asignacion', {
+            uid: 'u',
+            volver: volverA,
+            principal: { type: 'user', userId: u.id },
+            fixedKey: null,
+          }) %>
+        </details>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="seccion">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title">Permisos efectivos</h3>
+        <p class="seccion__desc">Qué tiene hoy, sobre qué registros y de dónde le viene. Si algo se lo quita, se dice qué.</p>
+      </div>
+    </div>
+    <div class="perm-tree">
+    <% detail.modules.forEach(function (m) { %>
+      <% const tiene = m.permissions.filter(function (p) { return p.granted; }).length; %>
+      <details<% if (tiene) { %> open<% } %>>
+        <summary><span><%= m.label %></span><span class="perm-muted"><%= tiene %> de <%= m.permissions.length %></span></summary>
+        <div class="perm-tree__body">
+          <table class="perm-table perm-table--responsive">
+            <tbody>
+              <% m.permissions.forEach(function (p) { %>
+                <tr>
+                  <td style="width:38%"><%= p.label %><span class="perm-key"><%= p.key %></span></td>
+                  <td style="width:12%">
+                    <% if (p.granted) { %><span class="perm-si">Sí</span><% } else { %><span class="perm-no">No</span><% } %>
+                    <% if (p.alcance) { %><br><span class="perm-muted"><%= p.alcance %></span><% } %>
+                  </td>
+                  <td>
+                    <% p.origins.forEach(function (o) { %><span class="perm-chip"><%= o %></span><% }) %>
+                    <% if (p.deniedBy) { %><span class="perm-chip perm-chip--deny">Denegado: <%= p.deniedBy %></span><% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    <% }) %>
+    </div>
+  </section>
+</div>

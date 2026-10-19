@@ -1,0 +1,59 @@
+<%
+const ACCIONES = {
+  'arranque': 'Copió los permisos vigentes (arranque)',
+  'conjunto.crear': 'Creó un conjunto',
+  'conjunto.editar': 'Editó un conjunto',
+  'conjunto.permisos': 'Cambió los permisos de un conjunto',
+  'conjunto.eliminar': 'Eliminó un conjunto',
+  'asignacion.conceder': 'Concedió',
+  'asignacion.denegar': 'Denegó',
+  'asignacion.quitar': 'Quitó una asignación',
+  'superadmin.marcar': 'Hizo superadmin',
+  'superadmin.quitar': 'Quitó superadmin',
+};
+const cuando = (d) => new Date(d).toLocaleString('es-' + country, { timeZone: countryConfig.timezone, dateStyle: 'short', timeStyle: 'short' });
+const json = (v) => v == null ? null : JSON.stringify(v, null, 2);
+%>
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: 'Auditoría de permisos',
+    descripcion: 'Cada cambio hecho en Gestión de permisos, con quién lo hizo y el antes y el después.',
+    seccion: 'auditoria',
+  }) %>
+
+  <div class="panel perm-audit">
+    <% if (!audit.rows.length) { %>
+      <p class="perm-muted">Sin cambios registrados.</p>
+    <% } else { %>
+      <table class="perm-table perm-table--responsive">
+        <thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Detalle</th></tr></thead>
+        <tbody>
+          <% audit.rows.forEach(function (r) { %>
+            <tr>
+              <td class="perm-muted"><%= cuando(r.occurred_at) %></td>
+              <td><%= r.actorName %></td>
+              <td>
+                <%= ACCIONES[r.action] || r.action %>
+                <span class="perm-key"><%= r.entity_type %><%= r.entity_id ? ' #' + r.entity_id : '' %></span>
+                <% if (r.note) { %><span class="perm-muted"><%= r.note %></span><% } %>
+              </td>
+              <td>
+                <% if (r.old_value != null || r.new_value != null) { %>
+                  <details>
+                    <summary class="perm-muted" style="cursor:pointer">Ver cambio</summary>
+                    <% if (r.old_value != null) { %><strong>Antes</strong><pre><%= json(r.old_value) %></pre><% } %>
+                    <% if (r.new_value != null) { %><strong>Después</strong><pre><%= json(r.new_value) %></pre><% } %>
+                  </details>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+    <div class="perm-paginas">
+      <% if (page > 0) { %><a class="perm-btn perm-btn--sec perm-btn--sm" href="/permisos/auditoria?pagina=<%= page - 1 %>">Más recientes</a><% } else { %><span></span><% } %>
+      <% if (audit.hasMore) { %><a class="perm-btn perm-btn--sec perm-btn--sm" href="/permisos/auditoria?pagina=<%= page + 1 %>">Anteriores</a><% } %>
+    </div>
+  </div>
+</div>

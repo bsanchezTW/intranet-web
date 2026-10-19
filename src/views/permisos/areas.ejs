@@ -1,0 +1,35 @@
+<%
+const filas = [];
+(function aplanar(nodos, nivel) {
+  nodos.forEach(function (n) {
+    filas.push({ area: n, nivel: nivel });
+    aplanar(n.children || [], nivel + 1);
+  });
+})(areaTree, 0);
+%>
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: 'Permisos por área',
+    descripcion: 'Lo que se asigna a un área lo tienen quienes trabajan en ella (y, si se marca, en las que cuelgan de ella).',
+    seccion: 'areas',
+  }) %>
+
+  <div class="panel perm-scroll">
+    <table class="perm-table">
+      <thead><tr><th>Área</th><th>Jefe</th><th>Personas</th><th>Asignaciones</th></tr></thead>
+      <tbody>
+        <% filas.forEach(function (f) { %>
+          <% const jefe = f.area.manager_user_id ? refs.userById.get(Number(f.area.manager_user_id)) : null; %>
+          <tr>
+            <td style="padding-left:<%= 8 + f.nivel * 20 %>px">
+              <a href="/permisos/areas/<%= f.area.id %>"><%= f.area.area_name %></a>
+            </td>
+            <td class="perm-muted"><%= jefe ? jefe.name : '—' %></td>
+            <td><%= members.get(Number(f.area.id)) || 0 %></td>
+            <td><%= counts.get(Number(f.area.id)) || 0 %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>

@@ -1,0 +1,63 @@
+<%
+/* Global, Jefes o un área: lo asignado a ese destinatario y el formulario
+   para agregar. `principal` = { type, areaId?, label, desc }. */
+const volverA = principal.type === 'area' ? '/permisos/areas/' + principal.areaId : '/permisos/' + principal.type;
+const migasDe = principal.type === 'area'
+  ? [{ href: '/permisos/areas', label: 'Áreas' }, { label: principal.label }]
+  : [{ label: principal.label }];
+const gente = typeof people !== 'undefined' ? people : null;
+%>
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: titulo,
+    descripcion: principal.desc,
+    seccion: seccion,
+    migas: migasDe,
+  }) %>
+
+  <section class="seccion">
+    <div class="panel">
+      <%- include('partials/tabla_asignaciones', {
+        assignments: assignments,
+        volver: volverA,
+        // En áreas y jefes dice si alcanza a las subáreas.
+        mostrarQuien: principal.type !== 'global',
+        vacio: 'Nada asignado todavía.',
+      }) %>
+    </div>
+  </section>
+
+  <section class="seccion">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title">Agregar</h3>
+        <p class="seccion__desc">Un conjunto o un permiso suelto. Denegar quita el permiso aunque llegue por otro lado (salvo que se conceda más específicamente, a la persona).</p>
+      </div>
+    </div>
+    <%- include('partials/form_asignacion', {
+      uid: 'd',
+      volver: volverA,
+      principal: { type: principal.type, areaId: principal.areaId },
+      fixedKey: null,
+    }) %>
+  </section>
+
+  <% if (gente) { %>
+    <section class="seccion">
+      <div class="seccion__head">
+        <div class="seccion__heading">
+          <h3 class="seccion__title">Personas en <%= principal.label %> (<%= gente.length %>)</h3>
+        </div>
+      </div>
+      <div class="panel">
+        <% if (!gente.length) { %>
+          <p class="perm-muted">Nadie trabaja en esta área.</p>
+        <% } else { %>
+          <% gente.forEach(function (u) { %>
+            <a class="perm-chip perm-chip--muted" href="/permisos/usuarios/<%= u.id %>"><%= u.name %></a>
+          <% }) %>
+        <% } %>
+      </div>
+    </section>
+  <% } %>
+</div>

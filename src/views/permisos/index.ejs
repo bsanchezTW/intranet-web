@@ -1,0 +1,92 @@
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: 'Gestión de permisos',
+    descripcion: 'Qué ve y qué puede hacer cada persona en la intranet de ' + countryConfig.name + '. Los permisos se asignan a todos, a un área, a los jefes o a una persona, y se pueden denegar.',
+    seccion: 'inicio',
+  }) %>
+
+  <% if (!meta || !meta.bootstrapped_at) { %>
+    <div class="perm-note perm-note--warn">
+      Todavía no se copian los permisos vigentes a este módulo. Corre la vista previa y luego aplícala:
+      <code>node scripts/permisos-arranque.js --pais <%= country %></code> y
+      <code>… --aplicar</code>.
+    </div>
+  <% } %>
+  <% if (meta && meta.mode === 'sombra') { %>
+    <div class="perm-note">
+      <strong>Modo sombra.</strong> Lo que configures aquí se guarda y se calcula, pero las páginas todavía deciden con las reglas antiguas. Cada módulo pasa a usar estos permisos a medida que se migra.
+    </div>
+  <% } %>
+
+  <div class="perm-stat">
+    <span><b><%= permissionCount %></b> permisos en el catálogo</span>
+    <span><b><%= refs.sets.length %></b> conjuntos</span>
+    <span><b><%= totals.concede %></b> concesiones</span>
+    <span><b><%= totals.deniega %></b> denegaciones</span>
+    <% if (meta && meta.bootstrapped_at) { %>
+      <span>Arranque aplicado el <b><%= new Date(meta.bootstrapped_at).toLocaleDateString('es-' + country, { timeZone: countryConfig.timezone }) %></b></span>
+    <% } %>
+  </div>
+
+  <div class="perm-cards">
+    <a class="perm-card" href="/permisos/modulos"><strong>Por módulo</strong><span>Cada permiso de la intranet y quién lo tiene.</span></a>
+    <a class="perm-card" href="/permisos/conjuntos"><strong>Conjuntos</strong><span>Paquetes con nombre, como «Aprobador de rendiciones».</span></a>
+    <a class="perm-card" href="/permisos/global"><strong>Global</strong><span>Lo que tiene toda cuenta activa.</span></a>
+    <a class="perm-card" href="/permisos/areas"><strong>Áreas</strong><span>Lo que tienen quienes trabajan en cada área.</span></a>
+    <a class="perm-card" href="/permisos/jefes"><strong>Jefes</strong><span>Lo que tiene quien es jefe en el organigrama.</span></a>
+    <a class="perm-card" href="/permisos/usuarios"><strong>Personas</strong><span>Ficha de cada persona: qué tiene y de dónde le viene.</span></a>
+    <a class="perm-card" href="/permisos/auditoria"><strong>Auditoría</strong><span>Quién cambió qué, con el antes y el después.</span></a>
+  </div>
+
+  <section class="seccion">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title"><span class="seccion__icon"><%- include('../partials/icon', { name: 'shield' }) %></span> Superadmins</h3>
+        <p class="seccion__desc">Tienen todos los permisos, no se les puede denegar nada y son los únicos que entran aquí. Siempre queda al menos uno.</p>
+      </div>
+    </div>
+    <div class="panel">
+      <table class="perm-table">
+        <tbody>
+          <% superadmins.forEach(function (u) { %>
+            <tr>
+              <td><a href="/permisos/usuarios/<%= u.id %>"><%= u.name %></a><% if (u.email) { %> <span class="perm-muted"><%= u.email %></span><% } %></td>
+              <td class="perm-table__accion">
+                <% if (u.id === actorId) { %>
+                  <span class="perm-muted">Tú</span>
+                <% } else { %>
+                  <form class="perm-inline" action="/permisos/superadmin" method="POST"
+                        data-confirm="<%= u.name %> dejará de tener todos los permisos."
+                        data-confirm-title="¿Quitar superadmin?" data-confirm-accept="Quitar" data-confirm-tone="peligro">
+                    <input type="hidden" name="user_id" value="<%= u.id %>">
+                    <input type="hidden" name="valor" value="0">
+                    <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm">Quitar</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+          <% if (!superadmins.length) { %>
+            <tr><td class="perm-muted">Sólo el login de emergencia. Aplica el arranque para marcar al superadmin.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+
+      <form class="perm-form" action="/permisos/superadmin" method="POST"
+            data-confirm="La persona tendrá todos los permisos de la intranet y podrá administrar este módulo."
+            data-confirm-title="¿Agregar superadmin?" data-confirm-accept="Agregar">
+        <input type="hidden" name="valor" value="1">
+        <div class="campo-form perm-form__ancho">
+          <label for="nuevo-superadmin">Agregar superadmin</label>
+          <select id="nuevo-superadmin" name="user_id" required>
+            <option value="">Elige…</option>
+            <% activeUsers.filter(function (u) { return !u.is_superadmin; }).forEach(function (u) { %>
+              <option value="<%= u.id %>"><%= u.name %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="perm-form__acciones"><button type="submit" class="perm-btn">Agregar</button></div>
+      </form>
+    </div>
+  </section>
+</div>

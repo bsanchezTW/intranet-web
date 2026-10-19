@@ -1,0 +1,44 @@
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: 'Conjuntos de permisos',
+    descripcion: 'Paquetes con nombre que se asignan de una vez a todos, a un área, a los jefes o a una persona.',
+    seccion: 'conjuntos',
+  }) %>
+
+  <div class="panel">
+    <% if (!refs.sets.length) { %>
+      <p class="perm-muted">Todavía no hay conjuntos.</p>
+    <% } else { %>
+      <table class="perm-table perm-table--responsive">
+        <thead><tr><th>Conjunto</th><th>Permisos</th><th>Asignado a</th><th>Estado</th></tr></thead>
+        <tbody>
+          <% refs.sets.forEach(function (s) { %>
+            <tr>
+              <td>
+                <a href="/permisos/conjuntos/<%= s.id %>"><strong><%= s.name %></strong></a>
+                <% if (s.description) { %><br><span class="perm-muted"><%= s.description %></span><% } %>
+              </td>
+              <td><%= s.item_count %></td>
+              <td><%= s.assignment_count %></td>
+              <td>
+                <% if (s.active) { %><span class="perm-chip">Activo</span><% } else { %><span class="perm-chip perm-chip--muted">Desactivado</span><% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+
+    <form class="perm-form" action="/permisos/conjuntos" method="POST">
+      <div class="campo-form">
+        <label for="nuevo-nombre">Nuevo conjunto</label>
+        <input type="text" id="nuevo-nombre" name="name" maxlength="120" required placeholder="Ej.: Aprobador de rendiciones">
+      </div>
+      <div class="campo-form">
+        <label for="nuevo-desc">Descripción</label>
+        <input type="text" id="nuevo-desc" name="description" maxlength="300" placeholder="Para qué sirve">
+      </div>
+      <div class="perm-form__acciones"><button type="submit" class="perm-btn">Crear y elegir permisos</button></div>
+    </form>
+  </div>
+</div>

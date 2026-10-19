@@ -1,0 +1,72 @@
+<%
+/* Asignaciones con su botón de quitar.
+   Parámetros: assignments, volver, mostrarQuien (bool), mostrarQue (bool), vacio (texto), countryConfig. */
+const fecha = (d) => d
+  ? new Date(d).toLocaleDateString('es-' + countryConfig.code, { timeZone: countryConfig.timezone, day: '2-digit', month: '2-digit', year: 'numeric' })
+  : null;
+// valid_until es el inicio del día siguiente: se muestra el último día vigente.
+const ultimoDia = (d) => d ? fecha(new Date(new Date(d).getTime() - 1)) : null;
+const conQuien = typeof mostrarQuien === 'undefined' ? true : mostrarQuien;
+const conQue = typeof mostrarQue === 'undefined' ? true : mostrarQue;
+%>
+<% if (!assignments.length) { %>
+  <p class="perm-muted"><%= typeof vacio !== 'undefined' ? vacio : 'Sin asignaciones.' %></p>
+<% } else { %>
+  <div class="perm-scroll">
+    <table class="perm-table perm-table--responsive">
+      <thead>
+        <tr>
+          <% if (conQuien) { %><th>A quién</th><% } %>
+          <% if (conQue) { %><th>Qué</th><% } %>
+          <th>Efecto</th>
+          <th>Vigencia</th>
+          <th>Motivo</th>
+          <th class="perm-table__accion"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% assignments.forEach(function (a) { %>
+          <tr>
+            <% if (conQuien) { %><td><%= a.principalLabel %></td><% } %>
+            <% if (conQue) { %>
+              <td>
+                <%= a.targetLabel %>
+                <% if (a.scopeLabel) { %><br><span class="perm-muted">Sobre: <%= a.scopeLabel %></span><% } %>
+              </td>
+            <% } %>
+            <td>
+              <% if (a.effect === 'deniega') { %>
+                <span class="perm-chip perm-chip--deny">Deniega</span>
+              <% } else { %>
+                <span class="perm-chip">Concede</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (a.expired) { %>
+                <span class="perm-chip perm-chip--muted">Vencida el <%= ultimoDia(a.valid_until) %></span>
+              <% } else if (a.pending) { %>
+                <span class="perm-chip perm-chip--warn">Desde el <%= fecha(a.valid_from) %></span>
+              <% } %>
+              <% if (!a.expired && a.valid_until) { %><span class="perm-muted">Hasta el <%= ultimoDia(a.valid_until) %></span><% } %>
+              <% if (!a.valid_from && !a.valid_until) { %><span class="perm-muted">Sin plazo</span><% } %>
+            </td>
+            <td class="perm-muted">
+              <%= a.note || '' %>
+              <% if (a.grantedByName) { %><br>por <%= a.grantedByName %><% } %>
+            </td>
+            <td class="perm-table__accion">
+              <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
+                    data-confirm="<%= a.principalLabel %> deja de tener esta asignación (<%= a.targetLabel %>)."
+                    data-confirm-title="¿Quitar la asignación?"
+                    data-confirm-accept="Quitar"
+                    data-confirm-tone="peligro">
+                <input type="hidden" name="volver" value="<%= volver %>">
+                <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm">Quitar</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+<% } %>

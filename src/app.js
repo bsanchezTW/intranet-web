@@ -31,6 +31,7 @@ const procesosRoutes = require("./routes/procesos");
 const personasRoutes = require("./routes/RRHH");
 const marketingRoutes = require("./routes/marketing");
 const docsRoutes = require("./routes/docs");
+const permisosRoutes = require("./routes/permisos");
 const noticiasRoutes = require("./routes/noticias");
 const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
@@ -617,6 +618,8 @@ if (ticketsRoutes) {
 }
 app.use("/marketing", requireAuth, marketingRoutes);
 app.use("/docs", requireAuth, docsRoutes);
+// Gestión de Permisos: sólo el superadmin (el router responde 404 al resto).
+app.use("/permisos", requireAuth, permisosRoutes);
 app.use("/noticias", requireAuth, noticiasRoutes);
 if (claudeRoutes) {
   app.use("/claude", requireAuth, requireFeature("claudeAssistant"), claudeRoutes);

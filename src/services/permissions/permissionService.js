@@ -152,14 +152,19 @@ async function resolve(user) {
   return perms;
 }
 
+/** Sólo este proceso: para quien ya subió la versión en su transacción. */
+function forgetLocalCache() {
+  snapshot = null;
+  results.clear();
+}
+
 /**
  * Tras cambiar permisos, áreas, jefaturas o personas: este proceso recarga
  * en la próxima petición y los demás al ver la versión nueva. `client` para
  * subir la versión dentro de la transacción que hizo el cambio.
  */
 async function invalidatePermissions(client = db) {
-  snapshot = null;
-  results.clear();
+  forgetLocalCache();
   try {
     await client.query("UPDATE perm_meta SET version = version + 1, updated_at = NOW() WHERE id = 1");
   } catch (err) {
@@ -170,5 +175,6 @@ async function invalidatePermissions(client = db) {
 module.exports = {
   resolve,
   invalidatePermissions,
+  forgetLocalCache,
   loadSnapshot,
 };

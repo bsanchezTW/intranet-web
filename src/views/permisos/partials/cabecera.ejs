@@ -1,0 +1,37 @@
+<%
+/* Cabecera y pestañas de Gestión de Permisos.
+   Parámetros: titulo, descripcion, seccion, migas (opcional: [{ href, label }]). */
+const pestanas = [
+  ['inicio', '/permisos', 'Resumen'],
+  ['modulos', '/permisos/modulos', 'Por módulo'],
+  ['conjuntos', '/permisos/conjuntos', 'Conjuntos'],
+  ['global', '/permisos/global', 'Global'],
+  ['areas', '/permisos/areas', 'Áreas'],
+  ['jefes', '/permisos/jefes', 'Jefes'],
+  ['usuarios', '/permisos/usuarios', 'Personas'],
+  ['auditoria', '/permisos/auditoria', 'Auditoría'],
+];
+const extraMigas = typeof migas !== 'undefined' && Array.isArray(migas) ? migas : [];
+%>
+<div class="page-header">
+  <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'shield' }) %></span>
+  <div class="page-header__text">
+    <nav class="page-header__migas" aria-label="Ruta de navegación">
+      <a href="/permisos">Gestión de permisos</a>
+      <% extraMigas.forEach(function (m) { %>
+        <span aria-hidden="true">/</span>
+        <% if (m.href) { %><a href="<%= m.href %>"><%= m.label %></a><% } else { %><span><%= m.label %></span><% } %>
+      <% }) %>
+    </nav>
+    <h2 class="page-title"><%= titulo %></h2>
+    <% if (typeof descripcion !== 'undefined' && descripcion) { %>
+      <p class="page-description"><%= descripcion %></p>
+    <% } %>
+  </div>
+</div>
+
+<nav class="perm-tabs" aria-label="Secciones de Gestión de permisos">
+  <% pestanas.forEach(function (p) { %>
+    <a href="<%= p[1] %>"<% if (p[0] === seccion) { %> aria-current="page"<% } %>><%= p[2] %></a>
+  <% }) %>
+</nav>

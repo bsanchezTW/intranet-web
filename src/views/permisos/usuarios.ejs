@@ -1,0 +1,45 @@
+<div class="perm-wrap">
+  <%- include('partials/cabecera', {
+    titulo: 'Permisos por persona',
+    descripcion: 'Busca a alguien para ver qué tiene, de dónde le viene y asignarle o denegarle permisos.',
+    seccion: 'usuarios',
+  }) %>
+
+  <form class="perm-form" action="/permisos/usuarios" method="GET" style="margin-top:0;margin-bottom:18px">
+    <div class="campo-form perm-form__ancho">
+      <label for="buscar">Buscar por nombre o correo</label>
+      <input type="search" id="buscar" name="q" value="<%= q %>" placeholder="Ej.: Astrid">
+    </div>
+    <div class="perm-form__acciones"><button type="submit" class="perm-btn">Buscar</button></div>
+  </form>
+
+  <div class="panel">
+    <% if (!list.length) { %>
+      <p class="perm-muted">Nadie coincide con «<%= q %>».</p>
+    <% } else { %>
+      <table class="perm-table perm-table--responsive">
+        <thead><tr><th>Persona</th><th>Área</th><th>Cuenta</th></tr></thead>
+        <tbody>
+          <% list.forEach(function (u) { %>
+            <% const area = u.work_area_id ? refs.areaById.get(Number(u.work_area_id)) : null; %>
+            <tr>
+              <td>
+                <a href="/permisos/usuarios/<%= u.id %>"><strong><%= u.name %></strong></a>
+                <% if (u.is_superadmin) { %><span class="perm-chip">Superadmin</span><% } %>
+                <% if (u.email) { %><br><span class="perm-muted"><%= u.email %></span><% } %>
+              </td>
+              <td class="perm-muted"><%= area ? area.area_name : 'Sin área' %></td>
+              <td>
+                <% if (/^deshabilitado$/i.test(String(u.role || '').trim()) || !u.role) { %>
+                  <span class="perm-chip perm-chip--muted">Deshabilitada</span>
+                <% } else { %>
+                  <span class="perm-chip">Activa</span>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    <% } %>
+  </div>
+</div>
