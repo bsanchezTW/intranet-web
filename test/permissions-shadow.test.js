@@ -87,10 +87,16 @@ describe("decide: sombra y aplicar", () => {
 
 describe("contexto antiguo", () => {
   it("rol activo y administrador", () => {
-    assert.deepEqual(legacyContext({ role: "Administrador" }), { active: true, admin: true });
-    assert.deepEqual(legacyContext({ role: "Usuario" }), { active: true, admin: false });
-    assert.deepEqual(legacyContext({ role: "Deshabilitado" }), { active: false, admin: false });
-    assert.deepEqual(legacyContext(null), { active: false, admin: false });
+    assert.deepEqual(legacyContext({ role: "Administrador" }), {
+      active: true, admin: true, rrhhManager: false, workAreaId: null,
+    });
+    assert.deepEqual(legacyContext({ role: "Usuario" }, { rrhhManager: true, workAreaId: 12 }), {
+      active: true, admin: false, rrhhManager: true, workAreaId: 12,
+    });
+    assert.deepEqual(legacyContext({ role: "Deshabilitado" }), {
+      active: false, admin: false, rrhhManager: false, workAreaId: null,
+    });
+    assert.deepEqual(legacyContext(null), { active: false, admin: false, rrhhManager: false, workAreaId: null });
   });
 });
 

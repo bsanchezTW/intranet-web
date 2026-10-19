@@ -39,7 +39,6 @@ const { getMonogram, applyIdentityToSession } = require("../utils/monogram");
 const {
   validateMobilePhone,
   validateWorkPhone,
-  maskPhone,
   formatPhoneForDisplay,
   toTelHref,
 } = require("../utils/phone");
@@ -55,7 +54,7 @@ const {
   companyEmailSql,
   accountUsesPersonalEmail,
   accountUsesPersonalEmailSql,
-  maskEmail,
+  contactoPersonalDirectorio,
 } = require("../utils/contactEmails");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const profileService = require("../services/vacations/vacationProfileService");
@@ -344,6 +343,13 @@ router.get("/", (req, res) => {
 // personal enmascarado (parte del correo, últimos 4 dígitos del teléfono). El
 // dato real no llega al navegador; RR.HH. lo ve y corrige en la ficha.
 router.get("/personal", async (req, res) => {
+  // Correo y teléfono personales: en sombra los ve cualquier sesión (enmascarados).
+  // Si el permiso no está, no se consultan y no llegan al HTML.
+  const veContactoPersonal = Boolean(
+    res.locals.can && typeof res.locals.can.field === "function"
+      && res.locals.can.field("rrhh.directorio.campo.contacto_personal"),
+  );
+  const contactoSql = veContactoPersonal ? "u.personal_email, u.phone," : "";
   const sql = `
     SELECT
       u.id,
@@ -356,8 +362,7 @@ router.get("/personal", async (req, res) => {
       u.birth_date,
       u.work_area_id,
       u.work_phone,
-      u.personal_email,
-      u.phone,
+      ${contactoSql}
       u.is_intranet_user,
       u.email_confirmed,
       u.national_id,
@@ -386,11 +391,15 @@ router.get("/personal", async (req, res) => {
       const pill = getWorkAreaPill(p.area, p.area_color);
 
       const { personal_email: correoPersonalRaw, phone: telefonoPersonalRaw, ...resto } = p;
+      const contacto = contactoPersonalDirectorio(
+        veContactoPersonal ? { personal_email: correoPersonalRaw, phone: telefonoPersonalRaw } : null,
+        veContactoPersonal,
+      );
       const persona = {
         ...resto,
         work_phone: telefonoDisplay || workPhoneRaw,
-        correoPersonal: maskEmail(correoPersonalRaw),
-        telefonoPersonal: maskPhone(telefonoPersonalRaw),
+        correoPersonal: contacto.correoPersonal,
+        telefonoPersonal: contacto.telefonoPersonal,
         // Guardado normalizado ("12345678-5"); los puntos se agregan al mostrar.
         documento: formatNationalId(p.national_id),
         ordenCumple,

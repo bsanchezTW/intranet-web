@@ -1,5 +1,5 @@
 <%
-  const admin = (typeof esAdmin !== 'undefined' && esAdmin);
+  const admin = (typeof veListadoCarpetas !== 'undefined' && veListadoCarpetas);
   const ctx = (typeof areaContext !== 'undefined' && areaContext) ? areaContext : { area: null, manager: null, isManager: false, requiresAdmin: false };
   const conteos = (typeof conteosArea !== 'undefined' && conteosArea) ? conteosArea : { procedimiento: 0, protocolo: 0 };
   const hayGastos = (typeof gastosActivos !== 'undefined') ? gastosActivos : false;

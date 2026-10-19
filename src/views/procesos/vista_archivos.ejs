@@ -1,10 +1,41 @@
 <%
-  const puedeSubir = !!(can && can[seccionBase + '_write']);
-  const puedeEditar = !!(typeof permisos !== 'undefined' && permisos && permisos.can_edit);
-  const puedeEliminar = !!(typeof permisos !== 'undefined' && permisos && permisos.can_delete);
   const lista = (typeof archivos !== 'undefined' && Array.isArray(archivos)) ? archivos : [];
   const esSeccionDeArea = seccionBase === 'procedimientos' || seccionBase === 'protocolos';
   const heredados = (typeof avisoHuerfanos !== 'undefined' && avisoHuerfanos);
+  const registro = (esSeccionDeArea && slugArea && slugArea !== 'sin-area' && slugArea !== 'general')
+    ? { areaId: Number(slugArea) }
+    : null;
+  function puede(accion) {
+    if (typeof can !== 'function') return false;
+    if (heredados || slugArea === 'sin-area') {
+      if (accion === 'subir') return false;
+      return can('procesos.sin_area.administrar');
+    }
+    if (seccionBase === 'procedimientos') {
+      if (accion === 'subir') return can('procesos.procedimientos.subir', registro);
+      if (accion === 'editar') return can('procesos.procedimientos.editar', registro);
+      return can('procesos.procedimientos.eliminar', registro);
+    }
+    if (seccionBase === 'protocolos') {
+      if (accion === 'subir') return can('procesos.protocolos.subir', registro);
+      if (accion === 'editar') return can('procesos.protocolos.editar', registro);
+      return can('procesos.protocolos.eliminar', registro);
+    }
+    if (seccionBase === 'reglamento') {
+      if (accion === 'subir') return can('procesos.reglamento.subir');
+      if (accion === 'editar') return can('procesos.reglamento.editar');
+      return can('procesos.reglamento.eliminar');
+    }
+    if (seccionBase === 'otros') {
+      if (accion === 'subir') return can('procesos.otros.subir');
+      if (accion === 'editar') return can('procesos.otros.editar');
+      return can('procesos.otros.eliminar');
+    }
+    return false;
+  }
+  const puedeSubir = puede('subir');
+  const puedeEditar = puede('editar');
+  const puedeEliminar = puede('eliminar');
   const color = (typeof areaColor !== 'undefined' && areaColor) ? areaColor : null;
   const retorno = `/procesos/${seccionBase}` + (esSeccionDeArea ? `/${slugArea}` : '');
 

@@ -183,6 +183,8 @@ const SYSTEM_SETS = [
       item("vacaciones.saldo.ver", A_CARGO),
       item("gastos.solicitud.ver", A_CARGO),
       item("gastos.solicitud.aprobar_jefatura", A_CARGO),
+      item("procesos.procedimientos.ver", A_CARGO),
+      item("procesos.protocolos.ver", A_CARGO),
     ],
   },
   {
@@ -223,6 +225,8 @@ const CAMBIOS = [
   "Los jefes alcanzan toda la cadena hacia abajo (antes sólo su área directa).",
   "La mesa de ayuda (Informática, cualquier rol) ve todos los tickets, no sólo quien tenía rol Administrador.",
   "La rendición de quien no tiene jefe por encima (p. ej. el jefe de Gerencia) la resuelve el superadmin hasta que se asigne otro aprobador; sus vacaciones se autoaprobarán (fase 9).",
+  "Los jefes ven las carpetas de procedimientos y protocolos de las áreas a su cargo; hoy sólo ven la de su área de trabajo.",
+  "El correo y el teléfono personales del directorio (hoy enmascarados para todos) quedan en quien tenga el permiso; el conjunto Básico no lo trae.",
 ];
 
 function displayName(u) {

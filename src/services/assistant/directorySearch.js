@@ -1,6 +1,7 @@
 const db = require("../../db");
 const { formatPhoneForDisplay } = require("../../utils/phone");
 const { companyEmailSql } = require("../../utils/contactEmails");
+const { puedeVerDocumentoBusqueda } = require("../documents/processAccess");
 
 /**
  * Búsquedas de solo lectura que usa el asistente como tools.
@@ -80,8 +81,12 @@ function documentLabel(row) {
   return row.area_name ? `${kind} · ${row.area_name}` : kind;
 }
 
-/** Busca por nombre de archivo, no por contenido: el texto de los PDF no está indexado. */
-async function searchDocuments(query) {
+/**
+ * Busca por nombre de archivo, no por contenido: el texto de los PDF no está indexado.
+ * Con `perms` y `legacyCtx` sólo devuelve carpetas que la persona puede ver
+ * (en sombra: la suya o todas, si es administrador).
+ */
+async function searchDocuments(query, { perms = null, legacyCtx = null } = {}) {
   const terms = searchTerms(query);
   if (!terms.length) return [];
 
@@ -90,7 +95,7 @@ async function searchDocuments(query) {
 
   const [documents, others] = await Promise.all([
     db.query(
-      `SELECT d.name, d.url, d.type, d.doc_kind, w.area_name
+      `SELECT d.name, d.url, d.type, d.doc_kind, d.work_area_id, w.area_name
          FROM documents d
          LEFT JOIN work_areas w ON w.id = d.work_area_id
         WHERE ${byName("d.name")}
@@ -108,11 +113,13 @@ async function searchDocuments(query) {
     ),
   ]);
 
-  return [...documents.rows, ...others.rows].map((row) => ({
-    nombre: row.name,
-    url: row.url,
-    ubicacion: documentLabel(row),
-  }));
+  return [...documents.rows, ...others.rows]
+    .filter((row) => !perms || puedeVerDocumentoBusqueda(perms, legacyCtx, row))
+    .map((row) => ({
+      nombre: row.name,
+      url: row.url,
+      ubicacion: documentLabel(row),
+    }));
 }
 
 /** Evento de la galería con enlace a sus fotos. */
@@ -147,6 +154,7 @@ module.exports = {
   documentLabel,
   searchPeople,
   searchDocuments,
+  puedeVerDocumentoBusqueda,
   toPublicEvent,
   searchEvents,
 };

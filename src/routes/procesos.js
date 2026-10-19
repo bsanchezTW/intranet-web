@@ -4,8 +4,13 @@ const router = express.Router();
 const db = require("../db");
 const multer = require("multer");
 const fileStorage = require("../services/fileStorage");
-const requireRole = require("../middlewares/requireRole");
 const { isAdministrador, normalizeRole } = require("../constants/roles");
+const {
+  puedeVerCarpeta,
+  puedeSubir,
+  puedeAdministrarDocumento,
+  veListadoDeCarpetas,
+} = require("../services/documents/processAccess");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { areaSlug, enrichAreaWithPill } = require("../constants/workAreas");
 const { isFeatureEnabled } = require("../config/features");
@@ -66,13 +71,23 @@ function mapDocumentoRow(row) {
   };
 }
 
-function getPermissions(user) {
-  const admin = user ? isAdministrador(user.role) : false;
-  return { can_upload: admin, can_edit: admin, can_delete: admin };
-}
-
 function esAdmin(user) {
   return !!user && isAdministrador(normalizeRole(user.role));
+}
+
+function negarAccion(req, res) {
+  const accept = req.headers.accept || "";
+  const json = req.xhr || accept.includes("application/json") || /\/(upload|subir)(\/|$)/.test(req.path)
+    || String(req.get("Content-Type") || "").includes("application/json");
+  if (json) return res.status(403).json({ error: "No tienes permiso para esta acción." });
+  return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+}
+
+/** Área de destino de una subida a carpeta. null si la sección no es de área. */
+async function areaDeSubida(seccion, area) {
+  if (seccion !== "procedimientos" && seccion !== "protocolos") return { areaId: null };
+  const resolved = await resolverArea(area);
+  return resolved ? { areaId: resolved.area.id, resolved } : { areaId: null, missing: true };
 }
 
 // ==========================================
@@ -123,7 +138,6 @@ router.get("/", async (req, res) => {
 
     res.render("procesos/index", {
       titulo: "Procesos y documentos",
-      esAdmin: admin,
       areaContext: context,
       conteosArea,
       gastosActivos,
@@ -148,8 +162,9 @@ async function renderCarpetas(req, res, seccion) {
   const docKind = SECCIONES_AREA[seccion];
   const user = req.session.user;
 
-  // El colaborador no navega carpetas ajenas: entra directo a la suya.
-  if (!esAdmin(user)) {
+  // Quien sólo ve su carpeta entra directo, como hoy. El listado (admin, y al
+  // aplicar un jefe con varias áreas) muestra únicamente las que pasan.
+  if (!veListadoDeCarpetas(req.perms, req.permLegacy)) {
     const context = await areaManager.getUserAreaContext(user.id);
     if (!context.area) {
       return res.redirect(
@@ -180,13 +195,18 @@ async function renderCarpetas(req, res, seccion) {
     ),
   ]);
 
+  const veSinArea = puedeVerCarpeta(req.perms, req.permLegacy, seccion, null, req.originalUrl);
+  const areas = areasResult.rows
+    .filter((area) => puedeVerCarpeta(req.perms, req.permLegacy, seccion, area.id, req.originalUrl))
+    .map(enrichAreaWithPill);
+
   res.render("procesos/menu_carpetas", {
     titulo: SECCION_LABEL[seccion],
     seccionBase: seccion,
-    areas: areasResult.rows.map(enrichAreaWithPill),
+    areas,
     // Documentos de slugs legacy que no correspondían a ningún área existente.
     // Se muestran para que nadie los dé por perdidos, no para navegarlos a diario.
-    huerfanos: huerfanosResult.rows[0].n,
+    huerfanos: veSinArea ? huerfanosResult.rows[0].n : 0,
     slugSinArea: SLUG_SIN_AREA,
     user,
     extraCss: ["/css/procesos.css?v=20260916m"],
@@ -217,7 +237,6 @@ router.get("/protocolos", async (req, res) => {
 
 async function renderGeneral(req, res, { seccion, titulo, sql, params }) {
   const { rows } = await db.query(sql, params);
-  const permisos = getPermissions(req.session.user);
 
   res.render("procesos/vista_archivos", {
     titulo,
@@ -228,8 +247,6 @@ async function renderGeneral(req, res, { seccion, titulo, sql, params }) {
     areaColor: null,
     archivos: rows.map(mapDocumentoRow),
     user: req.session.user,
-    permisos,
-    can: { [`${seccion}_write`]: permisos.can_upload },
     extraCss: ["/css/procesos.css?v=20260916m"],
   });
 }
@@ -297,12 +314,13 @@ router.get("/:seccion/:area", async (req, res) => {
 
   try {
     const user = req.session.user;
-    const admin = esAdmin(user);
 
-    // Carpeta de huérfanos: sólo administradores. Se puede borrar o
-    // renombrar; no se sube nada nuevo aquí.
+    // Carpeta de huérfanos: sólo quien ve documentos sin área. Se puede borrar
+    // o renombrar; no se sube nada nuevo aquí.
     if (area === SLUG_SIN_AREA) {
-      if (!admin) return res.redirect(`/procesos/${seccion}`);
+      if (!puedeVerCarpeta(req.perms, req.permLegacy, seccion, null, req.originalUrl)) {
+        return res.redirect(`/procesos/${seccion}`);
+      }
       const { rows } = await db.query(
         `SELECT * FROM documents
           WHERE work_area_id IS NULL AND doc_kind = $1
@@ -318,8 +336,6 @@ router.get("/:seccion/:area", async (req, res) => {
         areaColor: null,
         archivos: rows.map(mapDocumentoRow),
         user,
-        permisos: { ...getPermissions(user), can_upload: false },
-        can: { [`${seccion}_write`]: false },
         avisoHuerfanos: true,
         extraCss: ["/css/procesos.css?v=20260916m"],
       });
@@ -331,14 +347,10 @@ router.get("/:seccion/:area", async (req, res) => {
       return res.redirect(302, `/procesos/${seccion}/${resolved.area.id}`);
     }
 
-    // Un colaborador sólo abre la carpeta de su propia área.
-    if (!admin) {
-      const context = await areaManager.getUserAreaContext(user.id);
-      if (!context.area || Number(context.area.id) !== Number(resolved.area.id)) {
-        return res
-          .status(403)
-          .render("acceso_no_permitido", { titulo: "Acceso no permitido" });
-      }
+    if (!puedeVerCarpeta(req.perms, req.permLegacy, seccion, resolved.area.id, req.originalUrl)) {
+      return res
+        .status(403)
+        .render("acceso_no_permitido", { titulo: "Acceso no permitido" });
     }
 
     const { rows } = await db.query(
@@ -347,8 +359,6 @@ router.get("/:seccion/:area", async (req, res) => {
         ORDER BY created_at DESC`,
       [resolved.area.id, docKind],
     );
-
-    const permisos = getPermissions(user);
 
     res.render("procesos/vista_archivos", {
       titulo: `${SECCION_LABEL[seccion]}: ${resolved.area.area_name}`,
@@ -359,8 +369,6 @@ router.get("/:seccion/:area", async (req, res) => {
       areaColor: enrichAreaWithPill(resolved.area).color,
       archivos: rows.map(mapDocumentoRow),
       user,
-      permisos,
-      can: { [`${seccion}_write`]: permisos.can_upload },
       extraCss: ["/css/procesos.css?v=20260916m"],
     });
   } catch (err) {
@@ -373,9 +381,34 @@ router.get("/:seccion/:area", async (req, res) => {
 // 5. SUBIDA (dos pasos: storage y luego base de datos)
 // ==========================================
 
+async function exigirSubida(req, res, next) {
+  try {
+    const { seccion, area } = req.params;
+    if (seccion !== "reglamento" && seccion !== "otros" && !SECCIONES_AREA[seccion]) {
+      return res.status(400).json({ error: "Sección inválida" });
+    }
+    let areaId = null;
+    if (SECCIONES_AREA[seccion]) {
+      const destino = await areaDeSubida(seccion, area);
+      // En sombra un administrador puede subir aunque el área no resuelva
+      // (la ruta no lo comprobaba). Al aplicar, sin área no hay carpeta.
+      if (destino.missing && req.perms && req.perms.mode === "aplicar") {
+        return res.status(400).json({ error: "El área no existe" });
+      }
+      areaId = destino.areaId;
+    }
+    if (!puedeSubir(req.perms, req.permLegacy, seccion, areaId, req.originalUrl)) {
+      return negarAccion(req, res);
+    }
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
+
 router.post(
   "/:seccion/:area/upload",
-  requireRole.administrador(),
+  exigirSubida,
   upload.single("archivo"),
   async (req, res) => {
     const { seccion, area } = req.params;
@@ -406,7 +439,7 @@ router.post(
   },
 );
 
-router.post("/:seccion/:area/subir", requireRole.administrador(), async (req, res) => {
+router.post("/:seccion/:area/subir", exigirSubida, async (req, res) => {
   const { seccion, area } = req.params;
   const { nombre_archivo, secure_url, public_id } = req.body;
 
@@ -475,12 +508,32 @@ router.post("/:seccion/:area/subir", requireRole.administrador(), async (req, re
 // 6. EDITAR Y ELIMINAR
 // ==========================================
 
-router.post("/documento/editar", requireRole.administrador(), async (req, res) => {
+async function cargarDocumento(seccionBase, id) {
+  // La tabla sí sale del formulario: documents y other_documents no comparten
+  // id. La sección del permiso sale de la fila (doc_kind / type), no de aquí.
+  if (seccionBase === "otros") {
+    const { rows } = await db.query("SELECT id, public_id FROM other_documents WHERE id = $1", [id]);
+    return rows[0] ? { ...rows[0], tabla: "other_documents" } : null;
+  }
+  const { rows } = await db.query(
+    "SELECT id, public_id, work_area_id, doc_kind, type FROM documents WHERE id = $1",
+    [id],
+  );
+  return rows[0] ? { ...rows[0], tabla: "documents" } : null;
+}
+
+router.post("/documento/editar", async (req, res) => {
   const { id, nuevo_nombre, return_to, seccion_base } = req.body;
   const destino = safeReturnTo(return_to);
   try {
     const tabla = seccion_base === "otros" ? "other_documents" : "documents";
-    await db.query(`UPDATE ${tabla} SET name = $1 WHERE id = $2`, [nuevo_nombre, id]);
+    const row = await cargarDocumento(seccion_base, id);
+    if (row && !puedeAdministrarDocumento(req.perms, req.permLegacy, row, "editar", req.originalUrl)) {
+      return negarAccion(req, res);
+    }
+    if (row) {
+      await db.query(`UPDATE ${tabla} SET name = $1 WHERE id = $2`, [nuevo_nombre, row.id]);
+    }
     res.redirect(withQueryParam(destino, "ok", "Documento renombrado"));
   } catch (err) {
     console.error("[Procesos] Error editando documento:", err);
@@ -488,14 +541,21 @@ router.post("/documento/editar", requireRole.administrador(), async (req, res) =
   }
 });
 
-router.post("/eliminar", requireRole.administrador(), async (req, res) => {
+router.post("/eliminar", async (req, res) => {
   const { db_id, return_to, seccion_base } = req.body;
   const destino = safeReturnTo(return_to);
   try {
     // El archivo que se borra es el de la fila, no el que diga el formulario:
     // un public_id editado a mano no puede tocar otra parte del bucket.
     const tabla = seccion_base === "otros" ? "other_documents" : "documents";
-    const { rows } = await db.query(`DELETE FROM ${tabla} WHERE id = $1 RETURNING public_id`, [db_id]);
+    const row = await cargarDocumento(seccion_base, db_id);
+    if (!row) {
+      return res.redirect(withQueryParam(destino, "error", "El documento ya no existe"));
+    }
+    if (!puedeAdministrarDocumento(req.perms, req.permLegacy, row, "eliminar", req.originalUrl)) {
+      return negarAccion(req, res);
+    }
+    const { rows } = await db.query(`DELETE FROM ${tabla} WHERE id = $1 RETURNING public_id`, [row.id]);
     if (!rows.length) {
       return res.redirect(withQueryParam(destino, "error", "El documento ya no existe"));
     }

@@ -2,6 +2,7 @@ const db = require("../../db");
 const { isAdministrador, normalizeRole } = require("../../constants/roles");
 const { SLUG_SIN_AREA, GENERAL_AREA } = require("../documents/processDocumentStorage");
 const { currentWorkAreaId } = require("./accountStatus");
+const { puedeVerDocumento } = require("../documents/processAccess");
 
 /**
  * Quién puede descargar cada archivo de /content.
@@ -69,12 +70,18 @@ function canOpenAreaFolder({ folder, isAdmin, userAreaId }) {
  * el archivo no se movió.
  */
 async function documentFolder(relativePath, folder) {
+  const row = await documentRow(relativePath);
+  if (!row) return folder;
+  return row.work_area_id == null ? SLUG_SIN_AREA : String(row.work_area_id);
+}
+
+/** Fila de documents, si el archivo está registrado. */
+async function documentRow(relativePath) {
   const { rows } = await db.query(
-    "SELECT work_area_id FROM documents WHERE public_id = $1 LIMIT 1",
+    "SELECT work_area_id, doc_kind, type FROM documents WHERE public_id = $1 LIMIT 1",
     [relativePath],
   );
-  if (!rows.length) return folder;
-  return rows[0].work_area_id == null ? SLUG_SIN_AREA : String(rows[0].work_area_id);
+  return rows[0] || null;
 }
 
 async function userAreaIdFor(user) {
@@ -113,8 +120,13 @@ async function canOpenTicketAttachment(user, { ticketId }, isAdmin) {
   return isSupportAgent(user);
 }
 
-/** ¿Puede `user` (de sesión) descargar `relativePath`? */
-async function canAccessContent(user, relativePath) {
+/**
+ * ¿Puede `user` (de sesión) descargar `relativePath`?
+ * `perms` y `legacyCtx` los arma /content, que corre antes del middleware
+ * de sesión. Sin ellos, la carpeta de Procesos sigue la regla anterior
+ * (canOpenAreaFolder) para no dejar la descarga abierta.
+ */
+async function canAccessContent(user, relativePath, { perms = null, legacyCtx = null } = {}) {
   if (!user) return false;
   const rule = classifyContentPath(relativePath);
   if (rule.kind === "open") return true;
@@ -122,6 +134,16 @@ async function canAccessContent(user, relativePath) {
   const isAdmin = isAdministrador(normalizeRole(user.role));
   switch (rule.kind) {
     case "area_document": {
+      if (perms && legacyCtx) {
+        if (rule.section === "reglamento" || rule.section === "otros" || rule.folder === GENERAL_AREA) {
+          return puedeVerDocumento(perms, legacyCtx, { section: rule.section, folder: rule.folder });
+        }
+        const row = await documentRow(relativePath);
+        const folder = row
+          ? (row.work_area_id == null ? SLUG_SIN_AREA : String(row.work_area_id))
+          : rule.folder;
+        return puedeVerDocumento(perms, legacyCtx, { section: rule.section, folder, row });
+      }
       if (rule.folder === GENERAL_AREA || isAdmin) return true;
       return canOpenAreaFolder({
         folder: await documentFolder(relativePath, rule.folder),
@@ -130,10 +152,13 @@ async function canAccessContent(user, relativePath) {
       });
     }
     case "expense_attachment":
+      // Fases 7 y 8: comprobantes de gastos, con la regla de hoy.
       return canOpenExpenseAttachment(user, rule);
     case "ticket_attachment":
+      // Fases 7 y 8: adjuntos de tickets, con la regla de hoy.
       return canOpenTicketAttachment(user, rule, isAdmin);
     case "admin_only":
+      // Fases 7 y 8: lo que no calza en una carpeta conocida sigue en el administrador.
       return isAdmin;
     default:
       return false;
@@ -144,4 +169,5 @@ module.exports = {
   classifyContentPath,
   canOpenAreaFolder,
   canAccessContent,
+  puedeVerDocumento,
 };

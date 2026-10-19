@@ -10,12 +10,21 @@ const { canLogin, isAdministrador, normalizeRole } = require("../../constants/ro
  * Al pasar a 'aplicar' este archivo deja de usarse; se borra en la fase de
  * limpieza junto con users.role.
  *
- * Cada regla recibe el contexto antiguo de la sesión ({ active, admin }) y,
- * si la comprobación es sobre un registro, el registro.
+ * Cada regla recibe el contexto antiguo de la sesión
+ * ({ active, admin, rrhhManager, workAreaId }) y, si la comprobación es
+ * sobre un registro, el registro. Las reglas de las fases 0 a 4 sólo leen
+ * active y admin.
  */
 
 const ACTIVO = (ctx) => ctx.active;
 const ADMIN = (ctx) => ctx.admin;
+
+/** Carpeta de procedimientos o protocolos: todos entran a la sección; el área, la propia o un admin. */
+function verCarpeta(ctx, record) {
+  if (!ctx.active) return false;
+  if (!record || record.areaId == null) return true;
+  return Boolean(ctx.admin) || Number(record.areaId) === Number(ctx.workAreaId);
+}
 
 const LEGACY_RULES = Object.freeze({
   // Inicio: cualquier sesión activa; LinkedIn lo conecta un administrador.
@@ -65,13 +74,46 @@ const LEGACY_RULES = Object.freeze({
   "casino.acceso": ACTIVO,
   "casino.menu.ver": ACTIVO,
   "casino.menu.editar": ADMIN,
+
+  // Procesos. Subir, renombrar y eliminar: cualquier administrador, en cualquier carpeta.
+  "procesos.acceso": ACTIVO,
+  "procesos.procedimientos.ver": verCarpeta,
+  "procesos.procedimientos.subir": ADMIN,
+  "procesos.procedimientos.editar": ADMIN,
+  "procesos.procedimientos.eliminar": ADMIN,
+  "procesos.protocolos.ver": verCarpeta,
+  "procesos.protocolos.subir": ADMIN,
+  "procesos.protocolos.editar": ADMIN,
+  "procesos.protocolos.eliminar": ADMIN,
+  "procesos.reglamento.ver": ACTIVO,
+  "procesos.reglamento.subir": ADMIN,
+  "procesos.reglamento.editar": ADMIN,
+  "procesos.reglamento.eliminar": ADMIN,
+  "procesos.otros.ver": ACTIVO,
+  "procesos.otros.subir": ADMIN,
+  "procesos.otros.editar": ADMIN,
+  "procesos.otros.eliminar": ADMIN,
+  "procesos.sin_area.ver": ADMIN,
+  "procesos.sin_area.administrar": ADMIN,
+
+  // Directorio: el contacto personal (enmascarado) lo ve cualquier sesión activa.
+  "rrhh.directorio.campo.contacto_personal": ACTIVO,
 });
 
-/** Contexto antiguo de una sesión: rol activo y rol Administrador. */
-function legacyContext(sessionUser) {
-  if (!sessionUser) return { active: false, admin: false };
+/**
+ * Contexto antiguo de una sesión.
+ * `rrhhManager` y `workAreaId` los llena el middleware de sesión (fases 5 y 6);
+ * el fallback de requirePermission no los conoce y quedan en falso / null.
+ */
+function legacyContext(sessionUser, { rrhhManager = false, workAreaId = null } = {}) {
+  if (!sessionUser) return { active: false, admin: false, rrhhManager: false, workAreaId: null };
   const role = normalizeRole(sessionUser.role);
-  return { active: canLogin(role), admin: isAdministrador(role) };
+  return {
+    active: canLogin(role),
+    admin: isAdministrador(role),
+    rrhhManager: Boolean(rrhhManager),
+    workAreaId: workAreaId ?? null,
+  };
 }
 
 function hasLegacyRule(key) {

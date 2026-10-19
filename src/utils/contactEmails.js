@@ -1,3 +1,5 @@
+const { maskPhone } = require("./phone");
+
 /**
  * Correo de empresa vs. correo de la cuenta.
  *
@@ -40,6 +42,18 @@ function maskEmail(email) {
   return `${local.slice(0, visible)}***${value.slice(at)}`;
 }
 
+/**
+ * Contacto personal del directorio. Si no se ve, no hay dato: ni el valor ni
+ * la máscara. Si se ve, sale enmascarado (así está hoy el listado).
+ */
+function contactoPersonalDirectorio(row, visible) {
+  if (!visible || !row) return { correoPersonal: null, telefonoPersonal: null };
+  return {
+    correoPersonal: maskEmail(row.personal_email),
+    telefonoPersonal: maskPhone(row.phone),
+  };
+}
+
 /** SQL: true si la cuenta usa el correo personal. */
 function accountUsesPersonalEmailSql(alias = "u") {
   return `COALESCE(LOWER(TRIM(${alias}.email)) = LOWER(TRIM(${alias}.personal_email)), FALSE)`;
@@ -51,4 +65,5 @@ module.exports = {
   companyEmailSql,
   accountUsesPersonalEmailSql,
   maskEmail,
+  contactoPersonalDirectorio,
 };

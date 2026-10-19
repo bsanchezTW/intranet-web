@@ -1,6 +1,6 @@
 <%
   /* Mismas secciones que la portada de /procesos: Finanzas, Documentos generales, Mi área/Áreas. */
-  const adminNav = typeof isAdministrador !== 'undefined' && isAdministrador;
+  const adminNav = typeof veListadoCarpetas !== 'undefined' && veListadoCarpetas;
   const areaNavId = (typeof currentUser !== 'undefined' && currentUser && currentUser.work_area_id)
     ? currentUser.work_area_id
     : null;

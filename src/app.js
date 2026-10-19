@@ -40,8 +40,9 @@ const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
-const { checkSessionAccount } = require("./services/access/accountStatus");
-const { canAccessContent } = require("./services/access/contentAccess");
+const { checkSessionAccount, currentWorkAreaId } = require("./services/access/accountStatus");
+const { canAccessContent, classifyContentPath } = require("./services/access/contentAccess");
+const { veListadoDeCarpetas } = require("./services/documents/processAccess");
 const { isAreaManager } = require("./services/expenses/areaManager");
 const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
 const { migrateTicketCategories, ensureTicketReplyCorrelatives } = require("./services/tickets/ticketSchema");
@@ -385,7 +386,31 @@ app.use("/content", async (req, res, next) => {
   try {
     // La sesión no basta: documentos de otras áreas, comprobantes de gastos y
     // adjuntos de tickets sólo los descarga quien puede verlos en su página.
-    if (!(await canAccessContent(req.session.user, relativePath))) {
+    // /content corre antes del middleware de sesión, así que los permisos se
+    // resuelven aquí y sólo si el archivo no es de acceso abierto.
+    const contentKind = classifyContentPath(relativePath).kind;
+    let permitido = false;
+    if (contentKind === "open") {
+      permitido = true;
+    } else if (contentKind === "area_document") {
+      const sessionUser = req.session.user;
+      let perms;
+      try {
+        perms = await permissions.resolve(sessionUser);
+      } catch (err) {
+        logger.error("permisos", err);
+        perms = emptyPermissions(getCatalog(), sessionUser.id);
+      }
+      let workAreaId = await currentWorkAreaId(sessionUser.id);
+      if (workAreaId === undefined) workAreaId = sessionUser.work_area_id ?? null;
+      const gestionaRrhh = await canManageRrhh(sessionUser);
+      const legacyCtx = legacyContext(sessionUser, { rrhhManager: gestionaRrhh, workAreaId });
+      permitido = await canAccessContent(sessionUser, relativePath, { perms, legacyCtx });
+    } else {
+      // Gastos, tickets y admin_only: fases 7 y 8. Siguen con su regla actual.
+      permitido = await canAccessContent(req.session.user, relativePath);
+    }
+    if (!permitido) {
       return res.status(403).send("No tienes permiso para ver este archivo");
     }
 
@@ -531,14 +556,14 @@ app.use(async (req, res, next) => {
       logger.error("permisos", err);
       req.perms = emptyPermissions(getCatalog(), user.id);
     }
-    req.permLegacy = legacyContext(user);
+    let workAreaId = await currentWorkAreaId(user.id);
+    if (workAreaId === undefined) workAreaId = user.work_area_id ?? null;
+    req.permLegacy = legacyContext(user, { rrhhManager: gestionaRrhh, workAreaId });
     res.locals.perms = req.perms;
+    res.locals.veListadoCarpetas = veListadoDeCarpetas(req.perms, req.permLegacy);
     res.locals.can = buildViewCan(
       req.perms,
       {
-        procedimientos_write: isAdministrador(role),
-        protocolos_write: isAdministrador(role),
-        reglamento_write: isAdministrador(role),
         personas_write: gestionaRrhh,
         tickets_reply: isAdministrador(role),
         vacaciones_write: gestionaRrhh,
@@ -552,6 +577,7 @@ app.use(async (req, res, next) => {
     res.locals.canManageRrhh = false;
     res.locals.isAreaManager = false;
     res.locals.canIssueBills = false;
+    res.locals.veListadoCarpetas = false;
     req.perms = emptyPermissions(getCatalog());
     res.locals.perms = req.perms;
     res.locals.can = buildViewCan(req.perms);
