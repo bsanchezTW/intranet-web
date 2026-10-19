@@ -12,7 +12,7 @@ const defClave = clave ? catalog.byKey.get(clave) : null;
 const opcionesArea = [];
 (function aplanar(nodos, nivel) {
   nodos.forEach(function (n) {
-    opcionesArea.push({ id: n.id, label: '  '.repeat(nivel) + n.area_name });
+    opcionesArea.push({ id: n.id, label: '   '.repeat(nivel) + n.area_name });
     aplanar(n.children || [], nivel + 1);
   });
 })(areaTree, 0);

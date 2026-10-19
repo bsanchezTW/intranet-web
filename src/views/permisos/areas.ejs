@@ -1,40 +1,51 @@
-<%
-const filas = [];
-(function aplanar(nodos, nivel) {
-  nodos.forEach(function (n) {
-    filas.push({ area: n, nivel: nivel });
-    aplanar(n.children || [], nivel + 1);
-  });
-})(areaTree, 0);
-%>
+<% const icono = (name) => include('../partials/icon', { name: name }); %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
-    titulo: 'Permisos por área',
-    descripcion: 'Lo que se asigna a un área lo tienen quienes trabajan en ella (y, si se marca, en las que cuelgan de ella).',
+    titulo: 'Organigrama',
+    descripcion: 'Quién trabaja en cada área, quién la dirige y qué jefes hay por encima. Pesa en los permisos: lo asignado a un área lo tienen sus miembros, y lo de Jefes vale sobre todo lo que cada jefe tiene a cargo.',
     seccion: 'areas',
   }) %>
 
-  <div class="panel perm-scroll">
-    <table class="perm-table">
-      <thead><tr><th>Área</th><th>Jefe</th><th class="perm-table__num">Personas</th><th class="perm-table__num">Asignaciones</th></tr></thead>
-      <tbody>
-        <% filas.forEach(function (f) { %>
-          <% const jefe = f.area.manager_user_id ? refs.userById.get(Number(f.area.manager_user_id)) : null; %>
-          <% const asignadas = counts.get(Number(f.area.id)) || 0; %>
-          <tr>
-            <td style="padding-left:<%= 10 + f.nivel * 22 %>px">
-              <span class="perm-area-nombre">
-                <% if (f.nivel) { %><span class="perm-area-nombre__rama" aria-hidden="true"></span><% } %>
-                <span class="perm-area-punto" aria-hidden="true"<% if (/^#[0-9a-f]{3,8}$/i.test(String(f.area.color || ''))) { %> style="background:<%= f.area.color %>"<% } %>></span>
-                <a href="/permisos/areas/<%= f.area.id %>"><%= f.area.area_name %></a>
-              </span>
-            </td>
-            <td class="perm-muted"><%= jefe ? jefe.name : '—' %></td>
-            <td class="perm-table__num"><span class="perm-num"><%= members.get(Number(f.area.id)) || 0 %></span></td>
-            <td class="perm-table__num"><span class="perm-num<%= asignadas ? ' perm-num--activo' : '' %>"><%= asignadas %></span></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+  <div class="perm-banner">
+    <span class="perm-banner__icono" aria-hidden="true"><%- icono('info') %></span>
+    <div>
+      <strong>Cómo pesa el organigrama.</strong>
+      «Mi área» es el área donde trabaja cada persona. «A su cargo» son las áreas que dirige y todas las que cuelgan de ellas. El organigrama se edita en RRHH; aquí se ve y se asignan permisos a cada área.
+    </div>
   </div>
+
+  <div class="perm-filtros">
+    <label class="perm-buscar">
+      <%- icono('search') %>
+      <input type="search" placeholder="Buscar área, jefe o persona" aria-label="Buscar en el organigrama" data-perm-buscar-org="#perm-org">
+    </label>
+  </div>
+
+  <% if (!org.length) { %>
+    <div class="panel"><p class="perm-vacio"><%- icono('inbox') %> Todavía no hay áreas.</p></div>
+  <% } else { %>
+    <ul class="perm-org" id="perm-org">
+      <% org.forEach(function (raiz) { %>
+        <%- include('partials/nodo_area', { nodo: raiz }) %>
+      <% }) %>
+    </ul>
+  <% } %>
+
+  <% if (sinArea.length) { %>
+    <section class="seccion">
+      <div class="seccion__head">
+        <div class="seccion__heading">
+          <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('alert-triangle') %></span> Sin área <span class="perm-num"><%= sinArea.length %></span></h3>
+          <p class="seccion__desc">No reciben nada por área ni por jefatura. Se les asigna área en RRHH.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="perm-gente">
+          <% sinArea.forEach(function (u) { %>
+            <a href="/permisos/usuarios/<%= u.id %>"><span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= String(u.name || '?').split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase() %></span><%= u.name %></a>
+          <% }) %>
+        </div>
+      </div>
+    </section>
+  <% } %>
 </div>

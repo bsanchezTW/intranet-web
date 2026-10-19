@@ -128,7 +128,78 @@
     actualizar();
   }
 
+  /* Editar una asignación: «Editar» y «Cancelar» abren y cierran su formulario. */
+  document.addEventListener("click", function (ev) {
+    var boton = ev.target.closest("[data-perm-toggle]");
+    if (!boton) return;
+    var id = boton.getAttribute("data-perm-toggle");
+    var form = document.getElementById(id);
+    if (!form) return;
+    form.hidden = !form.hidden;
+    document.querySelectorAll("[data-perm-toggle='" + id + "'][aria-expanded]").forEach(function (b) {
+      b.setAttribute("aria-expanded", String(!form.hidden));
+    });
+    if (!form.hidden) {
+      var primero = form.querySelector("select, input:not([type='hidden'])");
+      if (primero) primero.focus();
+    }
+  });
+
+  // En el editor, la lista de áreas sólo con «Áreas elegidas».
+  function prepararEdicion(form) {
+    var alcance = form.querySelector("[data-perm-ed-scope]");
+    var areas = form.querySelector("[data-perm-ed-areas]");
+    if (!alcance || !areas) return;
+    function actualizar() {
+      ocultar(areas, alcance.value !== "areas");
+    }
+    alcance.addEventListener("change", actualizar);
+    actualizar();
+  }
+
+  function normalizarTexto(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+
+  // Buscar persona dentro de la lista de quienes tienen un permiso.
+  function prepararBuscarLista(input) {
+    var lista = document.querySelector(input.getAttribute("data-perm-buscar-lista"));
+    if (!lista) return;
+    input.addEventListener("input", function () {
+      var q = normalizarTexto(input.value).trim();
+      lista.querySelectorAll("[data-perm-texto]").forEach(function (fila) {
+        fila.hidden = Boolean(q) && normalizarTexto(fila.getAttribute("data-perm-texto")).indexOf(q) === -1;
+      });
+    });
+  }
+
+  /* Organigrama: un área se ve si ella, su jefe o alguien de ella coincide, y
+     entonces también se ven las áreas de arriba para no perder la rama. */
+  function prepararBuscarOrg(input) {
+    var arbol = document.querySelector(input.getAttribute("data-perm-buscar-org"));
+    if (!arbol) return;
+    var nodos = arbol.querySelectorAll(".perm-org__nodo");
+    input.addEventListener("input", function () {
+      var q = normalizarTexto(input.value).trim();
+      nodos.forEach(function (n) { n.hidden = Boolean(q); });
+      if (!q) return;
+      nodos.forEach(function (n) {
+        var propio = n.querySelector(":scope > .perm-org__area");
+        // Busca también entre las personas que la tarjeta no alcanza a mostrar.
+        var texto = propio ? propio.textContent + " " + (propio.getAttribute("data-perm-buscar-texto") || "") : "";
+        if (!propio || normalizarTexto(texto).indexOf(q) === -1) return;
+        for (var el = n; el && el !== arbol; el = el.parentElement) {
+          if (el.classList && el.classList.contains("perm-org__nodo")) el.hidden = false;
+        }
+        n.querySelectorAll(".perm-org__nodo").forEach(function (d) { d.hidden = false; });
+      });
+    });
+  }
+
   document.querySelectorAll("form[data-perm-form]").forEach(prepararAsignacion);
   document.querySelectorAll("[data-perm-item]").forEach(prepararItem);
   document.querySelectorAll("[data-perm-filtro]").forEach(prepararFiltro);
+  document.querySelectorAll("form[data-perm-edit]").forEach(prepararEdicion);
+  document.querySelectorAll("[data-perm-buscar-lista]").forEach(prepararBuscarLista);
+  document.querySelectorAll("[data-perm-buscar-org]").forEach(prepararBuscarOrg);
 })();

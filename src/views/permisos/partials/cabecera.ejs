@@ -1,15 +1,17 @@
 <%
 /* Cabecera y pestañas de Gestión de Permisos.
    Parámetros: titulo, descripcion, seccion, migas (opcional: [{ href, label }]). */
+// Primero lo de todos los días (qué permiso, quién, dónde en el organigrama);
+// después a quién se asigna en bloque y la auditoría.
 const pestanas = [
-  ['inicio', '/permisos', 'Resumen'],
-  ['modulos', '/permisos/modulos', 'Por módulo'],
-  ['conjuntos', '/permisos/conjuntos', 'Conjuntos'],
-  ['global', '/permisos/global', 'Global'],
-  ['areas', '/permisos/areas', 'Áreas'],
-  ['jefes', '/permisos/jefes', 'Jefes'],
-  ['usuarios', '/permisos/usuarios', 'Personas'],
-  ['auditoria', '/permisos/auditoria', 'Auditoría'],
+  ['inicio', '/permisos', 'Resumen', 'home'],
+  ['modulos', '/permisos/modulos', 'Permisos', 'layers'],
+  ['usuarios', '/permisos/usuarios', 'Personas', 'users'],
+  ['areas', '/permisos/areas', 'Organigrama', 'sitemap'],
+  ['jefes', '/permisos/jefes', 'Jefes', 'user-check'],
+  ['global', '/permisos/global', 'Global', 'grid'],
+  ['conjuntos', '/permisos/conjuntos', 'Conjuntos', 'briefcase'],
+  ['auditoria', '/permisos/auditoria', 'Auditoría', 'clock'],
 ];
 const extraMigas = typeof migas !== 'undefined' && Array.isArray(migas) ? migas : [];
 %>
@@ -32,6 +34,6 @@ const extraMigas = typeof migas !== 'undefined' && Array.isArray(migas) ? migas 
 
 <nav class="perm-tabs" aria-label="Secciones de Gestión de permisos">
   <% pestanas.forEach(function (p) { %>
-    <a href="<%= p[1] %>"<% if (p[0] === seccion) { %> aria-current="page"<% } %>><%= p[2] %></a>
+    <a href="<%= p[1] %>"<% if (p[0] === seccion) { %> aria-current="page"<% } %>><%- include('../../partials/icon', { name: p[3] }) %> <%= p[2] %></a>
   <% }) %>
 </nav>

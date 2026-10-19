@@ -1,0 +1,51 @@
+<%
+/* Un área del organigrama y, debajo, las que cuelgan de ella (recursivo).
+   Parámetros: nodo (de orgView.orgTree). */
+const iniciales = (nombre) => String(nombre || '?').split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase();
+const color = /^#[0-9a-f]{3,8}$/i.test(String(nodo.color || '')) ? nodo.color : null;
+const MAX = 8;
+const visibles = nodo.members.slice(0, MAX);
+%>
+<li class="perm-org__nodo">
+  <div class="perm-org__area" data-perm-buscar-texto="<%= nodo.members.map(function (u) { return u.name; }).join(' ') %>"<% if (color) { %> style="--area-color:<%= color %>"<% } %>>
+    <div class="perm-org__cabeza">
+      <a class="perm-org__nombre" href="/permisos/areas/<%= nodo.id %>"><%= nodo.area_name %></a>
+      <span class="perm-org__cuentas">
+        <span class="perm-muted" title="Personas en el área"><span class="perm-num"><%= nodo.members.length %></span> <%= nodo.members.length === 1 ? 'persona' : 'personas' %></span>
+        <% if (nodo.subtreeCount !== nodo.members.length) { %><span class="perm-muted" title="Personas en el área y en las que cuelgan de ella">· <%= nodo.subtreeCount %> con subáreas</span><% } %>
+        <% if (nodo.assignments) { %><span class="perm-chip perm-chip--brand" title="Asignaciones hechas a esta área"><%= nodo.assignments %> asignación<%= nodo.assignments === 1 ? '' : 'es' %></span><% } %>
+      </span>
+    </div>
+    <div class="perm-org__jefatura">
+      <% if (nodo.manager) { %>
+        <span class="perm-org__jefe"><span class="perm-org__etq">Jefe</span> <a href="/permisos/usuarios/<%= nodo.manager.id %>"><%= nodo.manager.name %></a></span>
+      <% } else { %>
+        <span class="perm-org__jefe perm-org__jefe--falta"><span class="perm-org__etq">Jefe</span> sin jefe<%= nodo.above.length ? ': responde ' + nodo.above[0].manager.name : '' %></span>
+      <% } %>
+      <% if (nodo.above.length) { %>
+        <span class="perm-org__arriba"><span class="perm-org__etq">Por encima</span>
+          <% nodo.above.forEach(function (b, i) { %><%= i ? ' › ' : '' %><a href="/permisos/usuarios/<%= b.manager.id %>"><%= b.manager.name %></a><% }) %>
+        </span>
+      <% } %>
+    </div>
+    <% if (nodo.members.length) { %>
+      <div class="perm-org__gente">
+        <% visibles.forEach(function (u) { %>
+          <a href="/permisos/usuarios/<%= u.id %>" class="perm-org__persona<%= nodo.manager && nodo.manager.id === u.id ? ' perm-org__persona--jefe' : '' %>" title="<%= u.name %>">
+            <span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= iniciales(u.name) %></span><span><%= u.name %></span>
+          </a>
+        <% }) %>
+        <% if (nodo.members.length > MAX) { %>
+          <a class="perm-org__mas" href="/permisos/areas/<%= nodo.id %>">+<%= nodo.members.length - MAX %> más</a>
+        <% } %>
+      </div>
+    <% } %>
+  </div>
+  <% if (nodo.children.length) { %>
+    <ul class="perm-org__hijos">
+      <% nodo.children.forEach(function (hijo) { %>
+        <%- include('nodo_area', { nodo: hijo }) %>
+      <% }) %>
+    </ul>
+  <% } %>
+</li>

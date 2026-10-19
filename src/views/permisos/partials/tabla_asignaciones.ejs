@@ -1,72 +1,125 @@
 <%
-/* Asignaciones con su botón de quitar.
-   Parámetros: assignments, volver, mostrarQuien (bool), mostrarQue (bool), vacio (texto), countryConfig. */
+/* Asignaciones con sus botones de editar y quitar.
+   Parámetros: assignments, volver, mostrarQuien (bool), mostrarQue (bool), vacio (texto),
+   y de baseContext: countryConfig, catalog, areaTree, scopeLabels. */
+const tz = countryConfig.timezone;
 const fecha = (d) => d
-  ? new Date(d).toLocaleDateString('es-' + countryConfig.code, { timeZone: countryConfig.timezone, day: '2-digit', month: '2-digit', year: 'numeric' })
+  ? new Date(d).toLocaleDateString('es-' + countryConfig.code, { timeZone: tz, day: '2-digit', month: '2-digit', year: 'numeric' })
   : null;
 // valid_until es el inicio del día siguiente: se muestra el último día vigente.
 const ultimoDia = (d) => d ? fecha(new Date(new Date(d).getTime() - 1)) : null;
+// AAAA-MM-DD en la zona del país, para los <input type="date">.
+const ymd = (d) => d ? new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(d)) : '';
+const ymdUltimo = (d) => d ? ymd(new Date(new Date(d).getTime() - 1)) : '';
 const conQuien = typeof mostrarQuien === 'undefined' ? true : mostrarQuien;
 const conQue = typeof mostrarQue === 'undefined' ? true : mostrarQue;
+const icono = (name) => include('../../partials/icon', { name: name });
+const opcionesArea = [];
+(function aplanar(nodos, nivel) {
+  nodos.forEach(function (n) {
+    opcionesArea.push({ id: n.id, label: '   '.repeat(nivel) + n.area_name });
+    aplanar(n.children || [], nivel + 1);
+  });
+})(typeof areaTree !== 'undefined' ? areaTree : [], 0);
 %>
 <% if (!assignments.length) { %>
-  <p class="perm-vacio"><%- include('../../partials/icon', { name: 'inbox' }) %> <%= typeof vacio !== 'undefined' ? vacio : 'Sin asignaciones.' %></p>
+  <p class="perm-vacio"><%- icono('inbox') %> <%= typeof vacio !== 'undefined' ? vacio : 'Sin asignaciones.' %></p>
 <% } else { %>
-  <div class="perm-scroll">
-    <table class="perm-table perm-table--responsive">
-      <thead>
-        <tr>
-          <% if (conQuien) { %><th>A quién</th><% } %>
-          <% if (conQue) { %><th>Qué</th><% } %>
-          <th>Efecto</th>
-          <th>Vigencia</th>
-          <th>Motivo</th>
-          <th class="perm-table__accion"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% assignments.forEach(function (a) { %>
-          <tr>
-            <% if (conQuien) { %><td><%= a.principalLabel %></td><% } %>
-            <% if (conQue) { %>
-              <td>
-                <strong><%= a.targetLabel %></strong>
-                <% if (a.scopeLabel) { %><br><span class="perm-muted">Sobre: <%= a.scopeLabel %></span><% } %>
-              </td>
+  <div class="perm-asigs">
+    <% assignments.forEach(function (a) { %>
+      <% const def = a.permission_key && typeof catalog !== 'undefined' ? catalog.byKey.get(a.permission_key) : null; %>
+      <% const conAlcance = def && def.scopes && !a.set_id && a.effect !== 'deniega'; %>
+      <% const elegidas = (a.scope_area_ids || []).map(Number); %>
+      <div class="perm-asig<%= a.effect === 'deniega' ? ' perm-asig--deny' : '' %><%= a.expired ? ' perm-asig--vencida' : '' %>">
+        <div class="perm-asig__main">
+          <div class="perm-asig__titulo">
+            <% if (a.effect === 'deniega') { %>
+              <span class="perm-chip perm-chip--deny">Deniega</span>
+            <% } else { %>
+              <span class="perm-chip">Concede</span>
             <% } %>
-            <td>
-              <% if (a.effect === 'deniega') { %>
-                <span class="perm-chip perm-chip--deny">Deniega</span>
+            <% if (conQue) { %>
+              <% if (a.isSet) { %>
+                <a href="/permisos/conjuntos/<%= a.set_id %>"><%= a.targetLabel %></a>
               <% } else { %>
-                <span class="perm-chip">Concede</span>
+                <strong><%= a.targetLabel %></strong>
               <% } %>
-            </td>
-            <td>
-              <% if (a.expired) { %>
-                <span class="perm-chip perm-chip--muted">Vencida el <%= ultimoDia(a.valid_until) %></span>
-              <% } else if (a.pending) { %>
-                <span class="perm-chip perm-chip--warn">Desde el <%= fecha(a.valid_from) %></span>
-              <% } %>
-              <% if (!a.expired && a.valid_until) { %><span class="perm-muted">Hasta el <%= ultimoDia(a.valid_until) %></span><% } %>
-              <% if (!a.valid_from && !a.valid_until) { %><span class="perm-muted">Sin plazo</span><% } %>
-            </td>
-            <td class="perm-muted">
-              <%= a.note || '' %>
-              <% if (a.grantedByName) { %><br>por <%= a.grantedByName %><% } %>
-            </td>
-            <td class="perm-table__accion">
-              <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
-                    data-confirm="<%= a.principalLabel %> deja de tener esta asignación (<%= a.targetLabel %>)."
-                    data-confirm-title="¿Quitar la asignación?"
-                    data-confirm-accept="Quitar"
-                    data-confirm-tone="peligro">
-                <input type="hidden" name="volver" value="<%= volver %>">
-                <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm"><%- include('../../partials/icon', { name: 'trash' }) %> Quitar</button>
-              </form>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
+            <% } %>
+            <% if (conQuien) { %><span class="perm-asig__quien"><%= conQue ? 'a ' : '' %><%= a.principalLabel %></span><% } %>
+          </div>
+          <div class="perm-asig__meta">
+            <% if (a.scopeLabel) { %><span>Sobre: <%= a.scopeLabel %></span><% } %>
+            <% if (a.expired) { %>
+              <span class="perm-chip perm-chip--muted">Vencida el <%= ultimoDia(a.valid_until) %></span>
+            <% } else if (a.pending) { %>
+              <span class="perm-chip perm-chip--warn">Desde el <%= fecha(a.valid_from) %></span>
+            <% } %>
+            <% if (!a.expired && a.valid_until) { %><span>Hasta el <%= ultimoDia(a.valid_until) %></span><% } %>
+            <% if (!a.valid_from && !a.valid_until) { %><span>Sin plazo</span><% } %>
+            <% if (a.note) { %><span class="perm-asig__nota">«<%= a.note %>»</span><% } %>
+            <% if (a.grantedByName) { %><span>por <%= a.grantedByName %></span><% } %>
+          </div>
+        </div>
+        <div class="perm-asig__acciones">
+          <button type="button" class="perm-btn perm-btn--sec perm-btn--sm" data-perm-toggle="editar-<%= a.id %>" aria-expanded="false" aria-controls="editar-<%= a.id %>"><%- icono('edit') %> Editar</button>
+          <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
+                data-confirm="<%= a.principalLabel %> deja de tener esta asignación (<%= a.targetLabel %>)."
+                data-confirm-title="¿Quitar la asignación?"
+                data-confirm-accept="Quitar"
+                data-confirm-tone="peligro">
+            <input type="hidden" name="volver" value="<%= volver %>">
+            <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm"><%- icono('trash') %> Quitar</button>
+          </form>
+        </div>
+
+        <form class="perm-asig__editar" id="editar-<%= a.id %>" action="/permisos/asignaciones/<%= a.id %>" method="POST" hidden data-perm-edit>
+          <input type="hidden" name="volver" value="<%= volver %>">
+          <% if ((a.principal_type === 'area' || a.principal_type === 'jefes') && a.area_id != null) { %>
+            <label class="perm-check perm-form__ancho">
+              <input type="checkbox" name="include_subareas" value="1"<% if (a.include_subareas) { %> checked<% } %>>
+              También a las áreas que cuelgan de ella
+            </label>
+          <% } %>
+          <% if (conAlcance) { %>
+            <div class="campo-form">
+              <label for="ed-scope-<%= a.id %>">Sobre qué registros</label>
+              <select id="ed-scope-<%= a.id %>" name="scope" data-perm-ed-scope>
+                <% def.scopes.forEach(function (s) { %>
+                  <option value="<%= s %>"<% if (s === a.scope) { %> selected<% } %>><%= scopeLabels[s] %></option>
+                <% }) %>
+              </select>
+            </div>
+            <% if (def.scopes.indexOf('areas') !== -1) { %>
+              <div class="campo-form perm-form__ancho" data-perm-ed-areas>
+                <label for="ed-areas-<%= a.id %>">Áreas elegidas</label>
+                <select id="ed-areas-<%= a.id %>" name="scope_area_ids" multiple>
+                  <% opcionesArea.forEach(function (o) { %>
+                    <option value="<%= o.id %>"<% if (elegidas.indexOf(Number(o.id)) !== -1) { %> selected<% } %>><%= o.label %></option>
+                  <% }) %>
+                </select>
+                <label class="perm-check"><input type="checkbox" name="scope_include_subareas" value="1"<% if (a.scope_include_subareas) { %> checked<% } %>> Con sus subáreas</label>
+              </div>
+            <% } %>
+          <% } %>
+          <div class="campo-form">
+            <label for="ed-desde-<%= a.id %>">Desde</label>
+            <input type="date" id="ed-desde-<%= a.id %>" name="valid_from" value="<%= ymd(a.valid_from) %>">
+          </div>
+          <div class="campo-form">
+            <label for="ed-hasta-<%= a.id %>">Hasta (incluido)</label>
+            <input type="date" id="ed-hasta-<%= a.id %>" name="valid_until" value="<%= ymdUltimo(a.valid_until) %>">
+          </div>
+          <div class="campo-form perm-form__ancho">
+            <label for="ed-nota-<%= a.id %>">Motivo</label>
+            <input type="text" id="ed-nota-<%= a.id %>" name="note" maxlength="500" value="<%= a.note || '' %>">
+          </div>
+          <div class="perm-form__acciones">
+            <span class="perm-muted">A quién, qué y si concede o deniega no se editan: quita ésta y agrega otra.</span>
+            <button type="button" class="perm-btn perm-btn--sec perm-btn--sm" data-perm-toggle="editar-<%= a.id %>">Cancelar</button>
+            <button type="submit" class="perm-btn perm-btn--sm"><%- icono('check') %> Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    <% }) %>
   </div>
 <% } %>

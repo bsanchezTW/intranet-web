@@ -394,6 +394,114 @@ async function deleteAssignment(assignmentId, actorId) {
   });
 }
 
+/**
+ * Cambia la vigencia, el motivo, el alcance o si alcanza a las subáreas de
+ * una asignación. A quién se asigna, qué y si concede o deniega no cambian:
+ * eso es otra asignación (se quita y se agrega).
+ */
+async function updateAssignment(assignmentId, input, actorId, { catalog = getCatalog() } = {}) {
+  return inTransaction(async (client) => {
+    const { rows } = await client.query("SELECT * FROM perm_assignments WHERE id = $1 FOR UPDATE", [assignmentId]);
+    if (!rows.length) throw new PermissionInputError("La asignación ya no existe.");
+    const before = rows[0];
+    const refs = await referenceSets(client);
+    const value = validateAssignment(
+      {
+        ...input,
+        principal_type: before.principal_type,
+        area_id: before.area_id,
+        user_id: before.user_id,
+        set_id: before.set_id,
+        permission_key: before.permission_key,
+        effect: before.effect,
+      },
+      { catalog, ...refs, actorId, timeZone: getTimezone() },
+    );
+    const { rows: after } = await client.query(
+      `UPDATE perm_assignments
+          SET include_subareas = $1, scope = $2, scope_area_ids = $3, scope_include_subareas = $4,
+              valid_from = $5, valid_until = $6, note = $7
+        WHERE id = $8
+        RETURNING *`,
+      [
+        value.include_subareas,
+        value.scope,
+        value.scope_area_ids,
+        value.scope_include_subareas,
+        value.valid_from,
+        value.valid_until,
+        value.note,
+        assignmentId,
+      ],
+    );
+    await audit(client, {
+      actorId,
+      action: "asignacion.editar",
+      entityType: "asignacion",
+      entityId: Number(assignmentId),
+      oldValue: before,
+      newValue: after[0],
+    });
+    return after[0];
+  });
+}
+
+/**
+ * Le quita un permiso a una persona (ver adminQueries.removalPlan): borra sus
+ * asignaciones `deleteIds` y, si `deny`, le deniega la clave a ella sola.
+ * Todo en una transacción: o queda sin el permiso, o no cambia nada.
+ */
+async function revokeFromUser({ userId, permissionKey, deleteIds = [], deny = false, note = null }, actorId, { catalog = getCatalog() } = {}) {
+  const id = toId(userId);
+  if (id == null) throw new PermissionInputError("Elige a la persona.");
+  if (actorId != null && id === Number(actorId)) throw new PermissionInputError("No puedes cambiar tus propias asignaciones.");
+  if (!catalog.byKey.has(permissionKey)) throw new PermissionInputError("Ese permiso no existe en la intranet de este país.");
+  return inTransaction(async (client) => {
+    const ids = toIdList(deleteIds);
+    if (ids.length) {
+      // Sólo asignaciones de esa persona: el plan viene del servidor, pero no
+      // se borra nada de otros aunque llegara mal.
+      const { rows } = await client.query(
+        `DELETE FROM perm_assignments
+          WHERE id = ANY($1::int[]) AND principal_type = user AND user_id = $2
+          RETURNING *`,
+        [ids, id],
+      );
+      for (const row of rows) {
+        await audit(client, {
+          actorId,
+          action: "asignacion.quitar",
+          entityType: "asignacion",
+          entityId: Number(row.id),
+          oldValue: row,
+          note,
+        });
+      }
+    }
+    if (!deny) return { denied: null };
+    const refs = await referenceSets(client);
+    const value = validateAssignment(
+      { principal_type: "user", user_id: id, permission_key: permissionKey, effect: "deniega", note },
+      { catalog, ...refs, actorId, timeZone: getTimezone() },
+    );
+    const { rows } = await client.query(
+      `INSERT INTO perm_assignments (principal_type, user_id, permission_key, effect, note, granted_by)
+       VALUES (user, $1, $2, deniega, $3, $4)
+       RETURNING *`,
+      [value.user_id, value.permission_key, value.note, actorId || null],
+    );
+    await audit(client, {
+      actorId,
+      action: "asignacion.denegar",
+      entityType: "asignacion",
+      entityId: rows[0].id,
+      newValue: rows[0],
+      note,
+    });
+    return { denied: rows[0] };
+  });
+}
+
 // --- Superadmin ----------------------------------------------------------------
 
 /**
@@ -448,5 +556,7 @@ module.exports = {
   deleteSet,
   createAssignment,
   deleteAssignment,
+  updateAssignment,
+  revokeFromUser,
   setSuperadmin,
 };

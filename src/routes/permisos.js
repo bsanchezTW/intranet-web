@@ -8,6 +8,9 @@ const store = require("../services/permissions/store");
 const queries = require("../services/permissions/adminQueries");
 const { recentMismatches } = require("../services/permissions/decide");
 const { buildTree } = require("../services/workAreaTree");
+const { loadSnapshot } = require("../services/permissions/permissionService");
+const { computePermissions } = require("../services/permissions/resolver");
+const { orgTree, areaInOrg, managersUp } = require("../services/permissions/orgView");
 const { withQueryParam } = require("../utils/returnTo");
 
 /**
@@ -15,18 +18,19 @@ const { withQueryParam } = require("../utils/returnTo");
  * página no existe (404), igual que un módulo apagado.
  *
  *   /permisos                 resumen y superadmins
- *   /permisos/modulos         cada permiso del catálogo y quién lo tiene
+ *   /permisos/modulos         cada permiso del catálogo, quién lo tiene y quitárselo
+ *   /permisos/quitar          quitarle un permiso a una persona
  *   /permisos/conjuntos       conjuntos con nombre y sus permisos
  *   /permisos/global          lo asignado a todos
- *   /permisos/areas[/:id]     lo asignado a cada área
+ *   /permisos/areas[/:id]     el organigrama y lo asignado a cada área
  *   /permisos/jefes           lo asignado a los jefes de área
  *   /permisos/usuarios[/:id]  ficha: asignaciones y permisos efectivos con su origen
  *   /permisos/auditoria       quién cambió qué
  */
 
 const BASE = "/permisos";
-const CSS = ["/css/permisos.css?v=20261019c"];
-const JS = ["/js/permisos.js?v=20261019b"];
+const CSS = ["/css/permisos.css?v=20261020a"];
+const JS = ["/js/permisos.js?v=20261020a"];
 
 router.use((req, res, next) => {
   if (req.perms && req.perms.superadmin) return next();
@@ -128,9 +132,46 @@ router.get("/modulos", async (req, res, next) => {
     const modulo = String(req.query.modulo || "");
     const modules = ctx.catalog.modules;
     const current = modules.find((m) => m.module === modulo) || modules[0];
-    render(res, "modulos", "Permisos por módulo", "modulos", { ...ctx, modules, current, whoHas });
+    // Persona por persona, sólo para el módulo que se mira.
+    const holders = await queries.holdersByKey(current.permissions.map((p) => p.key), ctx.refs, ctx.catalog);
+    render(res, "modulos", "Permisos", "modulos", { ...ctx, modules, current, whoHas, holders });
   } catch (err) {
     next(err);
+  }
+});
+
+/**
+ * Quitarle un permiso a una persona, venga de donde venga (ver
+ * adminQueries.removalPlan). Se decide con una foto fresca de la base.
+ */
+router.post("/quitar", async (req, res) => {
+  const to = volver(req, `${BASE}/modulos`);
+  try {
+    const catalog = getCatalog();
+    const key = String(req.body.permission_key || "");
+    const userId = Number(req.body.user_id);
+    const snapshot = await loadSnapshot();
+    const perms = computePermissions(snapshot, { id: userId }, { catalog });
+    if (perms.superadmin) {
+      throw new store.PermissionInputError("Un superadmin tiene todos los permisos: quítale primero la marca de superadmin.");
+    }
+    const e = perms.explain(key);
+    if (!e.granted) return ok(res, to, "Esa persona ya no tenía el permiso");
+    const plan = queries.removalPlan(e.sources, snapshot, key);
+    await store.revokeFromUser(
+      {
+        userId,
+        permissionKey: key,
+        deleteIds: plan.deleteIds,
+        deny: plan.mode === "denegar",
+        note: String(req.body.note || "").trim() || "Quitado desde Gestión de permisos",
+      },
+      actorId(req),
+      { catalog },
+    );
+    return ok(res, to, plan.mode === "denegar" ? "Permiso quitado: se le denegó sólo a esa persona" : "Permiso quitado");
+  } catch (err) {
+    return fail(res, to, err);
   }
 });
 
@@ -240,9 +281,25 @@ router.get("/jefes", async (req, res, next) => {
   try {
     const ctx = await baseContext(req);
     const assignments = await queries.listAssignments({ principal_type: "jefes" }, ctx.refs, ctx.catalog);
+    // Quiénes son hoy los jefes, qué dirigen y quién está por encima de ellos.
+    const porJefe = new Map();
+    for (const area of ctx.refs.areas) {
+      const id = Number(area.manager_user_id);
+      if (!id) continue;
+      if (!porJefe.has(id)) porJefe.set(id, []);
+      porJefe.get(id).push(area);
+    }
+    const jefes = [...porJefe.entries()]
+      .map(([id, areas]) => ({
+        user: ctx.refs.userById.get(id) || { id, name: `Usuario #${id}` },
+        areas,
+        above: areas[0] && areas[0].parent_area_id != null ? managersUp(ctx.refs, areas[0].parent_area_id, { skipUserId: id }) : [],
+      }))
+      .sort((a, b) => a.user.name.localeCompare(b.user.name, "es"));
     render(res, "destinatario", "Permisos de jefes de área", "jefes", {
       ...ctx,
       assignments,
+      jefes,
       principal: {
         type: "jefes",
         label: "Jefes de área",
@@ -262,12 +319,8 @@ router.get("/areas", async (req, res, next) => {
         WHERE principal_type = 'area' GROUP BY area_id`,
     );
     const counts = new Map(rows.map((r) => [Number(r.area_id), r.n]));
-    const members = new Map();
-    for (const u of ctx.refs.users) {
-      if (u.work_area_id == null) continue;
-      members.set(Number(u.work_area_id), (members.get(Number(u.work_area_id)) || 0) + 1);
-    }
-    render(res, "areas", "Permisos por área", "areas", { ...ctx, counts, members });
+    const sinArea = ctx.activeUsers.filter((u) => u.work_area_id == null);
+    render(res, "areas", "Organigrama", "areas", { ...ctx, org: orgTree(ctx.refs, { assignmentCounts: counts }), sinArea });
   } catch (err) {
     next(err);
   }
@@ -283,11 +336,12 @@ router.get("/areas/:id", async (req, res, next) => {
       ctx.refs,
       ctx.catalog,
     );
-    const people = ctx.refs.users.filter((u) => Number(u.work_area_id) === Number(area.id));
-    return render(res, "destinatario", `Permisos de ${area.area_name}`, "areas", {
+    const enOrg = areaInOrg(ctx.refs, area.id);
+    return render(res, "destinatario", area.area_name, "areas", {
       ...ctx,
       assignments,
-      people,
+      people: enOrg.members,
+      enOrg,
       principal: {
         type: "area",
         areaId: Number(area.id),
@@ -311,6 +365,16 @@ router.post("/asignaciones", async (req, res) => {
     else body.set_id = null;
     await store.createAssignment(body, actorId(req));
     return ok(res, to, body.effect === "deniega" ? "Denegación guardada" : "Permiso asignado");
+  } catch (err) {
+    return fail(res, to, err);
+  }
+});
+
+router.post("/asignaciones/:id", async (req, res) => {
+  const to = volver(req, BASE);
+  try {
+    await store.updateAssignment(req.params.id, req.body, actorId(req));
+    return ok(res, to, "Asignación actualizada");
   } catch (err) {
     return fail(res, to, err);
   }

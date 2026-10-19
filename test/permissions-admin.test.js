@@ -16,7 +16,8 @@ const {
   validateSetItems,
   slugify,
 } = require("../src/services/permissions/store");
-const { describeAssignment } = require("../src/services/permissions/adminQueries");
+const { describeAssignment, removalPlan, holdersByKey } = require("../src/services/permissions/adminQueries");
+const { orgTree, areaInOrg, personInOrg, managersUp } = require("../src/services/permissions/orgView");
 const { buildTree } = require("../src/services/workAreaTree");
 const { getCountryConfig, getCurrentCountry } = require("../src/config/country");
 const { getFeatures } = require("../src/config/features");
@@ -275,12 +276,22 @@ describe("las vistas renderizan con datos de prueba", () => {
     assert.match(conArranque, /Astrid Ortiz/);
   });
 
-  it("por módulo, con quién tiene cada permiso", async () => {
-    const whoHas = new Map([[anyKey, [{ assignment: assignments[0], viaSet: "Básico", scopeLabel: null }]]]);
-    const html = await render("modulos", { seccion: "modulos", modules: catalog.modules, current: catalog.modules[0], whoHas });
-    assert.match(html, /Todos · Básico/);
-    assert.match(html, /Sólo el superadmin/);
+  it("por módulo, con quién tiene cada permiso y cómo quitárselo", async () => {
+    const whoHas = new Map([[anyKey, [{ assignment: assignments[0], viaSet: "Básico", setId: 1, scopeLabel: null }]]]);
+    const holders = new Map([[anyKey, {
+      granted: [{ user: users[2], areaName: "Finanzas", alcance: null, origins: ["conjunto «Básico» · Todos"], removal: { mode: "denegar", deleteIds: [] } }],
+      denied: [{ user: users[1], areaName: "Finanzas", deniedBy: "permiso suelto · Freddy Payano", assignmentId: 9 }],
+    }]]);
+    const html = await render("modulos", { seccion: "modulos", modules: catalog.modules, current: catalog.modules[0], whoHas, holders });
+    assert.ok(html.includes("por el conjunto <a href=\"/permisos/conjuntos/1\">Básico</a>"));
+    assert.match(html, /Editar conjunto/);
+    assert.match(html, /A nadie: sólo lo tienen los superadmins/);
     assert.match(html, /data-perm-form/);
+    // Quitar a una persona: el aviso dice que se le deniega sólo a ella.
+    assert.ok(html.includes("action=\"/permisos/quitar\""));
+    assert.match(html, /Se le denegará sólo a esta persona/);
+    assert.ok(html.includes("action=\"/permisos/asignaciones/9/eliminar\""));
+    assert.match(html, /Quitar denegación/);
   });
 
   it("conjuntos y editor de conjunto", async () => {
@@ -309,8 +320,33 @@ describe("las vistas renderizan con datos de prueba", () => {
       });
       assert.match(html, /Reemplazo/);
       assert.match(html, /Vencida el/);
+      // Cada asignación se puede editar.
+      assert.ok(html.includes("action=\"/permisos/asignaciones/2\" method=\"POST\" hidden data-perm-edit"));
+      assert.match(html, /name="valid_until" value="2026-12-31"/);
     }
-    assert.match(await render("areas", { seccion: "areas", counts: new Map([[2, 1]]), members: new Map([[2, 2]]) }), /Finanzas/);
+    const area = await render("destinatario", {
+      titulo: "Finanzas",
+      seccion: "areas",
+      assignments: [],
+      principal: { type: "area", areaId: 2, label: "Finanzas", desc: "x" },
+      people: areaInOrg(refs, 2).members,
+      enOrg: areaInOrg(refs, 2),
+    });
+    assert.match(area, /Freddy Payano/);
+    assert.ok(area.includes("Gustavo Valenzuela</a><span class=\"perm-muted\">jefe de Gerencia"));
+    const jefes = await render("destinatario", {
+      titulo: "Jefes",
+      seccion: "jefes",
+      assignments: [],
+      principal: { type: "jefes", label: "Jefes de área", desc: "x" },
+      jefes: [{ user: users[1], areas: [areas[1]], above: managersUp(refs, 1) }],
+    });
+    assert.match(jefes, /Jefes hoy/);
+    assert.match(jefes, /Gustavo Valenzuela/);
+    const org = await render("areas", { seccion: "areas", org: orgTree(refs, { assignmentCounts: new Map([[2, 1]]) }), sinArea: [] });
+    assert.match(org, /Finanzas/);
+    assert.match(org, /1 asignación/);
+    assert.match(org, /sin jefe: responde Gustavo Valenzuela/);
   });
 
   it("personas y ficha con origen y denegaciones", async () => {
@@ -322,6 +358,7 @@ describe("las vistas renderizan con datos de prueba", () => {
         area: areas[1],
         managed: [],
         superadmin: false,
+        org: personInOrg(refs, 31),
         direct: [assignments[1]],
         grantedCount: 1,
         modules: [
@@ -329,8 +366,8 @@ describe("las vistas renderizan con datos de prueba", () => {
             module: "x",
             label: "Módulo",
             permissions: [
-              { key: anyKey, label: "Ver", granted: true, alcance: null, origins: ["conjunto «Básico» · Todos"], deniedBy: null },
-              { key: scopedKey, label: "Otro", granted: false, alcance: null, origins: [], deniedBy: "permiso suelto · Finanzas" },
+              { key: anyKey, label: "Ver", granted: true, alcance: null, origins: ["conjunto «Básico» · Todos"], deniedBy: null, removal: { mode: "denegar", deleteIds: [] } },
+              { key: scopedKey, label: "Otro", granted: false, alcance: null, origins: [], deniedBy: "permiso suelto · Finanzas", denialId: 3 },
             ],
           },
         ],
@@ -339,6 +376,8 @@ describe("las vistas renderizan con datos de prueba", () => {
     assert.match(html, /conjunto «Básico» · Todos/);
     assert.match(html, /Denegado: permiso suelto · Finanzas/);
     assert.match(html, /Hacer superadmin/);
+    assert.ok(html.includes("action=\"/permisos/quitar\""));
+    assert.match(html, /En el organigrama/);
   });
 
   it("auditoría", async () => {
@@ -352,5 +391,118 @@ describe("las vistas renderizan con datos de prueba", () => {
     });
     assert.match(html, /Denegó/);
     assert.match(html, /Anteriores/);
+  });
+});
+
+describe("organigrama dentro de Gestión de Permisos", () => {
+  // Gerencia (Gustavo) › Finanzas (Freddy) › Tesorería (Astrid) y Contabilidad (sin jefe).
+  const areas = [
+    { id: 1, area_name: "Gerencia", parent_area_id: null, manager_user_id: 10 },
+    { id: 2, area_name: "Finanzas", parent_area_id: 1, manager_user_id: 20 },
+    { id: 3, area_name: "Tesorería", parent_area_id: 2, manager_user_id: 31 },
+    { id: 4, area_name: "Contabilidad", parent_area_id: 2, manager_user_id: null },
+  ];
+  const users = [
+    { id: 10, name: "Gustavo", role: "Usuario", work_area_id: 1 },
+    { id: 20, name: "Freddy", role: "Administrador", work_area_id: 2 },
+    { id: 31, name: "Astrid", role: "Usuario", work_area_id: 2 },
+    { id: 32, name: "Marco", role: "Usuario", work_area_id: 3 },
+    { id: 33, name: "Lucía", role: "Usuario", work_area_id: 4 },
+    { id: 34, name: "Ex", role: "Deshabilitado", work_area_id: 4 },
+  ];
+  const refs = {
+    areas,
+    areaById: new Map(areas.map((a) => [a.id, a])),
+    users,
+    userById: new Map(users.map((u) => [u.id, u])),
+  };
+
+  it("jefes de la cadena, del directo hacia arriba y sin repetir", () => {
+    assert.deepEqual(managersUp(refs, 3).map((b) => b.manager.name), ["Astrid", "Freddy", "Gustavo"]);
+    // Astrid trabaja en Finanzas: su jefe directo es Freddy, no ella misma.
+    assert.deepEqual(personInOrg(refs, 31).bosses.map((b) => b.manager.name), ["Freddy", "Gustavo"]);
+  });
+
+  it("a cargo de un jefe: lo que dirige y todo lo que cuelga, sin contarlo a él", () => {
+    const freddy = personInOrg(refs, 20);
+    assert.deepEqual(freddy.underAreas.map((a) => a.id).sort(), [2, 3, 4]);
+    assert.equal(freddy.underCount, 3, "Astrid, Marco y Lucía; la cuenta deshabilitada no");
+    assert.deepEqual(personInOrg(refs, 33).manages, []);
+  });
+
+  it("un área sabe su jefe, los de arriba, sus subáreas y su gente", () => {
+    const fin = areaInOrg(refs, 2);
+    assert.equal(fin.manager.name, "Freddy");
+    assert.deepEqual(fin.above.map((b) => b.manager.name), ["Gustavo"]);
+    assert.deepEqual(fin.path.map((a) => a.area_name), ["Gerencia", "Finanzas"]);
+    assert.deepEqual(fin.members.map((u) => u.name), ["Freddy", "Astrid"]);
+    assert.equal(fin.belowCount, 2);
+    assert.equal(areaInOrg(refs, 99), null);
+  });
+
+  it("el árbol cuenta personas con subáreas", () => {
+    const [gerencia] = orgTree(refs);
+    assert.equal(gerencia.subtreeCount, 5);
+    const finanzas = gerencia.children[0];
+    assert.equal(finanzas.children.length, 2);
+    const conta = finanzas.children.find((c) => c.id === 4);
+    assert.equal(conta.manager, null);
+    assert.deepEqual(conta.above.map((b) => b.manager.name), ["Freddy", "Gustavo"]);
+  });
+});
+
+describe("quitarle un permiso a una persona", () => {
+  const KEY = "inicio.linkedin.configurar";
+  const sets = new Map([
+    [1, { id: 1, code: "conexion_linkedin", name: "Conexión LinkedIn", items: [{ permission_key: KEY }] }],
+    [2, { id: 2, code: "editor", name: "Editor", items: [{ permission_key: KEY }, { permission_key: "noticias.noticia.crear" }] }],
+  ]);
+  const snapshot = { sets };
+
+  it("si sólo le llega por asignaciones suyas que no traen más, se borran", () => {
+    assert.deepEqual(removalPlan([{ assignmentId: 5, principal: "user", setId: 1 }], snapshot, KEY), { mode: "quitar", deleteIds: [5] });
+    assert.deepEqual(removalPlan([{ assignmentId: 6, principal: "user" }], snapshot, KEY), { mode: "quitar", deleteIds: [6] });
+  });
+
+  it("si le llega por un conjunto con más permisos o por un grupo, se le deniega sólo a ella", () => {
+    assert.deepEqual(removalPlan([{ assignmentId: 7, principal: "user", setId: 2 }], snapshot, KEY), { mode: "denegar", deleteIds: [] });
+    assert.deepEqual(
+      removalPlan([{ assignmentId: 6, principal: "user" }, { assignmentId: 8, principal: "area", areaId: 2 }], snapshot, KEY),
+      { mode: "denegar", deleteIds: [6] },
+    );
+    assert.equal(removalPlan([{ assignmentId: 9, principal: "global" }], snapshot, KEY).mode, "denegar");
+  });
+
+  it("quiénes lo tienen, persona por persona, y a quién se le denegó", async () => {
+    if (!getCatalog(getCurrentCountry()).byKey.has(KEY)) return; // LinkedIn es sólo de Chile.
+    const catalog = getCatalog(getCurrentCountry());
+    const areas = [{ id: 2, area_name: "Finanzas", parent_area_id: null, manager_user_id: null }];
+    const users = [
+      { id: 20, name: "Freddy", role: "Administrador", work_area_id: 2, is_superadmin: false },
+      { id: 31, name: "Astrid", role: "Usuario", work_area_id: 2, is_superadmin: false },
+      { id: 40, name: "Bastián", role: "Administrador", work_area_id: 2, is_superadmin: true },
+    ];
+    const refs = {
+      areas,
+      areaById: new Map(areas.map((a) => [a.id, a])),
+      users,
+      userById: new Map(users.map((u) => [u.id, u])),
+      sets: [...sets.values()],
+      setById: sets,
+    };
+    const snap = {
+      users: new Map(users.map((u) => [u.id, u])),
+      areas,
+      sets,
+      assignments: [
+        { id: 5, principal_type: "user", user_id: 20, set_id: 1, effect: "concede", scope_area_ids: [] },
+        { id: 6, principal_type: "user", user_id: 31, set_id: 1, effect: "concede", scope_area_ids: [] },
+        { id: 7, principal_type: "user", user_id: 31, permission_key: KEY, effect: "deniega", scope_area_ids: [] },
+      ],
+    };
+    const holders = (await holdersByKey([KEY], refs, catalog, snap)).get(KEY);
+    assert.deepEqual(holders.granted.map((h) => h.user.name), ["Freddy"], "el superadmin no se lista");
+    assert.deepEqual(holders.granted[0].removal, { mode: "quitar", deleteIds: [5] });
+    assert.deepEqual(holders.denied.map((h) => [h.user.name, h.assignmentId]), [["Astrid", 7]]);
   });
 });

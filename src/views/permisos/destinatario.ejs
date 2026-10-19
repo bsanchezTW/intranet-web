@@ -1,11 +1,14 @@
 <%
 /* Global, Jefes o un área: lo asignado a ese destinatario y el formulario
-   para agregar. `principal` = { type, areaId?, label, desc }. */
+   para agregar. `principal` = { type, areaId?, label, desc }.
+   En un área llega además `enOrg` (orgView.areaInOrg); en Jefes, `jefes`. */
 const volverA = principal.type === 'area' ? '/permisos/areas/' + principal.areaId : '/permisos/' + principal.type;
 const migasDe = principal.type === 'area'
-  ? [{ href: '/permisos/areas', label: 'Áreas' }, { label: principal.label }]
+  ? [{ href: '/permisos/areas', label: 'Organigrama' }, { label: principal.label }]
   : [{ label: principal.label }];
 const gente = typeof people !== 'undefined' ? people : null;
+const org = typeof enOrg !== 'undefined' ? enOrg : null;
+const listaJefes = typeof jefes !== 'undefined' ? jefes : null;
 const icono = (name) => include('../partials/icon', { name: name });
 const iniciales = (nombre) => String(nombre || '?').split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase();
 const iconoDe = { global: 'grid', jefes: 'user-check', area: 'sitemap' }[principal.type] || 'layers';
@@ -18,10 +21,93 @@ const iconoDe = { global: 'grid', jefes: 'user-check', area: 'sitemap' }[princip
     migas: migasDe,
   }) %>
 
+  <% if (org) { %>
+    <section class="seccion">
+      <div class="perm-org-ficha">
+        <div class="perm-org-ficha__bloque">
+          <p class="perm-bloque__titulo">Ubicación</p>
+          <nav class="perm-ruta" aria-label="Ubicación en el organigrama">
+            <% org.path.forEach(function (a, i) { %>
+              <% if (i) { %><span aria-hidden="true">›</span><% } %>
+              <a href="/permisos/areas/<%= a.id %>"<% if (i === org.path.length - 1) { %> aria-current="page"<% } %>><%= a.area_name %></a>
+            <% }) %>
+          </nav>
+        </div>
+        <div class="perm-org-ficha__bloque">
+          <p class="perm-bloque__titulo">Jefatura</p>
+          <ol class="perm-jefes">
+            <% if (org.manager) { %>
+              <li><span class="perm-jefes__nivel">Jefe</span><a href="/permisos/usuarios/<%= org.manager.id %>"><%= org.manager.name %></a></li>
+            <% } else { %>
+              <li><span class="perm-jefes__nivel perm-jefes__nivel--falta">Sin jefe</span><span class="perm-muted">responde el primer jefe de arriba</span></li>
+            <% } %>
+            <% org.above.forEach(function (b) { %>
+              <li><span class="perm-jefes__nivel">Por encima</span><a href="/permisos/usuarios/<%= b.manager.id %>"><%= b.manager.name %></a><span class="perm-muted">jefe de <%= b.area.area_name %></span></li>
+            <% }) %>
+          </ol>
+        </div>
+        <div class="perm-org-ficha__bloque">
+          <p class="perm-bloque__titulo">Cuelgan de ella</p>
+          <% if (!org.children.length) { %>
+            <p class="perm-muted">Ninguna área.</p>
+          <% } else { %>
+            <ul class="perm-subareas">
+              <% org.children.forEach(function (c) { %>
+                <li>
+                  <a href="/permisos/areas/<%= c.area.id %>"><%= c.area.area_name %></a>
+                  <span class="perm-muted"><%= c.manager ? c.manager.name : 'sin jefe' %> · <%= c.count %></span>
+                </li>
+              <% }) %>
+            </ul>
+            <p class="perm-muted" style="margin-top:6px"><%= org.belowCount %> <%= org.belowCount === 1 ? 'persona' : 'personas' %> en todo lo que cuelga.</p>
+          <% } %>
+        </div>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (listaJefes) { %>
+    <section class="seccion">
+      <div class="seccion__head">
+        <div class="seccion__heading">
+          <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('users') %></span> Jefes hoy <span class="perm-num"><%= listaJefes.length %></span></h3>
+          <p class="seccion__desc">Salen del organigrama: quien dirige un área recibe lo asignado a los jefes. Cambian solos cuando RRHH cambia un jefe.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <% if (!listaJefes.length) { %>
+          <p class="perm-vacio"><%- icono('inbox') %> Ningún área tiene jefe todavía.</p>
+        <% } else { %>
+          <table class="perm-table perm-table--responsive">
+            <thead><tr><th>Jefe</th><th>Dirige</th><th>Por encima</th></tr></thead>
+            <tbody>
+              <% listaJefes.forEach(function (j) { %>
+                <tr>
+                  <td>
+                    <span class="perm-persona">
+                      <span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= iniciales(j.user.name) %></span>
+                      <a href="/permisos/usuarios/<%= j.user.id %>"><%= j.user.name %></a>
+                    </span>
+                  </td>
+                  <td><% j.areas.forEach(function (a) { %><a class="perm-chip perm-chip--brand" href="/permisos/areas/<%= a.id %>"><%= a.area_name %></a><% }) %></td>
+                  <td class="perm-muted">
+                    <% if (!j.above.length) { %>Nadie<% } %>
+                    <% j.above.forEach(function (b, i) { %><%= i ? ' › ' : '' %><a href="/permisos/usuarios/<%= b.manager.id %>"><%= b.manager.name %></a><% }) %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </section>
+  <% } %>
+
   <section class="seccion">
     <div class="seccion__head">
       <div class="seccion__heading">
         <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono(iconoDe) %></span> Asignado a <%= principal.label %> <span class="perm-num perm-num--activo"><%= assignments.length %></span></h3>
+        <p class="seccion__desc">Cada asignación se puede editar (vigencia, motivo, alcance) o quitar.</p>
       </div>
     </div>
     <div class="panel">
@@ -55,6 +141,7 @@ const iconoDe = { global: 'grid', jefes: 'user-check', area: 'sitemap' }[princip
       <div class="seccion__head">
         <div class="seccion__heading">
           <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('users') %></span> Personas en <%= principal.label %> <span class="perm-num"><%= gente.length %></span></h3>
+          <p class="seccion__desc">Reciben lo asignado arriba. Entra a cada una para ver todo lo que tiene.</p>
         </div>
       </div>
       <div class="panel">
@@ -63,7 +150,7 @@ const iconoDe = { global: 'grid', jefes: 'user-check', area: 'sitemap' }[princip
         <% } else { %>
           <div class="perm-gente">
             <% gente.forEach(function (u) { %>
-              <a href="/permisos/usuarios/<%= u.id %>"><span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= iniciales(u.name) %></span><%= u.name %></a>
+              <a href="/permisos/usuarios/<%= u.id %>"<% if (org && org.manager && org.manager.id === u.id) { %> class="perm-gente__jefe"<% } %>><span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= iniciales(u.name) %></span><%= u.name %><% if (org && org.manager && org.manager.id === u.id) { %> <span class="perm-chip perm-chip--brand">Jefe</span><% } %></a>
             <% }) %>
           </div>
         <% } %>

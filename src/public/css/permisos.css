@@ -625,7 +625,7 @@ details[open] > .perm-abrir {
 }
 
 /* El botón queda arriba a la derecha; el formulario se abre a todo el ancho. */
-.perm-row > details > summary {
+.perm-row > details:not(.perm-personas) > summary {
   position: absolute;
   top: 12px;
   right: 0;
@@ -1182,7 +1182,7 @@ details[open] > .perm-abrir {
 
 .perm-efectivo {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.4fr);
+  grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.4fr) auto;
   gap: 6px 16px;
   align-items: center;
   padding: 10px 0;
@@ -1374,6 +1374,503 @@ details[open] > .perm-abrir {
   color: var(--perm-deny);
 }
 
+/* ── Bloques dentro de un permiso ─────────────────────────────────────── */
+.perm-bloque {
+  margin-top: 12px;
+}
+
+.perm-bloque__titulo {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.perm-lineas,
+.perm-holders,
+.perm-subareas {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perm-linea {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  font-size: 0.86rem;
+}
+
+.perm-linea .perm-chip {
+  margin: 0 6px 0 0;
+}
+
+.perm-linea a {
+  color: var(--color-link);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.perm-linea--deny {
+  border-color: #f5c2bd;
+  background: #fffafa;
+}
+
+.perm-linea--vencida {
+  opacity: 0.65;
+}
+
+.perm-linea__acciones {
+  display: flex;
+  gap: 6px;
+}
+
+.perm-personas {
+  margin-top: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+
+.perm-personas > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--color-text);
+  font-size: 0.86rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.perm-personas > summary::-webkit-details-marker {
+  display: none;
+}
+
+.perm-personas > summary svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+.perm-personas > summary svg:last-child {
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+
+.perm-personas[open] > summary svg:last-child {
+  transform: rotate(180deg);
+}
+
+.perm-personas__cuerpo {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.perm-holder {
+  display: grid;
+  grid-template-columns: auto minmax(160px, 1fr) minmax(0, 1.4fr) auto;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--color-surface);
+  font-size: 0.86rem;
+}
+
+.perm-holder--deny {
+  background: #fffafa;
+}
+
+.perm-holder__quien {
+  display: grid;
+  min-width: 0;
+}
+
+.perm-holder__quien a {
+  color: var(--color-link);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.perm-holder__quien .perm-muted {
+  font-size: 0.76rem;
+}
+
+.perm-holder__origen .perm-chip {
+  margin: 1px 4px 1px 0;
+  font-weight: 600;
+}
+
+.perm-buscar--sm {
+  max-width: 280px;
+}
+
+.perm-buscar--sm input {
+  min-height: 34px;
+  font-size: 0.82rem;
+}
+
+/* ── Asignaciones como tarjetas, con edición ──────────────────────────── */
+.perm-asigs {
+  display: grid;
+  gap: 8px;
+}
+
+.perm-asig {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.perm-asig--deny {
+  border-color: #f5c2bd;
+}
+
+.perm-asig--vencida {
+  background: var(--color-surface-muted);
+}
+
+.perm-asig__titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 0.9rem;
+  color: var(--color-heading);
+}
+
+.perm-asig__titulo .perm-chip {
+  margin: 0;
+}
+
+.perm-asig__titulo a {
+  color: var(--color-link);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.perm-asig__quien {
+  color: var(--color-text-muted);
+}
+
+.perm-asig__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.perm-asig__meta .perm-chip {
+  margin: 0;
+}
+
+.perm-asig__nota {
+  font-style: italic;
+}
+
+.perm-asig__acciones {
+  display: flex;
+  gap: 6px;
+}
+
+.perm-asig__editar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0 14px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+
+.perm-asig__editar .campo-form {
+  margin-bottom: 10px;
+}
+
+.perm-asig__editar .campo-form > label {
+  font-size: 0.8rem;
+}
+
+.perm-asig__editar .perm-check {
+  margin-bottom: 10px;
+}
+
+/* ── Organigrama ──────────────────────────────────────────────────────── */
+.perm-org,
+.perm-org__hijos {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perm-org__hijos {
+  margin: 10px 0 0 18px;
+  padding-left: 18px;
+  border-left: 2px solid var(--color-border-strong);
+}
+
+.perm-org__area {
+  --area-color: var(--brand);
+  position: relative;
+  padding: 12px 16px 12px 18px;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--area-color);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+/* Conector desde la línea de la rama hasta la tarjeta hija. */
+.perm-org__hijos > .perm-org__nodo > .perm-org__area::before {
+  content: "";
+  position: absolute;
+  top: 22px;
+  left: -24px;
+  width: 20px;
+  border-top: 2px solid var(--color-border-strong);
+}
+
+.perm-org__cabeza {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.perm-org__nombre {
+  color: var(--color-heading);
+  font-size: 1rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.perm-org__nombre:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
+.perm-org__cuentas {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+
+.perm-org__cuentas .perm-chip {
+  margin: 0;
+}
+
+.perm-org__jefatura {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 6px;
+  font-size: 0.84rem;
+  color: var(--color-text);
+}
+
+.perm-org__jefatura a {
+  color: var(--color-link);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.perm-org__etq {
+  margin-right: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.perm-org__jefe--falta {
+  color: var(--perm-warn);
+}
+
+.perm-org__gente {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.perm-org__persona,
+.perm-org__mas {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 2px 10px 2px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.perm-org__persona span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perm-org__persona .perm-avatar--sm {
+  width: 24px;
+  height: 24px;
+  font-size: 0.64rem;
+}
+
+.perm-org__persona:hover,
+.perm-org__mas:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.perm-org__persona--jefe {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.perm-org__mas {
+  padding: 4px 10px;
+  color: var(--color-text-muted);
+}
+
+/* Ficha: la persona o el área en el organigrama */
+.perm-org-ficha {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.perm-org-ficha__bloque {
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.perm-org-ficha__cifra {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+
+.perm-org-ficha__cifra b {
+  font-size: 1.1rem;
+  color: var(--color-heading);
+}
+
+.perm-org-ficha__areas .perm-chip {
+  font-weight: 600;
+}
+
+.perm-ruta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 0.88rem;
+  color: var(--color-text-subtle);
+}
+
+.perm-ruta a {
+  color: var(--color-link);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.perm-ruta a[aria-current="page"] {
+  color: var(--color-heading);
+  font-weight: 800;
+}
+
+.perm-jefes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.86rem;
+}
+
+.perm-jefes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.perm-jefes a {
+  color: var(--color-link);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.perm-jefes__nivel {
+  min-width: 78px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-subtle);
+}
+
+.perm-jefes__nivel--falta {
+  color: var(--perm-warn);
+}
+
+.perm-subareas li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+  font-size: 0.86rem;
+}
+
+.perm-subareas a {
+  color: var(--color-link);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.perm-gente .perm-gente__jefe {
+  border-color: var(--brand);
+}
+
+.perm-gente .perm-chip {
+  margin: 0;
+}
+
+.perm-tabs a svg {
+  width: 15px;
+  height: 15px;
+  margin-right: 2px;
+  vertical-align: -2px;
+}
+
 @media (max-width: 860px) {
   .perm-layout {
     grid-template-columns: 1fr;
@@ -1410,7 +1907,8 @@ details[open] > .perm-abrir {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .perm-efectivo__origen {
+  .perm-efectivo__origen,
+  .perm-efectivo__accion {
     grid-column: 1 / -1;
   }
 
@@ -1460,9 +1958,29 @@ details[open] > .perm-abrir {
     padding-right: 0;
   }
 
-  .perm-row > details > summary {
+  .perm-row > details:not(.perm-personas) > summary {
     position: static;
     margin-top: 10px;
+  }
+
+  .perm-asig,
+  .perm-linea,
+  .perm-holder {
+    grid-template-columns: 1fr;
+  }
+
+  .perm-holder .perm-avatar {
+    display: none;
+  }
+
+  .perm-org__hijos {
+    margin-left: 8px;
+    padding-left: 12px;
+  }
+
+  .perm-org__hijos > .perm-org__nodo > .perm-org__area::before {
+    left: -18px;
+    width: 14px;
   }
 
   .perm-barra {

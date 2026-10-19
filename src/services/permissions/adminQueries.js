@@ -3,6 +3,7 @@ const { getCatalog } = require("./catalog");
 const { SCOPE_LABELS } = require("./scopes");
 const { loadSnapshot } = require("./permissionService");
 const { computePermissions } = require("./resolver");
+const { personInOrg } = require("./orgView");
 
 /**
  * Lecturas de las pantallas de Gestión de Permisos, ya con nombres para
@@ -150,6 +151,7 @@ async function whoHasByKey(refs, catalog = getCatalog()) {
         push(i.permission_key, {
           assignment: a,
           viaSet: set ? set.name : null,
+          setId: set ? Number(set.id) : null,
           scopeLabel: a.effect === "deniega" ? null : scopeLabel(i, refs),
         });
       }
@@ -187,6 +189,98 @@ async function listAudit({ limit = 100, offset = 0 } = {}, refs) {
   };
 }
 
+/** "conjunto «Básico» · Todos": de dónde le llega algo a alguien. */
+function sourceLabeler(snapshot, refs, catalog) {
+  const byId = new Map((snapshot.assignments || []).map((a) => [Number(a.id), describeAssignment(a, refs, catalog)]));
+  return (s) => {
+    if (!s) return null;
+    const a = byId.get(Number(s.assignmentId));
+    const via = s.setName ? `conjunto «${s.setName}»` : "permiso suelto";
+    return `${via} · ${a ? a.principalLabel : s.principal}`;
+  };
+}
+
+/** Sobre qué registros vale un permiso con alcance, en palabras. */
+function alcanceLabel(e, definition, refs) {
+  if (!e.granted || !definition || !definition.scopes) return null;
+  const c = e.coverage;
+  if (c.all) return SCOPE_LABELS.todo;
+  return [c.own ? SCOPE_LABELS.propio : null, c.areaIds.length ? c.areaIds.map((id) => areaName(refs, id)).join(", ") : null]
+    .filter(Boolean)
+    .join(" + ");
+}
+
+/**
+ * Cómo se le quita a una persona un permiso que hoy tiene, según de dónde le
+ * llega (`sources` de explain):
+ *
+ *   { mode: "quitar", deleteIds }   sólo por asignaciones suyas que no traen
+ *                                   nada más: se borran.
+ *   { mode: "denegar", deleteIds }  también por su área, los jefes, todos o
+ *                                   un conjunto con más permisos: se borran
+ *                                   sus asignaciones sueltas de esa clave y se
+ *                                   le deniega sólo a ella. El resto del
+ *                                   conjunto y del área no se toca.
+ */
+function removalPlan(sources, snapshot, key) {
+  const deleteIds = [];
+  let needsDeny = false;
+  for (const s of sources || []) {
+    if (s.principal !== "user") {
+      needsDeny = true;
+      continue;
+    }
+    if (s.setId == null) {
+      deleteIds.push(Number(s.assignmentId));
+      continue;
+    }
+    const set = snapshot.sets && snapshot.sets.get(Number(s.setId));
+    const keys = new Set(((set && set.items) || []).map((i) => i.permission_key));
+    if (keys.size === 1 && keys.has(key)) deleteIds.push(Number(s.assignmentId));
+    else needsDeny = true;
+  }
+  return { mode: needsDeny ? "denegar" : "quitar", deleteIds: [...new Set(deleteIds)] };
+}
+
+/**
+ * Quiénes tienen hoy cada clave de `keys`, persona por persona, con su origen
+ * y cómo quitárselo; y a quiénes se les denegó. Los superadmins no se listan:
+ * tienen todo. Una sola foto de la base para todas las claves.
+ */
+async function holdersByKey(keys, refs, catalog = getCatalog(), snapshot = null) {
+  const snap = snapshot || (await loadSnapshot());
+  const label = sourceLabeler(snap, refs, catalog);
+  const out = new Map(keys.map((k) => [k, { granted: [], denied: [] }]));
+  for (const user of refs.users) {
+    const perms = computePermissions(snap, { id: user.id }, { catalog });
+    if (perms.superadmin) continue;
+    for (const key of keys) {
+      const e = perms.explain(key);
+      const area = user.work_area_id != null ? refs.areaById.get(Number(user.work_area_id)) : null;
+      if (e.granted) {
+        out.get(key).granted.push({
+          user,
+          areaName: area ? area.area_name : null,
+          alcance: alcanceLabel(e, catalog.byKey.get(key), refs),
+          origins: e.sources.map(label),
+          removal: removalPlan(e.sources, snap, key),
+        });
+      } else if (e.deniedBy) {
+        const d = e.deniedBy;
+        out.get(key).denied.push({
+          user,
+          areaName: area ? area.area_name : null,
+          deniedBy: label(d),
+          // Una denegación hecha a la persona se quita aquí; la de un área o de
+          // todos, en su página.
+          assignmentId: d.principal === "user" && d.setId == null ? Number(d.assignmentId) : null,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Ficha de una persona: sus asignaciones directas y, por cada permiso del
  * catálogo, si lo tiene, con qué alcance y de dónde viene (o qué lo denegó).
@@ -199,27 +293,14 @@ async function userDetail(userId, refs, catalog = getCatalog()) {
   const snapshot = await loadSnapshot();
   const perms = computePermissions(snapshot, { id: user.id }, { catalog });
   const byId = new Map((snapshot.assignments || []).map((a) => [Number(a.id), describeAssignment(a, refs, catalog)]));
-  const sourceLabel = (s) => {
-    if (!s) return null;
-    const a = byId.get(Number(s.assignmentId));
-    const via = s.setName ? `conjunto «${s.setName}»` : "permiso suelto";
-    return `${via} · ${a ? a.principalLabel : s.principal}`;
-  };
+  const sourceLabel = sourceLabeler(snapshot, refs, catalog);
 
   const modules = catalog.modules.map((mod) => ({
     module: mod.module,
     label: mod.label,
     permissions: mod.permissions.map((p) => {
       const e = perms.explain(p.key);
-      let alcance = null;
-      if (e.granted && p.scopes) {
-        const c = e.coverage;
-        alcance = c.all
-          ? SCOPE_LABELS.todo
-          : [c.own ? SCOPE_LABELS.propio : null, c.areaIds.length ? c.areaIds.map((id) => areaName(refs, id)).join(", ") : null]
-              .filter(Boolean)
-              .join(" + ");
-      }
+      const alcance = alcanceLabel(e, p, refs);
       return {
         key: p.key,
         label: p.label,
@@ -227,6 +308,8 @@ async function userDetail(userId, refs, catalog = getCatalog()) {
         alcance,
         origins: e.superadmin ? ["superadmin"] : e.sources.map(sourceLabel),
         deniedBy: e.deniedBy ? sourceLabel(e.deniedBy) : null,
+        removal: e.granted && !e.superadmin ? removalPlan(e.sources, snapshot, p.key) : null,
+        denialId: e.deniedBy && e.deniedBy.principal === "user" && e.deniedBy.setId == null ? Number(e.deniedBy.assignmentId) : null,
       };
     }),
   }));
@@ -245,6 +328,7 @@ async function userDetail(userId, refs, catalog = getCatalog()) {
     direct,
     modules,
     grantedCount: perms.keys().length,
+    org: personInOrg(refs, user.id),
   };
 }
 
@@ -252,6 +336,8 @@ module.exports = {
   loadReferences,
   listAssignments,
   whoHasByKey,
+  holdersByKey,
+  removalPlan,
   getSet,
   listAudit,
   userDetail,

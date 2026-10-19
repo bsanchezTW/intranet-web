@@ -1,8 +1,13 @@
-<% const icono = (name) => include('../partials/icon', { name: name }); %>
+<%
+const icono = (name) => include('../partials/icon', { name: name });
+const iniciales = (nombre) => String(nombre || '?').split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase();
+const volverA = '/permisos/modulos?modulo=' + current.module;
+const personasDe = (key) => (typeof holders !== 'undefined' && holders && holders.get(key)) || { granted: [], denied: [] };
+%>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
-    titulo: 'Permisos por módulo',
-    descripcion: 'Cada permiso de la intranet, quién lo tiene y por qué. Lo que llega por un conjunto se ve con su nombre.',
+    titulo: 'Permisos',
+    descripcion: 'Cada permiso de la intranet: a quién está asignado, qué personas lo tienen hoy y por qué. Desde aquí se asigna y se quita.',
     seccion: 'modulos',
   }) %>
 
@@ -22,6 +27,7 @@
       </div>
       <% current.permissions.forEach(function (p, i) { %>
         <% const quienes = whoHas.get(p.key) || []; %>
+        <% const personas = personasDe(p.key); %>
         <div class="perm-row" id="p-<%= p.key %>">
           <div class="perm-row__head">
             <div>
@@ -39,27 +45,112 @@
               <% } %>
             </div>
           </div>
-          <div class="perm-row__who">
-            <span class="perm-row__who-label">Lo tienen</span>
-            <% if (!quienes.length) { %>
-              <span class="perm-chip perm-chip--muted">Sólo el superadmin</span>
-            <% } %>
-            <% quienes.forEach(function (q) { %>
-              <span class="perm-chip<%= q.assignment.effect === 'deniega' ? ' perm-chip--deny' : '' %><%= q.assignment.expired ? ' perm-chip--muted' : '' %>"
-                    title="<%= q.viaSet ? 'Por el conjunto ' + q.viaSet : 'Permiso suelto' %><%= q.assignment.note ? ' · ' + q.assignment.note : '' %>">
-                <%= q.assignment.effect === 'deniega' ? 'Denegado a' : '' %>
-                <%= q.assignment.principalLabel %><%= q.scopeLabel ? ' · ' + q.scopeLabel : '' %><%= q.viaSet ? ' · ' + q.viaSet : '' %><%= q.assignment.expired ? ' · vencida' : '' %>
-              </span>
-            <% }) %>
-          </div>
+
           <details>
             <summary class="perm-btn perm-btn--sec perm-btn--sm perm-abrir"><%- icono('plus') %> Asignar</summary>
             <%- include('partials/form_asignacion', {
               uid: 'm' + i,
-              volver: '/permisos/modulos?modulo=' + current.module,
+              volver: volverA,
               principal: null,
               fixedKey: p.key,
             }) %>
+          </details>
+
+          <div class="perm-bloque">
+            <p class="perm-bloque__titulo">Asignado a</p>
+            <% if (!quienes.length) { %>
+              <p class="perm-muted">A nadie: sólo lo tienen los superadmins.</p>
+            <% } else { %>
+              <ul class="perm-lineas">
+                <% quienes.forEach(function (q) { %>
+                  <% const a = q.assignment; %>
+                  <li class="perm-linea<%= a.effect === 'deniega' ? ' perm-linea--deny' : '' %><%= a.expired ? ' perm-linea--vencida' : '' %>">
+                    <span class="perm-linea__texto">
+                      <span class="perm-chip<%= a.effect === 'deniega' ? ' perm-chip--deny' : '' %>"><%= a.effect === 'deniega' ? 'Deniega' : 'Concede' %></span>
+                      <strong><%= a.principalLabel %></strong><%= q.scopeLabel ? ' · ' + q.scopeLabel : '' %>
+                      <% if (q.viaSet) { %><span class="perm-muted">· por el conjunto <a href="/permisos/conjuntos/<%= q.setId || a.set_id %>"><%= q.viaSet %></a></span><% } %>
+                      <% if (a.expired) { %><span class="perm-chip perm-chip--muted">vencida</span><% } %>
+                      <% if (a.note) { %><span class="perm-muted">· «<%= a.note %>»</span><% } %>
+                    </span>
+                    <span class="perm-linea__acciones">
+                      <% if (q.viaSet) { %>
+                        <a class="perm-btn perm-btn--sec perm-btn--sm" href="/permisos/conjuntos/<%= q.setId || a.set_id %>" title="Sacar este permiso del conjunto lo quita a todos los que tienen el conjunto"><%- icono('edit') %> Editar conjunto</a>
+                      <% } else { %>
+                        <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
+                              data-confirm="<%= a.principalLabel %> deja de tener «<%= p.label %>» por esta asignación."
+                              data-confirm-title="¿Quitar la asignación?" data-confirm-accept="Quitar" data-confirm-tone="peligro">
+                          <input type="hidden" name="volver" value="<%= volverA %>">
+                          <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm"><%- icono('trash') %> Quitar</button>
+                        </form>
+                      <% } %>
+                    </span>
+                  </li>
+                <% }) %>
+              </ul>
+            <% } %>
+          </div>
+
+          <details class="perm-personas"<% if (personas.granted.length && personas.granted.length <= 6) { %> open<% } %>>
+            <summary>
+              <%- icono('users') %>
+              <span><b><%= personas.granted.length %></b> <%= personas.granted.length === 1 ? 'persona lo tiene' : 'personas lo tienen' %><% if (personas.denied.length) { %> · <b><%= personas.denied.length %></b> con denegación<% } %></span>
+              <%- icono('chevron-down') %>
+            </summary>
+            <div class="perm-personas__cuerpo">
+              <% if (personas.granted.length > 8) { %>
+                <label class="perm-buscar perm-buscar--sm">
+                  <%- icono('search') %>
+                  <input type="search" placeholder="Buscar persona" aria-label="Buscar persona" data-perm-buscar-lista="#personas-<%= i %>">
+                </label>
+              <% } %>
+              <% if (!personas.granted.length) { %>
+                <p class="perm-muted">Nadie lo tiene hoy, salvo los superadmins.</p>
+              <% } %>
+              <ul class="perm-holders" id="personas-<%= i %>">
+                <% personas.granted.forEach(function (h) { %>
+                  <li class="perm-holder" data-perm-texto="<%= h.user.name %> <%= h.areaName || '' %>">
+                    <span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= iniciales(h.user.name) %></span>
+                    <span class="perm-holder__quien">
+                      <a href="/permisos/usuarios/<%= h.user.id %>"><%= h.user.name %></a>
+                      <span class="perm-muted"><%= h.areaName || 'Sin área' %><%= h.alcance ? ' · sobre ' + h.alcance : '' %></span>
+                    </span>
+                    <span class="perm-holder__origen">
+                      <% h.origins.forEach(function (o) { %><span class="perm-chip perm-chip--muted"><%= o %></span><% }) %>
+                    </span>
+                    <% if (h.user.id !== actorId) { %>
+                      <form class="perm-inline" action="/permisos/quitar" method="POST"
+                            data-confirm="<%= h.removal.mode === 'quitar'
+                              ? h.user.name + ' deja de tener «' + p.label + '».'
+                              : h.user.name + ' lo recibe por ' + h.origins.join(', ') + '. Se le denegará sólo a esta persona; los demás siguen igual.' %>"
+                            data-confirm-title="¿Quitar «<%= p.label %>» a <%= h.user.name %>?" data-confirm-accept="Quitar" data-confirm-tone="peligro">
+                        <input type="hidden" name="user_id" value="<%= h.user.id %>">
+                        <input type="hidden" name="permission_key" value="<%= p.key %>">
+                        <input type="hidden" name="volver" value="<%= volverA %>#p-<%= p.key %>">
+                        <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm"><%- icono('x') %> Quitar</button>
+                      </form>
+                    <% } %>
+                  </li>
+                <% }) %>
+                <% personas.denied.forEach(function (h) { %>
+                  <li class="perm-holder perm-holder--deny" data-perm-texto="<%= h.user.name %> <%= h.areaName || '' %>">
+                    <span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= iniciales(h.user.name) %></span>
+                    <span class="perm-holder__quien">
+                      <a href="/permisos/usuarios/<%= h.user.id %>"><%= h.user.name %></a>
+                      <span class="perm-muted"><%= h.areaName || 'Sin área' %></span>
+                    </span>
+                    <span class="perm-holder__origen"><span class="perm-chip perm-chip--deny">Denegado: <%= h.deniedBy %></span></span>
+                    <% if (h.assignmentId && h.user.id !== actorId) { %>
+                      <form class="perm-inline" action="/permisos/asignaciones/<%= h.assignmentId %>/eliminar" method="POST"
+                            data-confirm="Se quita la denegación: <%= h.user.name %> vuelve a tener «<%= p.label %>» si le llega por otro lado."
+                            data-confirm-title="¿Quitar la denegación?" data-confirm-accept="Quitar denegación">
+                        <input type="hidden" name="volver" value="<%= volverA %>#p-<%= p.key %>">
+                        <button type="submit" class="perm-btn perm-btn--sec perm-btn--sm"><%- icono('repeat') %> Quitar denegación</button>
+                      </form>
+                    <% } %>
+                  </li>
+                <% }) %>
+              </ul>
+            </div>
           </details>
         </div>
       <% }) %>

@@ -1,12 +1,12 @@
 <%
 const icono = (name) => include('../partials/icon', { name: name });
 const TARJETAS = [
-  ['/permisos/modulos', 'layers', 'Por módulo', 'Cada permiso de la intranet y quién lo tiene.'],
-  ['/permisos/conjuntos', 'briefcase', 'Conjuntos', 'Paquetes con nombre, como «Aprobador de rendiciones».'],
+  ['/permisos/modulos', 'layers', 'Permisos', 'Cada permiso, quién lo tiene y por qué. Asignar y quitar.'],
+  ['/permisos/usuarios', 'users', 'Personas', 'Ficha de cada persona: qué tiene, de dónde le viene y quitarle algo.'],
+  ['/permisos/areas', 'sitemap', 'Organigrama', 'Quién trabaja en cada área, sus jefes y los de arriba.'],
+  ['/permisos/jefes', 'user-check', 'Jefes', 'Quiénes son jefes y lo que reciben por serlo.'],
   ['/permisos/global', 'grid', 'Global', 'Lo que tiene toda cuenta activa.'],
-  ['/permisos/areas', 'sitemap', 'Áreas', 'Lo que tienen quienes trabajan en cada área.'],
-  ['/permisos/jefes', 'user-check', 'Jefes', 'Lo que tiene quien es jefe en el organigrama.'],
-  ['/permisos/usuarios', 'users', 'Personas', 'Ficha de cada persona: qué tiene y de dónde le viene.'],
+  ['/permisos/conjuntos', 'briefcase', 'Conjuntos', 'Paquetes con nombre, como «Aprobador de rendiciones».'],
   ['/permisos/auditoria', 'clock', 'Auditoría', 'Quién cambió qué, con el antes y el después.'],
 ];
 %>
