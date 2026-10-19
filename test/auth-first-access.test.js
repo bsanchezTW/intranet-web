@@ -118,6 +118,18 @@ before(async () => {
   const app = express();
   app.use(express.urlencoded({ extended: true }));
   app.use(session({ secret: "test", resave: false, saveUninitialized: true }));
+  app.use((req, res, next) => {
+    const user = req.session && req.session.user;
+    if (!user) return next();
+    // La ruta ya no pregunta canManageRrhh: en sombra decide la regla antigua,
+    // y este admin de prueba es quien gestiona RRHH.
+    const { legacyContext } = require(path.join(SRC, "services/permissions/legacyRules"));
+    const { emptyPermissions } = require(path.join(SRC, "services/permissions/resolver"));
+    const { getCatalog } = require(path.join(SRC, "services/permissions/catalog"));
+    req.permLegacy = legacyContext(user, { rrhhManager: user.role === "Administrador" });
+    req.perms = emptyPermissions(getCatalog(), user.id);
+    next();
+  });
   app.set("views", path.join(SRC, "views"));
   app.set("view engine", "ejs");
   app.locals.formatPageTitle = require(path.join(SRC, "utils/pageTitle")).formatPageTitle;

@@ -2,9 +2,8 @@ const express = require("express");
 const router = express.Router();
 
 const db = require("../db");
-const requireRole = require("../middlewares/requireRole");
+const requirePermission = require("../middlewares/requirePermission");
 const service = require("../services/costCenters/costCenterService");
-const { formatNationalId } = require("../utils/nationalId");
 const { getDocumentConfig } = require("../config/country");
 
 /**
@@ -44,19 +43,19 @@ function resolver(res, result, mensajeOk) {
   return redirectOk(res, mensajeOk);
 }
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("centros_costo.centro.ver"), async (req, res) => {
   try {
     const [centros, peopleResult] = await Promise.all([
       service.listCostCentersWithMembers(),
       db.query(
-        `SELECT u.id, u.first_name, u.last_name, u.national_id,
+        `SELECT u.id, u.first_name, u.last_name,
                 w.area_name,
                 COUNT(uc.cost_center_id)::int AS centros_asignados
            FROM users u
            LEFT JOIN work_areas w ON w.id = u.work_area_id
            LEFT JOIN user_cost_centers uc ON uc.user_id = u.id
           WHERE u.is_intranet_user = TRUE
-          GROUP BY u.id, u.first_name, u.last_name, u.national_id, w.area_name
+          GROUP BY u.id, u.first_name, u.last_name, w.area_name
           ORDER BY u.last_name ASC NULLS LAST, u.first_name ASC`,
       ),
     ]);
@@ -67,7 +66,6 @@ router.get("/", async (req, res) => {
         [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
         `Usuario ${row.id}`,
       areaName: row.area_name || null,
-      documento: formatNationalId(row.national_id),
       centrosAsignados: row.centros_asignados,
       // Con el tope alcanzado el nombre sigue en la lista pero no se puede
       // elegir: ocultarlo haría pensar que el colaborador no existe.
@@ -94,7 +92,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/", requireRole.administrador(), async (req, res) => {
+router.post("/", requirePermission("centros_costo.centro.administrar"), async (req, res) => {
   try {
     const result = await service.createCostCenter({
       code: req.body.code,
@@ -107,7 +105,7 @@ router.post("/", requireRole.administrador(), async (req, res) => {
   }
 });
 
-router.post("/:id", requireRole.administrador(), async (req, res) => {
+router.post("/:id", requirePermission("centros_costo.centro.administrar"), async (req, res) => {
   try {
     const result = await service.updateCostCenter(req.params.id, {
       code: req.body.code,
@@ -122,7 +120,7 @@ router.post("/:id", requireRole.administrador(), async (req, res) => {
   }
 });
 
-router.post("/:id/estado", requireRole.administrador(), async (req, res) => {
+router.post("/:id/estado", requirePermission("centros_costo.centro.administrar"), async (req, res) => {
   const activar = req.body.active === "true";
   try {
     const result = await service.setCostCenterActive(req.params.id, activar);
@@ -137,7 +135,7 @@ router.post("/:id/estado", requireRole.administrador(), async (req, res) => {
   }
 });
 
-router.post("/:id/eliminar", requireRole.administrador(), async (req, res) => {
+router.post("/:id/eliminar", requirePermission("centros_costo.centro.administrar"), async (req, res) => {
   try {
     const result = await service.deleteCostCenter(req.params.id);
     return resolver(res, result, "Centro de costo eliminado.");
@@ -147,7 +145,7 @@ router.post("/:id/eliminar", requireRole.administrador(), async (req, res) => {
   }
 });
 
-router.post("/:id/miembros", requireRole.administrador(), async (req, res) => {
+router.post("/:id/miembros", requirePermission("centros_costo.miembros.asignar"), async (req, res) => {
   // El modal manda una casilla por persona; el envío de un solo valor también
   // llega aquí y assignUsers lo trata igual.
   const userIds = [].concat(req.body.user_id || []);
@@ -176,7 +174,7 @@ router.post("/:id/miembros", requireRole.administrador(), async (req, res) => {
 
 router.post(
   "/:id/miembros/:userId/quitar",
-  requireRole.administrador(),
+  requirePermission("centros_costo.miembros.asignar"),
   async (req, res) => {
     try {
       const result = await service.removeUser(req.params.id, req.params.userId);

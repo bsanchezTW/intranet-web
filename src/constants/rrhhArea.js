@@ -7,8 +7,7 @@
  * en services/access/staffAccess.js; aquí sólo el nombre, que en la base se
  * escribe a mano ("RRHH", "Recursos Humanos").
  *
- * Los nombres son por país (config/country.js → rrhhAreaNames): en Perú RRHH
- * lo lleva el área de la Administradora.
+ * Se borra en la fase 11, junto con la regla antigua de staffAccess.
  */
 
 const { normalizeAreaName } = require("./workAreas");

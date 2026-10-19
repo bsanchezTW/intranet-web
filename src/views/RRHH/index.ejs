@@ -1,8 +1,12 @@
 <%
-const admin = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+const veOrganigrama = typeof can === 'function' && can('organigrama.area.editar');
+const veCentros = typeof can === 'function' && can('centros_costo.acceso');
+const veFeriados = typeof can === 'function' && can('feriados.acceso');
+const veVacacionesGestion = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+const vePortales = typeof can === 'function' && can('rrhh.portales.ver');
 const hayVacaciones = Boolean(features && features.vacations);
 const hayCentros = Boolean(features && features.expenseCenter);
-const hayPortales = Boolean(features && features.chileHrPortals);
+const hayPortales = Boolean(features && features.chileHrPortals) && vePortales;
 const pais = (typeof countryConfig !== 'undefined' && countryConfig && countryConfig.name)
   ? countryConfig.name
   : 'la empresa';
@@ -12,7 +16,7 @@ const INTERNOS = [
     href: '/RRHH/organigrama',
     icono: 'sitemap',
     titulo: 'Organigrama',
-    desc: admin
+    desc: veOrganigrama
       ? 'Áreas, jefaturas y de quién depende cada una. Aquí se crean y editan.'
       : 'Áreas, jefaturas y de quién depende cada una.',
   },
@@ -24,7 +28,7 @@ if (hayVacaciones) {
 
 // Las áreas no tienen pantalla propia: se crean y editan en el Organigrama.
 const ADMINISTRACION = [];
-if (hayCentros) {
+if (hayCentros && veCentros) {
   ADMINISTRACION.push({
     href: '/RRHH/centros-costo',
     icono: 'briefcase',
@@ -32,7 +36,7 @@ if (hayCentros) {
     desc: 'Definir centros y a cuáles rinde gastos cada colaborador.',
   });
 }
-if (hayVacaciones) {
+if (hayVacaciones && veVacacionesGestion) {
   ADMINISTRACION.push({
     href: '/RRHH/vacaciones/gestion',
     icono: 'check-circle',
@@ -46,13 +50,14 @@ if (hayVacaciones) {
     desc: 'Días vencidos de cada colaborador, historial, liquidación y exportación.',
   });
 }
-// Soporte usa los feriados para el horario hábil: existen aunque no haya Vacaciones.
+if (veFeriados) {
 ADMINISTRACION.push({
   href: '/RRHH/feriados',
   icono: 'flag',
   titulo: 'Feriados',
   desc: 'Administra los feriados de ' + pais + '.',
 });
+}
 
 const EXTERNOS = hayPortales
   ? [
@@ -101,7 +106,7 @@ const EXTERNOS = hayPortales
     </div>
   </section>
 
-  <% if (admin) { %>
+  <% if (ADMINISTRACION.length) { %>
   <!-- ═══════════ Administración ═══════════ -->
   <section class="seccion" aria-labelledby="seccion-admin">
     <div class="seccion__head">

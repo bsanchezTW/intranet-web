@@ -23,6 +23,11 @@ const parteLocal = (full) => String(full || '').startsWith(phonePrefix)
 const fechaIso = (valor) => valor ? new Date(valor).toISOString().split('T')[0] : '';
 const telMaxLength = countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1;
 const rolActual = p.role || 'Usuario';
+const veDocumento = typeof can === 'function' && can.field('rrhh.colaborador.campo.documento_identidad');
+const veDatos = typeof can === 'function' && can.field('rrhh.colaborador.campo.datos_personales');
+const esSuper = typeof perms !== 'undefined' && perms && perms.superadmin;
+const esPropia = !esCrear && typeof usuario !== 'undefined' && usuario && Number(usuario.id) === Number(p.id);
+const bloqueaRol = !esCrear && !esSuper && (esPropia || rolActual === 'Administrador' || rolActual === 'admin');
 %>
 
 <section class="modal-section">
@@ -41,6 +46,7 @@ const rolActual = p.role || 'Usuario';
              value="<%= p.last_name || '' %>" <%- esCrear ? 'placeholder="Ej: Pérez"' : '' %>>
       <span class="campo-form__error" role="alert"></span>
     </div>
+    <% if (veDocumento) { %>
     <div class="campo-form">
       <label for="<%= pre %>national_id"><%= documentoConfig.label %></label>
       <input type="text" id="<%= pre %>national_id" name="national_id"
@@ -49,6 +55,8 @@ const rolActual = p.role || 'Usuario';
              placeholder="<%= documentoConfig.example %>" autocomplete="off">
       <span class="campo-form__error" role="alert"></span>
     </div>
+    <% } %>
+    <% if (veDatos) { %>
     <div class="campo-form">
       <% if (esCrear) { %>
         <label for="crear_fecha_nacimiento" id="crear_fecha_nacimiento_label">
@@ -65,12 +73,13 @@ const rolActual = p.role || 'Usuario';
       <% } %>
       <span class="campo-form__error" role="alert"></span>
     </div>
+    <% } %>
   </div>
 </section>
 
 <section class="modal-section">
   <h3 class="modal-section__title"><%- include('../../partials/icon', { name: 'mail' }) %> Contacto</h3>
-  <p class="modal-section__hint">El contacto de empresa lo ve todo el mundo; el personal, sólo RRHH e Informática.</p>
+  <p class="modal-section__hint">El contacto de empresa lo ve todo el mundo; el personal, sólo quien tiene el permiso.</p>
 
   <div class="campos-grid">
     <div class="campo-form">
@@ -90,6 +99,7 @@ const rolActual = p.role || 'Usuario';
       </div>
       <span class="campo-form__error" role="alert"></span>
     </div>
+    <% if (veDatos) { %>
     <div class="campo-form">
       <label for="<%= pre %>personal_email">Correo personal</label>
       <input type="email" id="<%= pre %>personal_email" name="personal_email"
@@ -106,6 +116,7 @@ const rolActual = p.role || 'Usuario';
       </div>
       <span class="campo-form__error" role="alert"></span>
     </div>
+    <% } %>
   </div>
 </section>
 
@@ -115,23 +126,40 @@ const rolActual = p.role || 'Usuario';
   <div class="campos-grid">
     <div class="campo-form">
       <label for="<%= esCrear ? 'crear_area_trabajo_id' : 'area_trabajo_id' %>">Área de trabajo <span class="required-mark">*</span></label>
+      <% if (esPropia && !esSuper) { %>
+        <input type="hidden" name="work_area_id" value="<%= p.work_area_id || '' %>">
+        <select id="area_trabajo_id" disabled>
+          <option selected><%= (areas || []).find((a) => Number(a.id) === Number(p.work_area_id)) ? (areas || []).find((a) => Number(a.id) === Number(p.work_area_id)).area_name : 'Tu área' %></option>
+        </select>
+        <p class="campo-form__ayuda">No puedes cambiar tu propia área.</p>
+      <% } else { %>
       <select id="<%= esCrear ? 'crear_area_trabajo_id' : 'area_trabajo_id' %>" name="work_area_id" required>
         <option value="">Selecciona un área…</option>
         <% (areas || []).forEach(area => { %>
           <option value="<%= area.id %>" <%= Number(p.work_area_id) === Number(area.id) ? 'selected' : '' %>><%= area.area_name %></option>
         <% }) %>
       </select>
+      <% } %>
       <span class="campo-form__error" role="alert"></span>
     </div>
 
     <div class="campo-form">
       <% if (!esCrear && p.email_confirmed) { %>
         <label for="role">Rol de intranet <span class="required-mark">*</span></label>
+        <% if (bloqueaRol) { %>
+          <input type="hidden" name="role" value="<%= rolActual %>">
+          <select id="role" disabled>
+            <option selected><%= rolActual %></option>
+          </select>
+          <p class="campo-form__ayuda"><%= esPropia ? 'No puedes cambiar tu propio rol ni tu estado.' : 'Sólo el superadmin asigna o quita el rol Administrador.' %></p>
+        <% } else { %>
         <select id="role" name="role" required>
           <option value="Usuario"       <%= (rolActual === 'Usuario' || rolActual === 'usuario') ? 'selected' : '' %>>Usuario</option>
-          <option value="Administrador" <%= (rolActual === 'Administrador' || rolActual === 'admin') ? 'selected' : '' %>>Administrador</option>
+          <option value="Administrador" <%= (rolActual === 'Administrador' || rolActual === 'admin') ? 'selected' : '' %> <%= esSuper ? '' : 'disabled' %>>Administrador</option>
           <option value="Deshabilitado" <%= (rolActual === 'Deshabilitado') ? 'selected' : '' %>>Deshabilitado</option>
         </select>
+        <% if (!esSuper) { %><p class="campo-form__ayuda">Sólo el superadmin asigna o quita el rol Administrador.</p><% } %>
+        <% } %>
       <% } else { %>
         <label for="<%= pre %>role">Rol de intranet</label>
         <select id="<%= pre %>role" disabled aria-describedby="<%= pre %>role_ayuda">

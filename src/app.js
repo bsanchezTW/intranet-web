@@ -564,7 +564,6 @@ app.use(async (req, res, next) => {
     res.locals.can = buildViewCan(
       req.perms,
       {
-        personas_write: gestionaRrhh,
         tickets_reply: isAdministrador(role),
         vacaciones_write: gestionaRrhh,
         vacaciones_request:

@@ -14,8 +14,8 @@ const { isRrhhAreaName } = require("../../constants/rrhhArea");
  *     suban a la gerencia, y no por eso pierde el módulo.
  *
  * Igual que la mesa de ayuda y Finanzas, el área se resuelve contra la base y
- * no contra la sesión: un cambio de área o de rol vale sin volver a entrar. La
- * lista cambia poco, así que se cachea unos segundos.
+ * no contra la sesión: un cambio de área o de rol vale sin volver a entrar.
+ * Vacaciones lo usa hasta la fase 9. El resto de esta regla se borra en la fase 11.
  */
 
 const CACHE_TTL_MS = 60 * 1000;
@@ -81,10 +81,6 @@ async function isInformaticaAdmin(user) {
   return (await profileFor(user)).informaticaAdmin;
 }
 
-async function isRrhhAdmin(user) {
-  return (await profileFor(user)).rrhhAdmin;
-}
-
 /** ¿Puede ver y operar la Administración de RRHH y editar colaboradores? */
 async function canManageRrhh(user) {
   return (await profileFor(user)).canManageRrhh;
@@ -98,7 +94,6 @@ function invalidateStaffAccess() {
 module.exports = {
   accessProfile,
   isInformaticaAdmin,
-  isRrhhAdmin,
   canManageRrhh,
   invalidateStaffAccess,
 };

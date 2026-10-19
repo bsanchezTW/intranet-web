@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
-const requireRrhhManager = require("../middlewares/requireRrhhManager");
+const requirePermission = require("../middlewares/requirePermission");
 const { getCurrentCountry } = require("../config/country");
 const holidayService = require("../services/vacations/holidayService");
 const { VACATION_MESSAGES } = require("../constants/vacationMessages");
@@ -16,7 +16,7 @@ const { VACATION_MESSAGES } = require("../constants/vacationMessages");
 
 const BASE_PATH = "/RRHH/feriados";
 
-router.use(requireRrhhManager());
+router.use(requirePermission("feriados.acceso"));
 
 function redirectOk(res, msg) {
   return res.redirect(`${BASE_PATH}?ok=1&msg=${encodeURIComponent(msg)}`);
@@ -45,7 +45,7 @@ async function logChange(req, action) {
   }
 }
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("feriados.feriado.ver"), async (req, res) => {
   try {
     // Solo los feriados de esta instancia: el calendario del otro país se
     // administra desde su propio deployment.
@@ -62,7 +62,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requirePermission("feriados.feriado.administrar"), async (req, res) => {
   const { country_code, holiday_date, name, is_recurring } = req.body;
   const instanceCountry = getCurrentCountry();
   try {
@@ -85,7 +85,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.post("/:id/eliminar", async (req, res) => {
+router.post("/:id/eliminar", requirePermission("feriados.feriado.administrar"), async (req, res) => {
   try {
     const deleted = await holidayService.deleteHoliday(req.params.id, getCurrentCountry());
     if (!deleted) {

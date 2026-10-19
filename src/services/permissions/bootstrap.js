@@ -227,6 +227,9 @@ const CAMBIOS = [
   "La rendición de quien no tiene jefe por encima (p. ej. el jefe de Gerencia) la resuelve el superadmin hasta que se asigne otro aprobador; sus vacaciones se autoaprobarán (fase 9).",
   "Los jefes ven las carpetas de procedimientos y protocolos de las áreas a su cargo; hoy sólo ven la de su área de trabajo.",
   "El correo y el teléfono personales del directorio (hoy enmascarados para todos) quedan en quien tenga el permiso; el conjunto Básico no lo trae.",
+  "Nadie salvo el superadmin se cambia el rol, el estado o el área desde RRHH, ni se designa jefe de un área.",
+  "Sólo el superadmin asigna o quita el rol Administrador. RRHH sigue pudiendo habilitar y deshabilitar cuentas.",
+  "Sólo el superadmin designa jefe de Informática: esa jefatura sigue dando acceso total mientras exista la regla antigua (fase 11).",
 ];
 
 function displayName(u) {

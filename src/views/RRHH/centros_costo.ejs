@@ -1,5 +1,7 @@
 <%
-  const puedeEditar = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+  const puedeEditar = typeof can === 'function' && (
+    can('centros_costo.centro.administrar') || can('centros_costo.miembros.asignar')
+  );
   const listado = centros || [];
   const plantillaGente = people || [];
   const activos = listado.filter(c => c.active);

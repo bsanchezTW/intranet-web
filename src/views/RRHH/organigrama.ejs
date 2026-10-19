@@ -3,7 +3,10 @@
    una. Todos lo leen; quien gestiona RRHH lo edita aquí mismo (?editar=1):
    crea áreas, les asigna jefe y área superior, y mueve colaboradores. Lo que
    queda dibujado es lo que decide quién aprueba fondos y vacaciones. */
-const gestiona = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+const gestiona = typeof can === 'function' && (
+  can('organigrama.area.crear') || can('organigrama.area.editar') || can('organigrama.area.eliminar')
+  || can('organigrama.area.designar_jefe') || can('organigrama.area.editar_miembros')
+);
 const enEdicion = gestiona && typeof editando !== 'undefined' && editando;
 const listado = areas || [];
 const palette = (typeof colorPalette !== 'undefined' && colorPalette) || [];
@@ -171,6 +174,9 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
           <p class="campo-form__ayuda area-jefe-ayuda" id="jefeAyuda">
             Aprueba las solicitudes de fondos y vacaciones de su gente. Puede ser de otra área: una misma persona puede dirigir varias.
           </p>
+          <% if (!(typeof perms !== 'undefined' && perms && perms.superadmin)) { %>
+          <p class="campo-form__ayuda">Sólo el superadmin designa jefe de Informática o se nombra a sí mismo.</p>
+          <% } %>
         </div>
 
         <div class="campo-form">

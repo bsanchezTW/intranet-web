@@ -1,6 +1,10 @@
 <%
   /* Mismas secciones que /RRHH: Plataformas internas, Administración y Portales externos. */
-  const gestionRrhh = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+  const veCentros = typeof can === 'function' && can('centros_costo.acceso');
+  const veFeriados = typeof can === 'function' && can('feriados.acceso');
+  const veVacacionesGestion = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+  const gestionRrhh = veCentros || veFeriados || veVacacionesGestion;
+  const vePortales = typeof can === 'function' && can('rrhh.portales.ver');
 %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Plataformas internas</span>
@@ -13,17 +17,19 @@
 <% if (gestionRrhh) { %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Administración</span>
-  <% if (features.expenseCenter) { %>
+  <% if (features.expenseCenter && veCentros) { %>
   <a href="/RRHH/centros-costo">Centros de costo</a>
   <% } %>
-  <% if (features.vacations) { %>
+  <% if (features.vacations && veVacacionesGestion) { %>
   <a href="/RRHH/vacaciones/gestion">Gestión de vacaciones</a>
   <a href="/RRHH/vacaciones/gestion/resumen">Resumen de vacaciones</a>
   <% } %>
+  <% if (veFeriados) { %>
   <a href="/RRHH/feriados">Feriados</a>
+  <% } %>
 </div>
 <% } %>
-<% if (features.chileHrPortals) { %>
+<% if (features.chileHrPortals && vePortales) { %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Portales externos</span>
   <a href="https://transworld.mirexmas.com/" target="_blank" rel="noopener noreferrer">Rex+</a>

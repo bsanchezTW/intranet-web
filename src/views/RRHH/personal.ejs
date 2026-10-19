@@ -1,7 +1,7 @@
 <%
-  const puedeEditar = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+  const puedeEditar = typeof can === 'function' && (can('rrhh.colaborador.editar') || can('rrhh.colaborador.crear'));
   const veContactoPersonal = typeof can === 'function' && can.field('rrhh.directorio.campo.contacto_personal');
-  const mostrarRol = typeof mostrarColumnaRol !== 'undefined' ? mostrarColumnaRol : puedeEditar;
+  const mostrarRol = typeof mostrarColumnaRol !== 'undefined' ? mostrarColumnaRol : (typeof can === 'function' && can('rrhh.colaborador.activar'));
   const listado = personas || [];
 
   function pillRol(rol) {
@@ -142,7 +142,7 @@
                   <% } else { %>
                     <%- include('../partials/monogram', { initials: p.monogram.initials, style: p.monogram.style, className: 'avatar-fallback' }) %>
                   <% } %>
-                  <% if (puedeEditar) { %>
+                  <% if (puedeEditar && can('rrhh.colaborador.editar', { ownerId: p.id, areaId: p.work_area_id })) { %>
                     <a href="/RRHH/personal?editar=<%= p.id %>" class="link-nombre-colaborador"
                        data-editar-id="<%= p.id %>" title="Editar colaborador"><%= nombreLista %></a>
                   <% } else { %>

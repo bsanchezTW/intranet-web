@@ -18,6 +18,7 @@ const { canLogin, isAdministrador, normalizeRole } = require("../../constants/ro
 
 const ACTIVO = (ctx) => ctx.active;
 const ADMIN = (ctx) => ctx.admin;
+const RRHH = (ctx) => Boolean(ctx.rrhhManager);
 
 /** Carpeta de procedimientos o protocolos: todos entran a la sección; el área, la propia o un admin. */
 function verCarpeta(ctx, record) {
@@ -98,6 +99,36 @@ const LEGACY_RULES = Object.freeze({
 
   // Directorio: el contacto personal (enmascarado) lo ve cualquier sesión activa.
   "rrhh.directorio.campo.contacto_personal": ACTIVO,
+
+  // RRHH, organigrama, feriados y centros de costo.
+  // Portales: la vista los muestra a cualquiera si el país los tiene.
+  "rrhh.acceso": ACTIVO,
+  "rrhh.directorio.ver": ACTIVO,
+  "rrhh.portales.ver": ACTIVO,
+  "organigrama.acceso": ACTIVO,
+  "rrhh.colaborador.ver": RRHH,
+  "rrhh.colaborador.crear": RRHH,
+  "rrhh.colaborador.editar": RRHH,
+  "rrhh.colaborador.eliminar": RRHH,
+  "rrhh.colaborador.activar": RRHH,
+  "rrhh.colaborador.enviar_clave": RRHH,
+  "rrhh.colaborador.campo.documento_identidad": RRHH,
+  "rrhh.colaborador.campo.datos_personales": RRHH,
+  "organigrama.area.crear": RRHH,
+  "organigrama.area.editar": RRHH,
+  "organigrama.area.eliminar": RRHH,
+  "organigrama.area.designar_jefe": RRHH,
+  "organigrama.area.editar_miembros": RRHH,
+  "feriados.acceso": RRHH,
+  "feriados.feriado.ver": RRHH,
+  "feriados.feriado.administrar": RRHH,
+  "centros_costo.acceso": RRHH,
+  "centros_costo.centro.ver": RRHH,
+  // Doble guardia de hoy: requireRrhhManager en el montaje y administrador en el POST.
+  "centros_costo.centro.administrar": (ctx) => Boolean(ctx.rrhhManager && ctx.admin),
+  "centros_costo.miembros.asignar": (ctx) => Boolean(ctx.rrhhManager && ctx.admin),
+  // La pantalla no imprime el RUT: la consulta ya no lo trae.
+  "centros_costo.centro.campo.documento_identidad": () => false,
 });
 
 /**

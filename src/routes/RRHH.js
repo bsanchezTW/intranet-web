@@ -28,9 +28,11 @@ function parseRoleFromForm(role) {
   const value = String(role || "").trim();
   return ALL_ROLES.includes(value) ? value : ROLES.USUARIO;
 }
-const requireRole = require("../middlewares/requireRole");
-const requireRrhhManager = require("../middlewares/requireRrhhManager");
+const requirePermission = require("../middlewares/requirePermission");
+const { requireAnyPermission } = require("../middlewares/requirePermission");
 const requireFeature = require("../middlewares/requireFeature");
+const { decide } = require("../services/permissions/decide");
+const { rechazoEscalada, clavesDeEdicion, cambiosDeFicha } = require("../services/permissions/rrhhEscalada");
 const { sendMail } = require("../services/mailer");
 const { MAIL_SENDERS } = require("../constants/mailSenders");
 const { escapeHtml, secretBox } = require("../services/emailLayout");
@@ -263,6 +265,22 @@ function invalidarCachesDeArea() {
   invalidatePermissions();
 }
 
+function negarPermiso(res) {
+  return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+}
+
+function puede(req, key, record = null) {
+  return decide(req.perms, key, req.permLegacy, { record, path: req.originalUrl });
+}
+
+function puedeEditarOrganigrama(req) {
+  return puede(req, "organigrama.area.crear")
+    || puede(req, "organigrama.area.editar")
+    || puede(req, "organigrama.area.eliminar")
+    || puede(req, "organigrama.area.designar_jefe")
+    || puede(req, "organigrama.area.editar_miembros");
+}
+
 /**
  * Valida al jefe propuesto para un área. Devuelve { ok, managerId } o
  * { ok: false, error }. No se exige que pertenezca al área: gerentes y
@@ -331,7 +349,7 @@ async function refreshSessionIdentity(req, userId) {
 // ==========================================
 
 // 1. PÁGINA PRINCIPAL
-router.get("/", (req, res) => {
+router.get("/", requirePermission("rrhh.acceso"), (req, res) => {
   res.render("RRHH/index", {
     titulo: "Recursos humanos",
     user: req.session.user,
@@ -342,7 +360,7 @@ router.get("/", (req, res) => {
 // Lo ve cualquier usuario: muestra el contacto de empresa completo y el
 // personal enmascarado (parte del correo, últimos 4 dígitos del teléfono). El
 // dato real no llega al navegador; RR.HH. lo ve y corrige en la ficha.
-router.get("/personal", async (req, res) => {
+router.get("/personal", requirePermission("rrhh.directorio.ver"), async (req, res) => {
   // Correo y teléfono personales: en sombra los ve cualquier sesión (enmascarados).
   // Si el permiso no está, no se consultan y no llegan al HTML.
   const veContactoPersonal = Boolean(
@@ -365,7 +383,6 @@ router.get("/personal", async (req, res) => {
       ${contactoSql}
       u.is_intranet_user,
       u.email_confirmed,
-      u.national_id,
       at.area_name AS area,
       at.color AS area_color
     FROM users u
@@ -375,7 +392,7 @@ router.get("/personal", async (req, res) => {
 
   try {
     const { rows: results } = await db.query(sql);
-    const mostrarColumnaRol = Boolean(res.locals.isAdministrador);
+    const mostrarColumnaRol = puede(req, "rrhh.colaborador.activar");
 
     const personasFormateadas = results.map((p) => {
       const birthDate = p.birth_date ?? p.fecha_nacimiento;
@@ -400,8 +417,6 @@ router.get("/personal", async (req, res) => {
         work_phone: telefonoDisplay || workPhoneRaw,
         correoPersonal: contacto.correoPersonal,
         telefonoPersonal: contacto.telefonoPersonal,
-        // Guardado normalizado ("12345678-5"); los puntos se agregan al mostrar.
-        documento: formatNationalId(p.national_id),
         ordenCumple,
         fechaCumpleFmt,
         telefonoHref,
@@ -460,13 +475,13 @@ router.get("/personal", async (req, res) => {
 
 // --- CRUD Personas ---
 
-router.get("/crear", requireRrhhManager(), (req, res) => {
+router.get("/crear", requirePermission("rrhh.colaborador.crear"), (req, res) => {
   res.redirect("/RRHH/personal?abrirCrear=1");
 });
 
 // FIX: Se añaden los campos faltantes telefono al INSERT
 // FIX: Validación clara con mensajes específicos
-router.post("/crear", requireRrhhManager(), async (req, res) => {
+router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, res) => {
   const {
     first_name,
     last_name,
@@ -644,6 +659,8 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
         .catch((e) => console.error("[Vacaciones] recalc al crear:", e.message));
     }
 
+    invalidarCachesDeArea();
+
     // Los centros de costo van después del INSERT porque necesitan el id. Si
     // fallan, la ficha ya existe: se avisa en vez de deshacer al colaborador.
     // Con el centro de gastos apagado la ficha no dibuja el campo, y un
@@ -676,7 +693,7 @@ router.post("/crear", requireRrhhManager(), async (req, res) => {
   }
 });
 
-router.get("/editar/:id", requireRrhhManager(), async (req, res) => {
+router.get("/editar/:id", requirePermission("rrhh.colaborador.ver"), async (req, res) => {
   const { id } = req.params;
   try {
     const [userResult, areas, centrosCosto, centrosDelUsuario] =
@@ -689,6 +706,12 @@ router.get("/editar/:id", requireRrhhManager(), async (req, res) => {
     const { rows } = userResult;
 
     if (rows.length === 0) return res.status(404).send("Usuario no encontrado");
+    if (!puede(req, "rrhh.colaborador.ver", { ownerId: rows[0].id, areaId: rows[0].work_area_id })) {
+      return negarPermiso(res);
+    }
+
+    const veDocumento = puede(req, "rrhh.colaborador.campo.documento_identidad");
+    const veDatos = puede(req, "rrhh.colaborador.campo.datos_personales");
 
     const phoneRaw = rows[0].phone ?? rows[0].telefono;
     const phoneDisplay =
@@ -704,8 +727,15 @@ router.get("/editar/:id", requireRrhhManager(), async (req, res) => {
       correo_empresa: companyEmail(rows[0]) || "",
       cuenta_con_correo_personal: accountUsesPersonalEmail(rows[0]),
       // Guardado sin separadores; los puntos se agregan sólo al mostrarlo.
-      documento: formatNationalId(rows[0].national_id),
+      documento: veDocumento ? formatNationalId(rows[0].national_id) : "",
     });
+    if (!veDocumento) persona.national_id = "";
+    if (!veDatos) {
+      persona.birth_date = null;
+      persona.personal_email = "";
+      persona.phone = "";
+      persona.telefono = "";
+    }
 
     if (req.query.partial === "1") {
       // El fragmento se renderiza fuera del layout: lo que la vista necesite
@@ -732,7 +762,11 @@ router.get("/editar/:id", requireRrhhManager(), async (req, res) => {
 
 router.post(
   "/editar/:id",
-  requireRrhhManager(),
+  requireAnyPermission(
+    "rrhh.colaborador.editar",
+    "rrhh.colaborador.activar",
+    "organigrama.area.editar_miembros",
+  ),
   uploadProfilePhoto.single("foto"),
   async (req, res) => {
     const { id } = req.params;
@@ -752,17 +786,23 @@ router.post(
     } = req.body;
 
     try {
+      const veDatos = puede(req, "rrhh.colaborador.campo.datos_personales");
+      const veDocumento = puede(req, "rrhh.colaborador.campo.documento_identidad");
       const hireVal = hire_date && String(hire_date).trim() ? hire_date : null;
       const priorYearsVal = parsePriorYearsCredited(prior_years_credited);
       const progressiveOverrideVal = parseProgressiveOverride(progressive_days_override);
       const workDaysVal = parseWorkDaysPerWeek(work_days_per_week);
       const areaId = (work_area_id && String(work_area_id).trim()) ? Number(work_area_id) : null;
-      const contacto = validarContactoFicha(req.body);
-      const documentoCheck = validateNationalId(national_id);
+      const contacto = veDatos
+        ? validarContactoFicha(req.body)
+        : { error: null, workPhone: null, personalEmail: null, personalPhone: null };
+      const documentoCheck = veDocumento
+        ? validateNationalId(national_id)
+        : { valid: true, storageValue: null };
       if (!documentoCheck.valid) {
         return redirectPersonalEditarError(res, id, documentoCheck.error);
       }
-      const documentoVal = documentoCheck.storageValue;
+      let documentoVal = documentoCheck.storageValue;
       const firstName = (first_name && typeof first_name === 'string') ? toTitleCase(first_name.trim()) : '';
       const lastName = (last_name && typeof last_name === 'string') ? toTitleCase(last_name.trim()) : '';
       const emailRaw =
@@ -772,7 +812,7 @@ router.post(
         : { valid: true, value: null };
       // La cuenta usa el correo de empresa y, si no hay, el personal.
       const emailClean = emailCheck.value || contacto.personalEmail || null;
-      const fechaVal =
+      let fechaVal =
         birth_date && String(birth_date).trim()
           ? birth_date
           : null;
@@ -785,7 +825,7 @@ router.post(
         );
       }
 
-      if (documentoVal) {
+      if (veDocumento && documentoVal) {
         const { rows: repetido } = await db.query(
           "SELECT id FROM users WHERE national_id = $1 AND id <> $2",
           [documentoVal, id],
@@ -799,7 +839,7 @@ router.post(
         }
       }
 
-      if (!emailClean && !fechaVal) {
+      if (veDatos && !emailClean && !fechaVal) {
         return redirectPersonalEditarError(
           res,
           id,
@@ -811,7 +851,7 @@ router.post(
         return redirectPersonalEditarError(res, id, emailCheck.error);
       }
 
-      if (contacto.error) {
+      if (veDatos && contacto.error) {
         return redirectPersonalEditarError(res, id, contacto.error);
       }
 
@@ -830,7 +870,10 @@ router.post(
       }
 
       const { rows: prev } = await db.query(
-        "SELECT photo AS foto, password_hash, email_confirmed, role, email, hire_date, national_id FROM users WHERE id = $1",
+        `SELECT photo AS foto, password_hash, email_confirmed, role, email, hire_date,
+                national_id, work_area_id, first_name, last_name, birth_date, phone,
+                personal_email, work_phone
+           FROM users WHERE id = $1`,
         [id],
       );
       if (!prev.length) {
@@ -852,6 +895,41 @@ router.post(
         : ROLES.DESHABILITADO;
       const shouldRemovePhoto =
         eliminar_foto === "1" || eliminar_foto === "true";
+
+      if (!veDocumento) documentoVal = prevUser.national_id;
+      if (!veDatos) {
+        fechaVal = prevUser.birth_date;
+        contacto.workPhone = prevUser.work_phone;
+        contacto.personalEmail = prevUser.personal_email;
+        contacto.personalPhone = prevUser.phone;
+      }
+
+      const cambios = cambiosDeFicha(prevUser, {
+        first_name: firstName,
+        last_name: lastName,
+        email: emailClean,
+        birth_date: fechaVal,
+        phone: contacto.personalPhone,
+        personal_email: contacto.personalEmail,
+        work_phone: contacto.workPhone,
+        national_id: documentoVal,
+        hire_date: hireVal,
+        role: roleToSave,
+        work_area_id: areaId,
+        cambiaFoto: Boolean(req.file) || shouldRemovePhoto,
+      });
+      const motivo = rechazoEscalada({
+        superadmin: Boolean(req.perms && req.perms.superadmin),
+        actorId: req.session.user && req.session.user.id,
+        targetId: id,
+        antes: { role: prevUser.role, areaId: prevUser.work_area_id },
+        despues: { role: roleToSave, areaId },
+      });
+      if (motivo) return negarPermiso(res);
+      const registro = { ownerId: Number(id), areaId: prevUser.work_area_id };
+      for (const clave of clavesDeEdicion(cambios)) {
+        if (!puede(req, clave, registro)) return negarPermiso(res);
+      }
 
       let fotoValue;
       if (req.file) {
@@ -987,7 +1065,7 @@ router.post(
  * verificación → nueva contraseña. Al verificar el correo, /verify-email lo
  * pasa a Usuario porque la ficha tiene área (la creó RR.HH.).
  */
-router.post("/enviar-clave/:id", requireRrhhManager(), async (req, res) => {
+router.post("/enviar-clave/:id", requirePermission("rrhh.colaborador.enviar_clave"), async (req, res) => {
   const { id } = req.params;
   const responder = (status, ok, mensaje) => {
     if (req.get("X-Requested-With") === "fetch") {
@@ -1006,6 +1084,9 @@ router.post("/enviar-clave/:id", requireRrhhManager(), async (req, res) => {
     );
     if (!rows.length) return responder(404, false, "Usuario no encontrado.");
     const u = rows[0];
+    if (!puede(req, "rrhh.colaborador.enviar_clave", { ownerId: u.id, areaId: u.work_area_id })) {
+      return negarPermiso(res);
+    }
     const email = u.email ? String(u.email).trim() : "";
 
     if (!email) {
@@ -1064,15 +1145,18 @@ router.post("/enviar-clave/:id", requireRrhhManager(), async (req, res) => {
   }
 });
 
-router.post("/eliminar/:id", requireRrhhManager(), async (req, res) => {
+router.post("/eliminar/:id", requirePermission("rrhh.colaborador.eliminar"), async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await db.query(
-      "SELECT photo AS foto FROM users WHERE id = $1",
+      "SELECT id, photo AS foto, work_area_id FROM users WHERE id = $1",
       [id],
     );
     if (!rows.length) {
       return res.status(404).send("Usuario no encontrado");
+    }
+    if (!puede(req, "rrhh.colaborador.eliminar", { ownerId: rows[0].id, areaId: rows[0].work_area_id })) {
+      return negarPermiso(res);
     }
     await userPhotoStorage.removeUserPhoto(id, rows[0].foto);
 
@@ -1206,11 +1290,10 @@ async function cargarOrganigrama() {
 
 // Una sola pantalla: todos leen el organigrama y quien gestiona RRHH lo edita
 // ahí mismo con ?editar=1 (áreas, jefes, dependencias y colaboradores).
-router.get("/organigrama", async (req, res) => {
+router.get("/organigrama", requirePermission("organigrama.acceso"), async (req, res) => {
   try {
     const { areas, arbol, people, unassigned } = await cargarOrganigrama();
-    const editando =
-      Boolean(res.locals.canManageRrhh) && req.query.editar === "1";
+    const editando = req.query.editar === "1" && puedeEditarOrganigrama(req);
 
     res.render("RRHH/organigrama", {
       titulo: "Organigrama",
@@ -1263,7 +1346,7 @@ async function parseParentArea(rawValue, areaId = null) {
   return { ok: true, parentId };
 }
 
-router.post("/areas", requireRrhhManager(), async (req, res) => {
+router.post("/areas", requirePermission("organigrama.area.crear"), async (req, res) => {
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
   const sortOrder = parseSortOrder(req.body.sort_order);
@@ -1276,6 +1359,20 @@ router.post("/areas", requireRrhhManager(), async (req, res) => {
     if (!parent.ok) return redirectAreasError(res, parent.error);
     const manager = await parseAreaManager(req.body.manager_user_id);
     if (!manager.ok) return redirectAreasError(res, manager.error);
+    if (manager.managerId != null) {
+      if (!puede(req, "organigrama.area.designar_jefe")) return negarPermiso(res);
+      const motivo = rechazoEscalada({
+        superadmin: Boolean(req.perms && req.perms.superadmin),
+        actorId: req.session.user && req.session.user.id,
+        targetId: manager.managerId,
+        despues: {
+          seDesignaJefe: Number(manager.managerId) === Number(req.session.user && req.session.user.id),
+          designaJefe: true,
+        },
+        areaNombre: areaName,
+      });
+      if (motivo) return negarPermiso(res);
+    }
 
     // queryRetryIdCollision y no query: work_areas usa un id aleatorio de 4
     // dígitos y dos altas simultáneas pueden recibir el mismo candidato.
@@ -1300,7 +1397,7 @@ router.post("/areas", requireRrhhManager(), async (req, res) => {
   }
 });
 
-router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
+router.post("/areas/:id", requirePermission("organigrama.area.editar"), async (req, res) => {
   const areaId = parsePositiveInt(req.params.id);
   const areaName = parseAreaName(req.body.area_name);
   const color = parseAreaColor(req.body.color);
@@ -1318,10 +1415,37 @@ router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
     const parent = await parseParentArea(req.body.parent_area_id, areaId);
     if (!parent.ok) return redirectAreasError(res, parent.error);
 
-    const { rows: todas } = await db.query("SELECT id, parent_area_id, color FROM work_areas");
+    const { rows: todas } = await db.query(
+      "SELECT id, parent_area_id, color, manager_user_id, area_name FROM work_areas",
+    );
     const previa = todas.find((a) => Number(a.id) === areaId);
     if (!previa) {
       return redirectAreasError(res, "El área no existe.");
+    }
+    const jefeAntes = previa.manager_user_id;
+    const jefeNuevo = manager.managerId;
+    const cambiaJefe = (jefeAntes == null) !== (jefeNuevo == null)
+      || (jefeAntes != null && Number(jefeAntes) !== Number(jefeNuevo));
+    if (cambiaJefe) {
+      if (!puede(req, "organigrama.area.designar_jefe")) return negarPermiso(res);
+      const actorId = req.session.user && req.session.user.id;
+      const motivo = rechazoEscalada({
+        superadmin: Boolean(req.perms && req.perms.superadmin),
+        actorId,
+        targetId: jefeNuevo,
+        despues: {
+          seDesignaJefe: jefeNuevo != null && Number(jefeNuevo) === Number(actorId),
+          designaJefe: true,
+        },
+        areaNombre: areaName,
+      }) || rechazoEscalada({
+        superadmin: Boolean(req.perms && req.perms.superadmin),
+        actorId,
+        targetId: jefeNuevo,
+        despues: { designaJefe: true },
+        areaNombre: previa.area_name,
+      });
+      if (motivo) return negarPermiso(res);
     }
 
     // Las sub-áreas heredan el color: las que compartían el anterior siguen al
@@ -1369,7 +1493,7 @@ router.post("/areas/:id", requireRrhhManager(), async (req, res) => {
 
 router.post(
   "/areas/:id/eliminar",
-  requireRrhhManager(),
+  requirePermission("organigrama.area.eliminar"),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     if (!areaId) {
@@ -1446,7 +1570,7 @@ router.post(
 
 router.post(
   "/areas/:id/miembros",
-  requireRrhhManager(),
+  requirePermission("organigrama.area.editar_miembros"),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     // El modal manda una casilla por persona, así que user_id llega como lista;
@@ -1454,6 +1578,16 @@ router.post(
     const userIds = [].concat(req.body.user_id || []).map(parsePositiveInt);
     if (!areaId || !userIds.length || userIds.some((id) => !id)) {
       return redirectAreasError(res, "Datos inválidos.");
+    }
+    if (userIds.some((uid) => Number(uid) === Number(req.session.user && req.session.user.id))) {
+      const motivo = rechazoEscalada({
+        superadmin: Boolean(req.perms && req.perms.superadmin),
+        actorId: req.session.user && req.session.user.id,
+        targetId: req.session.user && req.session.user.id,
+        antes: { areaId: null },
+        despues: { areaId },
+      });
+      if (motivo) return negarPermiso(res);
     }
 
     try {
@@ -1491,12 +1625,22 @@ router.post(
 
 router.post(
   "/areas/:id/miembros/:userId/quitar",
-  requireRrhhManager(),
+  requirePermission("organigrama.area.editar_miembros"),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     const userId = parsePositiveInt(req.params.userId);
     if (!areaId || !userId) {
       return redirectAreasError(res, "Datos inválidos.");
+    }
+    if (Number(userId) === Number(req.session.user && req.session.user.id)) {
+      const motivo = rechazoEscalada({
+        superadmin: Boolean(req.perms && req.perms.superadmin),
+        actorId: userId,
+        targetId: userId,
+        antes: { areaId },
+        despues: { areaId: null },
+      });
+      if (motivo) return negarPermiso(res);
     }
 
     try {
@@ -1528,7 +1672,7 @@ router.post(
 
 router.post(
   "/areas/:id/miembros/:userId/mover",
-  requireRrhhManager(),
+  requirePermission("organigrama.area.editar_miembros"),
   async (req, res) => {
     const areaId = parsePositiveInt(req.params.id);
     const userId = parsePositiveInt(req.params.userId);
@@ -1538,6 +1682,16 @@ router.post(
     }
     if (targetAreaId === areaId) {
       return redirectAreasError(res, "Selecciona un área distinta.");
+    }
+    if (Number(userId) === Number(req.session.user && req.session.user.id)) {
+      const motivo = rechazoEscalada({
+        superadmin: Boolean(req.perms && req.perms.superadmin),
+        actorId: userId,
+        targetId: userId,
+        antes: { areaId },
+        despues: { areaId: targetAreaId },
+      });
+      if (motivo) return negarPermiso(res);
     }
 
     try {
@@ -1595,6 +1749,6 @@ router.use("/vacaciones", requireFeature("vacations"), vacationsRouter);
 
 // Centros de costo sólo donde existen (hoy, Chile).
 const costCentersRouter = require("./costCenters");
-router.use("/centros-costo", requireFeature("expenseCenter"), requireRrhhManager(), costCentersRouter);
+router.use("/centros-costo", requireFeature("expenseCenter"), requirePermission("centros_costo.acceso"), costCentersRouter);
 
 module.exports = router;
