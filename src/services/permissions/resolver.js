@@ -147,6 +147,10 @@ class EffectivePermissions {
     this.superadmin = superadmin;
     this.catalog = catalog;
     this.expiresAt = expiresAt;
+    // Los pone permissionService con la foto: 'sombra' mientras manden las
+    // reglas antiguas (ver decide.js), y si ya se aplicó el arranque.
+    this.mode = "sombra";
+    this.bootstrapped = false;
     // key → { plain: true } | { coverage }, más sus orígenes.
     this.granted = granted;
     this.stopped = stopped;

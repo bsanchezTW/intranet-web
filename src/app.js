@@ -83,6 +83,7 @@ const permissions = require("./services/permissions/permissionService");
 const { emptyPermissions } = require("./services/permissions/resolver");
 const { getCatalog } = require("./services/permissions/catalog");
 const { buildViewCan } = require("./services/permissions/viewCan");
+const { legacyContext } = require("./services/permissions/legacyRules");
 const { ensureExpenseSchema } = require("./services/expenses/expenseSchema");
 const {
   ensureCostCenterSchema,
@@ -521,30 +522,31 @@ app.use(async (req, res, next) => {
       : false;
 
     // Gestión de Permisos: req.perms para rutas y políticas, can('clave') en
-    // las vistas. Las propiedades *_write de abajo son las reglas antiguas,
-    // que siguen mandando hasta que cada módulo se migre.
+    // las vistas; los dos pasan por decide(), que en modo sombra responde
+    // con la regla antigua (req.permLegacy). Las propiedades *_write de abajo
+    // son de los módulos que aún no se migran.
     try {
       req.perms = await permissions.resolve(user);
     } catch (err) {
       logger.error("permisos", err);
       req.perms = emptyPermissions(getCatalog(), user.id);
     }
+    req.permLegacy = legacyContext(user);
     res.locals.perms = req.perms;
-    res.locals.can = buildViewCan(req.perms, {
-      procedimientos_write: isAdministrador(role),
-      protocolos_write: isAdministrador(role),
-      reglamento_write: isAdministrador(role),
-      noticias_write: isAdministrador(role),
-      personas_write: gestionaRrhh,
-      achs_write: isAdministrador(role),
-      eventos_write: isAdministrador(role),
-      tickets_reply: isAdministrador(role),
-      apps_write: isAdministrador(role),
-      cursos_write: isAdministrador(role),
-      vacaciones_write: gestionaRrhh,
-      vacaciones_request:
-        role === ROLES.USUARIO || isAdministrador(role),
-    });
+    res.locals.can = buildViewCan(
+      req.perms,
+      {
+        procedimientos_write: isAdministrador(role),
+        protocolos_write: isAdministrador(role),
+        reglamento_write: isAdministrador(role),
+        personas_write: gestionaRrhh,
+        tickets_reply: isAdministrador(role),
+        vacaciones_write: gestionaRrhh,
+        vacaciones_request:
+          role === ROLES.USUARIO || isAdministrador(role),
+      },
+      { legacyCtx: req.permLegacy, path: req.originalUrl },
+    );
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
     res.locals.canManageRrhh = false;

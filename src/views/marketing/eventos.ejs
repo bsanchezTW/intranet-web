@@ -17,7 +17,7 @@ const formatoFecha = (valor) => {
       <p class="page-description">Eventos de Chile y Perú. Los públicos se ven en ambos países; los privados, solo donde se publicaron.</p>
     </div>
 
-    <% if (can.eventos_write) { %>
+    <% if (can('eventos.evento.crear')) { %>
     <div class="page-header-actions">
       <button type="button" class="page-header-btn" data-abrir-modal-evento>
         <%- include('../partials/icon', { name: 'plus' }) %> Nuevo evento
@@ -31,7 +31,7 @@ const formatoFecha = (valor) => {
       <span class="galeria-vacio__icono"><%- include('../partials/icon', { name: 'camera' }) %></span>
       <h3 class="galeria-vacio__titulo">Aún no hay eventos</h3>
       <p class="galeria-vacio__texto">Cuando se publique un evento, sus fotos aparecerán aquí.</p>
-      <% if (can.eventos_write) { %>
+      <% if (can('eventos.evento.crear')) { %>
         <button type="button" class="page-header-btn" data-abrir-modal-evento>
           <span aria-hidden="true">+</span> Crear el primer evento
         </button>
@@ -91,6 +91,6 @@ const formatoFecha = (valor) => {
   <% } %>
 </div>
 
-<% if (can.eventos_write) { %>
+<% if (can('eventos.evento.crear')) { %>
   <%- include('partials/modal-evento', { modo: 'crear' }) %>
 <% } %>

@@ -8,9 +8,8 @@ const express = require("express");
 
 const router = express.Router();
 
-const requireRole = require("../middlewares/requireRole");
+const requirePermission = require("../middlewares/requirePermission");
 const receiveNewsMedia = require("../middlewares/receiveNewsMedia");
-const { isAdministrador } = require("../constants/roles");
 const { sanitizeArticleHtml } = require("../utils/sanitizeContent");
 
 const repository = require("../services/noticias/noticiaRepository");
@@ -21,8 +20,6 @@ const emailService = require("../services/noticias/noticiaEmailService");
 const presenter = require("../services/noticias/noticiaPresenter");
 const fileStorage = require("../services/fileStorage");
 const { getMonogram } = require("../utils/monogram");
-
-const ROLES_ESCRITURA = ["admin"];
 
 // Súbela SIEMPRE que cambie noticias.css o los scripts del módulo: los
 // estáticos se sirven con `maxAge: 1d`, así que sin bump el navegador se queda
@@ -131,7 +128,7 @@ function loadNombresAutor(noticias) {
 // ==========================================
 // LISTADO
 // ==========================================
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("noticias.noticia.ver"), async (req, res) => {
   try {
     const noticias = await repository.listAll();
     const nombresAutor = await loadNombresAutor(noticias);
@@ -152,9 +149,9 @@ router.get("/", async (req, res) => {
 });
 
 // El formulario de creación es un modal dentro del listado.
-router.get("/crear", requireRole(...ROLES_ESCRITURA), (req, res) => res.redirect("/noticias"));
+router.get("/crear", requirePermission("noticias.noticia.crear"), (req, res) => res.redirect("/noticias"));
 
-router.get("/editar/:id", requireRole(...ROLES_ESCRITURA), (req, res) =>
+router.get("/editar/:id", requirePermission("noticias.noticia.editar"), (req, res) =>
   res.redirect(`/noticias/${req.params.id}?editar=1`),
 );
 
@@ -165,7 +162,7 @@ router.get("/editar/:id", requireRole(...ROLES_ESCRITURA), (req, res) =>
 // existe, con el nombre <N° de noticia>_1, _2…
 router.post(
   "/crear",
-  requireRole(...ROLES_ESCRITURA),
+  requirePermission("noticias.noticia.crear"),
   receiveNewsMedia(),
   async (req, res) => {
     const parsed = parseNoticiaBody(req.body);
@@ -222,7 +219,7 @@ router.post(
 // ==========================================
 router.post(
   "/editar/:id",
-  requireRole(...ROLES_ESCRITURA),
+  requirePermission("noticias.noticia.editar"),
   receiveNewsMedia(),
   async (req, res) => {
     const { id } = req.params;
@@ -279,7 +276,7 @@ router.post(
 // ==========================================
 // ELIMINAR
 // ==========================================
-router.post("/eliminar/:id", requireRole(...ROLES_ESCRITURA), async (req, res) => {
+router.post("/eliminar/:id", requirePermission("noticias.noticia.eliminar"), async (req, res) => {
   const { id } = req.params;
 
   try {
@@ -307,7 +304,7 @@ router.post("/eliminar/:id", requireRole(...ROLES_ESCRITURA), async (req, res) =
 // ==========================================
 // DESTACAR
 // ==========================================
-router.post("/destacar/:id", requireRole(...ROLES_ESCRITURA), async (req, res) => {
+router.post("/destacar/:id", requirePermission("noticias.noticia.destacar"), async (req, res) => {
   const { id } = req.params;
   const quitar = req.body.quitar === "1";
 
@@ -332,7 +329,7 @@ router.post("/destacar/:id", requireRole(...ROLES_ESCRITURA), async (req, res) =
 // ==========================================
 // ENVIAR POR CORREO (acción manual del administrador)
 // ==========================================
-router.post("/enviar-correo/:id", requireRole(...ROLES_ESCRITURA), async (req, res) => {
+router.post("/enviar-correo/:id", requirePermission("noticias.noticia.enviar_correo"), async (req, res) => {
   const { id } = req.params;
   const enviarTodos = ["1", "true", "on"].includes(String(req.body.enviar_todos));
   const userIds = req.body.usuarios;
@@ -364,7 +361,7 @@ router.post("/enviar-correo/:id", requireRole(...ROLES_ESCRITURA), async (req, r
 // ==========================================
 // DETALLE (debe ir al final: captura cualquier ruta restante)
 // ==========================================
-router.get("/:id_or_slug", async (req, res) => {
+router.get("/:id_or_slug", requirePermission("noticias.noticia.ver"), async (req, res) => {
   try {
     const noticia = await repository.findByIdOrSlug(req.params.id_or_slug);
 
@@ -374,7 +371,8 @@ router.get("/:id_or_slug", async (req, res) => {
         .render("404", { titulo: "Noticia no encontrada", user: req.session.user });
     }
 
-    const esAdmin = isAdministrador(req.session.user?.role);
+    // La lista de destinatarios sólo hace falta a quien puede enviar por correo.
+    const puedeEnviar = res.locals.can("noticias.noticia.enviar_correo");
     const adjuntos = await loadAdjuntosParaVista(noticia);
     const nombresAutor = await loadNombresAutor([noticia]);
     const vista = presenter.toViewModel(noticia, { adjuntos, nombresAutor });
@@ -388,7 +386,7 @@ router.get("/:id_or_slug", async (req, res) => {
         await repository.listRelated(noticia.id, RELACIONADAS_EN_DETALLE),
       ),
       user: req.session.user,
-      usuariosCorreo: esAdmin
+      usuariosCorreo: puedeEnviar
         ? (await repository.listUsersWithEmail()).map((u) => ({
             ...u,
             monogram: getMonogram(u),

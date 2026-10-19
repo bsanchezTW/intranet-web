@@ -6,6 +6,7 @@ const { getCatalog } = require("../services/permissions/catalog");
 const { SCOPE_LABELS } = require("../services/permissions/scopes");
 const store = require("../services/permissions/store");
 const queries = require("../services/permissions/adminQueries");
+const { recentMismatches } = require("../services/permissions/decide");
 const { buildTree } = require("../services/workAreaTree");
 const { withQueryParam } = require("../utils/returnTo");
 
@@ -97,6 +98,11 @@ router.get("/", async (req, res, next) => {
       totals: totals[0] || { concede: 0, deniega: 0 },
       superadmins: ctx.refs.users.filter((u) => u.is_superadmin),
       permissionCount: ctx.catalog.byKey.size,
+      diferencias: recentMismatches().slice(0, 50).map((d) => ({
+        ...d,
+        userName: ctx.refs.userById.get(Number(d.userId))?.name || `Usuario #${d.userId}`,
+        label: ctx.catalog.byKey.get(d.key)?.label || d.key,
+      })),
     });
   } catch (err) {
     next(err);

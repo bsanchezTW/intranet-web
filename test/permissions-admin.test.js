@@ -262,6 +262,17 @@ describe("las vistas renderizan con datos de prueba", () => {
     assert.match(html, /Modo sombra/);
     assert.match(html, /permisos-arranque\.js --pais/);
     assert.match(html, /Bastián Sánchez/);
+
+    const conArranque = await render("index", {
+      seccion: "inicio",
+      meta: { version: 3, mode: "sombra", bootstrapped_at: new Date() },
+      totals: { concede: 5, deniega: 1 },
+      superadmins: [users[3]],
+      permissionCount: catalog.byKey.size,
+      diferencias: [{ userId: 31, userName: "Astrid Ortiz", key: anyKey, label: "Ver", legacy: true, next: false }],
+    });
+    assert.match(conArranque, /Diferencias del modo sombra/);
+    assert.match(conArranque, /Astrid Ortiz/);
   });
 
   it("por módulo, con quién tiene cada permiso", async () => {

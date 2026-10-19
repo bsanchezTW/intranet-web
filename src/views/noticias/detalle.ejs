@@ -5,7 +5,12 @@
 // Reparto de columnas: a la izquierda solo la noticia (titular, portada, cuerpo
 // y adjuntos incrustados); todo lo demás —volver, ficha del autor, índice de
 // documentos, relacionadas y administración— vive en la columna lateral.
-const puedeEscribir = typeof can !== 'undefined' && can.noticias_write;
+// Cada acción con su permiso (Gestión de Permisos).
+const puedeEditar = can('noticias.noticia.editar');
+const puedeDestacar = can('noticias.noticia.destacar');
+const puedeEnviar = can('noticias.noticia.enviar_correo');
+const puedeEliminar = can('noticias.noticia.eliminar');
+const puedeEscribir = puedeEditar || puedeDestacar || puedeEnviar || puedeEliminar;
 const relacionadasNoticia = typeof relacionadas !== 'undefined' ? relacionadas : [];
 
 const AVISOS_OK = {
@@ -89,15 +94,18 @@ function formatNewsDate(fecha) {
         <section class="articulo__admin">
           <div class="articulo__admin-cabecera">
             <h2 class="articulo__admin-titulo"><%- include('../partials/icon', { name: 'shield' }) %> Administración</h2>
-            <p class="articulo__admin-ayuda">Solo visible para administradores.</p>
+            <p class="articulo__admin-ayuda">Solo visible para quien administra noticias.</p>
           </div>
 
           <div class="articulo__admin-acciones">
+            <% if (puedeEditar) { %>
             <button type="button" class="btn-nt" onclick="abrirModalEditarNoticia(NoticiaDetalleData)">
               <%- include('../partials/icon', { name: 'edit' }) %>
               Editar
             </button>
+            <% } %>
 
+            <% if (puedeDestacar) { %>
             <form action="/noticias/destacar/<%= noticia.id %>" method="POST"
                   <% if (!noticia.featured) { %>
                     data-confirm="Aparecerá como destacada en el inicio y reemplazará a la destacada actual."
@@ -110,12 +118,16 @@ function formatNewsDate(fecha) {
                 <%= noticia.featured ? 'Quitar destacada' : 'Destacar' %>
               </button>
             </form>
+            <% } %>
 
+            <% if (puedeEnviar) { %>
             <button type="button" class="btn-nt btn-nt--principal" onclick="abrirModalDestinatarios()">
               <%- include('../partials/icon', { name: 'mail' }) %>
               Enviar por correo
             </button>
+            <% } %>
 
+            <% if (puedeEliminar) { %>
             <form action="/noticias/eliminar/<%= noticia.id %>" method="POST"
                   data-confirm="Se eliminará de forma permanente junto con sus archivos. Esta acción no se puede deshacer."
                   data-confirm-title="¿Eliminar la noticia?"
@@ -126,6 +138,7 @@ function formatNewsDate(fecha) {
                 Eliminar
               </button>
             </form>
+            <% } %>
           </div>
         </section>
       <% } %>
@@ -142,7 +155,7 @@ function formatNewsDate(fecha) {
   </div>
 </div>
 
-<% if (puedeEscribir) { %>
+<% if (puedeEditar || puedeEnviar) { %>
   <%- include('partials/modal-noticia') %>
 
   <script>

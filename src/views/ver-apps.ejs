@@ -1,10 +1,13 @@
 <%
-  const esAdminApps = (typeof isAdministrador !== 'undefined' && isAdministrador);
+  const puedeCrearApp = can('apps.app.crear');
+  const puedeOrdenarApps = can('apps.app.ordenar');
+  // El recorte de íconos se usa al crear y al editar.
+  const usaRecorte = puedeCrearApp || can('apps.app.editar');
   const listaApps = (typeof apps !== 'undefined' && Array.isArray(apps)) ? apps : [];
   const catalogoApps = (typeof appCatalog !== 'undefined' && appCatalog) ? appCatalog : 'corporate';
 %>
 <link rel="stylesheet" href="/css/apps.css?v=20261013b">
-<% if (typeof isAdministrador !== 'undefined' && isAdministrador) { %>
+<% if (usaRecorte) { %>
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <% } %>
@@ -18,12 +21,14 @@
       <p class="page-description">Descarga las aplicaciones y herramientas corporativas oficiales.</p>
     </div>
 
-    <% if (esAdminApps) { %>
+    <% if (puedeCrearApp || (puedeOrdenarApps && listaApps.length > 1)) { %>
     <div class="page-header-actions">
-      <% if (listaApps.length > 1) { %><%- include('partials/app-orden-boton') %><% } %>
+      <% if (puedeOrdenarApps && listaApps.length > 1) { %><%- include('partials/app-orden-boton') %><% } %>
+      <% if (puedeCrearApp) { %>
       <button type="button" class="page-header-btn" onclick="toggleFormulario()">
         <%- include('partials/icon', { name: 'plus' }) %> Nueva app
       </button>
+      <% } %>
     </div>
     <% } %>
   </div>
@@ -32,7 +37,7 @@
     <div hidden data-toast="<%= ok %>"></div>
   <% } %>
 
-  <% if (esAdminApps && listaApps.length > 1) { %><%- include('partials/app-orden-barra') %><% } %>
+  <% if (puedeOrdenarApps && listaApps.length > 1) { %><%- include('partials/app-orden-barra') %><% } %>
 
   <div class="apps-grid" data-orden-grid data-orden-catalogo="<%= catalogoApps %>">
     <% if (listaApps.length > 0) { %>
@@ -41,7 +46,7 @@
           app: app,
           index: index,
           allowNotify: true,
-          reorderable: esAdminApps && listaApps.length > 1
+          reorderable: puedeOrdenarApps && listaApps.length > 1
         }) %>
       <% }) %>
     <% } else { %>

@@ -105,7 +105,7 @@
         { label: 'USD', url: dolarUrl, dato: finanzas && finanzas.dolar },
         { label: 'EUR', url: euroUrl, dato: finanzas && finanzas.euro },
       ];
-      if (features.chileUfIndicator) {
+      if (features.chileUfIndicator && can('inicio.indicador_uf.ver')) {
         indicadores.push({ label: 'UF', url: ufUrl, dato: finanzas && finanzas.uf });
       }
     %>
@@ -292,7 +292,7 @@
     <div class="home-dash__side">
 
       <!-- Menú semanal (protagonista) -->
-      <% if (features.lunchMenu) { %>
+      <% if (features.lunchMenu && can('casino.menu.ver')) { %>
       <section class="home-section">
         <div class="home-card home-menu">
           <div class="home-menu__head">
@@ -302,7 +302,7 @@
             </div>
             <div class="home-menu__head-actions">
               <span class="home-menu__badge">HOY</span>
-              <% if (typeof isAdministrador !== 'undefined' && isAdministrador) { %>
+              <% if (can('casino.menu.editar')) { %>
                 <button type="button" onclick="IntranetModal.open('modalPlatos')" class="home-menu__edit" title="Editar menú semanal" aria-label="Editar menú semanal"><%- include('partials/icon', { name: 'edit' }) %></button>
               <% } %>
             </div>
@@ -420,7 +420,7 @@
       </section>
 
       <!-- Comunicaciones (LinkedIn) -->
-      <% if (features.linkedinFeed) { %>
+      <% if (features.linkedinFeed && can('inicio.linkedin.ver')) { %>
       <section class="home-section home-comms" aria-labelledby="home-comms-title">
         <div class="home-card__head home-card__head--bare home-comms__head">
           <h2 class="home-card__title" id="home-comms-title">Comunicaciones</h2>
@@ -529,7 +529,7 @@
 </div>
 <% } %>
 
-<% if (features.lunchMenu && typeof isAdministrador !== 'undefined' && isAdministrador) { %>
+<% if (features.lunchMenu && can('casino.menu.editar')) { %>
 <div id="modalPlatos" class="modal-overlay modal-editar-menu" role="dialog" aria-modal="true" aria-labelledby="modalPlatosTitle" aria-hidden="true">
   <div class="modal-content modal-content--md">
     <button type="button" class="modal-close" data-modal-close aria-label="Cerrar">&times;</button>

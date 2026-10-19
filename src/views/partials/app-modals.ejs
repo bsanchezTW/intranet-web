@@ -4,11 +4,11 @@
    * notificación). Los comparten la vista Apps y la autoayuda de Soporte; lo
    * único que cambia es el catálogo al que se dan de alta y los textos.
    *
-   * Espera: appCatalog e isAdministrador. Opcionales: modalNewTitle,
+   * Espera: appCatalog (los permisos salen de can()). Opcionales: modalNewTitle,
    * modalNewSubtitle, modalNamePlaceholder, modalDescPlaceholder, allowNotify.
    */
   const mCatalog = (typeof appCatalog !== 'undefined' && appCatalog) ? appCatalog : 'corporate';
-  const mIsAdmin = (typeof isAdministrador !== 'undefined' && isAdministrador);
+  const mIsAdmin = can('apps.app.crear') || can('apps.app.editar') || can('apps.app.notificar');
   const mAllowNotify = (typeof allowNotify === 'undefined') ? true : allowNotify;
   const mNewTitle = (typeof modalNewTitle !== 'undefined' && modalNewTitle) ? modalNewTitle : 'Ingresar nueva app';
   const mNewSubtitle = (typeof modalNewSubtitle !== 'undefined' && modalNewSubtitle)

@@ -73,6 +73,12 @@ function permisos(snapshot, userId, opts = {}) {
   return computePermissions(snapshot, { id: userId }, { catalog: CL, ...opts });
 }
 
+/** Con el modo 'aplicar': decide Gestión de Permisos, no la regla antigua. */
+function aplicando(perms) {
+  perms.mode = "aplicar";
+  return perms;
+}
+
 const LEER = "noticias.noticia.ver";
 const APROBAR_JEFATURA = "gastos.solicitud.aprobar_jefatura";
 const APROBAR_FINANZAS = "gastos.solicitud.aprobar_finanzas";
@@ -314,7 +320,7 @@ describe("can() de las vistas", () => {
       asignacion({ principal_type: "global", permission_key: LEER }),
       asignacion({ principal_type: "user", user_id: 201, permission_key: VER_GASTOS, scope: "propio" }),
     ]);
-    const can = buildViewCan(permisos(s, 201), { noticias_write: true });
+    const can = buildViewCan(aplicando(permisos(s, 201)), { noticias_write: true });
     assert.equal(can(LEER), true);
     assert.equal(can(VER_GASTOS, { ownerId: 201 }), true);
     assert.equal(can(VER_GASTOS, { ownerId: 401 }), false);
@@ -350,8 +356,8 @@ describe("requirePermission", () => {
 
   it("deja pasar a quien tiene el permiso y frena al resto", async () => {
     const mw = requirePermission(LEER);
-    assert.deepEqual(await correr(mw, { session: { user: { id: 201 } }, perms: permisos(s, 201) }), { next: true });
-    const negado = await correr(mw, { session: { user: { id: 401 } }, perms: permisos(s, 401) });
+    assert.deepEqual(await correr(mw, { session: { user: { id: 201 } }, perms: aplicando(permisos(s, 201)) }), { next: true });
+    const negado = await correr(mw, { session: { user: { id: 401 } }, perms: aplicando(permisos(s, 401)) });
     assert.equal(negado.status, 403);
   });
 
@@ -362,7 +368,17 @@ describe("requirePermission", () => {
 
   it("basta con uno de varios permisos", async () => {
     const mw = requireAnyPermission(APROBAR_FINANZAS, LEER);
-    assert.deepEqual(await correr(mw, { session: { user: { id: 201 } }, perms: permisos(s, 201) }), { next: true });
+    assert.deepEqual(await correr(mw, { session: { user: { id: 201 } }, perms: aplicando(permisos(s, 201)) }), { next: true });
+  });
+
+  it("en modo sombra decide la regla antigua aunque el permiso nuevo diga otra cosa", async () => {
+    const mw = requirePermission("noticias.noticia.crear");
+    // Administrador sin el permiso nuevo: pasa, como siempre.
+    const admin = await correr(mw, { session: { user: { id: 401, role: "Administrador" } }, perms: permisos(s, 401) });
+    assert.deepEqual(admin, { next: true });
+    // Usuario: no pasa, como siempre.
+    const usuario = await correr(mw, { session: { user: { id: 402, role: "Usuario" } }, perms: permisos(s, 402) });
+    assert.equal(usuario.status, 403);
   });
 
   it("un permiso de un módulo que el país no tiene responde 404", async () => {

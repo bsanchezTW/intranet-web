@@ -124,7 +124,7 @@ const fotosPortada = esEditar
           <% } %>
         </section>
 
-        <% if (esEditar) { %>
+        <% if (esEditar && can('eventos.evento.eliminar')) { %>
         <section class="modal-section galeria-modal__peligro">
           <h3 class="modal-section__title galeria-modal__peligro-titulo">
             <%- include('../../partials/icon', { name: 'alert-triangle' }) %> Zona de peligro

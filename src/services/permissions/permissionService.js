@@ -32,6 +32,22 @@ function isMissingRelation(err) {
   return err && (err.code === "42P01" || err.code === "42703");
 }
 
+/** Versión, modo y arranque: si las páginas ya deciden con estos permisos. */
+async function fetchMeta() {
+  try {
+    const { rows } = await db.query("SELECT version, mode, bootstrapped_at FROM perm_meta WHERE id = 1");
+    if (!rows.length) return { version: 0, mode: "sombra", bootstrapped: false };
+    return {
+      version: Number(rows[0].version),
+      mode: rows[0].mode === "aplicar" ? "aplicar" : "sombra",
+      bootstrapped: rows[0].bootstrapped_at != null,
+    };
+  } catch (err) {
+    if (isMissingRelation(err)) return { version: 0, mode: "sombra", bootstrapped: false };
+    throw err;
+  }
+}
+
 async function fetchVersion() {
   try {
     const { rows } = await db.query("SELECT version FROM perm_meta WHERE id = 1");
@@ -82,14 +98,16 @@ async function fetchConfiguration() {
 
 /** Lee toda la configuración de permisos del país en una foto. */
 async function loadSnapshot() {
-  const [version, users, areas, config] = await Promise.all([
-    fetchVersion(),
+  const [meta, users, areas, config] = await Promise.all([
+    fetchMeta(),
     fetchUsers(),
     db.query("SELECT id, parent_area_id, manager_user_id FROM work_areas").then((r) => r.rows),
     fetchConfiguration(),
   ]);
   return {
-    version,
+    version: meta.version,
+    mode: meta.mode,
+    bootstrapped: meta.bootstrapped,
     loadedAt: Date.now(),
     users: new Map(users.map((u) => [Number(u.id), u])),
     areas,
@@ -147,6 +165,8 @@ async function resolve(user) {
   if (cached && cached.snapshot === current && cached.expiresAt > now) return cached.perms;
 
   const perms = computePermissions(current, user, { catalog, now });
+  perms.mode = current.mode;
+  perms.bootstrapped = current.bootstrapped;
   const expiresAt = Math.min(now + RESULT_TTL_MS, perms.expiresAt || Infinity);
   results.set(id, { snapshot: current, expiresAt, perms });
   return perms;

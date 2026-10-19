@@ -28,6 +28,36 @@
     <% } %>
   </div>
 
+  <% if (meta && meta.mode === 'sombra' && meta.bootstrapped_at) { %>
+    <section class="seccion">
+      <div class="seccion__head">
+        <div class="seccion__heading">
+          <h3 class="seccion__title">Diferencias del modo sombra</h3>
+          <p class="seccion__desc">Lo que cambiaría para alguien si hoy se aplicaran estos permisos, según lo que se ha usado desde que arrancó el servidor. Cuando un módulo no tenga diferencias, está listo para aplicar.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <% if (!diferencias.length) { %>
+          <p class="perm-muted">Sin diferencias hasta ahora.</p>
+        <% } else { %>
+          <table class="perm-table perm-table--responsive">
+            <thead><tr><th>Persona</th><th>Permiso</th><th>Hoy</th><th>Con permisos</th></tr></thead>
+            <tbody>
+              <% diferencias.forEach(function (d) { %>
+                <tr>
+                  <td><a href="/permisos/usuarios/<%= d.userId %>"><%= d.userName %></a></td>
+                  <td><%= d.label %><span class="perm-key"><%= d.key %></span></td>
+                  <td><%= d.legacy ? 'Sí' : 'No' %></td>
+                  <td><span class="perm-chip<%= d.next ? '' : ' perm-chip--deny' %>"><%= d.next ? 'Sí' : 'No' %></span></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        <% } %>
+      </div>
+    </section>
+  <% } %>
+
   <div class="perm-cards">
     <a class="perm-card" href="/permisos/modulos"><strong>Por módulo</strong><span>Cada permiso de la intranet y quién lo tiene.</span></a>
     <a class="perm-card" href="/permisos/conjuntos"><strong>Conjuntos</strong><span>Paquetes con nombre, como «Aprobador de rendiciones».</span></a>

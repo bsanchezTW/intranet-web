@@ -16,7 +16,7 @@ const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { getIndicadores } = require("../services/usdService");
 const { getWeather } = require("../services/weatherService");
 const linkedinService = require("../services/linkedinService");
-const { ROLES, isAdministrador, normalizeRole } = require("../constants/roles");
+const { ROLES, normalizeRole } = require("../constants/roles");
 const {
   APP_CATALOGS,
   normalizeAppCatalog,
@@ -32,8 +32,9 @@ const {
   resolveHomeQuickAccess,
   sanitizeHomeQuickAccess,
 } = require("../services/homeQuickAccess");
-const requireRole = require("../middlewares/requireRole");
+const requirePermission = require("../middlewares/requirePermission");
 const requireFeature = require("../middlewares/requireFeature");
+const { scopeFilter } = require("../services/permissions/decide");
 const { toTitleCase } = require("../utils/formatName");
 const { safeReturnTo, withQueryParam } = require("../utils/returnTo");
 const { applyIdentityToSession, getMonogram } = require("../utils/monogram");
@@ -322,8 +323,7 @@ setImmediate(() => {
 // ==========================================
 // RUTA: HOME
 // ==========================================
-router.get("/", async (req, res) => {
-  if (!req.session.user) return res.redirect("/login");
+router.get("/", requirePermission("inicio.acceso"), async (req, res) => {
 
   try {
     const dataFinanciera = cachedIndicadores;
@@ -498,6 +498,7 @@ router.get("/", async (req, res) => {
 router.post(
   "/home/accesos",
   requireFeature("homeQuickAccess"),
+  requirePermission("inicio.accesos.personalizar"),
   async (req, res) => {
     if (!req.session.user || !req.session.user.id) {
       return res.status(401).json({ ok: false });
@@ -584,9 +585,7 @@ router.post("/home/tutorial-visto", async (req, res) => {
 // ==========================================
 // GUARDAR MENÚ SEMANAL
 // ==========================================
-router.post("/platos/editar", requireFeature("lunchMenu"), async (req, res) => {
-  if (!req.session.user || !isAdministrador(req.session.user.role))
-    return res.status(403).send("No autorizado");
+router.post("/platos/editar", requireFeature("lunchMenu"), requirePermission("casino.menu.editar"), async (req, res) => {
 
   const { plato_1, plato_2, plato_3, plato_4, plato_5 } = req.body;
   try {
@@ -773,8 +772,12 @@ router.post("/perfil/foto/eliminar", async (req, res) => {
 // ==========================================
 // RUTA: CURSOS Y CAPACITACIONES
 // ==========================================
+const verCursos = requirePermission("cursos.curso.ver");
+router.use("/cursos", (req, res, next) =>
+  /^\/(material|editar-subseccion)(\/|$)/.test(req.path) ? next() : verCursos(req, res, next),
+);
+
 router.get("/cursos", async (req, res) => {
-  if (!req.session.user) return res.redirect("/login");
 
   try {
     res.render("cursos/index", {
@@ -947,7 +950,7 @@ function volverACursos(res, returnUrl, tipo, mensaje) {
 
 router.post(
   "/cursos/material/nuevo",
-  requireRole.administrador(),
+  requirePermission("cursos.material.crear"),
   upload.single("archivo"),
   async (req, res) => {
     const { nombre, seccion, return_url } = req.body;
@@ -980,7 +983,7 @@ router.post(
 
 router.post(
   "/cursos/material/editar/:id",
-  requireRole.administrador(),
+  requirePermission("cursos.material.editar"),
   upload.single("archivo"),
   async (req, res) => {
     const { id } = req.params;
@@ -1021,7 +1024,7 @@ router.post(
 
 router.post(
   "/cursos/material/eliminar/:id",
-  requireRole.administrador(),
+  requirePermission("cursos.material.eliminar"),
   async (req, res) => {
     const { id } = req.params;
     const { return_url } = req.body;
@@ -1047,7 +1050,7 @@ router.post(
 // ==========================================
 router.post(
   "/cursos/editar-subseccion",
-  requireRole.administrador(),
+  requirePermission("cursos.material.editar"),
   upload.single("imagen"),
   async (req, res) => {
     const { old_name, new_name, current_url, return_url } = req.body;
@@ -1342,10 +1345,30 @@ function buildKpiPorCursoFromRows(rows) {
   return Array.from(byCourse.values());
 }
 
-router.get("/kpi-cursos", async (req, res) => {
-  if (!req.session.user) return res.redirect("/login");
+/**
+ * Alcance del KPI de cursos (decide.js): en modo sombra se ve a todos, como
+ * siempre; al aplicar, a quienes cubre «Ver el avance de otros». El correo
+ * sólo con «Ver el correo de cada persona en el KPI».
+ */
+function kpiScope(req, firstParam) {
+  return scopeFilter(req.perms, "cursos.avance.ver", {
+    ownerColumn: "u.id",
+    areaColumn: "u.work_area_id",
+    firstParam,
+  });
+}
 
+function kpiShowsEmail(res) {
+  return res.locals.can.field("cursos.avance.campo.email");
+}
+
+function withoutEmail(rows) {
+  return rows.map((row) => ({ ...row, email: null }));
+}
+
+router.get("/kpi-cursos", requirePermission("cursos.avance.ver"), async (req, res) => {
   try {
+    const alcance = kpiScope(req, 2);
     const queryRanking = `
       SELECT 
         u.id AS usuario_id,
@@ -1356,14 +1379,16 @@ router.get("/kpi-cursos", async (req, res) => {
         COUNT(cu.course_id) FILTER (WHERE cu.status = 'in_progress') AS cursos_en_curso
       FROM users u
       LEFT JOIN user_course_progress cu ON cu.user_id = u.id
-      WHERE u.role IS DISTINCT FROM $1
+      WHERE u.role IS DISTINCT FROM $1 AND ${alcance.clause}
       GROUP BY u.id, u.first_name, u.last_name, u.email
       HAVING COUNT(cu.course_id) FILTER (WHERE cu.status = 'evaluated') > 0
       ORDER BY puntaje_total DESC, cursos_completados DESC, nombre_usuario ASC
     `;
-    const { rows: todosLosRanking } = await db.query(queryRanking, [
+    const { rows: rankingRows } = await db.query(queryRanking, [
       ROLES.DESHABILITADO,
+      ...alcance.params,
     ]);
+    const todosLosRanking = kpiShowsEmail(res) ? rankingRows : withoutEmail(rankingRows);
     const top10Ranking = todosLosRanking.slice(0, 10);
 
     const { rows: cursos } = await db.query(
@@ -1374,6 +1399,7 @@ router.get("/kpi-cursos", async (req, res) => {
     );
     const catalogoCursos = cursos.map(mapCourseCatalogRow);
 
+    const alcanceNotas = kpiScope(req, 1);
     const { rows: notasRows } = await db.query(
       `WITH ranked AS (
         SELECT
@@ -1390,11 +1416,13 @@ router.get("/kpi-cursos", async (req, res) => {
         WHERE c.is_active = true
           AND cu.score IS NOT NULL
           AND cu.score > 0
+          AND ${alcanceNotas.clause}
       )
       SELECT course_id, title, section, subsection, nombre_usuario, score
       FROM ranked
       WHERE rn <= 10
       ORDER BY section NULLS LAST, subsection NULLS LAST, title ASC, score DESC`,
+      alcanceNotas.params,
     );
     const kpiPorCurso = buildKpiPorCursoFromRows(notasRows);
 
@@ -1424,8 +1452,7 @@ router.get("/kpi-cursos", async (req, res) => {
   }
 });
 
-router.get("/kpi-cursos/api/integrantes", async (req, res) => {
-  if (!req.session.user) return res.status(401).json({ error: "No autorizado" });
+router.get("/kpi-cursos/api/integrantes", requirePermission("cursos.avance.ver"), async (req, res) => {
 
   const q = String(req.query.q || "").trim();
   if (q.length < 2) {
@@ -1433,6 +1460,9 @@ router.get("/kpi-cursos/api/integrantes", async (req, res) => {
   }
 
   try {
+    // Sin permiso de ver correos tampoco se busca por correo.
+    const conCorreo = kpiShowsEmail(res);
+    const alcance = kpiScope(req, 3);
     const { rows } = await db.query(
       `SELECT
         u.id,
@@ -1440,29 +1470,30 @@ router.get("/kpi-cursos/api/integrantes", async (req, res) => {
         u.email
       FROM users u
       WHERE u.role IS DISTINCT FROM $2
+        AND ${alcance.clause}
         AND (
           u.first_name ILIKE $1
           OR u.last_name ILIKE $1
-          OR u.email ILIKE $1
+          ${conCorreo ? "OR u.email ILIKE $1" : ""}
           OR TRIM(u.first_name || ' ' || COALESCE(u.last_name, '')) ILIKE $1
         )
       ORDER BY name ASC
       LIMIT 12`,
-      [`%${q}%`, ROLES.DESHABILITADO],
+      [`%${q}%`, ROLES.DESHABILITADO, ...alcance.params],
     );
-    res.json(rows);
+    res.json(conCorreo ? rows : withoutEmail(rows));
   } catch (err) {
     console.error("Error buscando integrantes KPI:", err);
     res.status(500).json({ error: "Error al buscar integrantes" });
   }
 });
 
-router.get("/kpi-cursos/api/integrantes/:id", async (req, res) => {
-  if (!req.session.user) return res.status(401).json({ error: "No autorizado" });
+router.get("/kpi-cursos/api/integrantes/:id", requirePermission("cursos.avance.ver"), async (req, res) => {
 
   const userId = req.params.id;
 
   try {
+    const alcance = kpiScope(req, 3);
     const { rows: userRows } = await db.query(
       `SELECT
         u.id,
@@ -1470,8 +1501,8 @@ router.get("/kpi-cursos/api/integrantes/:id", async (req, res) => {
         u.email,
         u.role
       FROM users u
-      WHERE u.id = $1 AND u.role IS DISTINCT FROM $2`,
-      [userId, ROLES.DESHABILITADO],
+      WHERE u.id = $1 AND u.role IS DISTINCT FROM $2 AND ${alcance.clause}`,
+      [userId, ROLES.DESHABILITADO, ...alcance.params],
     );
     if (userRows.length === 0) {
       return res.status(404).json({ error: "Integrante no encontrado" });
@@ -1511,7 +1542,7 @@ router.get("/kpi-cursos/api/integrantes/:id", async (req, res) => {
     };
 
     res.json({
-      user: userRows[0],
+      user: kpiShowsEmail(res) ? userRows[0] : { ...userRows[0], email: null },
       summary,
       courses,
     });
@@ -1533,7 +1564,7 @@ function esUrlDescargaValida(url) {
   }
 }
 
-router.get("/apps/qr", requireRole.intranetActivo(), async (req, res) => {
+router.get("/apps/qr", requirePermission("apps.app.ver"), async (req, res) => {
   const targetUrl = String(req.query.url || "").trim();
 
   if (!esUrlDescargaValida(targetUrl)) {
@@ -1557,7 +1588,7 @@ router.get("/apps/qr", requireRole.intranetActivo(), async (req, res) => {
   }
 });
 
-router.get("/apps", requireRole.intranetActivo(), async (req, res) => {
+router.get("/apps", requirePermission("apps.app.ver"), async (req, res) => {
     try {
       res.render("ver-apps", {
         titulo: "Aplicaciones | Transworld",
@@ -1574,7 +1605,7 @@ router.get("/apps", requireRole.intranetActivo(), async (req, res) => {
 );
 
 /** Guarda el orden manual de las tarjetas de un catálogo. */
-router.post("/apps/orden", requireRole.administrador(), async (req, res) => {
+router.post("/apps/orden", requirePermission("apps.app.ordenar"), async (req, res) => {
   const catalog = normalizeAppCatalog(req.body.catalog);
   const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
 
@@ -1627,7 +1658,7 @@ const appUploads = upload.fields([
 
 router.post(
   "/apps/nueva",
-  requireRole.administrador(),
+  requirePermission("apps.app.crear"),
   appUploads,
   async (req, res) => {
     // Form fields match DB columns (name/description); accept Spanish aliases as fallback
@@ -1679,7 +1710,7 @@ router.post(
 
 router.post(
   "/apps/editar/:id",
-  requireRole.administrador(),
+  requirePermission("apps.app.editar"),
   appUploads,
   async (req, res) => {
     const { id } = req.params;
@@ -1751,7 +1782,7 @@ router.post(
 
 router.post(
   "/apps/eliminar/:id",
-  requireRole.administrador(),
+  requirePermission("apps.app.eliminar"),
   async (req, res) => {
     const { id } = req.params;
     try {
@@ -1787,14 +1818,14 @@ router.get(
   "/auth/linkedin/renovar",
   requireFeature("linkedinFeed"),
   // El enlace viejo sigue sirviendo, pero pasa por el login de LinkedIn de
-  // auth.js, que exige administrador y valida el `state`.
+  // auth.js, que exige «Conectar la cuenta de LinkedIn» y valida el `state`.
   (req, res) => res.redirect("/auth/linkedin/login"),
 );
 
 // ==========================================
 // NOTIFICACIÓN DE APP
 // ==========================================
-router.post("/apps/notificar/:id", requireRole.administrador(), async (req, res) => {
+router.post("/apps/notificar/:id", requirePermission("apps.app.notificar"), async (req, res) => {
   const { id } = req.params;
   const { cambios_texto } = req.body;
 

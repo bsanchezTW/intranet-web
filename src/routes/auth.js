@@ -19,7 +19,6 @@ const userPhotoStorage = require("../services/userPhotoStorage");
 const {
   ROLES,
   normalizeRole,
-  isAdministrador,
   isDeshabilitado,
   canLogin,
 } = require("../constants/roles");
@@ -29,8 +28,9 @@ const {
   getCountryConfig,
   isForeignCountryEmailDomain,
 } = require("../config/country");
-const { consumeReturnTo, rememberReturnTo } = require("../utils/returnTo");
+const { consumeReturnTo } = require("../utils/returnTo");
 const requireFeature = require("../middlewares/requireFeature");
+const requirePermission = require("../middlewares/requirePermission");
 
 function getBaseUrl(req) {
   return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -1150,22 +1150,12 @@ router.get("/logout", (req, res) => {
 // LINKEDIN
 // ==========================================
 /**
- * Conectar el feed reemplaza el token de toda la intranet: sólo un
- * administrador con sesión, y el callback tiene que traer el `state` que se
- * le entregó a esa misma sesión (si no, cualquiera podría colarle a la
+ * Conectar el feed reemplaza el token de toda la intranet: sólo quien tiene
+ * «Conectar la cuenta de LinkedIn», y el callback tiene que traer el `state`
+ * que se le entregó a esa misma sesión (si no, cualquiera podría colarle a la
  * intranet un código de su propia cuenta de LinkedIn).
  */
-function requireLinkedinAdmin(req, res, next) {
-  const user = req.session && req.session.user;
-  if (!user) {
-    rememberReturnTo(req);
-    return res.redirect("/login");
-  }
-  if (!isAdministrador(normalizeRole(user.role))) {
-    return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
-  }
-  return next();
-}
+const requireLinkedinAdmin = requirePermission("inicio.linkedin.configurar");
 
 router.get(
   "/auth/linkedin/login",

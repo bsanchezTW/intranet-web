@@ -1,6 +1,8 @@
 const { rememberReturnTo } = require("../utils/returnTo");
 const { allKeys, getPermission } = require("../services/permissions/catalog");
 const permissions = require("../services/permissions/permissionService");
+const { decide } = require("../services/permissions/decide");
+const { legacyContext } = require("../services/permissions/legacyRules");
 
 /**
  * Corta la petición si quien la hace no tiene el permiso (Gestión de
@@ -59,7 +61,10 @@ function requireAnyPermission(...keys) {
     } catch (err) {
       return next(err);
     }
-    if (keys.some((key) => req.perms.can(key))) return next();
+    // En modo sombra decide la regla antigua del permiso (decide.js).
+    const legacyCtx = req.permLegacy || legacyContext(user);
+    const path = req.originalUrl;
+    if (keys.some((key) => decide(req.perms, key, legacyCtx, { path }))) return next();
 
     if (wantsJsonResponse(req)) {
       return res.status(403).json({ error: "No tienes permiso para esta acción." });

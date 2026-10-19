@@ -24,7 +24,8 @@ const fondoHero = fondoHeroFull ? eventPreviewUrl(fondoHeroFull) : '';
 const datosGaleria = {
   slug: evento.slug,
   portada: evento.image || '',
-  puedeEditar: Boolean(can.eventos_write),
+  puedePortada: can('eventos.fotos.subir'),
+  puedeEliminar: can('eventos.fotos.eliminar'),
   items,
 };
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
@@ -53,7 +54,7 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
       </p>
       <div class="galeria-hero__titular">
         <h1 class="galeria-hero__titulo" id="galeriaTitulo"><%= evento.name %></h1>
-        <% if (can.eventos_write) { %>
+        <% if (can('eventos.evento.editar')) { %>
           <button type="button" class="galeria-hero__editar" data-abrir-modal-evento
                   aria-label="Editar evento" title="Editar evento">
             <%- include('../partials/icon', { name: 'edit' }) %>
@@ -117,14 +118,14 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
       <span class="galeria-vacio__icono"><%- include('../partials/icon', { name: 'camera' }) %></span>
       <h3 class="galeria-vacio__titulo">Todavía no hay fotos</h3>
       <p class="galeria-vacio__texto">
-        <%= can.eventos_write
+        <%= can('eventos.fotos.subir')
           ? 'Agrega las primeras fotos o videos desde el recuadro de abajo.'
           : 'Pronto se publicarán las fotos de este evento.' %>
       </p>
     </div>
   </section>
 
-  <% if (can.eventos_write) { %>
+  <% if (can('eventos.fotos.subir')) { %>
   <section class="galeria-seccion galeria-subida" aria-labelledby="galeriaSubidaTitulo">
     <div class="galeria-seccion__head">
       <h2 class="galeria-seccion__titulo" id="galeriaSubidaTitulo">Agregar fotos y videos</h2>
@@ -157,6 +158,6 @@ const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
 <script type="application/json" id="galeriaDatos"><%- JSON.stringify(datosGaleria).replace(/</g, '\\u003c') %></script>
 
-<% if (can.eventos_write) { %>
+<% if (can('eventos.evento.editar')) { %>
   <%- include('partials/modal-evento', { modo: 'editar', evento, imagenes }) %>
 <% } %>

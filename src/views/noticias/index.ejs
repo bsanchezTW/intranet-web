@@ -1,7 +1,7 @@
 <%
 // El modelo de vista (autor, fechas, tiempo de lectura, tipos de adjunto) lo
 // arma noticiaPresenter; aquí solo se decide el orden y el marcado.
-const puedeEscribir = typeof can !== 'undefined' && can.noticias_write;
+const puedeEscribir = can('noticias.noticia.crear');
 const restantes = noticias.filter(n => !destacada || n.id !== destacada.id);
 
 const ICONO_CHIP = { image: 'image', pdf: 'file-text', word: 'file-text', video: 'video', file: 'paperclip' };

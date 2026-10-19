@@ -8,16 +8,15 @@ const db = require('../db');
 const fileStorage = require('../services/fileStorage');
 const eventThumbnails = require('../services/media/eventThumbnails');
 const contentCache = require('../services/storage/contentCache');
-const requireRole = require('../middlewares/requireRole');
+const requirePermission = require('../middlewares/requirePermission');
 const { UPLOAD_LIMITS_BYTES } = require('../config/uploadLimits');
 const { EVENTO_VIEW_COLUMNS } = require('../utils/schemaMappers');
 const { getCurrentCountry } = require('../config/country');
 const { isPrivateFlag, hasPrivacyField, hasWebField } = require('../utils/eventAccess');
 
 const router = express.Router();
-const WRITE_ROLES = ['admin'];
 
-const ASSET_VERSION = '20261013b';
+const ASSET_VERSION = '20261019a';
 const ASSETS_LISTA = {
   extraCss: [`/css/galeria.css?v=${ASSET_VERSION}`],
   extraJs: [`/js/galeria.js?v=${ASSET_VERSION}`],
@@ -105,7 +104,7 @@ function parseDirectUploadedImages(body) {
 
 router.get('/', (req, res) => res.redirect('/marketing/eventos'));
 
-router.get('/eventos', async (req, res) => {
+router.get('/eventos', requirePermission('eventos.evento.ver'), async (req, res) => {
   try {
     const { rows } = await db.query(`SELECT ${EVENTO_VIEW_COLUMNS} FROM events ORDER BY created_at DESC`);
     res.render('marketing/eventos', { titulo: 'Galería', eventos: rows, ...ASSETS_LISTA });
@@ -115,11 +114,11 @@ router.get('/eventos', async (req, res) => {
   }
 });
 
-router.get('/eventos/nuevo', requireRole(...WRITE_ROLES), (req, res) => {
+router.get('/eventos/nuevo', requirePermission('eventos.evento.crear'), (req, res) => {
   res.redirect('/marketing/eventos?modal=nuevo');
 });
 
-router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
+router.post('/eventos/nuevo', requirePermission('eventos.evento.crear'), async (req, res) => {
   const { name, description, isPrivate, visibleWeb } = eventFieldsFromBody(req.body);
   const responderError = (status, error) => {
     if (wantsJsonResponse(req)) return res.status(status).json({ error });
@@ -155,7 +154,7 @@ router.post('/eventos/nuevo', requireRole(...WRITE_ROLES), async (req, res) => {
 });
 
 // GET DETALLE
-router.get('/eventos/:slug', async (req, res) => {
+router.get('/eventos/:slug', requirePermission('eventos.evento.ver'), async (req, res) => {
   const { slug } = req.params;
   try {
     const { rows } = await db.query(`SELECT ${EVENTO_VIEW_COLUMNS} FROM events WHERE slug = $1`, [slug]);
@@ -181,7 +180,7 @@ router.get('/eventos/:slug', async (req, res) => {
 
 
 // SIGNATURE - Endpoint para obtener datos de subida
-router.get('/eventos/:slug/fotos/signature', requireRole(...WRITE_ROLES), async (req, res) => {
+router.get('/eventos/:slug/fotos/signature', requirePermission('eventos.fotos.subir'), async (req, res) => {
   const { slug } = req.params;
   try {
     // Ya no se necesita firma para almacenamiento local
@@ -196,7 +195,7 @@ router.get('/eventos/:slug/fotos/signature', requireRole(...WRITE_ROLES), async 
 });
 
 // ENDPOINT PARA SUBIR ARCHIVOS
-router.post('/eventos/:slug/fotos/upload', requireRole(...WRITE_ROLES), upload.single('archivo'), async (req, res) => {
+router.post('/eventos/:slug/fotos/upload', requirePermission('eventos.fotos.subir'), upload.single('archivo'), async (req, res) => {
   const { slug } = req.params;
   try {
     if (!req.file) {
@@ -256,7 +255,7 @@ router.post('/eventos/:slug/fotos/upload', requireRole(...WRITE_ROLES), upload.s
 });
 
 // SUBIR - Compatibilidad con uploads directos
-router.post('/eventos/:slug/fotos', requireRole(...WRITE_ROLES), upload.none(), async (req, res) => {
+router.post('/eventos/:slug/fotos', requirePermission('eventos.fotos.subir'), upload.none(), async (req, res) => {
   const { slug } = req.params;
   const directFiles = parseDirectUploadedImages(req.body);
 
@@ -289,7 +288,7 @@ router.post('/eventos/:slug/fotos', requireRole(...WRITE_ROLES), upload.none(), 
 });
 
 // DEFINIR PORTADA
-router.post('/eventos/:slug/portada', requireRole(...WRITE_ROLES), async (req, res) => {
+router.post('/eventos/:slug/portada', requirePermission('eventos.fotos.subir'), async (req, res) => {
   const { slug } = req.params;
   const { url_imagen } = req.body;
   if (!isEventObject(slug, url_imagen)) {
@@ -308,7 +307,7 @@ router.post('/eventos/:slug/portada', requireRole(...WRITE_ROLES), async (req, r
 });
 
 // ELIMINAR FOTO O VIDEO
-router.post('/eventos/:slug/fotos/eliminar', requireRole(...WRITE_ROLES), async (req, res) => {
+router.post('/eventos/:slug/fotos/eliminar', requirePermission('eventos.fotos.eliminar'), async (req, res) => {
   const { public_id, resource_type } = req.body; 
   const { slug } = req.params;
   if (!isEventObject(slug, public_id)) {
@@ -333,7 +332,7 @@ router.post('/eventos/:slug/fotos/eliminar', requireRole(...WRITE_ROLES), async 
 });
 
 // ELIMINAR EVENTO COMPLETO
-router.post('/eventos/:slug/eliminar', requireRole(...WRITE_ROLES), async (req, res) => {
+router.post('/eventos/:slug/eliminar', requirePermission('eventos.evento.eliminar'), async (req, res) => {
   const { slug } = req.params;
   try {
     await fileStorage.deleteFolder(`eventos/${slug}`);
@@ -351,11 +350,11 @@ router.post('/eventos/:slug/eliminar', requireRole(...WRITE_ROLES), async (req, 
 });
 
 // RUTAS EDITAR
-router.get('/eventos/:slug/editar', requireRole(...WRITE_ROLES), (req, res) => {
+router.get('/eventos/:slug/editar', requirePermission('eventos.evento.editar'), (req, res) => {
   res.redirect(`/marketing/eventos/${encodeURIComponent(req.params.slug)}?modal=editar`);
 });
 
-router.post('/eventos/:slug/editar', requireRole(...WRITE_ROLES), async (req, res) => {
+router.post('/eventos/:slug/editar', requirePermission('eventos.evento.editar'), async (req, res) => {
   const { slug } = req.params;
   const { name, description, isPrivate, hasPrivacy, visibleWeb, hasWeb } = eventFieldsFromBody(req.body);
   const responderError = (status, error) => {

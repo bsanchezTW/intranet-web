@@ -111,7 +111,7 @@
   %>
     <div class="cat-card" id="card-<%= index %>" onclick="mostrarCursos('<%= idLista %>', this, '<%= subseccion %>')">
 
-      <% if (typeof can !== 'undefined' && can.cursos_write) { %>
+      <% if (can('cursos.material.editar')) { %>
         <button class="btn-edit-sub" onclick="event.stopPropagation(); abrirModalEditarSub('<%= subseccion %>', '<%= imgUrl %>')">Editar</button>
       <% } %>
 
@@ -166,7 +166,7 @@
 
 <div class="material-header-container">
   <h2 class="section-title" style="margin: 0; text-align: left;">Material de estudio</h2>
-  <% if (typeof can !== 'undefined' && can.cursos_write) { %>
+  <% if (can('cursos.material.crear')) { %>
     <button class="btn-primario" onclick="abrirModalNuevoMaterial('Equipamiento Activo')" style="margin:0; background: #003a70; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">+ Subir Archivo</button>
   <% } %>
 </div>
@@ -197,12 +197,15 @@
                  Ver / Descargar
              </a>
             
-            <% if (typeof can !== 'undefined' && can.cursos_write) { %>
+            <% if (can('cursos.material.editar') || can('cursos.material.eliminar')) { %>
             <div class="material-actions">
+                <% if (can('cursos.material.editar')) { %>
                 <button type="button" class="btn-material btn-mat-edit" onclick="abrirModalEditarMaterial('<%= mat.id %>', '<%= mat.name.replace(/'/g, "\\'") %>')" title="Editar nombre o archivo">
                     Editar
                 </button>
+                <% } %>
                 
+                <% if (can('cursos.material.eliminar')) { %>
                 <form action="/cursos/material/eliminar/<%= mat.id %>" method="POST" style="margin: 0;"
                   data-confirm="«<%= mat.name %>» se borrará de la nube de forma permanente."
                   data-confirm-title="¿Eliminar el material?"
@@ -213,6 +216,7 @@
                     Eliminar
                 </button>
                 </form>
+                <% } %>
             </div>
             <% } %>
         </div>

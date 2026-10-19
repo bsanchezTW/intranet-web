@@ -4,7 +4,10 @@
    * Soporte. Espera: app, index y (opcional) allowNotify.
    */
   const cardAllowNotify = (typeof allowNotify === 'undefined') ? true : allowNotify;
-  const cardIsAdmin = (typeof isAdministrador !== 'undefined' && isAdministrador);
+  const cardCanNotify = can('apps.app.notificar');
+  const cardCanEdit = can('apps.app.editar');
+  const cardCanDelete = can('apps.app.eliminar');
+  const cardIsAdmin = cardCanNotify || cardCanEdit || cardCanDelete;
   const cardIndex = (typeof index === 'undefined') ? 0 : index;
   const cardReorderable = (typeof reorderable !== 'undefined') && reorderable;
 
@@ -83,7 +86,7 @@
 
   <% if (cardIsAdmin) { %>
   <div class="app-card__footer">
-    <% if (cardAllowNotify) { %>
+    <% if (cardAllowNotify && cardCanNotify) { %>
     <button type="button" class="app-action app-action--notify"
             title="<%= app.notified === false ? 'Enviar cambios por correo a los equipos' : 'No hay cambios pendientes' %>"
             onclick="abrirModalNotificar('<%= app.id %>', '<%= cardNombreJs %>')"
@@ -91,10 +94,13 @@
       Notificar
     </button>
     <% } %>
+    <% if (cardCanEdit) { %>
     <button type="button" class="app-action app-action--edit" title="Editar app"
             onclick="abrirModalEditar('<%= app.id %>', '<%= cardNombreJs %>', '<%= cardJsSafe(app.description) %>', '<%= cardJsSafe(app.url_pc || '') %>', '<%= cardJsSafe(app.url_apk || '') %>', '<%= cardJsSafe(app.url_ios || '') %>', '<%= cardJsSafe(app.url_web || '') %>', '<%= cardJsSafe(cardIconUrl) %>')">
       Editar
     </button>
+    <% } %>
+    <% if (cardCanDelete) { %>
     <form action="/apps/eliminar/<%= app.id %>" method="POST" class="app-card__delete-form"
           data-confirm="Se eliminará «<%= app.name %>» con sus enlaces e instructivo. Esta acción no se puede deshacer."
           data-confirm-title="¿Eliminar la aplicación?"
@@ -102,6 +108,7 @@
           data-confirm-tone="peligro">
       <button type="submit" class="app-action app-action--delete" title="Eliminar app">Eliminar</button>
     </form>
+    <% } %>
   </div>
   <% } %>
 </article>

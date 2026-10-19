@@ -359,9 +359,11 @@
           '<p class="galeria-visor__contador" aria-live="polite"></p>' +
           '<div class="galeria-visor__acciones">' +
             '<a class="galeria-visor__accion" data-accion="descargar" download>' + ICONOS.descargar + '<span>Descargar</span></a>' +
-            (datos.puedeEditar
-              ? '<button type="button" class="galeria-visor__accion" data-accion="portada">' + ICONOS.portada + '<span>Usar como portada</span></button>' +
-                '<button type="button" class="galeria-visor__accion galeria-visor__accion--peligro" data-accion="eliminar">' + ICONOS.eliminar + '<span>Eliminar</span></button>'
+            (datos.puedePortada
+              ? '<button type="button" class="galeria-visor__accion" data-accion="portada">' + ICONOS.portada + '<span>Usar como portada</span></button>'
+              : "") +
+            (datos.puedeEliminar
+              ? '<button type="button" class="galeria-visor__accion galeria-visor__accion--peligro" data-accion="eliminar">' + ICONOS.eliminar + '<span>Eliminar</span></button>'
               : "") +
             '<button type="button" class="galeria-visor__accion galeria-visor__accion--cerrar" data-accion="cerrar" aria-label="Cerrar visor">' + ICONOS.cerrar + "</button>" +
           "</div>" +
