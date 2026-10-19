@@ -1262,6 +1262,11 @@ async function getDraftForEdit(requestId, user) {
  * Devuelve la etapa ('manager' | 'finance') o null.
  */
 async function reviewerStageFor(request, user) {
+  // Nadie resuelve lo propio, en ninguna etapa: ni el jefe sin superior que
+  // además es administrador, ni quien aprueba en Finanzas.
+  if (request.user_id != null && Number(request.user_id) === Number(user.id)) {
+    return null;
+  }
   const isAdmin = isAdministrador(normalizeRole(user.role));
 
   if (request.status === EXPENSE_STATUS.PENDING) {
@@ -1414,6 +1419,10 @@ async function settleRequest({ requestId, reviewer, notes }) {
     ) {
       await client.query("ROLLBACK");
       return { ok: false, error: "Sólo se liquidan rendiciones aprobadas por Finanzas." };
+    }
+    if (Number(request.user_id) === Number(reviewer.id)) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "No puedes liquidar tu propia rendición." };
     }
     if (request.settled_at) {
       await client.query("ROLLBACK");

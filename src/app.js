@@ -39,6 +39,8 @@ const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
+const { checkSessionAccount } = require("./services/access/accountStatus");
+const { canAccessContent } = require("./services/access/contentAccess");
 const { isAreaManager } = require("./services/expenses/areaManager");
 const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
 const { migrateTicketCategories, ensureTicketReplyCorrelatives } = require("./services/tickets/ticketSchema");
@@ -282,6 +284,31 @@ app.use(
   }),
 );
 
+// La sesión se renueva sola en cada petición y guarda el rol del login: se
+// contrasta con la base para que deshabilitar, eliminar o cambiar el rol de
+// alguien valga en segundos y no cuando se le venza la sesión.
+app.use(async (req, res, next) => {
+  const user = req.session && req.session.user;
+  if (!user) return next();
+  let estado;
+  try {
+    estado = await checkSessionAccount(user);
+  } catch (err) {
+    logger.error("cuentas", err);
+    return next();
+  }
+  if (estado.action === "update") user.role = estado.role;
+  if (estado.action !== "end") return next();
+
+  return req.session.destroy(() => {
+    res.clearCookie(countryConfig.sessionCookieName);
+    if (wantsJsonResponse(req)) {
+      return res.status(401).json({ error: "Tu cuenta ya no tiene acceso a la intranet." });
+    }
+    return res.redirect("/login");
+  });
+});
+
 // FIX: Unificado → <root>/public/uploads sirve /uploads/*
 app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads"), { maxAge: "7d", etag: true }));
 
@@ -349,6 +376,13 @@ app.use("/content", async (req, res, next) => {
 
   let requestContext;
   try {
+    // La sesión no basta: documentos de otras áreas, comprobantes de gastos y
+    // adjuntos de tickets sólo los descarga quien puede verlos en su página.
+    if (!(await canAccessContent(req.session.user, relativePath))) {
+      return res.status(403).send("No tienes permiso para ver este archivo");
+    }
+
+
     // La vista `events` esconde el privado del otro país. Si no hay fila,
     // no se sirve la foto aunque alguien adivine la ruta.
     const eventSlug = eventSlugFromContentPath(relativePath);

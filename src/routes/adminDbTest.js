@@ -11,9 +11,13 @@ function safeEqualString(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+/**
+ * Sin sesión (sirve justo cuando el login falla), así que la llave es lo
+ * único que la protege: sin ADMIN_DB_TEST_KEY configurada la página no existe.
+ */
 function canSeeDbTest(req) {
   const requiredKey = String(process.env.ADMIN_DB_TEST_KEY || "").trim();
-  if (!requiredKey) return true;
+  if (!requiredKey) return false;
   return safeEqualString(String(req.query.key || ""), requiredKey);
 }
 

@@ -19,6 +19,7 @@ const userPhotoStorage = require("../services/userPhotoStorage");
 const {
   ROLES,
   normalizeRole,
+  isAdministrador,
   isDeshabilitado,
   canLogin,
 } = require("../constants/roles");
@@ -28,7 +29,7 @@ const {
   getCountryConfig,
   isForeignCountryEmailDomain,
 } = require("../config/country");
-const { consumeReturnTo } = require("../utils/returnTo");
+const { consumeReturnTo, rememberReturnTo } = require("../utils/returnTo");
 const requireFeature = require("../middlewares/requireFeature");
 
 function getBaseUrl(req) {
@@ -302,7 +303,24 @@ async function findLoginRows(column, value) {
   }
 }
 
-function startUserSession(req, u) {
+/**
+ * Sesión nueva al autenticar: el id de la anterior (la del visitante anónimo)
+ * deja de valer, así nadie puede fijarle a otro una cookie conocida y heredar
+ * su login. Sólo se conserva a dónde volver.
+ */
+function regenerateSession(req) {
+  const returnTo = req.session.returnTo;
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((err) => {
+      if (err) return reject(err);
+      if (returnTo) req.session.returnTo = returnTo;
+      return resolve();
+    });
+  });
+}
+
+async function startUserSession(req, u) {
+  await regenerateSession(req);
   const isFirstLogin = u.last_login_at == null;
   const showHomeTutorial = isFirstLogin || u.home_tutorial_seen === false;
 
@@ -386,6 +404,12 @@ router.post("/login", async (req, res) => {
     safeEqualString(username, validUser) &&
     safeEqualString(password, validPass)
   ) {
+    try {
+      await regenerateSession(req);
+    } catch (err) {
+      logger.error("auth", err);
+      return fail(500, "No se pudo iniciar la sesión. Intenta de nuevo.");
+    }
     req.session.user = {
       id: 0,
       username: validUser,
@@ -457,9 +481,7 @@ router.post("/login", async (req, res) => {
       return fail(403, errorMsg);
     }
 
-    delete req.session.pendingPasswordReset;
-
-    startUserSession(req, u);
+    await startUserSession(req, u);
 
     if (u.must_change_password) {
       return succeed("/reset-password");
@@ -1027,7 +1049,7 @@ router.post("/reset-password", async (req, res) => {
         return res.redirect("/login?changed=1");
       }
       u.must_change_password = false;
-      startUserSession(req, u);
+      await startUserSession(req, u);
       return res.redirect(consumeReturnTo(req.session, "/?changed=1"));
     }
 
@@ -1127,19 +1149,50 @@ router.get("/logout", (req, res) => {
 // ==========================================
 // LINKEDIN
 // ==========================================
+/**
+ * Conectar el feed reemplaza el token de toda la intranet: sólo un
+ * administrador con sesión, y el callback tiene que traer el `state` que se
+ * le entregó a esa misma sesión (si no, cualquiera podría colarle a la
+ * intranet un código de su propia cuenta de LinkedIn).
+ */
+function requireLinkedinAdmin(req, res, next) {
+  const user = req.session && req.session.user;
+  if (!user) {
+    rememberReturnTo(req);
+    return res.redirect("/login");
+  }
+  if (!isAdministrador(normalizeRole(user.role))) {
+    return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+  }
+  return next();
+}
+
 router.get(
   "/auth/linkedin/login",
   requireFeature("linkedinFeed"),
+  requireLinkedinAdmin,
   (req, res) => {
-    res.redirect(linkedinService.getAuthorizationUrl(req));
+    const state = crypto.randomBytes(16).toString("hex");
+    req.session.linkedinOAuthState = state;
+    res.redirect(linkedinService.getAuthorizationUrl(req, state));
   },
 );
 
 router.get(
   "/auth/linkedin/callback",
   requireFeature("linkedinFeed"),
+  requireLinkedinAdmin,
   async (req, res) => {
   const { code } = req.query;
+  const expectedState = req.session.linkedinOAuthState;
+  delete req.session.linkedinOAuthState;
+  if (
+    !expectedState ||
+    typeof req.query.state !== "string" ||
+    !safeEqualString(req.query.state, expectedState)
+  ) {
+    return res.status(400).send("Error: la autorización de LinkedIn no corresponde a esta sesión. Vuelve a intentarlo.");
+  }
   if (!code) return res.send("Error: No se recibió código de LinkedIn");
 
   try {
@@ -1152,7 +1205,7 @@ router.get(
       </div>
     `);
   } catch (err) {
-    res.send("Error conectando con LinkedIn: " + err.message);
+    res.send("Error conectando con LinkedIn: " + escapeHtml(err.message));
   }
 });
 

@@ -1786,9 +1786,9 @@ router.post(
 router.get(
   "/auth/linkedin/renovar",
   requireFeature("linkedinFeed"),
-  (req, res) => {
-    res.redirect(linkedinService.getAuthorizationUrl(req));
-  },
+  // El enlace viejo sigue sirviendo, pero pasa por el login de LinkedIn de
+  // auth.js, que exige administrador y valida el `state`.
+  (req, res) => res.redirect("/auth/linkedin/login"),
 );
 
 // ==========================================

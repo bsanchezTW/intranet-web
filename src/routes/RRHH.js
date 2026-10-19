@@ -62,6 +62,7 @@ const profileService = require("../services/vacations/vacationProfileService");
 const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
 const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
 const { invalidateStaffAccess } = require("../services/access/staffAccess");
+const { invalidateAccountStatus } = require("../services/access/accountStatus");
 const { isAreaManager, isAvailableApprover } = require("../services/expenses/areaManager");
 
 function parsePriorYearsCredited(value) {
@@ -249,13 +250,15 @@ function isUniqueViolation(err) {
 
 /**
  * Quién forma la mesa de ayuda y quién aprueba en Finanzas se deduce del área,
- * y ambos servicios lo cachean 60 s. Cualquier cambio de área o de membresía
- * tiene que invalidarlos o el permiso queda desfasado hasta un minuto.
+ * y ambos servicios lo cachean 60 s. Cualquier cambio de área, de membresía,
+ * de rol o de personal tiene que invalidarlos o el permiso queda desfasado
+ * hasta un minuto.
  */
 function invalidarCachesDeArea() {
   invalidateFinanceTeam();
   invalidateSupportTeam();
   invalidateStaffAccess();
+  invalidateAccountStatus();
 }
 
 /**
@@ -905,6 +908,7 @@ router.post(
         `UPDATE users SET ${setClauses.join(", ")} WHERE id=$${values.length}`,
         values,
       );
+      invalidarCachesDeArea();
 
       // La fecha de ingreso y el documento mueven el cálculo de vacaciones:
       // el cambio queda en la bitácora de la ficha de vacaciones.
@@ -1061,6 +1065,7 @@ router.post("/eliminar/:id", requireRrhhManager(), async (req, res) => {
     await userPhotoStorage.removeUserPhoto(id, rows[0].foto);
 
     await db.query("DELETE FROM users WHERE id = $1", [id]);
+    invalidarCachesDeArea();
     res.redirect("/RRHH/personal?ok=1&msg=Usuario+eliminado+correctamente");
   } catch (err) {
     console.error(err);

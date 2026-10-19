@@ -177,7 +177,8 @@ async function getRefreshToken() {
   return rows.length > 0 ? rows[0].value : null;
 }
 
-function getAuthorizationUrl(req) {
+/** `state` lo genera la ruta y lo guarda en la sesión para validar el callback. */
+function getAuthorizationUrl(req, state) {
   assertLinkedInConfig();
   const redirectUri = getRedirectUri(req);
   const scope = "r_organization_social";
@@ -187,6 +188,7 @@ function getAuthorizationUrl(req) {
     redirect_uri: redirectUri,
     scope,
     prompt: "consent",
+    state,
   });
   return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
 }

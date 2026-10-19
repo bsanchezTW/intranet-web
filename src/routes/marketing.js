@@ -49,6 +49,16 @@ const upload = multer({
   limits: { fileSize: UPLOAD_LIMITS_BYTES.EVENT_MEDIA },
 });
 
+/**
+ * ¿`ref` (public_id, /content/… o /media/…) es un archivo de la carpeta de
+ * este evento? Lo que llega en el formulario no se usa para borrar ni para
+ * fijar la portada si apunta a otra parte del bucket.
+ */
+function isEventObject(slug, ref) {
+  const relativePath = fileStorage.resolveStoredPath(ref);
+  return Boolean(slug && relativePath) && relativePath.startsWith(`eventos/${slug}/`);
+}
+
 function createSlug(text) {
   return String(text || '')
     .toLowerCase()
@@ -252,7 +262,9 @@ router.post('/eventos/:slug/fotos', requireRole(...WRITE_ROLES), upload.none(), 
 
   if (directFiles.length > 0) {
     try {
-      const firstImage = directFiles.find(f => (f.resource_type === 'image' || !f.resource_type));
+      const firstImage = directFiles.find(
+        f => (f.resource_type === 'image' || !f.resource_type) && isEventObject(slug, f.secure_url),
+      );
       if (firstImage) {
         await db.query(
           `UPDATE events SET image = $1 WHERE slug = $2 AND (image IS NULL OR image = '')`,
@@ -280,6 +292,10 @@ router.post('/eventos/:slug/fotos', requireRole(...WRITE_ROLES), upload.none(), 
 router.post('/eventos/:slug/portada', requireRole(...WRITE_ROLES), async (req, res) => {
   const { slug } = req.params;
   const { url_imagen } = req.body;
+  if (!isEventObject(slug, url_imagen)) {
+    if (wantsJsonResponse(req)) return res.status(400).json({ error: 'La portada tiene que ser una foto de este evento.' });
+    return res.status(400).send('La portada tiene que ser una foto de este evento');
+  }
   try {
     await db.query('UPDATE events SET image = $1 WHERE slug = $2', [url_imagen, slug]);
     if (wantsJsonResponse(req)) return res.json({ ok: true, image: url_imagen });
@@ -295,7 +311,11 @@ router.post('/eventos/:slug/portada', requireRole(...WRITE_ROLES), async (req, r
 router.post('/eventos/:slug/fotos/eliminar', requireRole(...WRITE_ROLES), async (req, res) => {
   const { public_id, resource_type } = req.body; 
   const { slug } = req.params;
-  
+  if (!isEventObject(slug, public_id)) {
+    if (wantsJsonResponse(req)) return res.status(400).json({ error: 'El archivo no pertenece a este evento.' });
+    return res.status(400).send('El archivo no pertenece a este evento');
+  }
+
   try {
     await eventThumbnails.removeStored(public_id);
 

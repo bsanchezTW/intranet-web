@@ -489,13 +489,18 @@ router.post("/documento/editar", requireRole.administrador(), async (req, res) =
 });
 
 router.post("/eliminar", requireRole.administrador(), async (req, res) => {
-  const { public_id, db_id, return_to, seccion_base } = req.body;
+  const { db_id, return_to, seccion_base } = req.body;
   const destino = safeReturnTo(return_to);
   try {
-    if (public_id) await fileStorage.deleteFile(public_id);
-
+    // El archivo que se borra es el de la fila, no el que diga el formulario:
+    // un public_id editado a mano no puede tocar otra parte del bucket.
     const tabla = seccion_base === "otros" ? "other_documents" : "documents";
-    if (db_id) await db.query(`DELETE FROM ${tabla} WHERE id = $1`, [db_id]);
+    const { rows } = await db.query(`DELETE FROM ${tabla} WHERE id = $1 RETURNING public_id`, [db_id]);
+    if (!rows.length) {
+      return res.redirect(withQueryParam(destino, "error", "El documento ya no existe"));
+    }
+    const stored = fileStorage.resolveStoredPath(rows[0].public_id);
+    if (stored.startsWith("documentos/")) await fileStorage.deleteFile(stored);
 
     await db.query(
       "INSERT INTO change_log (user_id, action, section, link_path) VALUES ($1, $2, $3, $4)",

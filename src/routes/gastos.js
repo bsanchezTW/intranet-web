@@ -493,11 +493,13 @@ router.get("/:id", async (req, res) => {
 
     const stage = await expenses.reviewerStageFor(request, user);
     // Liquidar es de Finanzas, sólo sobre rendiciones aprobadas con saldo
-    // pendiente (las sin saldo se liquidan solas al aprobarse).
+    // pendiente (las sin saldo se liquidan solas al aprobarse), y nunca la
+    // propia.
     const puedeLiquidar =
       request.kind === "rendicion" &&
       request.status === EXPENSE_STATUS.APPROVED_FINANCE &&
       !request.settled_at &&
+      Number(request.user_id) !== Number(user.id) &&
       (await financeTeam.isFinanceApprover(user));
 
     res.render("gastos/detalle", {
