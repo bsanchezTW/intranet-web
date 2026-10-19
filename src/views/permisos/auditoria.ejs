@@ -13,6 +13,9 @@ const ACCIONES = {
 };
 const cuando = (d) => new Date(d).toLocaleString('es-' + country, { timeZone: countryConfig.timezone, dateStyle: 'short', timeStyle: 'short' });
 const json = (v) => v == null ? null : JSON.stringify(v, null, 2);
+// Color del punto: verde lo que da, rojo lo que quita.
+const tono = (accion) => /conceder|marcar|crear/.test(accion) ? ' perm-accion--ok' : /denegar|quitar|eliminar/.test(accion) ? ' perm-accion--deny' : '';
+const icono = (name) => include('../partials/icon', { name: name });
 %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
@@ -23,24 +26,24 @@ const json = (v) => v == null ? null : JSON.stringify(v, null, 2);
 
   <div class="panel perm-audit">
     <% if (!audit.rows.length) { %>
-      <p class="perm-muted">Sin cambios registrados.</p>
+      <p class="perm-vacio"><%- icono('inbox') %> Sin cambios registrados.</p>
     <% } else { %>
       <table class="perm-table perm-table--responsive">
         <thead><tr><th>Cuándo</th><th>Quién</th><th>Qué</th><th>Detalle</th></tr></thead>
         <tbody>
           <% audit.rows.forEach(function (r) { %>
             <tr>
-              <td class="perm-muted"><%= cuando(r.occurred_at) %></td>
+              <td class="perm-muted" style="white-space:nowrap"><%= cuando(r.occurred_at) %></td>
               <td><%= r.actorName %></td>
               <td>
-                <%= ACCIONES[r.action] || r.action %>
+                <span class="perm-accion<%= tono(r.action) %>"><%= ACCIONES[r.action] || r.action %></span>
                 <span class="perm-key"><%= r.entity_type %><%= r.entity_id ? ' #' + r.entity_id : '' %></span>
-                <% if (r.note) { %><span class="perm-muted"><%= r.note %></span><% } %>
+                <% if (r.note) { %><span class="perm-muted" style="display:block"><%= r.note %></span><% } %>
               </td>
               <td>
                 <% if (r.old_value != null || r.new_value != null) { %>
                   <details>
-                    <summary class="perm-muted" style="cursor:pointer">Ver cambio</summary>
+                    <summary><%- icono('chevron-right') %> Ver cambio</summary>
                     <% if (r.old_value != null) { %><strong>Antes</strong><pre><%= json(r.old_value) %></pre><% } %>
                     <% if (r.new_value != null) { %><strong>Después</strong><pre><%= json(r.new_value) %></pre><% } %>
                   </details>

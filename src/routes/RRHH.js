@@ -32,7 +32,12 @@ const requirePermission = require("../middlewares/requirePermission");
 const { requireAnyPermission } = require("../middlewares/requirePermission");
 const requireFeature = require("../middlewares/requireFeature");
 const { decide } = require("../services/permissions/decide");
-const { rechazoEscalada, clavesDeEdicion, cambiosDeFicha } = require("../services/permissions/rrhhEscalada");
+const {
+  rechazoEscalada,
+  rechazoNombreArea,
+  clavesDeEdicion,
+  cambiosDeFicha,
+} = require("../services/permissions/rrhhEscalada");
 const { sendMail } = require("../services/mailer");
 const { MAIL_SENDERS } = require("../constants/mailSenders");
 const { escapeHtml, secretBox } = require("../services/emailLayout");
@@ -1359,6 +1364,9 @@ router.post("/areas", requirePermission("organigrama.area.crear"), async (req, r
     if (!parent.ok) return redirectAreasError(res, parent.error);
     const manager = await parseAreaManager(req.body.manager_user_id);
     if (!manager.ok) return redirectAreasError(res, manager.error);
+    if (rechazoNombreArea({ superadmin: Boolean(req.perms && req.perms.superadmin), despues: areaName })) {
+      return negarPermiso(res);
+    }
     if (manager.managerId != null) {
       if (!puede(req, "organigrama.area.designar_jefe")) return negarPermiso(res);
       const motivo = rechazoEscalada({
@@ -1421,6 +1429,13 @@ router.post("/areas/:id", requirePermission("organigrama.area.editar"), async (r
     const previa = todas.find((a) => Number(a.id) === areaId);
     if (!previa) {
       return redirectAreasError(res, "El área no existe.");
+    }
+    if (rechazoNombreArea({
+      superadmin: Boolean(req.perms && req.perms.superadmin),
+      antes: previa.area_name,
+      despues: areaName,
+    })) {
+      return negarPermiso(res);
     }
     const jefeAntes = previa.manager_user_id;
     const jefeNuevo = manager.managerId;

@@ -16,6 +16,7 @@ const { getCountryConfig } = require("../src/config/country");
 const { getFeatures } = require("../src/config/features");
 const {
   rechazoEscalada,
+  rechazoNombreArea,
   clavesDeEdicion,
   cambiosDeFicha,
 } = require("../src/services/permissions/rrhhEscalada");
@@ -199,6 +200,16 @@ describe("escalada de RRHH", () => {
       actorId: actor, targetId: 31,
       antes: { role: "Usuario" }, despues: { role: "Deshabilitado" },
     }), null, "habilitar sigue en RRHH");
+  });
+
+  it("renombrar o crear un área con nombre que da permisos es del superadmin", () => {
+    assert.equal(rechazoNombreArea({ antes: "Comercial", despues: "Informática" }), "nombre-area-sensible");
+    assert.equal(rechazoNombreArea({ antes: "TI", despues: "Comercial" }), "nombre-area-sensible");
+    assert.equal(rechazoNombreArea({ antes: "Comercial", despues: "RRHH" }), "nombre-area-sensible");
+    assert.equal(rechazoNombreArea({ despues: "Recursos Humanos" }), "nombre-area-sensible", "crear");
+    assert.equal(rechazoNombreArea({ antes: "Comercial", despues: "Ventas" }), null);
+    assert.equal(rechazoNombreArea({ antes: "Informática", despues: "Informatica" }), null, "corregir el acento no cambia nada");
+    assert.equal(rechazoNombreArea({ superadmin: true, antes: "Comercial", despues: "TI" }), null);
   });
 
   it("el superadmin puede los tres", () => {

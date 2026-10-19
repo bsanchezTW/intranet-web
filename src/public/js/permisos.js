@@ -32,7 +32,6 @@
     var principal = form.querySelector("[data-perm-principal]");
     var principalFijo = form.querySelector("input[type='hidden'][name='principal_type']");
     var objetivo = form.querySelector("[data-perm-target]");
-    var efecto = form.querySelector("[data-perm-effect]");
     var campoAlcance = form.querySelector("[data-perm-scope-field]");
     var alcance = form.querySelector("[data-perm-scope]");
     var campoAreas = form.querySelector("[data-perm-areas-field]");
@@ -62,6 +61,8 @@
       });
 
       var permitidos = alcancesDe(form, que);
+      // Conceder / Denegar son radios; antes era un select.
+      var efecto = form.querySelector("[data-perm-effect]:checked") || form.querySelector("select[data-perm-effect]");
       var deniega = efecto && efecto.value === "deniega";
       ocultar(campoAlcance, !permitidos.length || deniega);
       if (alcance) {
@@ -90,6 +91,44 @@
     actualizar();
   }
 
+  /* Ficha de persona: filtra los permisos efectivos por texto y por «sólo lo
+     que tiene». Un módulo sin filas visibles se esconde entero. */
+  function prepararFiltro(caja) {
+    var destino = document.querySelector(caja.getAttribute("data-perm-filtro"));
+    if (!destino) return;
+    var texto = caja.querySelector("input[type='search']");
+    var soloTiene = caja.querySelector("input[type='checkbox']");
+    var vacio = destino.querySelector("[data-perm-filtro-vacio]");
+
+    function normalizar(s) {
+      return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    }
+
+    function actualizar() {
+      var q = normalizar(texto && texto.value).trim();
+      var solo = Boolean(soloTiene && soloTiene.checked);
+      var algunModulo = false;
+      destino.querySelectorAll("[data-perm-modulo]").forEach(function (modulo) {
+        var visibles = 0;
+        modulo.querySelectorAll("[data-perm-fila]").forEach(function (fila) {
+          var pasa = (!q || normalizar(fila.getAttribute("data-perm-fila")).indexOf(q) !== -1)
+            && (!solo || fila.hasAttribute("data-perm-tiene"));
+          fila.hidden = !pasa;
+          if (pasa) visibles++;
+        });
+        modulo.hidden = visibles === 0;
+        if (visibles && q) modulo.open = true;
+        if (visibles) algunModulo = true;
+      });
+      if (vacio) vacio.hidden = algunModulo;
+    }
+
+    caja.addEventListener("input", actualizar);
+    caja.addEventListener("change", actualizar);
+    actualizar();
+  }
+
   document.querySelectorAll("form[data-perm-form]").forEach(prepararAsignacion);
   document.querySelectorAll("[data-perm-item]").forEach(prepararItem);
+  document.querySelectorAll("[data-perm-filtro]").forEach(prepararFiltro);
 })();

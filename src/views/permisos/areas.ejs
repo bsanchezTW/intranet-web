@@ -16,17 +16,22 @@ const filas = [];
 
   <div class="panel perm-scroll">
     <table class="perm-table">
-      <thead><tr><th>Área</th><th>Jefe</th><th>Personas</th><th>Asignaciones</th></tr></thead>
+      <thead><tr><th>Área</th><th>Jefe</th><th class="perm-table__num">Personas</th><th class="perm-table__num">Asignaciones</th></tr></thead>
       <tbody>
         <% filas.forEach(function (f) { %>
           <% const jefe = f.area.manager_user_id ? refs.userById.get(Number(f.area.manager_user_id)) : null; %>
+          <% const asignadas = counts.get(Number(f.area.id)) || 0; %>
           <tr>
-            <td style="padding-left:<%= 8 + f.nivel * 20 %>px">
-              <a href="/permisos/areas/<%= f.area.id %>"><%= f.area.area_name %></a>
+            <td style="padding-left:<%= 10 + f.nivel * 22 %>px">
+              <span class="perm-area-nombre">
+                <% if (f.nivel) { %><span class="perm-area-nombre__rama" aria-hidden="true"></span><% } %>
+                <span class="perm-area-punto" aria-hidden="true"<% if (/^#[0-9a-f]{3,8}$/i.test(String(f.area.color || ''))) { %> style="background:<%= f.area.color %>"<% } %>></span>
+                <a href="/permisos/areas/<%= f.area.id %>"><%= f.area.area_name %></a>
+              </span>
             </td>
             <td class="perm-muted"><%= jefe ? jefe.name : '—' %></td>
-            <td><%= members.get(Number(f.area.id)) || 0 %></td>
-            <td><%= counts.get(Number(f.area.id)) || 0 %></td>
+            <td class="perm-table__num"><span class="perm-num"><%= members.get(Number(f.area.id)) || 0 %></span></td>
+            <td class="perm-table__num"><span class="perm-num<%= asignadas ? ' perm-num--activo' : '' %>"><%= asignadas %></span></td>
           </tr>
         <% }) %>
       </tbody>

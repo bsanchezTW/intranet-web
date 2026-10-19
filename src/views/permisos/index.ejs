@@ -1,3 +1,15 @@
+<%
+const icono = (name) => include('../partials/icon', { name: name });
+const TARJETAS = [
+  ['/permisos/modulos', 'layers', 'Por módulo', 'Cada permiso de la intranet y quién lo tiene.'],
+  ['/permisos/conjuntos', 'briefcase', 'Conjuntos', 'Paquetes con nombre, como «Aprobador de rendiciones».'],
+  ['/permisos/global', 'grid', 'Global', 'Lo que tiene toda cuenta activa.'],
+  ['/permisos/areas', 'sitemap', 'Áreas', 'Lo que tienen quienes trabajan en cada área.'],
+  ['/permisos/jefes', 'user-check', 'Jefes', 'Lo que tiene quien es jefe en el organigrama.'],
+  ['/permisos/usuarios', 'users', 'Personas', 'Ficha de cada persona: qué tiene y de dónde le viene.'],
+  ['/permisos/auditoria', 'clock', 'Auditoría', 'Quién cambió qué, con el antes y el después.'],
+];
+%>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
     titulo: 'Gestión de permisos',
@@ -6,39 +18,57 @@
   }) %>
 
   <% if (!meta || !meta.bootstrapped_at) { %>
-    <div class="perm-note perm-note--warn">
-      Todavía no se copian los permisos vigentes a este módulo. Corre la vista previa y luego aplícala:
-      <code>node scripts/permisos-arranque.js --pais <%= country %></code> y
-      <code>… --aplicar</code>.
+    <div class="perm-banner perm-banner--warn">
+      <span class="perm-banner__icono" aria-hidden="true"><%- icono('alert-triangle') %></span>
+      <div>
+        <strong>Falta copiar los permisos vigentes.</strong>
+        Corre la vista previa y luego aplícala: <code>node scripts/permisos-arranque.js --pais <%= country %></code> y <code>… --aplicar</code>.
+      </div>
     </div>
   <% } %>
   <% if (meta && meta.mode === 'sombra') { %>
-    <div class="perm-note">
-      <strong>Modo sombra.</strong> Lo que configures aquí se guarda y se calcula, pero las páginas todavía deciden con las reglas antiguas. Cada módulo pasa a usar estos permisos a medida que se migra.
+    <div class="perm-banner">
+      <span class="perm-banner__icono" aria-hidden="true"><%- icono('info') %></span>
+      <div>
+        <strong>Modo sombra.</strong>
+        Lo que configures aquí se guarda y se calcula, pero las páginas todavía deciden con las reglas antiguas. Cada módulo pasa a usar estos permisos a medida que se migra.
+      </div>
     </div>
   <% } %>
 
-  <div class="perm-stat">
-    <span><b><%= permissionCount %></b> permisos en el catálogo</span>
-    <span><b><%= refs.sets.length %></b> conjuntos</span>
-    <span><b><%= totals.concede %></b> concesiones</span>
-    <span><b><%= totals.deniega %></b> denegaciones</span>
-    <% if (meta && meta.bootstrapped_at) { %>
-      <span>Arranque aplicado el <b><%= new Date(meta.bootstrapped_at).toLocaleDateString('es-' + country, { timeZone: countryConfig.timezone }) %></b></span>
-    <% } %>
+  <div class="perm-kpis">
+    <div class="perm-kpi">
+      <span class="perm-kpi__icono" aria-hidden="true"><%- icono('layers') %></span>
+      <div><span class="perm-kpi__valor"><%= permissionCount %></span><span class="perm-kpi__label">permisos en el catálogo</span></div>
+    </div>
+    <div class="perm-kpi">
+      <span class="perm-kpi__icono" aria-hidden="true"><%- icono('briefcase') %></span>
+      <div><span class="perm-kpi__valor"><%= refs.sets.length %></span><span class="perm-kpi__label">conjuntos</span></div>
+    </div>
+    <div class="perm-kpi">
+      <span class="perm-kpi__icono perm-kpi__icono--ok" aria-hidden="true"><%- icono('check-circle') %></span>
+      <div><span class="perm-kpi__valor"><%= totals.concede %></span><span class="perm-kpi__label">concesiones</span></div>
+    </div>
+    <div class="perm-kpi">
+      <span class="perm-kpi__icono perm-kpi__icono--deny" aria-hidden="true"><%- icono('x-circle') %></span>
+      <div><span class="perm-kpi__valor"><%= totals.deniega %></span><span class="perm-kpi__label">denegaciones</span></div>
+    </div>
   </div>
+  <% if (meta && meta.bootstrapped_at) { %>
+    <p class="perm-muted" style="margin:-10px 0 22px">Arranque aplicado el <b><%= new Date(meta.bootstrapped_at).toLocaleDateString('es-' + country, { timeZone: countryConfig.timezone }) %></b>.</p>
+  <% } %>
 
   <% if (meta && meta.mode === 'sombra' && meta.bootstrapped_at) { %>
     <section class="seccion">
       <div class="seccion__head">
         <div class="seccion__heading">
-          <h3 class="seccion__title">Diferencias del modo sombra</h3>
+          <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('repeat') %></span> Diferencias del modo sombra</h3>
           <p class="seccion__desc">Lo que cambiaría para alguien si hoy se aplicaran estos permisos, según lo que se ha usado desde que arrancó el servidor. Cuando un módulo no tenga diferencias, está listo para aplicar.</p>
         </div>
       </div>
       <div class="panel">
         <% if (!diferencias.length) { %>
-          <p class="perm-muted">Sin diferencias hasta ahora.</p>
+          <p class="perm-vacio"><span class="perm-estado perm-estado--si">Sin diferencias</span> Nada cambiaría para nadie hasta ahora.</p>
         <% } else { %>
           <table class="perm-table perm-table--responsive">
             <thead><tr><th>Persona</th><th>Permiso</th><th>Hoy</th><th>Con permisos</th></tr></thead>
@@ -47,8 +77,8 @@
                 <tr>
                   <td><a href="/permisos/usuarios/<%= d.userId %>"><%= d.userName %></a></td>
                   <td><%= d.label %><span class="perm-key"><%= d.key %></span></td>
-                  <td><%= d.legacy ? 'Sí' : 'No' %></td>
-                  <td><span class="perm-chip<%= d.next ? '' : ' perm-chip--deny' %>"><%= d.next ? 'Sí' : 'No' %></span></td>
+                  <td><span class="perm-estado <%= d.legacy ? 'perm-estado--si' : 'perm-estado--no' %>"><%= d.legacy ? 'Sí' : 'No' %></span></td>
+                  <td><span class="perm-estado <%= d.next ? 'perm-estado--si' : 'perm-estado--deny' %>"><%= d.next ? 'Sí' : 'No' %></span></td>
                 </tr>
               <% }) %>
             </tbody>
@@ -59,19 +89,18 @@
   <% } %>
 
   <div class="perm-cards">
-    <a class="perm-card" href="/permisos/modulos"><strong>Por módulo</strong><span>Cada permiso de la intranet y quién lo tiene.</span></a>
-    <a class="perm-card" href="/permisos/conjuntos"><strong>Conjuntos</strong><span>Paquetes con nombre, como «Aprobador de rendiciones».</span></a>
-    <a class="perm-card" href="/permisos/global"><strong>Global</strong><span>Lo que tiene toda cuenta activa.</span></a>
-    <a class="perm-card" href="/permisos/areas"><strong>Áreas</strong><span>Lo que tienen quienes trabajan en cada área.</span></a>
-    <a class="perm-card" href="/permisos/jefes"><strong>Jefes</strong><span>Lo que tiene quien es jefe en el organigrama.</span></a>
-    <a class="perm-card" href="/permisos/usuarios"><strong>Personas</strong><span>Ficha de cada persona: qué tiene y de dónde le viene.</span></a>
-    <a class="perm-card" href="/permisos/auditoria"><strong>Auditoría</strong><span>Quién cambió qué, con el antes y el después.</span></a>
+    <% TARJETAS.forEach(function (t) { %>
+      <a class="perm-card" href="<%= t[0] %>">
+        <span class="perm-card__icono" aria-hidden="true"><%- icono(t[1]) %></span>
+        <div><strong><%= t[2] %></strong><span><%= t[3] %></span></div>
+      </a>
+    <% }) %>
   </div>
 
   <section class="seccion">
     <div class="seccion__head">
       <div class="seccion__heading">
-        <h3 class="seccion__title"><span class="seccion__icon"><%- include('../partials/icon', { name: 'shield' }) %></span> Superadmins</h3>
+        <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('shield') %></span> Superadmins</h3>
         <p class="seccion__desc">Tienen todos los permisos, no se les puede denegar nada y son los únicos que entran aquí. Siempre queda al menos uno.</p>
       </div>
     </div>
@@ -80,10 +109,18 @@
         <tbody>
           <% superadmins.forEach(function (u) { %>
             <tr>
-              <td><a href="/permisos/usuarios/<%= u.id %>"><%= u.name %></a><% if (u.email) { %> <span class="perm-muted"><%= u.email %></span><% } %></td>
+              <td>
+                <span class="perm-persona">
+                  <span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= String(u.name || '?').split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase() %></span>
+                  <span class="perm-persona__texto">
+                    <a href="/permisos/usuarios/<%= u.id %>"><%= u.name %></a>
+                    <% if (u.email) { %><span class="perm-muted"><%= u.email %></span><% } %>
+                  </span>
+                </span>
+              </td>
               <td class="perm-table__accion">
                 <% if (u.id === actorId) { %>
-                  <span class="perm-muted">Tú</span>
+                  <span class="perm-chip perm-chip--brand">Tú</span>
                 <% } else { %>
                   <form class="perm-inline" action="/permisos/superadmin" method="POST"
                         data-confirm="<%= u.name %> dejará de tener todos los permisos."
@@ -115,7 +152,7 @@
             <% }) %>
           </select>
         </div>
-        <div class="perm-form__acciones"><button type="submit" class="perm-btn">Agregar</button></div>
+        <div class="perm-form__acciones"><button type="submit" class="perm-btn"><%- icono('plus') %> Agregar</button></div>
       </form>
     </div>
   </section>

@@ -1,3 +1,4 @@
+<% const icono = (name) => include('../partials/icon', { name: name }); %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
     titulo: 'Permisos por módulo',
@@ -9,13 +10,16 @@
     <nav class="perm-modlist" aria-label="Módulos">
       <% modules.forEach(function (m) { %>
         <a href="/permisos/modulos?modulo=<%= m.module %>"<% if (m.module === current.module) { %> aria-current="page"<% } %>>
-          <%= m.label %> <span class="perm-muted"><%= m.permissions.length %></span>
+          <span><%= m.label %></span><span class="perm-modlist__n"><%= m.permissions.length %></span>
         </a>
       <% }) %>
     </nav>
 
     <div class="panel">
-      <h3 class="seccion__title"><%= current.label %></h3>
+      <div class="perm-modhead">
+        <h3><%= current.label %></h3>
+        <span class="perm-muted"><%= current.permissions.length %> permisos</span>
+      </div>
       <% current.permissions.forEach(function (p, i) { %>
         <% const quienes = whoHas.get(p.key) || []; %>
         <div class="perm-row" id="p-<%= p.key %>">
@@ -23,16 +27,20 @@
             <div>
               <div class="perm-row__title">
                 <%= p.label %>
-                <% if (p.isModuleAccess) { %><span class="perm-chip perm-chip--muted">Acceso al módulo</span><% } %>
-                <% if (p.isField) { %><span class="perm-chip perm-chip--muted">Dato sensible</span><% } %>
+                <% if (p.isModuleAccess) { %><span class="perm-chip perm-chip--brand">Acceso al módulo</span><% } %>
+                <% if (p.isField) { %><span class="perm-chip perm-chip--warn">Dato sensible</span><% } %>
               </div>
               <span class="perm-key"><%= p.key %></span>
               <% if (p.scopes) { %>
-                <span class="perm-muted">Alcances: <%= p.scopes.map(function (s) { return scopeLabels[s]; }).join(' · ') %></span>
+                <div class="perm-row__alcances">
+                  Alcances posibles:
+                  <% p.scopes.forEach(function (s) { %><span class="perm-chip perm-chip--linea"><%= scopeLabels[s] %></span><% }) %>
+                </div>
               <% } %>
             </div>
           </div>
           <div class="perm-row__who">
+            <span class="perm-row__who-label">Lo tienen</span>
             <% if (!quienes.length) { %>
               <span class="perm-chip perm-chip--muted">Sólo el superadmin</span>
             <% } %>
@@ -45,7 +53,7 @@
             <% }) %>
           </div>
           <details>
-            <summary class="perm-btn perm-btn--sec perm-btn--sm" style="margin-top:8px">Asignar o denegar</summary>
+            <summary class="perm-btn perm-btn--sec perm-btn--sm perm-abrir"><%- icono('plus') %> Asignar</summary>
             <%- include('partials/form_asignacion', {
               uid: 'm' + i,
               volver: '/permisos/modulos?modulo=' + current.module,

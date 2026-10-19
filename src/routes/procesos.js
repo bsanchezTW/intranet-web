@@ -20,6 +20,7 @@ const areaManager = require("../services/expenses/areaManager");
 const financeTeam = require("../services/expenses/financeTeam");
 const expenses = require("../services/expenses/expenseRequestService");
 const funds = require("../services/expenses/expenseFundService");
+const requirePermission = require("../middlewares/requirePermission");
 
 /**
  * Procesos y Documentos.
@@ -35,6 +36,8 @@ const funds = require("../services/expenses/expenseFundService");
  * Las subidas nuevas van a Storage (`/content/documentos/...`). Las filas
  * heredadas de Cloudinary se migran con scripts/migrate-cloudinary-process-docs.js.
  */
+
+router.use(requirePermission("procesos.acceso"));
 
 // Secciones que viven en `documents` con carpeta por área.
 const SECCIONES_AREA = {
@@ -531,9 +534,10 @@ router.post("/documento/editar", async (req, res) => {
     if (row && !puedeAdministrarDocumento(req.perms, req.permLegacy, row, "editar", req.originalUrl)) {
       return negarAccion(req, res);
     }
-    if (row) {
-      await db.query(`UPDATE ${tabla} SET name = $1 WHERE id = $2`, [nuevo_nombre, row.id]);
+    if (!row) {
+      return res.redirect(withQueryParam(destino, "error", "El documento ya no existe"));
     }
+    await db.query(`UPDATE ${tabla} SET name = $1 WHERE id = $2`, [nuevo_nombre, row.id]);
     res.redirect(withQueryParam(destino, "ok", "Documento renombrado"));
   } catch (err) {
     console.error("[Procesos] Error editando documento:", err);

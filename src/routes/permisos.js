@@ -25,8 +25,8 @@ const { withQueryParam } = require("../utils/returnTo");
  */
 
 const BASE = "/permisos";
-const CSS = ["/css/permisos.css?v=20261019a"];
-const JS = ["/js/permisos.js?v=20261019a"];
+const CSS = ["/css/permisos.css?v=20261019b"];
+const JS = ["/js/permisos.js?v=20261019b"];
 
 router.use((req, res, next) => {
   if (req.perms && req.perms.superadmin) return next();

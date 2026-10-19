@@ -18,7 +18,7 @@ function fullName(u) {
 async function loadReferences() {
   const [areas, users, sets] = await Promise.all([
     db.query(
-      `SELECT w.id, w.area_name, w.parent_area_id, w.manager_user_id, w.sort_order
+      `SELECT w.id, w.area_name, w.parent_area_id, w.manager_user_id, w.sort_order, w.color
          FROM work_areas w ORDER BY w.area_name`,
     ),
     db.query(

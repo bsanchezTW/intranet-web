@@ -6,6 +6,9 @@ const migasDe = principal.type === 'area'
   ? [{ href: '/permisos/areas', label: 'Áreas' }, { label: principal.label }]
   : [{ label: principal.label }];
 const gente = typeof people !== 'undefined' ? people : null;
+const icono = (name) => include('../partials/icon', { name: name });
+const iniciales = (nombre) => String(nombre || '?').split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase();
+const iconoDe = { global: 'grid', jefes: 'user-check', area: 'sitemap' }[principal.type] || 'layers';
 %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
@@ -16,6 +19,11 @@ const gente = typeof people !== 'undefined' ? people : null;
   }) %>
 
   <section class="seccion">
+    <div class="seccion__head">
+      <div class="seccion__heading">
+        <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono(iconoDe) %></span> Asignado a <%= principal.label %> <span class="perm-num perm-num--activo"><%= assignments.length %></span></h3>
+      </div>
+    </div>
     <div class="panel">
       <%- include('partials/tabla_asignaciones', {
         assignments: assignments,
@@ -30,7 +38,7 @@ const gente = typeof people !== 'undefined' ? people : null;
   <section class="seccion">
     <div class="seccion__head">
       <div class="seccion__heading">
-        <h3 class="seccion__title">Agregar</h3>
+        <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('plus') %></span> Agregar</h3>
         <p class="seccion__desc">Un conjunto o un permiso suelto. Denegar quita el permiso aunque llegue por otro lado (salvo que se conceda más específicamente, a la persona).</p>
       </div>
     </div>
@@ -46,16 +54,18 @@ const gente = typeof people !== 'undefined' ? people : null;
     <section class="seccion">
       <div class="seccion__head">
         <div class="seccion__heading">
-          <h3 class="seccion__title">Personas en <%= principal.label %> (<%= gente.length %>)</h3>
+          <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('users') %></span> Personas en <%= principal.label %> <span class="perm-num"><%= gente.length %></span></h3>
         </div>
       </div>
       <div class="panel">
         <% if (!gente.length) { %>
-          <p class="perm-muted">Nadie trabaja en esta área.</p>
+          <p class="perm-vacio"><%- icono('inbox') %> Nadie trabaja en esta área.</p>
         <% } else { %>
-          <% gente.forEach(function (u) { %>
-            <a class="perm-chip perm-chip--muted" href="/permisos/usuarios/<%= u.id %>"><%= u.name %></a>
-          <% }) %>
+          <div class="perm-gente">
+            <% gente.forEach(function (u) { %>
+              <a href="/permisos/usuarios/<%= u.id %>"><span class="perm-avatar perm-avatar--sm" aria-hidden="true"><%= iniciales(u.name) %></span><%= u.name %></a>
+            <% }) %>
+          </div>
         <% } %>
       </div>
     </section>

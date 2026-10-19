@@ -1,5 +1,6 @@
 const { isAdministrador, normalizeRole } = require("../../constants/roles");
 const { isSupportAreaName } = require("../../constants/supportArea");
+const { isRrhhAreaName } = require("../../constants/rrhhArea");
 
 /**
  * Cierra la escalada de RRHH-M (hallazgo A.4.4). Corre también en sombra.
@@ -14,6 +15,22 @@ function mismoId(a, b) {
   if (a == null || a === "") return b == null || b === "";
   if (b == null || b === "") return false;
   return Number(a) === Number(b);
+}
+
+/**
+ * Mientras exista la regla antigua, el NOMBRE del área da permisos: un
+ * administrador de "Informática" tiene acceso total y uno de "RRHH" gestiona
+ * personas. Renombrar un área hacia o desde esos nombres (o crear una con
+ * ellos) es entonces repartir permisos, y sólo lo hace el superadmin.
+ * Se va en la fase 11, con staffAccess.
+ */
+function areaSensible(nombre) {
+  return Boolean(nombre) && (isSupportAreaName(nombre) || isRrhhAreaName(nombre));
+}
+
+function rechazoNombreArea({ superadmin = false, antes = null, despues = null } = {}) {
+  if (superadmin) return null;
+  return areaSensible(antes) !== areaSensible(despues) ? "nombre-area-sensible" : null;
 }
 
 function rechazoEscalada({
@@ -81,6 +98,7 @@ function cambiosDeFicha(prev, next) {
 
 module.exports = {
   rechazoEscalada,
+  rechazoNombreArea,
   clavesDeEdicion,
   cambiosDeFicha,
   mismoId,
