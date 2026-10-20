@@ -716,11 +716,9 @@ function iniciarTareaCierreTickets() {
     }
   };
 
-  // Ejecutar inmediatamente al iniciar el servidor para limpiar los tickets rezagados
-  ejecutarCierre();
-
-  // Y luego continuar ejecutando la revisión cada 1 hora
+  const first = ejecutarCierre();
   setInterval(ejecutarCierre, 3600000);
+  return first;
 }
 
 // ==========================================
@@ -745,11 +743,9 @@ function iniciarLimpiezaHistorial() {
     }
   };
 
-  // Ejecutar inmediatamente al iniciar
-  ejecutarLimpieza();
-
-  // Y luego cada 12 horas
+  const first = ejecutarLimpieza();
   setInterval(ejecutarLimpieza, 43200000);
+  return first;
 }
 
 // ==========================================
@@ -775,8 +771,9 @@ function iniciarPurgaBorradoresGastos() {
     }
   };
 
-  ejecutar();
+  const first = ejecutar();
   setInterval(ejecutar, 43200000);
+  return first;
 }
 
 // ==========================================
@@ -798,9 +795,9 @@ function iniciarTransicionesVacaciones() {
     }
   };
 
-  ejecutar();
-  // Cada 12 horas
+  const first = ejecutar();
   setInterval(ejecutar, 43200000);
+  return first;
 }
 
 async function sincronizarUsuariosDeshabilitados() {
@@ -861,13 +858,12 @@ async function asegurarColumnasApps() {
     logger.error("apps", err);
     return;
   }
-  await Promise.all([
-    asegurarColumnaAppsIconUrl(),
-    asegurarColumnaAppsUrlIos(),
-    asegurarColumnaAppsUrlWeb(),
-    asegurarColumnaAppsCatalog(),
-    asegurarColumnaAppsOrden(),
-  ]);
+  // En serie: cada ALTER en paralelo abre otra conexión al pooler.
+  await asegurarColumnaAppsIconUrl();
+  await asegurarColumnaAppsUrlIos();
+  await asegurarColumnaAppsUrlWeb();
+  await asegurarColumnaAppsCatalog();
+  await asegurarColumnaAppsOrden();
 }
 
 async function asegurarColumnaAppsIconUrl() {
@@ -1041,29 +1037,43 @@ async function asegurarSchemaTickets() {
   }
 }
 
-function startBackgroundJobs() {
-  if (isFeatureEnabled("supportTickets")) {
-    iniciarTareaCierreTickets();
-  }
-  iniciarLimpiezaHistorial();
+async function runStartupDbTasks() {
+  // Una conexión: el pooler de Supabase cobra cada login (TLS+SCRAM a
+  // us-west-2) y el tope de la sesión es bajo. En paralelo, el primer
+  // timeout tiraba el pool y reabría todo en el otro puerto.
+  await db.warmPool();
 
-  // Migraciones y sincronización en background (no bloquean el arranque).
-  Promise.allSettled([
-    asegurarCorreoUnico(),
-    asegurarColumnaNoticiasDestacada(),
-    asegurarColumnasApps(),
-    asegurarColumnaAccesosHome(),
-    sincronizarUsuariosDeshabilitados(),
-    asegurarSchemaVacaciones(),
-    asegurarSchemaAreas().then(asegurarSchemaPermisos),
-    isFeatureEnabled("supportTickets") ? asegurarSchemaTickets() : null,
-    isFeatureEnabled("billsOfExchange") ? asegurarSchemaLetras() : null,
-    asegurarSchemaGastos().then(asegurarSchemaCentrosCosto),
-  ]).finally(() => {
-    if (isFeatureEnabled("vacations")) iniciarTransicionesVacaciones();
-    // Después del schema: la purga usa el estado 'draft' y su índice.
-    iniciarPurgaBorradoresGastos();
+  const steps = [
+    asegurarCorreoUnico,
+    asegurarColumnaNoticiasDestacada,
+    asegurarColumnasApps,
+    asegurarColumnaAccesosHome,
+    sincronizarUsuariosDeshabilitados,
+    asegurarSchemaVacaciones,
+    async () => {
+      await asegurarSchemaAreas();
+      await asegurarSchemaPermisos();
+    },
+  ];
+  if (isFeatureEnabled("supportTickets")) steps.push(asegurarSchemaTickets);
+  if (isFeatureEnabled("billsOfExchange")) steps.push(asegurarSchemaLetras);
+  steps.push(async () => {
+    await asegurarSchemaGastos();
+    await asegurarSchemaCentrosCosto();
   });
+
+  for (const step of steps) {
+    await step();
+  }
+
+  if (isFeatureEnabled("supportTickets")) await iniciarTareaCierreTickets();
+  await iniciarLimpiezaHistorial();
+  if (isFeatureEnabled("vacations")) await iniciarTransicionesVacaciones();
+  await iniciarPurgaBorradoresGastos();
+}
+
+function startBackgroundJobs() {
+  runStartupDbTasks().catch((err) => logger.error("db", err));
 }
 
 function onHttpListening(bindLabel) {

@@ -126,9 +126,29 @@ function isNetworkUnreachable(err) {
   if (Array.isArray(err.errors) && err.errors.some(isNetworkUnreachable)) {
     return true;
   }
-  return /ECONNREFUSED|connection timeout|AggregateError/i.test(
+  // "timeout exceeded when trying to connect" es la cola del pool (no hay
+  // cliente libre). No es un fallo de red: cambiar de puerto no lo arregla.
+  return /ECONNREFUSED|Connection terminated due to connection timeout|AggregateError/i.test(
     String(err.message || err),
   );
+}
+
+function alternatePoolerPort(port) {
+  if (port === 5432) return 6543;
+  if (port === 6543) return 5432;
+  return null;
+}
+
+/**
+ * Cambia 5432↔6543 sólo si esta instancia todavía no logró una consulta y no
+ * quedan clientes vivos. Un timeout con otras conexiones a medio abrir no
+ * debe tirar el pool: cada login nuevo al pooler es caro y el cambio las corta.
+ */
+function shouldSwitchPoolerPort(err, state) {
+  if (!state || state.connectedOnce || state.alternatePortTried) return false;
+  if ((state.totalCount || 0) > 0) return false;
+  if (!state.supabaseHost || !isNetworkUnreachable(err)) return false;
+  return alternatePoolerPort(state.port) != null;
 }
 
 function setPoolPort(port) {
@@ -145,30 +165,19 @@ function setPoolPort(port) {
 }
 
 function attachPoolHandlers(target) {
-  target.on("connect", (client) => {
-    client
-      .query(
-        "SELECT current_user AS db_user, current_schema() AS schema, inet_server_port() AS port",
-      )
-      .then((result) => {
-        if (firstConnectLogged) return;
-        firstConnectLogged = true;
-        const row = result.rows[0] || {};
-        logger.info(
-          "db",
-          `conectado ${row.db_user || "?"} schema=${row.schema || "?"} puerto=${row.port || "?"} en ${Date.now() - poolCreatedAt}ms`,
-        );
-      })
-      .catch((error) => {
-        if (firstConnectLogged) return;
-        firstConnectLogged = true;
-        logger.error("db", error);
-      });
-  });
-
   target.on("error", (error) => {
     logger.error("db", error);
   });
+}
+
+function logFirstConnection(result) {
+  if (firstConnectLogged) return;
+  firstConnectLogged = true;
+  const row = (result && result.rows && result.rows[0]) || {};
+  logger.info(
+    "db",
+    `conectado ${row.db_user || "?"} schema=${row.schema || "?"} puerto=${row.port || "?"} en ${Date.now() - poolCreatedAt}ms`,
+  );
 }
 
 function replacePool(next) {
@@ -181,11 +190,21 @@ function replacePool(next) {
 
 async function withPoolerPortFallback(operation) {
   try {
-    return await operation();
+    const result = await operation();
+    connectedOnce = true;
+    return result;
   } catch (err) {
     const from = currentPoolPort();
-    const to = from === 5432 ? 6543 : from === 6543 ? 5432 : null;
-    if (alternatePortTried || !to || !looksLikeSupabaseHost() || !isNetworkUnreachable(err)) {
+    const to = alternatePoolerPort(from);
+    if (
+      !shouldSwitchPoolerPort(err, {
+        connectedOnce,
+        alternatePortTried,
+        totalCount: pool.totalCount,
+        supabaseHost: looksLikeSupabaseHost(),
+        port: from,
+      })
+    ) {
       throw err;
     }
     alternatePortTried = true;
@@ -196,7 +215,9 @@ async function withPoolerPortFallback(operation) {
     );
     setPoolPort(to);
     replacePool(createPool());
-    return operation();
+    const result = await operation();
+    connectedOnce = true;
+    return result;
   }
 }
 
@@ -204,10 +225,15 @@ async function applySearchPath(client, country = process.env.COUNTRY) {
   await client.query(searchPathStatement(country));
 }
 
+const IDENTITY_SQL =
+  "SELECT current_user AS db_user, current_schema() AS schema, inet_server_port() AS port";
+
 let pool = createPool();
 const poolCreatedAt = Date.now();
 let firstConnectLogged = false;
 let alternatePortTried = false;
+let connectedOnce = false;
+let warmPromise = null;
 // El pooler en modo transacción (cPanel → :6543) ignora `options=-c search_path`.
 // Si una consulta choca con "relation does not exist", pasamos a SET explícito.
 let forceSearchPath = false;
@@ -215,9 +241,18 @@ let forceSearchPath = false;
 attachPoolHandlers(pool);
 
 function warmPool() {
-  withPoolerPortFallback(() => pool.query("SELECT 1")).catch((error) => {
-    logger.error("db", error);
-  });
+  if (!warmPromise) {
+    const attempt = withPoolerPortFallback(() => pool.query(IDENTITY_SQL))
+      .then((result) => {
+        logFirstConnection(result);
+      })
+      .catch((error) => {
+        logger.error("db", error);
+        if (warmPromise === attempt) warmPromise = null;
+      });
+    warmPromise = attempt;
+  }
+  return warmPromise;
 }
 
 async function getClient() {
@@ -307,6 +342,7 @@ module.exports = {
   isIdPrimaryKeyCollision,
   isMissingRelationError,
   isNetworkUnreachable,
+  shouldSwitchPoolerPort,
   getClient,
   get pool() {
     return pool;

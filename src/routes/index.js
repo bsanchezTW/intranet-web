@@ -159,6 +159,9 @@ async function updateDataBackground() {
   }
 
   try {
+    // Después del primer login al pooler: si no, LinkedIn abre otra conexión
+    // mientras el arranque todavía está haciendo el handshake.
+    await db.warmPool();
     const posts = await linkedinService.getCompanyPosts();
     if (posts && posts.length > 0) {
       cachedLinkedin = posts;
