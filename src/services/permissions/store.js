@@ -225,11 +225,10 @@ async function inTransaction(fn) {
 }
 
 async function referenceSets(client) {
-  const [areas, users, sets] = await Promise.all([
-    client.query("SELECT id FROM work_areas"),
-    client.query("SELECT id FROM users"),
-    client.query("SELECT id FROM perm_sets"),
-  ]);
+  // En serie: un cliente de pg no admite consultas simultáneas (pg@9 lo prohíbe).
+  const areas = await client.query("SELECT id FROM work_areas");
+  const users = await client.query("SELECT id FROM users");
+  const sets = await client.query("SELECT id FROM perm_sets");
   return {
     areaIds: new Set(areas.rows.map((r) => Number(r.id))),
     userIds: new Set(users.rows.map((r) => Number(r.id))),

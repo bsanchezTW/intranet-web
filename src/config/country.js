@@ -71,6 +71,19 @@ const COUNTRY_CONFIGS = {
       detailUrl:
         "https://www.meteored.cl/tiempo-en_Santiago+de+Chile-America+Sur-Chile-Region+Metropolitana+de+Santiago-SCEL-1-18578.html",
     },
+    // Indicadores del inicio, en pesos. `source` elige el proveedor en
+    // services/usdService.js; los enlaces abren la serie oficial.
+    indicators: {
+      source: "mindicador",
+      links: {
+        dolar:
+          "https://si3.bcentral.cl/indicadoressiete/secure/Serie.aspx?gcode=PRE_TCO&param=RABmAFYAWQB3AGYAaQBuAEkALQAzADUAbgBNAGgAaAAkADUAVwBQAC4AbQBYADAARwBOAGUAYwBjACMAQQBaAHAARgBhAGcAUABTAGUAdwA1ADQAMQA0AE0AawBLAF8AdQBDACQASABzAG0AXwA2AHQAawBvAFcAZwBKAEwAegBzAF8AbgBMAHIAYgBDAC4ARQA3AFUAVwB4AFIAWQBhAEEAOABkAHkAZwAxAEEARAA=",
+        euro:
+          "https://si3.bcentral.cl/IndicadoresSiete/secure/Serie.aspx?gcode=PRE_EUR&param=cgBnAE8AOQBlAGcAIwBiAFUALQBsAEcAYgBOAEkASQBCAEcAegBFAFkAeABkADgASAA2AG8AdgB2AFMAUgBYADIAQwBzAEEARQBMAG8ASgBWADQATABrAGQAZAB1ADIAeQBBAFAAZwBhADIAbABWAHcAXwBXAGgATAAkAFIAVAB1AEIAbAB3AFoAdQBRAFgAZwA5AHgAdgAwACQATwBZADcAMwAuAGIARwBFAFIASwAuAHQA",
+        uf:
+          "https://si3.bcentral.cl/IndicadoresSiete/secure/Serie.aspx?gcode=UF&param=RABmAFYAWQB3AGYAaQBuAEkALQAzADUAbgBNAGgAaAAkADUAVwBQAC4AbQBYADAARwBOAGUAYwBjACMAQQBaAHAARgBhAGcAUABTAGUAYwBsAEMAMQA0AE0AawBLAF8AdQBDACQASABzAG0AXwA2AHQAawBvAFcAZwBKAEwAegBzAF8AbgBMAHIAYgBDAC4ARQA3AFUAVwB4AFIAWQBhAEEAOABkAHkAZwAxAEEARAA=",
+      },
+    },
     supportEmail: "soporte@transworld.cl",
     hrEmail: "rrhh@transworld.cl",
     // Áreas cuyos administradores gestionan RRHH. Se borra en la fase 11.
@@ -121,6 +134,14 @@ const COUNTRY_CONFIGS = {
       cityLabel: "Lima",
       detailUrl:
         "https://www.meteored.pe/tiempo-en_Lima-America+Sur-Peru-Provincia+de+Lima-SPIM-1-16982.html",
+    },
+    // Tipo de cambio venta en soles (SBS para el dólar), según publica el BCRP.
+    indicators: {
+      source: "bcrp",
+      links: {
+        dolar: "https://estadisticas.bcrp.gob.pe/estadisticas/series/diarias/resultados/PD04640PD/html",
+        euro: "https://estadisticas.bcrp.gob.pe/estadisticas/series/diarias/resultados/PD04648PD/html",
+      },
     },
     // TODO(TI Perú): confirmar las casillas locales antes de salir a producción.
     supportEmail: "soporte@transworld.pe",

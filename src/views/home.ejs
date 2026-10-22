@@ -86,9 +86,7 @@
   const nombreSaludo = (typeof nombrePila !== 'undefined' && nombrePila) ? nombrePila : '';
   const fechaEncabezado = (typeof fechaLarga !== 'undefined' && fechaLarga) ? fechaLarga : '';
 
-  const dolarUrl = 'https://si3.bcentral.cl/indicadoressiete/secure/Serie.aspx?gcode=PRE_TCO&param=RABmAFYAWQB3AGYAaQBuAEkALQAzADUAbgBNAGgAaAAkADUAVwBQAC4AbQBYADAARwBOAGUAYwBjACMAQQBaAHAARgBhAGcAUABTAGUAdwA1ADQAMQA0AE0AawBLAF8AdQBDACQASABzAG0AXwA2AHQAawBvAFcAZwBKAEwAegBzAF8AbgBMAHIAYgBDAC4ARQA3AFUAVwB4AFIAWQBhAEEAOABkAHkAZwAxAEEARAA=';
-  const euroUrl = 'https://si3.bcentral.cl/IndicadoresSiete/secure/Serie.aspx?gcode=PRE_EUR&param=cgBnAE8AOQBlAGcAIwBiAFUALQBsAEcAYgBOAEkASQBCAEcAegBFAFkAeABkADgASAA2AG8AdgB2AFMAUgBYADIAQwBzAEEARQBMAG8ASgBWADQATABrAGQAZAB1ADIAeQBBAFAAZwBhADIAbABWAHcAXwBXAGgATAAkAFIAVAB1AEIAbAB3AFoAdQBRAFgAZwA5AHgAdgAwACQATwBZADcAMwAuAGIARwBFAFIASwAuAHQA';
-  const ufUrl = 'https://si3.bcentral.cl/IndicadoresSiete/secure/Serie.aspx?gcode=UF&param=RABmAFYAWQB3AGYAaQBuAEkALQAzADUAbgBNAGgAaAAkADUAVwBQAC4AbQBYADAARwBOAGUAYwBjACMAQQBaAHAARgBhAGcAUABTAGUAYwBsAEMAMQA0AE0AawBLAF8AdQBDACQASABzAG0AXwA2AHQAawBvAFcAZwBKAEwAegBzAF8AbgBMAHIAYgBDAC4ARQA3AFUAVwB4AFIAWQBhAEEAOABkAHkAZwAxAEEARAA=';
+  const indicatorLinks = countryConfig.indicators.links;
 %>
 
 <div class="home-page">
@@ -102,11 +100,11 @@
 
     <%
       const indicadores = [
-        { label: 'USD', url: dolarUrl, dato: finanzas && finanzas.dolar },
-        { label: 'EUR', url: euroUrl, dato: finanzas && finanzas.euro },
+        { label: 'USD', url: indicatorLinks.dolar, dato: finanzas && finanzas.dolar },
+        { label: 'EUR', url: indicatorLinks.euro, dato: finanzas && finanzas.euro },
       ];
       if (features.chileUfIndicator && can('inicio.indicador_uf.ver')) {
-        indicadores.push({ label: 'UF', url: ufUrl, dato: finanzas && finanzas.uf });
+        indicadores.push({ label: 'UF', url: indicatorLinks.uf, dato: finanzas && finanzas.uf });
       }
     %>
     <div class="home-hero__indicators" role="list" aria-label="Indicadores financieros">
