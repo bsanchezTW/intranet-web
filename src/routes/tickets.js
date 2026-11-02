@@ -29,7 +29,10 @@ const {
   ticketMailText: generarTextoCorreo,
   notifyTicketTeam,
 } = require("../services/tickets/ticketService");
-const { normalizeTicketPriority } = require("../services/tickets/ticketRules");
+const {
+  normalizeTicketPriority,
+  sanitizeReplyAttachments,
+} = require("../services/tickets/ticketRules");
 const {
   DEFAULT_TICKET_CATEGORY,
   normalizeTicketCategory,
@@ -375,7 +378,10 @@ router.post(
     const category =
       normalizeTicketCategory(req.body.category ?? req.body.categoria) || DEFAULT_TICKET_CATEGORY;
     const priority = normalizeTicketPriority(req.body.priority ?? req.body.prioridad);
-    const { mensaje_respuesta, adjuntos_data } = req.body;
+    const { mensaje_respuesta } = req.body;
+    // Sólo archivos de este ticket, con la URL armada aquí (ver ticketRules).
+    const adjuntos = sanitizeReplyAttachments(req.body.adjuntos_data, id);
+    const adjuntos_data = JSON.stringify(adjuntos);
     const cerrar = String(req.body.accion || "") === "cerrar";
     const status = cerrar ? "closed" : "in_progress";
 
@@ -401,12 +407,12 @@ router.post(
 
       const tieneMensaje =
         mensaje_respuesta && mensaje_respuesta.trim().length > 0;
-      const tieneAdjuntos = adjuntos_data && adjuntos_data.length > 2;
+      const tieneAdjuntos = adjuntos.length > 0;
 
       if (tieneMensaje || tieneAdjuntos) {
         await db.query(
           `INSERT INTO ticket_replies (ticket_id, message, sender, attachments, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-          [id, mensaje_respuesta, "Support", adjuntos_data || "[]"],
+          [id, mensaje_respuesta, "Support", adjuntos_data],
         );
       }
 
@@ -517,7 +523,8 @@ router.post("/tickets/:id/rechazar", async (req, res) => {
 // USUARIO/ADMIN: RESPONDER TICKET
 router.post("/tickets/:id/responder", async (req, res) => {
   const { id } = req.params;
-  const { mensaje_respuesta, adjuntos_data } = req.body;
+  const { mensaje_respuesta } = req.body;
+  const adjuntos_data = JSON.stringify(sanitizeReplyAttachments(req.body.adjuntos_data, id));
   const user = req.session.user;
 
   try {
@@ -542,7 +549,7 @@ router.post("/tickets/:id/responder", async (req, res) => {
 
     await db.query(
       `INSERT INTO ticket_replies (ticket_id, message, sender, attachments, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-      [id, mensaje_respuesta, isAgent ? "Support" : remitenteNombre, adjuntos_data || "[]"],
+      [id, mensaje_respuesta, isAgent ? "Support" : remitenteNombre, adjuntos_data],
     );
 
     if (isAgent) {

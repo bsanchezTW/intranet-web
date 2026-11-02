@@ -37,6 +37,7 @@ const requireFeature = require("../middlewares/requireFeature");
 const { scopeFilter } = require("../services/permissions/decide");
 const { toTitleCase } = require("../utils/formatName");
 const { safeReturnTo, withQueryParam } = require("../utils/returnTo");
+const { optionalLinkUrl } = require("../utils/safeUrl");
 const { applyIdentityToSession, getMonogram } = require("../utils/monogram");
 const {
   toTelHref,
@@ -1656,6 +1657,18 @@ async function subirInstructivoIos(file) {
   );
 }
 
+/**
+ * Enlaces de descarga de una app: http(s) o ruta interna. Van en un href
+ * para toda la intranet; `javascript:` o `data:` se rechazan (400).
+ */
+function appLinks(body = {}) {
+  return {
+    url_pc: optionalLinkUrl(body.url_pc, "El enlace de Windows"),
+    url_apk: optionalLinkUrl(body.url_apk, "El enlace de Android"),
+    url_web: optionalLinkUrl(body.url_web, "El enlace web"),
+  };
+}
+
 const appUploads = upload.fields([
   { name: "icon", maxCount: 1 },
   { name: "instructivo_ios", maxCount: 1 },
@@ -1669,12 +1682,12 @@ router.post(
     // Form fields match DB columns (name/description); accept Spanish aliases as fallback
     const name = req.body.name ?? req.body.nombre;
     const description = req.body.description ?? req.body.descripcion;
-    const { url_pc, url_apk, url_web } = req.body;
     const catalog = normalizeAppCatalog(req.body.catalog);
     let icon_url = null;
     let url_ios = null;
 
     try {
+      const { url_pc, url_apk, url_web } = appLinks(req.body);
       if (req.files && req.files["icon"]) {
         const result = await uploadAppFile(
           req.files["icon"][0].buffer,
@@ -1695,10 +1708,10 @@ router.post(
         [
           name,
           description,
-          url_pc || null,
-          url_apk || null,
+          url_pc,
+          url_apk,
           url_ios,
-          url_web || null,
+          url_web,
           icon_url,
           catalog,
         ],
@@ -1722,9 +1735,9 @@ router.post(
     // Form fields match DB columns (name/description); accept Spanish aliases as fallback
     const name = req.body.name ?? req.body.nombre;
     const description = req.body.description ?? req.body.descripcion;
-    const { url_pc, url_apk, url_web } = req.body;
 
     try {
+      const { url_pc, url_apk, url_web } = appLinks(req.body);
       const { rows: existingRows } = await db.query(
         "SELECT icon_url, url_ios, catalog FROM applications WHERE id = $1",
         [id],
@@ -1738,9 +1751,9 @@ router.post(
       let queryParams = [
         name,
         description,
-        url_pc || null,
-        url_apk || null,
-        url_web || null,
+        url_pc,
+        url_apk,
+        url_web,
       ];
       let paramIndex = 6;
       const obsoleteFiles = [];

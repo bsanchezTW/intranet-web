@@ -15,7 +15,11 @@ const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { areaSlug, enrichAreaWithPill } = require("../constants/workAreas");
 const { isFeatureEnabled } = require("../config/features");
 const { withQueryParam } = require("../utils/returnTo");
-const { folderForUpload, SLUG_SIN_AREA } = require("../services/documents/processDocumentStorage");
+const {
+  folderForUpload,
+  uploadedDocumentPath,
+  SLUG_SIN_AREA,
+} = require("../services/documents/processDocumentStorage");
 const areaManager = require("../services/expenses/areaManager");
 const financeTeam = require("../services/expenses/financeTeam");
 const expenses = require("../services/expenses/expenseRequestService");
@@ -444,12 +448,28 @@ router.post(
 
 router.post("/:seccion/:area/subir", exigirSubida, async (req, res) => {
   const { seccion, area } = req.params;
-  const { nombre_archivo, secure_url, public_id } = req.body;
+  const { nombre_archivo } = req.body;
 
   try {
-    if (!secure_url || !public_id) {
+    if (!req.body.public_id) {
       return res.status(400).json({ error: "Faltan datos del archivo subido" });
     }
+    // La ruta y la URL salen de aquí, no del formulario (ver uploadedDocumentPath).
+    const public_id = uploadedDocumentPath(seccion, area, req.body.public_id);
+    if (!public_id) {
+      return res.status(400).json({ error: "El archivo no corresponde a esta carpeta. Vuelve a subirlo." });
+    }
+    const { rows: yaRegistrado } = await db.query(
+      `SELECT 1 FROM documents WHERE public_id = $1
+       UNION ALL
+       SELECT 1 FROM other_documents WHERE public_id = $1
+       LIMIT 1`,
+      [public_id],
+    );
+    if (yaRegistrado.length) {
+      return res.status(409).json({ error: "Ese archivo ya está registrado como documento." });
+    }
+    const secure_url = fileStorage.getPublicUrl(public_id);
 
     let textoHistorial = SECCION_LABEL[seccion] || seccion;
     let urlHistorial = `/procesos/${seccion}/${area}`;

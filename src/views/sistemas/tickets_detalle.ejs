@@ -20,8 +20,19 @@
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
   }) : '—';
 
-  let ticketAdjuntos = [];
-  try { if (ticket.attachments) ticketAdjuntos = JSON.parse(ticket.attachments); } catch (e) {}
+  // Sólo enlaces http(s) o rutas internas: filas antiguas guardaban la URL
+  // que mandaba el navegador, y un `javascript:` en un href se ejecuta al clic.
+  const enlaceSeguro = (a) => Boolean(a) && /^(\/(?![\/\\])|https?:\/\/)/i.test(String(a.url || '').trim());
+  const listaAdjuntos = (json) => {
+    try {
+      const lista = json ? JSON.parse(json) : [];
+      return Array.isArray(lista) ? lista.filter(enlaceSeguro) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const ticketAdjuntos = listaAdjuntos(ticket.attachments);
   const imagenesOrig = ticketAdjuntos.filter((a) => a.tipo === 'image');
   const otrosOrig = ticketAdjuntos.filter((a) => a.tipo !== 'image');
 %>
@@ -116,10 +127,9 @@
         <ol class="ticket-hilo">
           <% respuestas.forEach((r) => {
                const esSoporte = r.remitente === 'Soporte' || r.remitente === 'Sistema';
-               let respAdjuntos = [];
-               try { if (r.attachments) respAdjuntos = JSON.parse(r.attachments); } catch (e) {}
+               let respAdjuntos = listaAdjuntos(r.attachments);
                if (r.file_url && respAdjuntos.length === 0) {
-                 respAdjuntos.push({ url: r.file_url, nombre: r.archivo_nombre || 'Archivo adjunto', tipo: r.archivo_tipo || 'doc' });
+                 respAdjuntos = [{ url: r.file_url, nombre: r.archivo_nombre || 'Archivo adjunto', tipo: r.archivo_tipo || 'doc' }].filter(enlaceSeguro);
                }
                const imagenes = respAdjuntos.filter((a) => a.tipo === 'image');
                const otros = respAdjuntos.filter((a) => a.tipo !== 'image');
