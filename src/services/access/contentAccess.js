@@ -3,6 +3,7 @@ const { isAdministrador, normalizeRole } = require("../../constants/roles");
 const { SLUG_SIN_AREA, GENERAL_AREA } = require("../documents/processDocumentStorage");
 const { currentWorkAreaId } = require("./accountStatus");
 const { puedeVerDocumento } = require("../documents/processAccess");
+const { sameEmail } = require("../../utils/email");
 
 /**
  * Quién puede descargar cada archivo de /content.
@@ -115,7 +116,7 @@ async function canOpenTicketAttachment(user, { ticketId }, isAdmin) {
     [ticketId],
   );
   if (!rows.length) return false;
-  if (user.email && rows[0].requester_email === user.email) return true;
+  if (sameEmail(rows[0].requester_email, user.email)) return true;
   const { isSupportAgent } = require("../tickets/supportTeam");
   return isSupportAgent(user);
 }

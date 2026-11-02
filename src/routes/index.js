@@ -38,6 +38,7 @@ const { scopeFilter } = require("../services/permissions/decide");
 const { toTitleCase } = require("../utils/formatName");
 const { safeReturnTo, withQueryParam } = require("../utils/returnTo");
 const { optionalLinkUrl } = require("../utils/safeUrl");
+const { gradeEvaluation, attachOptions } = require("../services/courses/evaluation");
 const { applyIdentityToSession, getMonogram } = require("../utils/monogram");
 const {
   toTelHref,
@@ -1213,13 +1214,16 @@ router.get("/cursos/evaluacion/:id", async (req, res) => {
       [cursoId],
     );
 
-    for (let p of preguntasRows) {
-      const { rows: altRows } = await db.query(
-        "SELECT id, text FROM question_options WHERE question_id = $1 ORDER BY id ASC",
-        [p.id],
-      );
-      p.alternativas = altRows;
-    }
+    // Todas las alternativas en una consulta (antes, una por pregunta).
+    const { rows: altRows } = preguntasRows.length
+      ? await db.query(
+          `SELECT id, question_id, text FROM question_options
+            WHERE question_id = ANY($1::bigint[])
+            ORDER BY id ASC`,
+          [preguntasRows.map((p) => p.id)],
+        )
+      : { rows: [] };
+    const preguntas = attachOptions(preguntasRows, altRows);
 
     let correctasIds = [];
     if (yaEvaluado && notaGuardada >= 80) {
@@ -1239,7 +1243,7 @@ router.get("/cursos/evaluacion/:id", async (req, res) => {
       user: req.session.user,
       active: "equipamiento",
       curso,
-      preguntas: preguntasRows.map(mapQuestionForView),
+      preguntas: preguntas.map(mapQuestionForView),
       yaEvaluado,
       notaGuardada,
       intentosTotales,
@@ -1270,19 +1274,9 @@ router.post("/cursos/api/evaluacion/:id", async (req, res) => {
       [cursoId],
     );
 
-    let buenas = 0;
-    let total = correctas.length;
-    let mapeoCorrectas = {};
-
-    correctas.forEach((c) => {
-      mapeoCorrectas[c.pregunta_id] = c.alternativa_id;
-      if (respuestasUsuario[`preg_${c.pregunta_id}`] == c.alternativa_id) {
-        buenas++;
-      }
-    });
-
-    const porcentaje = Math.round((buenas / total) * 100);
-    const mostrarFeedback = porcentaje >= 80;
+    const nota = gradeEvaluation(correctas, respuestasUsuario);
+    if (!nota.ok) return res.status(400).json({ error: nota.error });
+    const { porcentaje, mostrarFeedback, mapeoCorrectas } = nota;
 
     await db.query(
       `UPDATE user_course_progress 

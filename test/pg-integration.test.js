@@ -53,6 +53,25 @@ describe("integración con Postgres", { skip: !URL_PG && "sin INTEGRATION_PG_URL
     assert.equal(await call("get", "sid-1"), null);
   });
 
+  it("evaluación: las alternativas de todas las preguntas en una consulta (ids bigint)", async () => {
+    await pool.query(`CREATE TABLE ${SCHEMA}.question_options (id bigint PRIMARY KEY, question_id bigint, text text)`);
+    await pool.query(
+      `INSERT INTO ${SCHEMA}.question_options VALUES (100, 10, 'x'), (101, 10, 'z'), (111, 11, 'y'), (999, 77, 'otra')`,
+    );
+    const { attachOptions } = require("../src/services/courses/evaluation");
+    const preguntas = [{ id: "10" }, { id: "11" }];
+    const { rows } = await pool.query(
+      `SELECT id, question_id, text FROM ${SCHEMA}.question_options
+        WHERE question_id = ANY($1::bigint[])
+        ORDER BY id ASC`,
+      [preguntas.map((p) => p.id)],
+    );
+    assert.deepEqual(
+      attachOptions(preguntas, rows).map((p) => p.alternativas.map((a) => a.text)),
+      [["x", "z"], ["y"]],
+    );
+  });
+
   it("cupo del asistente: el ON CONFLICT con tope es atómico", async () => {
     const { createAssistantQuota } = require("../src/services/assistant/assistantQuota");
     const quota = createAssistantQuota({

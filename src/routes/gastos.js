@@ -86,13 +86,16 @@ function redirectError(res, path, msg) {
   return res.redirect(`${path}?error=${encodeURIComponent(msg)}`);
 }
 
+/**
+ * Avisos de la URL. Express ya los decodifica: decodificarlos otra vez
+ * rompía con un "%" suelto (URIError → la página caía en "Error cargando").
+ * Sólo texto: un ?error[]= llegaría como lista.
+ */
 function flashFrom(req) {
+  const texto = (value) => (typeof value === "string" && value ? value : null);
   return {
-    success:
-      req.query.ok === "1"
-        ? decodeURIComponent(req.query.msg || "Operación exitosa")
-        : null,
-    error: req.query.error ? decodeURIComponent(req.query.error) : null,
+    success: req.query.ok === "1" ? texto(req.query.msg) || "Operación exitosa" : null,
+    error: texto(req.query.error),
   };
 }
 
@@ -623,3 +626,4 @@ router.post("/:id/cancelar", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.flashFrom = flashFrom;

@@ -38,6 +38,7 @@ const {
   normalizeTicketCategory,
 } = require("../constants/ticketCategories");
 const { safeTicketRedirect, ticketModalUrl } = require("../utils/ticketRedirect");
+const { sameEmail } = require("../utils/email");
 const { withQueryParam } = require("../utils/returnTo");
 
 // Cada acción vuelve con ?ok= o ?error=, que el layout muestra como aviso.
@@ -194,7 +195,9 @@ router.get("/tickets/notificaciones/count", async (req, res) => {
     if (esAgente) {
       sql = `SELECT COUNT(*) FROM support_tickets WHERE read_by_admin = FALSE`;
     } else {
-      sql = `SELECT COUNT(*) FROM support_tickets WHERE (requester_email = $1 OR requester_name = $1) AND read_by_user = FALSE`;
+      sql = `SELECT COUNT(*) FROM support_tickets
+              WHERE (LOWER(TRIM(requester_email)) = LOWER(TRIM($1)) OR requester_name = $1)
+                AND read_by_user = FALSE`;
       params = [userEmail];
     }
 
@@ -221,10 +224,13 @@ async function renderSupportHome(req, res) {
   let sql = "";
   let params = [];
 
-  if (isAdministrador(user.role)) {
+  // La mesa de ayuda ve todos los tickets aunque su rol sea Usuario.
+  if (isAdministrador(user.role) || (await isSupportAgent(user))) {
     sql = `${ticketListSql()} ORDER BY t.created_at DESC`;
   } else {
-    sql = `${ticketListSql()} WHERE t.requester_email = $1 OR t.requester_name = $1 ORDER BY t.created_at DESC`;
+    sql = `${ticketListSql()}
+           WHERE LOWER(TRIM(t.requester_email)) = LOWER(TRIM($1)) OR t.requester_name = $1
+           ORDER BY t.created_at DESC`;
     params = [userEmail];
   }
 
@@ -464,7 +470,7 @@ router.post("/tickets/:id/confirmar", async (req, res) => {
       "SELECT requester_email FROM support_tickets WHERE id = $1",
       [id],
     );
-    if (rows.length === 0 || rows[0].requester_email !== user.email)
+    if (rows.length === 0 || !sameEmail(rows[0].requester_email, user.email))
       return res.status(403).send("No tienes permiso.");
 
     await db.query(
@@ -487,7 +493,7 @@ router.post("/tickets/:id/rechazar", async (req, res) => {
       "SELECT requester_email, title FROM support_tickets WHERE id = $1",
       [id],
     );
-    if (rows.length === 0 || rows[0].requester_email !== user.email)
+    if (rows.length === 0 || !sameEmail(rows[0].requester_email, user.email))
       return res.status(403).send("No tienes permiso.");
 
     await db.query(
@@ -539,7 +545,7 @@ router.post("/tickets/:id/responder", async (req, res) => {
     // Quien firma como "Soporte" es el área de Informática, no cualquier
     // administrador: un admin de otra área que comente lo hace como usuario.
     const isAgent = await isSupportAgent(user);
-    const isOwner = user.email === ticket.requester_email;
+    const isOwner = sameEmail(user.email, ticket.requester_email);
     if (!isAgent && !isOwner) return res.status(403).send("Sin permiso.");
 
     let remitenteNombre = isAgent
@@ -629,15 +635,15 @@ router.get("/tickets/:id", async (req, res) => {
     if (ticketResults.length === 0)
       return res.status(404).render("404", { titulo: "No encontrado" });
 
-    if (
-      !isAdministrador(user.role) &&
-      ticketResults[0].requester_email !== user.email
-    )
-      return res.status(403).send("No tienes permisos.");
-
     // Gestionar es del área, no del rol: el panel de TI sólo aparece para
     // Informática. Un administrador de otra área ve el ticket, no lo opera.
+    // Un agente con rol Usuario sí lo ve: antes recibía 403 en el detalle
+    // aunque podía gestionarlo.
     const puedeGestionar = await isSupportAgent(user);
+    const esDueno = sameEmail(ticketResults[0].requester_email, user.email);
+    if (!isAdministrador(user.role) && !puedeGestionar && !esDueno)
+      return res.status(403).send("No tienes permisos.");
+
     const agentes = puedeGestionar ? await listSupportAgents() : [];
 
     const { rows: respuestasResults } = await db.query(sqlRespuestas, [id]);
@@ -646,7 +652,7 @@ router.get("/tickets/:id", async (req, res) => {
       await db.query("UPDATE support_tickets SET read_by_admin = TRUE WHERE id = $1", [
         id,
       ]);
-    } else if (ticketResults[0].requester_email === user.email) {
+    } else if (esDueno) {
       await db.query("UPDATE support_tickets SET read_by_user = TRUE WHERE id = $1", [
         id,
       ]);

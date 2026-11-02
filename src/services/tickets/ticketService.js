@@ -258,7 +258,7 @@ async function listOpenTicketsForUser(user, { limit = 5 } = {}) {
   const { rows } = await db.query(
     `SELECT id, title, category, status
        FROM support_tickets
-      WHERE requester_email = $1 AND status <> 'closed'
+      WHERE LOWER(TRIM(requester_email)) = LOWER(TRIM($1)) AND status <> 'closed'
       ORDER BY created_at DESC
       LIMIT $2`,
     [email, limit],
