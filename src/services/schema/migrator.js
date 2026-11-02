@@ -39,6 +39,29 @@ function validateMigrations(migrations) {
 }
 
 /**
+ * CREATE TABLE IF NOT EXISTS no es seguro con dos procesos a la vez: ambos ven
+ * que falta y uno choca con el otro en los catálogos (23505 en pg_type), así
+ * que ese arranque se queda sin migrar. El lock asesor los pone en fila. Es de
+ * transacción porque el pooler en modo transacción no conserva uno de sesión.
+ */
+async function ensureMigrationsTable(client, table) {
+  await client.query("BEGIN");
+  try {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [table]);
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS ${table} (
+         id         varchar(100) PRIMARY KEY,
+         applied_at timestamptz  NOT NULL DEFAULT NOW()
+       )`,
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  }
+}
+
+/**
  * Aplica las pendientes. `connect` entrega un cliente de pg (pool.connect).
  * Devuelve { applied: [ids], skipped: [ids] }.
  */
@@ -51,12 +74,7 @@ async function runMigrations({ connect, schema, migrations, logger = console }) 
 
   const client = await connect();
   try {
-    await client.query(
-      `CREATE TABLE IF NOT EXISTS ${table} (
-         id         varchar(100) PRIMARY KEY,
-         applied_at timestamptz  NOT NULL DEFAULT NOW()
-       )`,
-    );
+    await ensureMigrationsTable(client, table);
 
     for (const migration of migrations) {
       await client.query("BEGIN");

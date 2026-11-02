@@ -64,6 +64,24 @@ describe("runMigrations", () => {
     assert.ok(client.released);
   });
 
+  it("crea su tabla bajo un lock asesor: dos arranques a la vez no chocan", async () => {
+    const client = fakeClient();
+    await runMigrations({ connect: async () => client, schema: "chile", migrations: [m("001_a")], logger: silent });
+    const inicio = client.log.slice(0, 4).map((q) => q.split(" ").slice(0, 2).join(" "));
+    assert.deepEqual(inicio, ["BEGIN", "SELECT pg_advisory_xact_lock(hashtext($1))", "CREATE TABLE", "COMMIT"]);
+  });
+
+  it("si no puede crear su tabla, revierte y devuelve el cliente al pool", async () => {
+    const client = fakeClient({ failOn: "CREATE TABLE" });
+    await assert.rejects(
+      runMigrations({ connect: async () => client, schema: "chile", migrations: [m("001_a")], logger: silent }),
+      /permiso denegado/,
+    );
+    assert.ok(client.log.includes("ROLLBACK"));
+    assert.ok(!client.log.includes("-- 001_a"));
+    assert.ok(client.released);
+  });
+
   it("si una falla, la revierte, no sigue y avisa cuál fue", async () => {
     const client = fakeClient({ failOn: "ALTER malo" });
     await assert.rejects(
