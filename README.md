@@ -68,5 +68,7 @@ Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas column
 - **Pantallas sin sesión** (login, registro, código, recuperar contraseña): tope por IP (`AUTH_IP_RATE_LIMIT`, 300 por 15 min por defecto), 5 contraseñas erradas por cuenta cada 15 min, 5 intentos por código de verificación (contados en la base) y 3 reenvíos o enlaces por cuenta. Los topes por IP y por cuenta viven en memoria de cada proceso.
 - **La IP real** sólo se conoce si `trust proxy` está activo (`NODE_ENV=production` o `TRUST_PROXY=true`). Sin eso, todos comparten la IP del proxy y el tope por IP se vuelve global.
 - **Olvidé mi contraseña** manda un enlace de un solo uso (30 min). No cambia la contraseña actual.
+- **CSRF**: toda petición que cambia algo (POST, PUT, PATCH, DELETE) debe venir de la propia intranet según `Sec-Fetch-Site` u `Origin` (`src/middlewares/crossOriginProtection.js`). Vale el host de la petición y el de `APP_BASE_URL`; otro dominio legítimo va en `CSRF_TRUSTED_ORIGINS` (separados por coma).
+- **Sesiones**: en `<schema del país>.sessions` (Postgres), cookie `HttpOnly`, `SameSite=Lax` y `Secure` cuando la petición llega por HTTPS.
 
 Si encuentras un problema de seguridad, avísale directamente al equipo de Informática en vez de abrir un issue.

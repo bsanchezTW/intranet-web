@@ -41,6 +41,7 @@ const { pageSkeletonFor } = require("./utils/pageSkeleton");
 const { phoneClientConfig } = require("./utils/phone");
 const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
+const { crossOriginProtection } = require("./middlewares/crossOriginProtection");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
 const { checkSessionAccount, currentWorkAreaId } = require("./services/access/accountStatus");
@@ -142,6 +143,9 @@ app.locals.eventPreviewUrl = (url) => eventThumbnails.previewUrl(url) || url;
 // Middlewares Básicos
 // ================================
 app.use(compression());
+// CSRF: antes de leer el cuerpo. Rechaza POST/PUT/PATCH/DELETE que el
+// navegador marca como de otro sitio (ver crossOriginProtection).
+app.use(crossOriginProtection());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 

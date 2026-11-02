@@ -1093,8 +1093,11 @@ const RESET_LINK_INVALID =
 
 function noStoreNoReferrer(res) {
   res.set("Cache-Control", "no-store");
-  // El token va en la URL: que no viaje como Referer a ningún recurso.
-  res.set("Referrer-Policy", "no-referrer");
+  // El token va en la URL: que no viaje como Referer a otro sitio. No es
+  // "no-referrer": con esa política el POST del formulario sale con
+  // `Origin: null` y la protección CSRF lo rechazaría en navegadores sin
+  // Sec-Fetch-Site.
+  res.set("Referrer-Policy", "same-origin");
 }
 
 /** El enlace del correo: se valida sin consumirlo; lo consume el POST. */

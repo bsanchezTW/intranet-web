@@ -391,7 +391,7 @@ describe("recuperar contraseña con enlace de un solo uso", () => {
 
     const pagina = await request("GET", `/reset-password?token=${token}`);
     assert.equal(pagina.status, 200);
-    assert.equal(pagina.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(pagina.headers.get("referrer-policy"), "same-origin");
     assert.match(pagina.headers.get("cache-control"), /no-store/);
     assert.match(await pagina.text(), new RegExp(`name="reset_token" value="${token}"`));
 
