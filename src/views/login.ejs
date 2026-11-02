@@ -69,15 +69,17 @@
             },
             forgot: {
               heading: 'Recuperar contraseña',
-              subheading: 'Ingresa tu correo corporativo y te enviaremos una contraseña temporal',
+              subheading: 'Ingresa tu usuario y te enviaremos un enlace para crear una contraseña nueva',
             },
             verify: locals.awaitingAdmin
               ? { heading: 'Correo verificado', subheading: 'Tu correo fue confirmado correctamente' }
               : { heading: 'Verificar correo', subheading: 'Enviamos un código de 6 dígitos a tu correo. Ingrésalo para activar tu cuenta.' },
-            reset: {
-              heading: 'Crear nueva contraseña',
-              subheading: 'Por seguridad, debes cambiar tu contraseña temporal antes de continuar',
-            },
+            reset: locals.resetToken
+              ? { heading: 'Crear nueva contraseña', subheading: 'Elige la contraseña nueva de tu cuenta' }
+              : {
+                  heading: 'Crear nueva contraseña',
+                  subheading: 'Por seguridad, debes cambiar tu contraseña temporal antes de continuar',
+                },
           };
           const copy = viewCopy[activeView] || viewCopy.login;
         %>
@@ -380,6 +382,9 @@
         <!-- ── Restablecer contraseña temporal ── -->
         <div class="login-view" data-view="reset"<% if (activeView !== 'reset') { %> hidden<% } %>>
           <form action="/reset-password" method="POST" novalidate>
+            <% if (locals.resetToken) { %>
+              <input type="hidden" name="reset_token" value="<%= resetToken %>">
+            <% } %>
             <div class="login-field login-field--password">
               <label class="login-field__label" for="reset-password">Nueva contraseña</label>
               <input
@@ -634,7 +639,7 @@
           path: '/forgot-password',
           title: 'Recuperar contraseña',
           heading: 'Recuperar contraseña',
-          subheading: 'Ingresa tu correo corporativo y te enviaremos una contraseña temporal'
+          subheading: 'Ingresa tu usuario y te enviaremos un enlace para crear una contraseña nueva'
         },
         verify: {
           path: '/verify-email',
@@ -657,7 +662,7 @@
         confirmed: 'Correo verificado correctamente. Ya puedes iniciar sesión.',
         pending: 'Debes verificar tu correo con el código de 6 dígitos antes de ingresar.',
         exists: 'Ese correo ya está registrado. Inicia sesión.',
-        reset: 'Se ha enviado una nueva contraseña a tu correo.',
+        reset: 'Si el usuario está registrado, te enviamos un enlace para crear una contraseña nueva. Vence en 30 minutos.',
         changed: 'Contraseña actualizada correctamente. Ingresa con tu correo y nueva contraseña.'
       };
 

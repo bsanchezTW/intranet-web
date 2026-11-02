@@ -961,6 +961,25 @@ async function asegurarColumnaAppsOrden() {
   }
 }
 
+/**
+ * Columnas de la autenticación endurecida (routes/auth.js):
+ *   - confirm_attempts: intentos contra el código de verificación vigente.
+ *   - password_reset_token_hash / _expires: enlace de un solo uso de
+ *     «Olvidé mi contraseña» (sólo el SHA-256 del token).
+ */
+async function asegurarColumnasAuth() {
+  try {
+    await db.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS confirm_attempts INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS password_reset_token_hash VARCHAR(64),
+        ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ
+    `);
+  } catch (err) {
+    logger.error("auth", err);
+  }
+}
+
 /** Preferencia de la banda del home. NULL conserva el orden del país. */
 async function asegurarColumnaAccesosHome() {
   try {
@@ -1045,6 +1064,7 @@ async function runStartupDbTasks() {
 
   const steps = [
     asegurarCorreoUnico,
+    asegurarColumnasAuth,
     asegurarColumnaNoticiasDestacada,
     asegurarColumnasApps,
     asegurarColumnaAccesosHome,

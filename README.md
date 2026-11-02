@@ -61,8 +61,12 @@ scripts/       lanzador por país y utilidades
 test/
 ```
 
-Los cambios de esquema se aplican a mano a partir de `supabase/`; la app no migra al arrancar.
+Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas columnas nuevas también se aseguran al arrancar (`asegurar*` en `src/app.js`), por ejemplo las de autenticación (`confirm_attempts`, `password_reset_token_hash`, `password_reset_expires`).
 
 ## Seguridad
+
+- **Pantallas sin sesión** (login, registro, código, recuperar contraseña): tope por IP (`AUTH_IP_RATE_LIMIT`, 300 por 15 min por defecto), 5 contraseñas erradas por cuenta cada 15 min, 5 intentos por código de verificación (contados en la base) y 3 reenvíos o enlaces por cuenta. Los topes por IP y por cuenta viven en memoria de cada proceso.
+- **La IP real** sólo se conoce si `trust proxy` está activo (`NODE_ENV=production` o `TRUST_PROXY=true`). Sin eso, todos comparten la IP del proxy y el tope por IP se vuelve global.
+- **Olvidé mi contraseña** manda un enlace de un solo uso (30 min). No cambia la contraseña actual.
 
 Si encuentras un problema de seguridad, avísale directamente al equipo de Informática en vez de abrir un issue.

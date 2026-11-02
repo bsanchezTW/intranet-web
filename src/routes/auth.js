@@ -31,6 +31,7 @@ const {
 const { consumeReturnTo } = require("../utils/returnTo");
 const requireFeature = require("../middlewares/requireFeature");
 const requirePermission = require("../middlewares/requirePermission");
+const throttle = require("../services/access/authThrottle");
 
 function getBaseUrl(req) {
   return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -69,9 +70,25 @@ function bodyString(value) {
 }
 
 const OTP_EXPIRES_MS = 15 * 60 * 1000;
+// Intentos contra un mismo código. Se cuentan en la base, de forma atómica:
+// con 6 dígitos y sin tope, el código se adivinaba por fuerza bruta.
+const MAX_CODE_ATTEMPTS = 5;
+// Vigencia del enlace de «Olvidé mi contraseña».
+const RESET_TOKEN_MINUTES = 30;
 
 function generateEmailVerificationCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // CSPRNG: Math.random es predecible a partir de sus salidas.
+  return String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+}
+
+function hashResetToken(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
+}
+
+/** Token del enlace tal como llega: base64url de 32 bytes, o null. */
+function readResetToken(value) {
+  const token = typeof value === "string" ? value.trim() : "";
+  return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null;
 }
 
 function normalizeVerificationCode(raw) {
@@ -99,7 +116,7 @@ async function issueVerificationCode(userId, firstName, email) {
   const code = generateEmailVerificationCode();
   const expires = new Date(Date.now() + OTP_EXPIRES_MS);
   await pool.query(
-    "UPDATE users SET confirm_token = $1, confirm_expires = $2 WHERE id = $3",
+    "UPDATE users SET confirm_token = $1, confirm_expires = $2, confirm_attempts = 0 WHERE id = $3",
     [code, expires, userId],
   );
   await sendVerificationCodeEmail(email, firstName, code);
@@ -134,6 +151,7 @@ function renderAuthPage(res, view, options = {}) {
     awaitingAdmin: options.awaitingAdmin ?? false,
     externalDomainMessage: options.externalDomainMessage ?? null,
     formData: options.formData ?? null,
+    resetToken: options.resetToken ?? null,
     layout: false,
   };
   const status = options.status || 200;
@@ -258,6 +276,21 @@ function normalizeCorporateEmail(usernameOrEmail, selectedDomain = null) {
   return `${localPart}@${domain}`;
 }
 
+/**
+ * Tope por IP de las acciones sin sesión (ver authThrottle). Va antes de
+ * leer el cuerpo de la subida y antes de tocar la base.
+ */
+function limitByIp(view) {
+  return (req, res, next) => {
+    const { allowed, retryAfterMs } = throttle.limiters.ip.hit(throttle.clientKey(req));
+    if (allowed) return next();
+    const error = `Demasiadas solicitudes desde tu red. Espera ${throttle.minutesLabel(retryAfterMs)} e inténtalo de nuevo.`;
+    res.set("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
+    if (wantsJsonResponse(req)) return res.status(429).json({ ok: false, error });
+    return renderAuthPage(res, view, { status: 429, error });
+  };
+}
+
 const uploadProfilePhoto = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: UPLOAD_LIMITS_BYTES.PROFILE_PHOTO },
@@ -363,7 +396,7 @@ router.get("/login", (req, res) => {
         : req.query.exists === "1"
           ? "Ese correo ya está registrado. Inicia sesión."
           : req.query.reset === "1"
-            ? "Se ha enviado una nueva contraseña a tu correo."
+            ? `Si el usuario está registrado, te enviamos un enlace para crear una contraseña nueva. Vence en ${RESET_TOKEN_MINUTES} minutos.`
             : req.query.changed === "1"
               ? "Contraseña actualizada correctamente. Ingresa con tu correo y nueva contraseña."
               : null;
@@ -371,7 +404,7 @@ router.get("/login", (req, res) => {
   renderAuthPage(res, "login", { info });
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", limitByIp("login"), async (req, res) => {
   const json = wantsJsonResponse(req);
   const username = bodyString(req.body && req.body.username);
   const password = bodyString(req.body && req.body.password);
@@ -435,22 +468,37 @@ router.post("/login", async (req, res) => {
       return fail(400, "Debes ingresar un usuario corporativo válido.");
     }
 
+    // Contraseñas erradas por cuenta: se revisa antes de calcular el hash,
+    // que es lo caro, y vale aunque el atacante cambie de IP.
+    const cuenta = throttle.accountKey(email);
+    const bloqueo = throttle.limiters.loginFailures.check(cuenta);
+    if (!bloqueo.allowed) {
+      return fail(
+        429,
+        `Demasiados intentos fallidos. Espera ${throttle.minutesLabel(bloqueo.retryAfterMs)} e inténtalo de nuevo.`,
+      );
+    }
+
     const rows = await findLoginRows("u.email", email);
 
     if (!rows.length) {
+      throttle.limiters.loginFailures.hit(cuenta);
       return fail(401, "Usuario no registrado en la intranet");
     }
 
     const u = rows[0];
 
     if (!u.password_hash || !u.password_salt) {
+      throttle.limiters.loginFailures.hit(cuenta);
       return fail(401, "Usuario o contraseña incorrectos");
     }
 
     const computed = pbkdf2Hash(password, u.password_salt);
     if (!safeEqualHex(computed, u.password_hash)) {
+      throttle.limiters.loginFailures.hit(cuenta);
       return fail(401, "Usuario o contraseña incorrectos");
     }
+    throttle.limiters.loginFailures.reset(cuenta);
 
     if (!u.email_confirmed) {
       const codeExpired =
@@ -510,6 +558,7 @@ router.get("/register", (req, res) => {
 
 router.post(
   "/register",
+  limitByIp("register"),
   uploadProfilePhoto.single("foto_file"),
   async (req, res) => {
     // Para repoblar el formulario si hay un error (sin contraseñas ni foto).
@@ -737,7 +786,7 @@ router.get("/verify-email", async (req, res) => {
   });
 });
 
-router.post("/verify-email", async (req, res) => {
+router.post("/verify-email", limitByIp("verify"), async (req, res) => {
   const email =
     req.session.pendingEmailVerification ||
     normalizeCorporateEmail(req.body.email);
@@ -800,11 +849,43 @@ router.post("/verify-email", async (req, res) => {
       });
     }
 
-    if (!safeEqualString(code, u.confirm_token)) {
+    // El intento se anota ANTES de comparar y en una sola sentencia: así ni
+    // cien pedidos en paralelo comparan más de MAX_CODE_ATTEMPTS veces.
+    const { rows: intento } = await pool.query(
+      `UPDATE users
+          SET confirm_attempts = COALESCE(confirm_attempts, 0) + 1
+        WHERE id = $1 AND confirm_token IS NOT NULL
+        RETURNING confirm_attempts, confirm_token`,
+      [u.id],
+    );
+    if (!intento.length) {
       return renderAuthPage(res, "verify", {
         status: 400,
         email,
-        error: "Código incorrecto. Revisa tu correo e inténtalo de nuevo.",
+        error: "No hay un código activo. Solicita uno nuevo.",
+      });
+    }
+    const intentos = Number(intento[0].confirm_attempts);
+    const correcto =
+      intentos <= MAX_CODE_ATTEMPTS && safeEqualString(code, intento[0].confirm_token);
+
+    if (!correcto) {
+      if (intentos >= MAX_CODE_ATTEMPTS) {
+        await pool.query(
+          "UPDATE users SET confirm_token = NULL, confirm_expires = NULL WHERE id = $1",
+          [u.id],
+        );
+        return renderAuthPage(res, "verify", {
+          status: 429,
+          email,
+          error: "Se agotaron los intentos para este código. Usa «Reenviar código» para obtener uno nuevo.",
+        });
+      }
+      const quedan = MAX_CODE_ATTEMPTS - intentos;
+      return renderAuthPage(res, "verify", {
+        status: 400,
+        email,
+        error: `Código incorrecto. Te ${quedan === 1 ? "queda 1 intento" : `quedan ${quedan} intentos`}.`,
       });
     }
 
@@ -822,6 +903,7 @@ router.post("/verify-email", async (req, res) => {
        SET email_confirmed = TRUE,
            confirm_token = NULL,
            confirm_expires = NULL,
+           confirm_attempts = 0,
            role = $2,
            is_intranet_user = $3
        WHERE id = $1`,
@@ -856,13 +938,24 @@ router.post("/verify-email", async (req, res) => {
   }
 });
 
-router.post("/verify-email/resend", async (req, res) => {
+router.post("/verify-email/resend", limitByIp("verify"), async (req, res) => {
   const email =
     req.session.pendingEmailVerification ||
     normalizeCorporateEmail(req.body.email);
 
   if (!email) {
     return res.redirect("/register");
+  }
+
+  // Cada reenvío trae intentos nuevos: sin tope, el límite por código no
+  // frenaría la fuerza bruta y el buzón de la persona se llenaría.
+  const reenvio = throttle.limiters.resend.hit(throttle.accountKey(email));
+  if (!reenvio.allowed) {
+    return renderAuthPage(res, "verify", {
+      status: 429,
+      email,
+      error: `Ya te enviamos varios códigos. Espera ${throttle.minutesLabel(reenvio.retryAfterMs)} antes de pedir otro.`,
+    });
   }
 
   try {
@@ -913,7 +1006,7 @@ router.get("/forgot-password", (req, res) => {
   renderAuthPage(res, "forgot");
 });
 
-router.post("/forgot-password", async (req, res) => {
+router.post("/forgot-password", limitByIp("forgot"), async (req, res) => {
   const json = wantsJsonResponse(req);
   // Igual que el login: usuario + dominio (editable, por defecto el de la
   // instancia). `email` completo se sigue aceptando por compatibilidad.
@@ -925,7 +1018,10 @@ router.post("/forgot-password", async (req, res) => {
     return renderAuthPage(res, "forgot", { status, error });
   };
 
-  const succeed = (redirect) => {
+  // La misma respuesta exista o no la cuenta, y aunque se haya alcanzado el
+  // tope: no revela quién está registrado.
+  const succeed = () => {
+    const redirect = "/login?reset=1";
     if (json) return res.json({ ok: true, redirect });
     return res.redirect(redirect);
   };
@@ -942,42 +1038,47 @@ router.post("/forgot-password", async (req, res) => {
       return fail(400, "Debes ingresar un usuario corporativo válido.");
     }
 
+    if (!throttle.limiters.forgot.hit(throttle.accountKey(cleanEmail)).allowed) {
+      return succeed();
+    }
+
     const { rows } = await pool.query(
       "SELECT id, first_name FROM users WHERE email = $1",
       [cleanEmail],
     );
 
-    if (!rows.length) return succeed("/login?reset=1");
+    if (!rows.length) return succeed();
 
     const user = rows[0];
 
-    const tempPassword = crypto.randomBytes(4).toString("hex");
-    const newSalt = crypto.randomBytes(16).toString("hex");
-    const newHash = pbkdf2Hash(tempPassword, newSalt);
-
+    // La contraseña actual NO se toca. Antes se reemplazaba aquí por una
+    // temporal, y cualquiera que conociera un correo dejaba a su dueño sin
+    // acceso. Ahora se manda un enlace de un solo uso y en la base queda
+    // sólo su hash.
+    const token = crypto.randomBytes(32).toString("base64url");
     await pool.query(
-      `UPDATE users 
-       SET password_hash = $1, 
-           password_salt = $2, 
-           must_change_password = TRUE 
-       WHERE id = $3`,
-      [newHash, newSalt, user.id],
+      `UPDATE users
+          SET password_reset_token_hash = $1,
+              password_reset_expires = NOW() + $2::interval
+        WHERE id = $3`,
+      [hashResetToken(token), `${RESET_TOKEN_MINUTES} minutes`, user.id],
     );
 
+    const resetPath = `/reset-password?token=${token}`;
+    const resetUrl = `${getBaseUrl(req).replace(/\/+$/, "")}${resetPath}`;
     await sendMail({
       to: cleanEmail,
       subject: "Recuperación de contraseña de Intranet",
       senderName: MAIL_SENDERS.intranet,
       heading: "Recuperación de contraseña",
-      cta: { href: "/login", label: "Ingresar a la intranet" },
-      text: `Hola ${user.first_name},\n\nSe ha solicitado restablecer tu contraseña.\n\nTu nueva contraseña temporal es: ${tempPassword}\n\nPor favor inicia sesión con ella. El sistema te pedirá cambiarla inmediatamente.\n`,
+      cta: { href: resetPath, label: "Crear nueva contraseña" },
+      text: `Hola ${user.first_name},\n\nSe solicitó restablecer tu contraseña de la intranet.\n\nCrea una nueva en este enlace (vence en ${RESET_TOKEN_MINUTES} minutos y sirve una sola vez):\n${resetUrl}\n\nSi no lo pediste, ignora este correo: tu contraseña actual sigue funcionando.\n`,
       html: `<p style="margin:0 0 16px 0;">Hola <strong>${escapeHtml(user.first_name)}</strong>,</p>
-        <p style="margin:0 0 16px 0;">Se ha solicitado restablecer tu contraseña.</p>
-        ${secretBox(tempPassword, { label: "Contraseña temporal" })}
-        <p style="margin:0; color:#51637a;">Inicia sesión con ella. El sistema te pedirá cambiarla de inmediato.</p>`,
+        <p style="margin:0 0 16px 0;">Se solicitó restablecer tu contraseña de la intranet. Usa el botón para crear una nueva. El enlace vence en ${RESET_TOKEN_MINUTES} minutos y sirve una sola vez.</p>
+        <p style="margin:0; color:#51637a;">Si no lo pediste, ignora este correo: tu contraseña actual sigue funcionando.</p>`,
     });
 
-    return succeed("/login?reset=1");
+    return succeed();
   } catch (err) {
     console.error("Error en Forgot Password:", err);
     return fail(500, "Error interno al procesar la solicitud.");
@@ -987,7 +1088,43 @@ router.post("/forgot-password", async (req, res) => {
 // ==========================================
 // RESTABLECER CONTRASEÑA
 // ==========================================
-router.get("/reset-password", (req, res) => {
+const RESET_LINK_INVALID =
+  "El enlace para crear tu contraseña no es válido, ya se usó o venció. Pide uno nuevo.";
+
+function noStoreNoReferrer(res) {
+  res.set("Cache-Control", "no-store");
+  // El token va en la URL: que no viaje como Referer a ningún recurso.
+  res.set("Referrer-Policy", "no-referrer");
+}
+
+/** El enlace del correo: se valida sin consumirlo; lo consume el POST. */
+async function renderResetFromLink(res, token) {
+  noStoreNoReferrer(res);
+  if (!token) return renderAuthPage(res, "forgot", { status: 400, error: RESET_LINK_INVALID });
+  const { rows } = await pool.query(
+    `SELECT id FROM users
+      WHERE password_reset_token_hash = $1 AND password_reset_expires > NOW()`,
+    [hashResetToken(token)],
+  );
+  if (!rows.length) {
+    return renderAuthPage(res, "forgot", { status: 400, error: RESET_LINK_INVALID });
+  }
+  return renderAuthPage(res, "reset", { resetToken: token });
+}
+
+router.get("/reset-password", async (req, res) => {
+  if (req.query.token !== undefined) {
+    try {
+      return await renderResetFromLink(res, readResetToken(req.query.token));
+    } catch (err) {
+      console.error("Error validando enlace de recuperación:", err);
+      return renderAuthPage(res, "forgot", {
+        status: 500,
+        error: "Error interno al validar el enlace. Intenta de nuevo.",
+      });
+    }
+  }
+
   // Flujo fluido tras verificar el correo: aún no hay sesión iniciada.
   if (!req.session.user && req.session.pendingPasswordReset) {
     return renderAuthPage(res, "reset", {
@@ -1006,7 +1143,68 @@ router.get("/reset-password", (req, res) => {
   renderAuthPage(res, "reset");
 });
 
-router.post("/reset-password", async (req, res) => {
+/**
+ * Contraseña nueva desde el enlace del correo. El UPDATE valida y consume el
+ * token en la misma sentencia: dos envíos del mismo enlace no cambian dos
+ * veces la clave.
+ */
+async function resetWithToken(req, res, rawToken) {
+  noStoreNoReferrer(res);
+  const token = readResetToken(rawToken);
+  if (!token) return renderAuthPage(res, "forgot", { status: 400, error: RESET_LINK_INVALID });
+
+  const new_password = bodyString(req.body && req.body.new_password);
+  const confirm_password = bodyString(req.body && req.body.confirm_password);
+  if (!isPasswordStrongEnough(new_password)) {
+    return renderAuthPage(res, "reset", {
+      status: 400,
+      error: PASSWORD_POLICY_MESSAGE,
+      resetToken: token,
+    });
+  }
+  if (new_password !== confirm_password) {
+    return renderAuthPage(res, "reset", {
+      status: 400,
+      error: "Las contraseñas no coinciden.",
+      resetToken: token,
+    });
+  }
+
+  try {
+    const newSalt = crypto.randomBytes(16).toString("hex");
+    const newHash = pbkdf2Hash(new_password, newSalt);
+    const { rows } = await pool.query(
+      `UPDATE users
+          SET password_hash = $1,
+              password_salt = $2,
+              must_change_password = FALSE,
+              password_reset_token_hash = NULL,
+              password_reset_expires = NULL
+        WHERE password_reset_token_hash = $3 AND password_reset_expires > NOW()
+        RETURNING id, email`,
+      [newHash, newSalt, hashResetToken(token)],
+    );
+    if (!rows.length) {
+      return renderAuthPage(res, "forgot", { status: 400, error: RESET_LINK_INVALID });
+    }
+    // Demostró ser dueño del correo: los intentos fallidos previos no cuentan.
+    throttle.limiters.loginFailures.reset(throttle.accountKey(rows[0].email));
+    return res.redirect("/login?changed=1");
+  } catch (err) {
+    console.error("Error restableciendo con enlace:", err);
+    return renderAuthPage(res, "reset", {
+      status: 500,
+      error: "Error al actualizar la contraseña.",
+      resetToken: token,
+    });
+  }
+}
+
+router.post("/reset-password", limitByIp("reset"), async (req, res) => {
+  if (req.body && req.body.reset_token !== undefined) {
+    return resetWithToken(req, res, req.body.reset_token);
+  }
+
   const sessionUser = req.session.user || null;
   const pendingResetId = req.session.pendingPasswordReset || null;
   const userId = sessionUser ? sessionUser.id : pendingResetId;
