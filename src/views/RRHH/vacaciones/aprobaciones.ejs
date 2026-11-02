@@ -107,7 +107,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="<%= locals.cspNonce %>">
   document.querySelectorAll('.js-reject-form').forEach((form) => {
     form.addEventListener('submit', async (e) => {
       if (form.dataset.motivoListo === '1') {

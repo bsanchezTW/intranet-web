@@ -408,7 +408,7 @@
     </div>
   </div>
 </div>
-<script>
+<script nonce="<%= locals.cspNonce %>">
   document.addEventListener("DOMContentLoaded", function () {
     "use strict";
     var overlay = document.getElementById("modalAnularGasto");
@@ -431,7 +431,7 @@
 <% } %>
 
 <% if (puedeResolver) { %>
-<script>
+<script nonce="<%= locals.cspNonce %>">
   (function () {
     "use strict";
     var form = document.getElementById("formResolver");

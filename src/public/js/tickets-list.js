@@ -98,9 +98,15 @@
       modalBody.innerHTML = await res.text();
       window.TicketDetail?.init(modalBody);
 
+      // Los scripts del modal vienen con el nonce de OTRA respuesta (el
+      // fetch): al recrearlos llevan el de esta página, el que su CSP acepta.
+      const paginaNonce = document.querySelector('script[nonce]')?.nonce || '';
       modalBody.querySelectorAll('script').forEach((oldScript) => {
         const newScript = document.createElement('script');
-        Array.from(oldScript.attributes).forEach((attr) => newScript.setAttribute(attr.name, attr.value));
+        Array.from(oldScript.attributes).forEach((attr) => {
+          if (attr.name !== 'nonce') newScript.setAttribute(attr.name, attr.value);
+        });
+        if (paginaNonce) newScript.nonce = paginaNonce;
         newScript.appendChild(document.createTextNode(oldScript.innerHTML));
         oldScript.parentNode.replaceChild(newScript, oldScript);
       });

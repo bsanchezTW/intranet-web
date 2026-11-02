@@ -391,7 +391,7 @@
       <div class="kpi-card">
         <div class="kpi-card__head">
           <h2>Ranking: Cursos Realizados</h2>
-          <button id="btnToggleChart" class="btn-toggle-chart" onclick="toggleRankingChart()">Ver más...</button>
+          <button id="btnToggleChart" class="btn-toggle-chart" data-accion="toggleRankingChart">Ver más...</button>
         </div>
         <div id="mainChartContainer" class="chart-container">
           <canvas id="chartGeneral"></canvas>
@@ -457,7 +457,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="<%= locals.cspNonce %>">
   // Nombres, correos y títulos vienen de la base y el nombre lo escribe cada
   // colaborador: todo lo que entra por innerHTML pasa por aquí.
   function escapeHtml(value) {

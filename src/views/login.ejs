@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= formatPageTitle(titulo || "Iniciar sesión") %></title>
   <link rel="stylesheet" href="/css/login.css?v=20261102a">
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     (function () {
       var raiz = document.documentElement;
       function listo() { raiz.classList.add('pagina-lista'); }
@@ -21,7 +21,7 @@
     })();
   </script>
   <noscript><style>.cargando-pagina { display: none; }</style></noscript>
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     try {
       if (sessionStorage.getItem('loginShellReady') === '1') {
         document.documentElement.classList.add('login-shell-settled');
@@ -148,7 +148,7 @@
                 autocomplete="current-password"
                 required
               >
-              <button type="button" class="login-field__toggle" onclick="toggleVisibility('login-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+              <button type="button" class="login-field__toggle" data-accion="toggleVisibility" data-args='["login-password",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
@@ -239,7 +239,7 @@
               <div class="login-field login-field--password">
                 <label class="login-field__label" for="reg-password">Contraseña</label>
                 <input type="password" id="reg-password" name="password" class="login-field__input" required minlength="8" autocomplete="new-password">
-                <button type="button" class="login-field__toggle" tabindex="-1" onclick="toggleVisibility('reg-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+                <button type="button" class="login-field__toggle" tabindex="-1" data-accion="toggleVisibility" data-args='["reg-password",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
                 <p class="login-field__error" data-error-for="reg-password" hidden></p>
@@ -247,7 +247,7 @@
               <div class="login-field login-field--password">
                 <label class="login-field__label" for="reg-password2">Repetir contraseña</label>
                 <input type="password" id="reg-password2" name="password2" class="login-field__input" required minlength="8" autocomplete="new-password">
-                <button type="button" class="login-field__toggle" tabindex="-1" onclick="toggleVisibility('reg-password2', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+                <button type="button" class="login-field__toggle" tabindex="-1" data-accion="toggleVisibility" data-args='["reg-password2",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
                 <p class="login-field__error" data-error-for="reg-password2" hidden></p>
@@ -413,7 +413,7 @@
                 minlength="8"
                 <% if (activeView === 'reset') { %>autofocus<% } %>
               >
-              <button type="button" class="login-field__toggle" onclick="toggleVisibility('reset-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+              <button type="button" class="login-field__toggle" data-accion="toggleVisibility" data-args='["reset-password",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
@@ -448,7 +448,7 @@
                 required
                 minlength="8"
               >
-              <button type="button" class="login-field__toggle" onclick="toggleVisibility('reset-password2', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+              <button type="button" class="login-field__toggle" data-accion="toggleVisibility" data-args='["reset-password2",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
@@ -605,7 +605,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     function toggleVisibility(inputId, btn) {
       const input = document.getElementById(inputId);
       const isHidden = input.type === 'password';
@@ -1200,9 +1200,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/js/profile-photo-cropper.js?v=20261013b"></script>
   <script src="/js/password-strength.js?v=20260916q"></script>
-  <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()).replace(/</g, '\\u003c') %>;</script>
+  <script nonce="<%= locals.cspNonce %>">window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()).replace(/</g, '\\u003c') %>;</script>
   <script src="/js/phone.js?v=20260910n"></script>
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     (function initRegisterForm() {
       const passwordInput = document.getElementById('reg-password');
       const password2Input = document.getElementById('reg-password2');
@@ -1417,7 +1417,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     /**
      * Estado "enviando" de los botones de los formularios de acceso.
      *

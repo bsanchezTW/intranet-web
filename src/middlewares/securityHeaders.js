@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const express = require("express");
 const logger = require("../utils/logger");
 const { createRateLimiter } = require("../utils/rateLimiter");
@@ -5,15 +6,15 @@ const { createRateLimiter } = require("../utils/rateLimiter");
 /**
  * Cabeceras de seguridad de todas las respuestas.
  *
- * CSP en dos niveles:
- *   - Aplicada (`Content-Security-Policy`): lo que no rompe nada hoy. Nadie
- *     enmarca la intranet desde otro sitio (clickjacking), no hay <base> ni
- *     <object>.
- *   - Sólo reporte (`Content-Security-Policy-Report-Only`): la política a la
- *     que se quiere llegar. Las vistas tienen scripts y onclick inline, así
- *     que aplicarla hoy rompería páginas; en reporte, el navegador avisa a
- *     /csp-report de cada cosa que bloquearía y eso es la lista de trabajo
- *     para quitar 'unsafe-inline' (o pasar a nonces) y aplicarla.
+ * CSP:
+ *   - Mínima, siempre aplicada: nadie enmarca la intranet desde otro sitio
+ *     (clickjacking), no hay <base> ni <object>.
+ *   - Estricta: scripts sólo de la propia intranet, de los CDN de la lista y
+ *     los inline que llevan el nonce de la petición (res.locals.cspNonce, en
+ *     cada <script> de las vistas). Los onclick/onerror inline ya no existen
+ *     (public/js/acciones.js). Va en Report-Only y el navegador avisa a
+ *     /csp-report de lo que bloquearía; con CSP_ENFORCE=true se aplica.
+ *     Pasar a aplicarla después de ver el log `csp` limpio en staging.
  *
  * Orígenes externos que usan las vistas: cdnjs y jsdelivr (librerías),
  * Google Fonts, SharePoint (visor de PowerPoint en Cursos) y YouTube.
@@ -21,11 +22,16 @@ const { createRateLimiter } = require("../utils/rateLimiter");
 
 const CDN_SCRIPTS = ["https://cdnjs.cloudflare.com", "https://cdn.jsdelivr.net"];
 
+// YouTube: la API del reproductor de Cursos se carga desde su dominio.
+const VIDEO_SCRIPTS = ["https://www.youtube.com", "https://s.ytimg.com"];
+
 const ENFORCED_CSP = ["frame-ancestors 'self'", "base-uri 'self'", "object-src 'none'"].join("; ");
 
-const REPORT_ONLY_CSP = [
+/** Política estricta con el nonce de la petición. */
+function strictCsp(nonce) {
+  return [
   "default-src 'self'",
-  `script-src 'self' ${CDN_SCRIPTS.join(" ")}`,
+  `script-src 'self' 'nonce-${nonce}' ${CDN_SCRIPTS.join(" ")} ${VIDEO_SCRIPTS.join(" ")}`,
   `style-src 'self' 'unsafe-inline' ${CDN_SCRIPTS.join(" ")} https://fonts.googleapis.com`,
   "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
   // Las noticias admiten imágenes externas (sanitizeContent) y el feed de
@@ -40,7 +46,11 @@ const REPORT_ONLY_CSP = [
   "base-uri 'self'",
   "object-src 'none'",
   "report-uri /csp-report",
-].join("; ");
+  ].join("; ");
+}
+
+/** Compatibilidad: la política estricta sin nonce (sólo para tests y docs). */
+const REPORT_ONLY_CSP = strictCsp("NONCE");
 
 const PERMISSIONS_POLICY = [
   "camera=()",
@@ -54,14 +64,26 @@ const PERMISSIONS_POLICY = [
 // dominio corporativo siguen por HTTP.
 const HSTS = "max-age=15552000";
 
-function securityHeaders({ reportOnly = REPORT_ONLY_CSP, enforced = ENFORCED_CSP } = {}) {
+function enforceStrictCsp(env = process.env) {
+  return String(env.CSP_ENFORCE || "").trim().toLowerCase() === "true";
+}
+
+function securityHeaders({ enforce = enforceStrictCsp() } = {}) {
   return (req, res, next) => {
+    // 128 bits por petición: el nonce no se puede adivinar ni reutilizar.
+    const nonce = crypto.randomBytes(16).toString("base64");
+    res.locals.cspNonce = nonce;
     res.set("X-Content-Type-Options", "nosniff");
     res.set("X-Frame-Options", "SAMEORIGIN");
     res.set("Referrer-Policy", "strict-origin-when-cross-origin");
     res.set("Permissions-Policy", PERMISSIONS_POLICY);
-    res.set("Content-Security-Policy", enforced);
-    if (reportOnly) res.set("Content-Security-Policy-Report-Only", reportOnly);
+    if (enforce) {
+      // La estricta ya incluye frame-ancestors, base-uri y object-src.
+      res.set("Content-Security-Policy", strictCsp(nonce));
+    } else {
+      res.set("Content-Security-Policy", ENFORCED_CSP);
+      res.set("Content-Security-Policy-Report-Only", strictCsp(nonce));
+    }
     // Sólo por HTTPS: por HTTP el navegador la ignora y, detrás de un proxy
     // sin `trust proxy`, req.secure es false aunque el cliente use HTTPS.
     if (req.secure) res.set("Strict-Transport-Security", HSTS);
@@ -108,6 +130,8 @@ function cspReportRouter({ now = () => Date.now() } = {}) {
 
 module.exports = {
   securityHeaders,
+  strictCsp,
+  enforceStrictCsp,
   cspReportRouter,
   ENFORCED_CSP,
   REPORT_ONLY_CSP,

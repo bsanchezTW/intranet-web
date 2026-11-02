@@ -99,7 +99,7 @@ function formatNewsDate(fecha) {
 
           <div class="articulo__admin-acciones">
             <% if (puedeEditar) { %>
-            <button type="button" class="btn-nt" onclick="abrirModalEditarNoticia(NoticiaDetalleData)">
+            <button type="button" class="btn-nt" data-accion="abrirModalEditarNoticia" data-args='[{"$global":"NoticiaDetalleData"}]'>
               <%- include('../partials/icon', { name: 'edit' }) %>
               Editar
             </button>
@@ -121,7 +121,7 @@ function formatNewsDate(fecha) {
             <% } %>
 
             <% if (puedeEnviar) { %>
-            <button type="button" class="btn-nt btn-nt--principal" onclick="abrirModalDestinatarios()">
+            <button type="button" class="btn-nt btn-nt--principal" data-accion="abrirModalDestinatarios">
               <%- include('../partials/icon', { name: 'mail' }) %>
               Enviar por correo
             </button>
@@ -158,7 +158,7 @@ function formatNewsDate(fecha) {
 <% if (puedeEditar || puedeEnviar) { %>
   <%- include('partials/modal-noticia') %>
 
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     window.NoticiaDetalleData = <%- JSON.stringify({
       id: noticia.id,
       title: noticia.title,

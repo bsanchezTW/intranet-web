@@ -292,7 +292,7 @@ async function renderSupportHome(req, res) {
       user: user,
       ok: req.query.ok,
       extraCss: ["/css/apps.css?v=20261013b", "/css/tickets.css?v=20260916g"],
-      extraJs: ["/js/tickets-list.js?v=20261102a"],
+      extraJs: ["/js/tickets-list.js?v=20261102b"],
     });
   } catch (err) {
     console.error(err);

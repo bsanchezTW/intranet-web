@@ -29,7 +29,7 @@
            alt=""
            loading="<%= typeof imageLoading !== 'undefined' ? imageLoading : 'eager' %>"
            decoding="async"
-           onerror="this.closest('.home-featured__photo').remove()">
+           data-si-falla="quitar:.home-featured__photo">
     </span>
   <% } else { %>
     <span class="home-featured__glow home-featured__glow--1" aria-hidden="true"></span>

@@ -58,7 +58,11 @@ describe("cabeceras de seguridad", () => {
     assert.equal(res.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
     assert.match(res.headers.get("permissions-policy"), /camera=\(\)/);
     assert.equal(res.headers.get("content-security-policy"), ENFORCED_CSP);
-    assert.equal(res.headers.get("content-security-policy-report-only"), REPORT_ONLY_CSP);
+    // Cada respuesta trae su nonce; el resto de la política es fija.
+    assert.equal(
+      res.headers.get("content-security-policy-report-only").replace(/'nonce-[^']+'/, "'nonce-NONCE'"),
+      REPORT_ONLY_CSP,
+    );
     assert.equal(res.headers.get("x-powered-by"), null);
   });
 

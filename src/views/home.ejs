@@ -246,8 +246,8 @@
             </div>
 
             <% if (imagenesGaleria.length > 1) { %>
-              <button type="button" class="home-gallery__nav home-gallery__nav--prev" onclick="moveHomeGallery(-1)" aria-label="Imagen anterior">&#10094;</button>
-              <button type="button" class="home-gallery__nav home-gallery__nav--next" onclick="moveHomeGallery(1)" aria-label="Imagen siguiente">&#10095;</button>
+              <button type="button" class="home-gallery__nav home-gallery__nav--prev" data-accion="moveHomeGallery" data-args='[-1]' aria-label="Imagen anterior">&#10094;</button>
+              <button type="button" class="home-gallery__nav home-gallery__nav--next" data-accion="moveHomeGallery" data-args='[1]' aria-label="Imagen siguiente">&#10095;</button>
             <% } %>
 
             <div class="home-gallery__viewport">
@@ -260,7 +260,7 @@
                       alt="Imagen de la galería de <%= item.name %>"
                       class="home-gallery__img"
                       loading="<%= index === 0 ? 'eager' : 'lazy' %>"
-                      onerror="if(!this.dataset.fullTried&&this.dataset.full&&this.dataset.full!==this.getAttribute('src')){this.dataset.fullTried='1';this.src=this.dataset.full}else{this.onerror=null;this.src='/img/fondo-home.png'}"
+                      data-fallback-src="/img/fondo-home.png"
                     >
                     <div class="home-gallery__overlay">
                       <span class="home-gallery__eyebrow">Galería de eventos</span>
@@ -305,7 +305,7 @@
             <div class="home-menu__head-actions">
               <span class="home-menu__badge">HOY</span>
               <% if (can('casino.menu.editar')) { %>
-                <button type="button" onclick="IntranetModal.open('modalPlatos')" class="home-menu__edit" title="Editar menú semanal" aria-label="Editar menú semanal"><%- include('partials/icon', { name: 'edit' }) %></button>
+                <button type="button" data-accion="IntranetModal.open" data-args='["modalPlatos"]' class="home-menu__edit" title="Editar menú semanal" aria-label="Editar menú semanal"><%- include('partials/icon', { name: 'edit' }) %></button>
               <% } %>
             </div>
           </div>
@@ -324,7 +324,7 @@
 
       <!-- Clima -->
       <section class="home-section">
-        <article class="home-card home-weather home-card--clickable" onclick="window.open('<%= (typeof clima !== 'undefined' && clima && clima.detailUrl) ? clima.detailUrl : countryConfig.weather.detailUrl %>', '_blank')" title="Ver clima detallado">
+        <article class="home-card home-weather home-card--clickable" data-abrir="<%= (typeof clima !== 'undefined' && clima && clima.detailUrl) ? clima.detailUrl : countryConfig.weather.detailUrl %>" title="Ver clima detallado">
           <div class="home-weather__top">
             <div class="home-weather__lead">
               <span class="home-weather__label">Clima · <%= (typeof clima !== 'undefined' && clima && clima.ubicacion) ? clima.ubicacion : countryConfig.weather.locationName %></span>
@@ -415,7 +415,7 @@
               <% } %>
             </div>
             <% if (cumpleaniosOrdenados.length > 3) { %>
-              <button type="button" id="btn-ver-mas-cumple" class="home-bdays__more" onclick="toggleCumpleanios()">Ver más...</button>
+              <button type="button" id="btn-ver-mas-cumple" class="home-bdays__more" data-accion="toggleCumpleanios">Ver más...</button>
             <% } %>
           <% } %>
         </div>
@@ -430,8 +430,8 @@
         </div>
 
         <div class="home-glass home-comms__frame" id="homeCommsCarousel">
-          <button type="button" class="home-comms__nav home-comms__nav--prev" onclick="moveLinkedin(-1)" aria-label="Anterior">&#10094;</button>
-          <button type="button" class="home-comms__nav home-comms__nav--next" onclick="moveLinkedin(1)" aria-label="Siguiente">&#10095;</button>
+          <button type="button" class="home-comms__nav home-comms__nav--prev" data-accion="moveLinkedin" data-args='[-1]' aria-label="Anterior">&#10094;</button>
+          <button type="button" class="home-comms__nav home-comms__nav--next" data-accion="moveLinkedin" data-args='[1]' aria-label="Siguiente">&#10095;</button>
 
           <% if (typeof linkedinFeed !== 'undefined' && linkedinFeed.length > 0) { %>
             <% linkedinFeed.forEach((post, index) => { %>
@@ -448,7 +448,7 @@
                       <p class="home-comms__cta">Ver más →</p>
                     </div>
                   <% } else { %>
-                    <img src="<%= post.image_url %>" alt="Publicación LinkedIn" class="home-comms__img" onerror="this.src='/img/fondo-home.png'">
+                    <img src="<%= post.image_url %>" alt="Publicación LinkedIn" class="home-comms__img" data-fallback-src="/img/fondo-home.png">
                   <% } %>
                 </a>
               </div>
@@ -584,7 +584,7 @@
 </div>
 <% } %>
 
-<script>
+<script nonce="<%= locals.cspNonce %>">
   function toggleCumpleanios() {
     const items = document.querySelectorAll('.item-cumple');
     const btn = document.getElementById('btn-ver-mas-cumple');

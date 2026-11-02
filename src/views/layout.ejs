@@ -20,7 +20,7 @@
     <% if (typeof usuario !== 'undefined' && usuario && features.claudeAssistant) { %>
     <link rel="stylesheet" href="/css/claude-assistant.css?v=20261006a">
     <% } %>
-    <script>
+    <script nonce="<%= locals.cspNonce %>">
       // Sin defer y en el head: la clase se pone en cuanto el documento está
       // listo, sin esperar a las imágenes. Los dos respaldos —load y el
       // temporizador— existen para que un recurso atascado no deje la página
@@ -102,7 +102,7 @@
   <% }) %>
 <% } %>
 
-<script>
+<script nonce="<%= locals.cspNonce %>">
   document.addEventListener('DOMContentLoaded', async function() {
 
     // --- ESTADO ACTIVO DE LA NAVEGACIÓN ---
