@@ -854,6 +854,8 @@ async function runStartupDbTasks() {
 
 function startBackgroundJobs() {
   runStartupDbTasks().catch((err) => logger.error("db", err));
+  // Datos de la portada (indicadores, clima, LinkedIn, eventos).
+  indexRoutes.startHomeBackgroundJobs();
 }
 
 function onHttpListening(bindLabel) {
