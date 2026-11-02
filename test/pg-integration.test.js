@@ -85,6 +85,25 @@ describe("integración con Postgres", { skip: !URL_PG && "sin INTEGRATION_PG_URL
     assert.equal(rows[0].last_status, "ok");
   });
 
+  it("migraciones: dos procesos a la vez aplican cada una una sola vez", async () => {
+    await pool.query(`CREATE TABLE ${SCHEMA}.users (id int PRIMARY KEY, email varchar(150))`);
+    await pool.query(`CREATE TABLE ${SCHEMA}.news_articles (id int PRIMARY KEY)`);
+    await pool.query(`CREATE TABLE ${SCHEMA}.applications (id int PRIMARY KEY)`);
+    const { runMigrations } = require("../src/services/schema/migrator");
+    const migrations = require("../src/migrations");
+    const silent = { info() {} };
+    const run = () => runMigrations({ connect: () => pool.connect(), schema: SCHEMA, migrations, logger: silent });
+    const [a, b] = await Promise.all([run(), run()]);
+    assert.equal(a.applied.length + b.applied.length, migrations.length);
+    const { rows } = await pool.query(`SELECT count(*)::int AS n FROM ${SCHEMA}.schema_migrations`);
+    assert.equal(rows[0].n, migrations.length);
+    const cols = await pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'users'`,
+      [SCHEMA],
+    );
+    assert.ok(cols.rows.some((r) => r.column_name === "confirm_attempts"));
+  });
+
   it("cupo del asistente: el ON CONFLICT con tope es atómico", async () => {
     const { createAssistantQuota } = require("../src/services/assistant/assistantQuota");
     const quota = createAssistantQuota({

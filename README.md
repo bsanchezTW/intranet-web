@@ -67,7 +67,7 @@ test/
 
 El test de integración con Postgres (`test/pg-integration.test.js`) corre sólo con `INTEGRATION_PG_URL` apuntando a una base desechable.
 
-Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas columnas nuevas también se aseguran al arrancar (`asegurar*` en `src/app.js`), por ejemplo las de autenticación (`confirm_attempts`, `password_reset_token_hash`, `password_reset_expires`).
+Los esquemas de referencia están en `supabase/`. Los cambios nuevos van como migración en `src/migrations/` (`NNN_nombre.js`, al final de `index.js`; una ya publicada no se edita). Se aplican al arrancar y quedan anotados en `<schema>.schema_migrations`; para correrlas antes de desplegar: `node scripts/migrar.js --pais CL`. Las `ensure*Schema` de cada módulo siguen corriendo al arrancar mientras se pasan a migraciones.
 
 ## Seguridad
 

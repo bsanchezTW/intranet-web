@@ -95,10 +95,8 @@ const { ensureExpenseSchema } = require("./services/expenses/expenseSchema");
 const {
   ensureCostCenterSchema,
 } = require("./services/costCenters/costCenterSchema");
-const {
-  APP_CATALOG_VALUES,
-  DEFAULT_APP_CATALOG,
-} = require("./constants/appCatalogs");
+const { runMigrations } = require("./services/schema/migrator");
+const migrations = require("./migrations");
 const { wantsJson, denyUnauthenticated } = require("./utils/httpResponses");
 const {
   createJobRunner,
@@ -743,181 +741,21 @@ async function sincronizarUsuariosDeshabilitados() {
   }
 }
 
-// El correo es identificador único de usuario: la BD lo garantiza con un
-// índice único (ignora mayúsculas/minúsculas y espacios).
-async function asegurarCorreoUnico() {
-  try {
-    await db.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx
-      ON users (LOWER(TRIM(email)))
-      WHERE email IS NOT NULL AND TRIM(email) <> ''
-    `);
-  } catch (err) {
-    logger.error("usuarios", err);
-  }
-}
-
-async function asegurarColumnaNoticiasDestacada() {
-  try {
-    await db.query(`
-      ALTER TABLE news_articles
-        ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_news_articles_featured ON news_articles (featured)
-        WHERE featured = true
-    `);
-  } catch (err) {
-    logger.error("noticias", err);
-  }
-}
-
-async function asegurarColumnasApps() {
-  try {
-    const { rows } = await db.query(`
-      SELECT c.relkind
-      FROM pg_class c
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = current_schema() AND c.relname = 'applications'
-      LIMIT 1
-    `);
-    // Vista sobre shared.applications: las columnas ya viven en el catálogo compartido.
-    if (rows[0] && rows[0].relkind === "v") return;
-  } catch (err) {
-    logger.error("apps", err);
-    return;
-  }
-  // En serie: cada ALTER en paralelo abre otra conexión al pooler.
-  await asegurarColumnaAppsIconUrl();
-  await asegurarColumnaAppsUrlIos();
-  await asegurarColumnaAppsUrlWeb();
-  await asegurarColumnaAppsCatalog();
-  await asegurarColumnaAppsOrden();
-}
-
-async function asegurarColumnaAppsIconUrl() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS icon_url TEXT
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-async function asegurarColumnaAppsUrlIos() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS url_ios TEXT
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-async function asegurarColumnaAppsUrlWeb() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS url_web TEXT
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
 /**
- * Separa el catálogo comercial (vista Apps) del de autoayuda (vista Soporte).
- * Las filas existentes quedan en el catálogo corporativo por el DEFAULT, así que
- * la migración no toca lo ya publicado en /apps.
+ * Cambios de esquema versionados (src/migrations, services/schema/migrator).
+ * Un fallo se registra y la app sigue: igual que antes con los asegurar*.
  */
-async function asegurarColumnaAppsCatalog() {
+async function aplicarMigraciones() {
   try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS catalog VARCHAR(20) NOT NULL
-        DEFAULT '${DEFAULT_APP_CATALOG}'
-    `);
-    await db.query(`
-      DO $do$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint con
-          JOIN pg_class c ON c.oid = con.conrelid
-          JOIN pg_namespace n ON n.oid = c.relnamespace
-          WHERE con.conname = 'applications_catalog_check'
-            AND c.relname = 'applications'
-            AND n.nspname = current_schema()
-        ) THEN
-          ALTER TABLE applications
-            ADD CONSTRAINT applications_catalog_check
-            CHECK (catalog IN (${APP_CATALOG_VALUES.map((v) => `'${v}'`).join(", ")}));
-        END IF;
-      END
-      $do$;
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_applications_catalog
-        ON applications (catalog)
-    `);
+    const { applied } = await runMigrations({
+      connect: () => db.pool.connect(),
+      schema: getCountryDbBinding(countryConfig.code).schema,
+      migrations,
+      logger,
+    });
+    if (applied.length) logger.info("migraciones", `aplicadas: ${applied.join(", ")}`);
   } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-/**
- * Orden manual de las tarjetas dentro de cada catálogo.
- *
- * Nace en NULL a propósito: mientras nadie reordene, el listado conserva el
- * orden por fecha que tenía, y las apps nuevas caen al final hasta que se las
- * coloque a mano.
- */
-async function asegurarColumnaAppsOrden() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS sort_order INTEGER
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_applications_catalog_orden
-        ON applications (catalog, sort_order)
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-/**
- * Columnas de la autenticación endurecida (routes/auth.js):
- *   - confirm_attempts: intentos contra el código de verificación vigente.
- *   - password_reset_token_hash / _expires: enlace de un solo uso de
- *     «Olvidé mi contraseña» (sólo el SHA-256 del token).
- */
-async function asegurarColumnasAuth() {
-  try {
-    await db.query(`
-      ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS confirm_attempts INTEGER NOT NULL DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS password_reset_token_hash VARCHAR(64),
-        ADD COLUMN IF NOT EXISTS password_reset_expires TIMESTAMPTZ
-    `);
-  } catch (err) {
-    logger.error("auth", err);
-  }
-}
-
-/** Preferencia de la banda del home. NULL conserva el orden del país. */
-async function asegurarColumnaAccesosHome() {
-  try {
-    await db.query(`
-      ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS home_quick_access jsonb
-    `);
-  } catch (err) {
-    logger.error("home", err);
+    logger.error("migraciones", err);
   }
 }
 
@@ -992,11 +830,7 @@ async function runStartupDbTasks() {
   await db.warmPool();
 
   const steps = [
-    asegurarCorreoUnico,
-    asegurarColumnasAuth,
-    asegurarColumnaNoticiasDestacada,
-    asegurarColumnasApps,
-    asegurarColumnaAccesosHome,
+    aplicarMigraciones,
     sincronizarUsuariosDeshabilitados,
     asegurarSchemaVacaciones,
     async () => {
