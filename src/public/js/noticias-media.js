@@ -232,7 +232,8 @@
     if (!url) return;
 
     // La portada la renderizó el servidor: se conserva por si el visor falla.
-    var portadaHtml = visor.innerHTML;
+    // Sin portada lo que hay es el esqueleto, que no debe quedar junto al aviso.
+    var portadaHtml = visor.querySelector(".pdf-esqueleto") ? "" : visor.innerHTML;
 
     var pdfjs;
     var doc;

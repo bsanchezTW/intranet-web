@@ -1339,29 +1339,30 @@
   position: absolute;
   inset: 0;
   z-index: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  overflow: hidden;
+  /* Esqueleto sobre fondo oscuro: los bloques claros de theme.css no se verían. */
+  --sk-base: rgba(255, 255, 255, 0.12);
+  --sk-brillo: rgba(255, 255, 255, 0.16);
   background: linear-gradient(165deg, #0b2440 0%, #0f4c81 100%);
-  color: rgba(255, 255, 255, 0.9);
   transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-.home-gallery__spinner {
-  width: 34px;
-  height: 34px;
-  border: 3px solid rgba(255, 255, 255, 0.22);
-  border-top-color: var(--corp-green, #7ac143);
-  border-radius: 50%;
-  animation: homeGallerySpin 0.8s linear infinite;
+.home-gallery__sk-brillo {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  border-radius: 0;
+  background-color: transparent;
 }
 
-.home-gallery__loading-text {
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.home-gallery__sk-pie {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
 }
 
 .home-gallery__card:not(.is-ready) .home-gallery__viewport,
@@ -1382,17 +1383,6 @@
 .home-gallery__card.is-ready .home-gallery__dots {
   opacity: 1;
   transition: opacity 0.3s ease;
-}
-
-@keyframes homeGallerySpin {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .home-gallery__spinner {
-    animation: none;
-    border-top-color: rgba(255, 255, 255, 0.55);
-  }
 }
 
 .home-gallery__viewport,

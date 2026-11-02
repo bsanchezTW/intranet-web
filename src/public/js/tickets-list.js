@@ -55,10 +55,38 @@
     items.forEach((item) => lista.appendChild(item));
   }
 
+  // Misma anatomía del modal de detalle: cabecera, cuerpo y pie.
+  const ESQUELETO_DETALLE = `
+    <div class="modal-stack" role="status">
+      <span class="sr-only">Cargando detalles del ticket…</span>
+      <header class="modal-head" aria-hidden="true">
+        <div class="sk-pila">
+          <span class="sk sk--w25"></span>
+          <span class="sk sk--titulo sk--w60"></span>
+        </div>
+      </header>
+      <div class="modal-body" aria-hidden="true">
+        <div class="sk-pila">
+          <span class="sk sk--w25"></span>
+          <span class="sk"></span>
+          <span class="sk"></span>
+          <span class="sk sk--w80"></span>
+        </div>
+        <div class="sk-pila">
+          <span class="sk sk--w25"></span>
+          <span class="sk sk--control"></span>
+          <span class="sk sk--control"></span>
+        </div>
+      </div>
+      <footer class="modal-foot" aria-hidden="true">
+        <span class="sk sk--boton"></span>
+      </footer>
+    </div>`;
+
   async function abrirDetalle(href, modalBody, modalId) {
     if (!href || !modalBody) return;
 
-    modalBody.innerHTML = '<div class="ticket-modal-state">Cargando detalles del ticket...</div>';
+    modalBody.innerHTML = ESQUELETO_DETALLE;
     window.IntranetModal?.open(modalId);
 
     try {

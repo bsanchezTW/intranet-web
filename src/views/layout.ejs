@@ -7,7 +7,7 @@
     <title><%= formatPageTitle(titulo) %></title>
     <link rel="stylesheet" href="/css/intranet.css?v=20261006b">
     <link rel="stylesheet" href="/css/shell.css?v=20261013b">
-    <link rel="stylesheet" href="/css/modal.css?v=20261009a">
+    <link rel="stylesheet" href="/css/modal.css?v=20261102a">
     <% if (features.supportTickets) { %>
     <link rel="stylesheet" href="/css/ticket-modal.css?v=20260916m">
     <% } %>
@@ -16,7 +16,7 @@
         <link rel="stylesheet" href="<%= href %>">
       <% }) %>
     <% } %>
-    <link rel="stylesheet" href="/css/home.css?v=20261016a">
+    <link rel="stylesheet" href="/css/home.css?v=20261102a">
     <% if (typeof usuario !== 'undefined' && usuario && features.claudeAssistant) { %>
     <link rel="stylesheet" href="/css/claude-assistant.css?v=20261006a">
     <% } %>
@@ -51,10 +51,7 @@
 
 <body>
 
-  <div class="cargando-pagina" role="status">
-    <span class="cargando-pagina__spinner" aria-hidden="true"></span>
-    <span class="sr-only">Cargando…</span>
-  </div>
+  <%- include('partials/skeleton-pagina') %>
 
   <% 
     const currentUser = (typeof usuario !== 'undefined' && usuario) ?

@@ -373,6 +373,12 @@
   margin: 58px var(--modal-pad-x) 0;
 }
 
+.colaborador-esqueleto__foto {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+}
+
 .colaborador-aside {
   justify-items: center;
   align-content: start;

@@ -35,6 +35,7 @@ const permisosRoutes = require("./routes/permisos");
 const noticiasRoutes = require("./routes/noticias");
 const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
+const { pageSkeletonFor } = require("./utils/pageSkeleton");
 const { phoneClientConfig } = require("./utils/phone");
 const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
@@ -507,6 +508,7 @@ app.use(async (req, res, next) => {
   res.locals.countryConfig = countryConfig;
   // Capacidades de la instancia, para filtrar navegación y bloques de UI.
   res.locals.features = getFeatures();
+  res.locals.esqueletoPagina = pageSkeletonFor(req.path);
 
   res.locals.usuario = req.session.user || null;
 

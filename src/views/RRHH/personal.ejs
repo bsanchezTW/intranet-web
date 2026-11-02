@@ -22,7 +22,7 @@
   const errorMsg   = (typeof error   !== 'undefined' && error)   ? error   : null;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20260922a">
+<link rel="stylesheet" href="/css/personal.css?v=20261102a">
 <link rel="stylesheet" href="/css/phone.css?v=20260902">
 <% if (puedeEditar) { %>
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
@@ -236,7 +236,7 @@
           tanto espera aquí, fuera del hueco que se reemplaza. %>
       <div id="editarColaboradorError" class="modal-alert colaborador-modal__error" role="alert"></div>
       <div id="modalEditarColaboradorBody" class="modal-stack">
-        <p class="modal-loading">Cargando colaborador…</p>
+        <%- include('partials/persona_esqueleto') %>
       </div>
     </div>
   </div>
@@ -263,4 +263,4 @@
 <script src="/js/persona-editar-form.js?v=20260925a"></script>
 <script src="/js/centros-picker.js?v=20260911a"></script>
 <% } %>
-<script src="/js/personal-tabla.js?v=20260925a" defer></script>
+<script src="/js/personal-tabla.js?v=20261102a" defer></script>

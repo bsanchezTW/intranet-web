@@ -237,8 +237,12 @@
         <div class="home-glass home-gallery__card<%= imagenesGaleria.length === 0 ? ' is-ready' : '' %>" id="homeGalleryCarousel"<%= imagenesGaleria.length > 0 ? ' aria-busy="true"' : '' %>>
           <% if (imagenesGaleria.length > 0) { %>
             <div class="home-gallery__loading" role="status" aria-live="polite">
-              <span class="home-gallery__spinner" aria-hidden="true"></span>
-              <span class="home-gallery__loading-text">Cargando fotos…</span>
+              <span class="sk home-gallery__sk-brillo" aria-hidden="true"></span>
+              <span class="home-gallery__sk-pie" aria-hidden="true">
+                <span class="sk sk--titulo sk--w40"></span>
+                <span class="sk sk--w25"></span>
+              </span>
+              <span class="sr-only">Cargando fotos…</span>
             </div>
 
             <% if (imagenesGaleria.length > 1) { %>
