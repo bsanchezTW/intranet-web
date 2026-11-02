@@ -7,6 +7,7 @@ const fileStorage = require("../services/fileStorage");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { ROLES, ALL_ROLES, isDeshabilitado, isAdministrador } = require("../constants/roles");
+const { publicErrorMessage } = require("../utils/publicError");
 const {
   DEFAULT_COLOR,
   COLOR_PALETTE,
@@ -707,7 +708,7 @@ router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, r
     console.error("Error creando usuario:", err);
     return redirectPersonalCrearError(
       res,
-      `Error al crear el usuario: ${err.message}`,
+      publicErrorMessage(err, "Error al crear el usuario"),
     );
   }
 });

@@ -40,6 +40,7 @@ const {
 } = require("../constants/expenseCategories");
 const { formatDisplay } = require("../utils/vacationDateUtils");
 const funds = require("../services/expenses/expenseFundService");
+const { publicErrorMessage } = require("../utils/publicError");
 
 /**
  * Centro de gastos: rendiciones y solicitudes de fondos.
@@ -293,7 +294,7 @@ router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
     const raw = err.message || "";
     const error = /fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(raw)
       ? "No se pudo guardar el comprobante en el almacenamiento. Inténtalo de nuevo."
-      : raw || "Error al subir el archivo";
+      : publicErrorMessage(err, "Error al subir el archivo");
     res.status(500).json({ error });
   }
 });

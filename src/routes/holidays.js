@@ -5,6 +5,7 @@ const requirePermission = require("../middlewares/requirePermission");
 const { getCurrentCountry } = require("../config/country");
 const holidayService = require("../services/vacations/holidayService");
 const { VACATION_MESSAGES } = require("../constants/vacationMessages");
+const { publicErrorMessage } = require("../utils/publicError");
 
 /**
  * Feriados de la instancia (/RRHH/feriados).
@@ -81,7 +82,7 @@ router.post("/", requirePermission("feriados.feriado.administrar"), async (req, 
     return redirectOk(res, VACATION_MESSAGES.holidayAdded);
   } catch (err) {
     console.error("Error creando feriado:", err);
-    return redirectErr(res, err.message || VACATION_MESSAGES.holidayAddFailed);
+    return redirectErr(res, publicErrorMessage(err, VACATION_MESSAGES.holidayAddFailed));
   }
 });
 

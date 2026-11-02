@@ -37,6 +37,7 @@ const permisosRoutes = require("./routes/permisos");
 const noticiasRoutes = require("./routes/noticias");
 const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
+const { publicErrorMessage, isUserFacingError } = require("./utils/publicError");
 const { pageSkeletonFor } = require("./utils/pageSkeleton");
 const { phoneClientConfig } = require("./utils/phone");
 const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
@@ -709,20 +710,19 @@ app.use((err, req, res, next) => {
   if (err?.stack) console.error(err.stack);
   if (res.headersSent) return next(err);
 
-  const isLocal =
-    process.env.NODE_ENV !== "production" ||
-    /localhost|127\.0\.0\.1/i.test(String(process.env.APP_BASE_URL || ""));
-  const message = isLocal && err?.message
-    ? `Error interno del servidor: ${err.message}`
-    : "Error interno del servidor";
+  // Un 4xx (JSON mal formado, cuerpo muy grande…) es del cliente y su
+  // mensaje se muestra; el resto es un 500 sin detalles internos, salvo con
+  // NODE_ENV=development (ver utils/publicError).
+  const status = isUserFacingError(err) ? Number(err.statusCode || err.status) : 500;
+  const message = publicErrorMessage(err, "Error interno del servidor");
 
   const acceptsJson =
     req.xhr ||
     req.get("accept")?.includes("application/json") ||
     req.originalUrl.includes("/api/");
 
-  if (acceptsJson) return res.status(500).json({ error: message });
-  return res.status(500).send(message);
+  if (acceptsJson) return res.status(status).json({ error: message });
+  return res.status(status).type("text/plain").send(message);
 });
 
 // Manejo de 404

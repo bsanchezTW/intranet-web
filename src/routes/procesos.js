@@ -15,6 +15,7 @@ const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { areaSlug, enrichAreaWithPill } = require("../constants/workAreas");
 const { isFeatureEnabled } = require("../config/features");
 const { withQueryParam } = require("../utils/returnTo");
+const { publicErrorMessage } = require("../utils/publicError");
 const {
   folderForUpload,
   uploadedDocumentPath,
@@ -441,7 +442,7 @@ router.post(
       });
     } catch (err) {
       console.error("[Procesos] Error de subida a Storage:", err);
-      res.status(500).json({ error: err.message || "Error al subir el archivo" });
+      res.status(500).json({ error: publicErrorMessage(err, "Error al subir el archivo") });
     }
   },
 );
@@ -523,7 +524,7 @@ router.post("/:seccion/:area/subir", exigirSubida, async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("[Procesos] Error guardando documento:", err);
-    res.status(500).json({ error: err.message || "Error al guardar en la base de datos" });
+    res.status(500).json({ error: publicErrorMessage(err, "Error al guardar el documento") });
   }
 });
 

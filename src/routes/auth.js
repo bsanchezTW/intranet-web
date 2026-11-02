@@ -32,6 +32,7 @@ const { consumeReturnTo } = require("../utils/returnTo");
 const requireFeature = require("../middlewares/requireFeature");
 const requirePermission = require("../middlewares/requirePermission");
 const throttle = require("../services/access/authThrottle");
+const { publicErrorMessage } = require("../utils/publicError");
 
 function getBaseUrl(req) {
   return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -506,11 +507,7 @@ router.post("/login", limitByIp("login"), async (req, res) => {
   } catch (err) {
     logger.error("auth", err);
     if (err && err.stack) console.error(err.stack);
-    const isLocal =
-      process.env.NODE_ENV !== "production" ||
-      /localhost|127\.0\.0\.1/i.test(String(process.env.APP_BASE_URL || ""));
-    const detail = isLocal && err && err.message ? `: ${err.message}` : "";
-    return fail(500, `Error interno del servidor${detail}`);
+    return fail(500, publicErrorMessage(err, "Error interno del servidor"));
   }
 });
 
