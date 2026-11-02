@@ -42,6 +42,7 @@ const { phoneClientConfig } = require("./utils/phone");
 const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { crossOriginProtection } = require("./middlewares/crossOriginProtection");
+const { securityHeaders, cspReportRouter } = require("./middlewares/securityHeaders");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
 const { checkSessionAccount, currentWorkAreaId } = require("./services/access/accountStatus");
@@ -142,7 +143,14 @@ app.locals.eventPreviewUrl = (url) => eventThumbnails.previewUrl(url) || url;
 // ================================
 // Middlewares Básicos
 // ================================
+app.disable("x-powered-by");
+// Cabeceras de seguridad y CSP (aplicada mínima + sólo reporte) en todas las
+// respuestas, estáticos incluidos.
+app.use(securityHeaders());
 app.use(compression());
+// Reportes CSP del navegador: antes de la protección CSRF, que no los manda
+// el usuario sino el navegador por su cuenta.
+app.use(cspReportRouter());
 // CSRF: antes de leer el cuerpo. Rechaza POST/PUT/PATCH/DELETE que el
 // navegador marca como de otro sitio (ver crossOriginProtection).
 app.use(crossOriginProtection());

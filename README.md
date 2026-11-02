@@ -70,5 +70,6 @@ Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas column
 - **Olvidé mi contraseña** manda un enlace de un solo uso (30 min). No cambia la contraseña actual.
 - **CSRF**: toda petición que cambia algo (POST, PUT, PATCH, DELETE) debe venir de la propia intranet según `Sec-Fetch-Site` u `Origin` (`src/middlewares/crossOriginProtection.js`). Vale el host de la petición y el de `APP_BASE_URL`; otro dominio legítimo va en `CSRF_TRUSTED_ORIGINS` (separados por coma).
 - **Sesiones**: en `<schema del país>.sessions` (Postgres), cookie `HttpOnly`, `SameSite=Lax` y `Secure` cuando la petición llega por HTTPS.
+- **Cabeceras** (`src/middlewares/securityHeaders.js`): `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS por HTTPS y una CSP mínima aplicada (`frame-ancestors`, `base-uri`, `object-src`). La CSP completa va en `Content-Security-Policy-Report-Only`: lo que bloquearía aparece en el log con la etiqueta `csp` y es la lista de scripts inline por migrar antes de aplicarla.
 
 Si encuentras un problema de seguridad, avísale directamente al equipo de Informática en vez de abrir un issue.
