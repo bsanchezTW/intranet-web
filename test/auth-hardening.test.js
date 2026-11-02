@@ -114,6 +114,11 @@ const fakePool = {
       });
       return { rows: [{ id: row.id, email: row.email }] };
     }
+    if (/^UPDATE users SET password_hash = \$1, password_salt = \$2 WHERE id = \$3 AND password_hash = \$4/.test(q)) {
+      const u = users.get(Number(params[2]));
+      if (u && u.password_hash === params[3]) Object.assign(u, { password_hash: params[0], password_salt: params[1] });
+      return { rows: [], rowCount: u ? 1 : 0 };
+    }
     throw new Error(`Consulta no simulada: ${q}`);
   },
 };
@@ -379,6 +384,31 @@ describe("login", () => {
     assert.equal(res.status, 429);
     assert.ok(Number(res.headers.get("retry-after")) > 0);
     assert.match(await res.text(), /Demasiadas solicitudes desde tu red/);
+  });
+});
+
+describe("hash de contraseñas", () => {
+  it("un login correcto con hash PBKDF2 antiguo lo cambia por scrypt, y la clave sigue sirviendo", async () => {
+    seedUser();
+    assert.match(users.get(5).password_hash, /^[0-9a-f]{64}$/);
+    assert.equal((await browser()("POST", "/login", { ...LOGIN, password: "Clave#Vieja2026" })).status, 302);
+    assert.match(users.get(5).password_hash, /^scrypt\$N=16384,r=8,p=5\$/);
+    assert.equal(users.get(5).password_salt, null);
+    assert.equal((await browser()("POST", "/login", { ...LOGIN, password: "Clave#Vieja2026" })).status, 302);
+    assert.equal((await browser()("POST", "/login", { ...LOGIN, password: "otra" })).status, 401);
+  });
+
+  it("una contraseña errada no toca el hash antiguo", async () => {
+    const { password_hash: antes } = seedUser();
+    await browser()("POST", "/login", { ...LOGIN, password: "mala" });
+    assert.equal(users.get(5).password_hash, antes);
+  });
+
+  it("la contraseña creada con el enlace ya nace en scrypt", async () => {
+    seedUser();
+    await browser()("POST", "/forgot-password", LOGIN);
+    await browser()("POST", "/reset-password", { reset_token: tokenFromMail(mails[0]), ...NUEVA });
+    assert.match(users.get(5).password_hash, /^scrypt\$/);
   });
 });
 

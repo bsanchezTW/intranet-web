@@ -8,6 +8,7 @@ const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { ROLES, ALL_ROLES, isDeshabilitado, isAdministrador } = require("../constants/roles");
 const { publicErrorMessage } = require("../utils/publicError");
+const { hashPassword } = require("../services/auth/passwords");
 const {
   DEFAULT_COLOR,
   COLOR_PALETTE,
@@ -150,17 +151,10 @@ function parseFechaNacimiento(fecha) {
   return { month: parseInt(m[2], 10) - 1, day: parseInt(m[3], 10) };
 }
 
-function pbkdf2Hash(password, saltHex) {
-  const salt = Buffer.from(saltHex, "hex");
-  return crypto
-    .pbkdf2Sync(password, salt, 120000, 32, "sha256")
-    .toString("hex");
-}
-
-function generarCredencialesTemporales() {
+/** Clave temporal para el primer acceso: se manda por correo y se cambia al entrar. */
+async function generarCredencialesTemporales() {
   const passwordTemporal = crypto.randomBytes(4).toString("hex");
-  const saltHex = crypto.randomBytes(16).toString("hex");
-  const hashHex = pbkdf2Hash(passwordTemporal, saltHex);
+  const { hash: hashHex, salt: saltHex } = await hashPassword(passwordTemporal);
   return { passwordTemporal, saltHex, hashHex };
 }
 
@@ -604,7 +598,7 @@ router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, r
 
     if (crearCuentaIntranet) {
       const { passwordTemporal, saltHex, hashHex } =
-        generarCredencialesTemporales();
+        await generarCredencialesTemporales();
 
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
@@ -1141,7 +1135,7 @@ router.post("/enviar-clave/:id", requirePermission("rrhh.colaborador.enviar_clav
     }
 
     const { passwordTemporal, saltHex, hashHex } =
-      generarCredencialesTemporales();
+      await generarCredencialesTemporales();
     await db.query(
       `UPDATE users
        SET password_hash = $1,

@@ -33,22 +33,27 @@ const requireFeature = require("../middlewares/requireFeature");
 const requirePermission = require("../middlewares/requirePermission");
 const throttle = require("../services/access/authThrottle");
 const { publicErrorMessage } = require("../utils/publicError");
+const { hashPassword, verifyPassword } = require("../services/auth/passwords");
 
 function getBaseUrl(req) {
   return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
 }
 
-function pbkdf2Hash(password, saltHex) {
-  const salt = Buffer.from(String(saltHex || ""), "hex");
-  const derived = crypto.pbkdf2Sync(String(password), salt, 120000, 32, "sha256");
-  return derived.toString("hex");
-}
-
-function safeEqualHex(a, b) {
-  const bufA = Buffer.from(a, "hex");
-  const bufB = Buffer.from(b, "hex");
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
+/**
+ * Tras un login correcto con un hash antiguo (PBKDF2) o con parámetros
+ * viejos, guarda el hash nuevo. Sólo si nadie cambió la contraseña entre
+ * tanto (WHERE password_hash = el leído). Un fallo no bloquea el login.
+ */
+async function upgradePasswordHash(userId, password, previousHash) {
+  try {
+    const { hash, salt } = await hashPassword(password);
+    await pool.query(
+      "UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3 AND password_hash = $4",
+      [hash, salt, userId, previousHash],
+    );
+  } catch (err) {
+    logger.error("auth", err);
+  }
 }
 
 function safeEqualString(a, b) {
@@ -455,17 +460,13 @@ router.post("/login", limitByIp("login"), async (req, res) => {
 
     const u = rows[0];
 
-    if (!u.password_hash || !u.password_salt) {
-      throttle.limiters.loginFailures.hit(cuenta);
-      return fail(401, "Usuario o contraseña incorrectos");
-    }
-
-    const computed = pbkdf2Hash(password, u.password_salt);
-    if (!safeEqualHex(computed, u.password_hash)) {
+    const verificacion = await verifyPassword(password, u);
+    if (!verificacion.ok) {
       throttle.limiters.loginFailures.hit(cuenta);
       return fail(401, "Usuario o contraseña incorrectos");
     }
     throttle.limiters.loginFailures.reset(cuenta);
+    if (verificacion.needsRehash) await upgradePasswordHash(u.id, password, u.password_hash);
 
     if (!u.email_confirmed) {
       const codeExpired =
@@ -624,8 +625,7 @@ router.post(
         return res.redirect("/login?exists=1");
       }
 
-      const saltHex = crypto.randomBytes(16).toString("hex");
-      const hashHex = pbkdf2Hash(password, saltHex);
+      const { hash: hashHex, salt: saltHex } = await hashPassword(password);
       const verificationCode = generateEmailVerificationCode();
       const expires = new Date(Date.now() + OTP_EXPIRES_MS);
 
@@ -1137,8 +1137,7 @@ async function resetWithToken(req, res, rawToken) {
   }
 
   try {
-    const newSalt = crypto.randomBytes(16).toString("hex");
-    const newHash = pbkdf2Hash(new_password, newSalt);
+    const { hash: newHash, salt: newSalt } = await hashPassword(new_password);
     const { rows } = await pool.query(
       `UPDATE users
           SET password_hash = $1,
@@ -1194,8 +1193,7 @@ router.post("/reset-password", limitByIp("reset"), async (req, res) => {
   }
 
   try {
-    const newSalt = crypto.randomBytes(16).toString("hex");
-    const newHash = pbkdf2Hash(new_password, newSalt);
+    const { hash: newHash, salt: newSalt } = await hashPassword(new_password);
 
     await pool.query(
       "UPDATE users SET password_hash = $1, password_salt = $2, must_change_password = FALSE WHERE id = $3",
@@ -1276,15 +1274,13 @@ router.post("/change-password", async (req, res) => {
     if (!rows.length) return res.redirect("/login");
 
     const u = rows[0];
-    const computed = pbkdf2Hash(old_password, u.password_salt);
-    if (!safeEqualHex(computed, u.password_hash)) {
+    if (!(await verifyPassword(old_password, u)).ok) {
       const error = "La contraseña actual es incorrecta.";
       if (json) return res.status(400).json({ ok: false, error });
       return redirectPasswordError(res, error);
     }
 
-    const newSalt = crypto.randomBytes(16).toString("hex");
-    const newHash = pbkdf2Hash(new_password, newSalt);
+    const { hash: newHash, salt: newSalt } = await hashPassword(new_password);
 
     await pool.query(
       "UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3",
