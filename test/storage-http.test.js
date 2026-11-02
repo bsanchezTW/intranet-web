@@ -4,6 +4,7 @@ const { Readable, PassThrough } = require("node:stream");
 
 const {
   isActiveContentType,
+  isInlineSafeContentType,
   contentDispositionFor,
   parseByteRange,
   pipeStoredStream,
@@ -32,6 +33,45 @@ describe("storage HTTP hardening", () => {
     assert.equal(isActiveContentType("text/javascript"), true);
     assert.equal(isActiveContentType("image/png"), false);
     assert.equal(isActiveContentType("application/pdf"), false);
+  });
+
+  it("neutraliza todo tipo XML, aunque no esté en ninguna lista conocida", () => {
+    // El navegador abre cualquier *+xml como documento XML y ejecuta un
+    // <script> XHTML: con la lista negra anterior estos pasaban inline.
+    for (const tipo of [
+      "application/mathml+xml",
+      "application/rdf+xml",
+      "application/vnd.foo+xml; charset=utf-8",
+      "text/xsl",
+      "application/xslt+xml",
+      "multipart/x-mixed-replace",
+    ]) {
+      assert.equal(isActiveContentType(tipo), true, tipo);
+    }
+  });
+
+  it("trata un tipo vacío, desconocido o mal escrito como activo", () => {
+    assert.equal(isActiveContentType(""), true);
+    assert.equal(isActiveContentType(undefined), true);
+    assert.equal(isActiveContentType("application/octet-stream"), true);
+    assert.equal(isActiveContentType("application/x-unknown"), true);
+    assert.equal(isActiveContentType("text/html "), true);
+  });
+
+  it("sirve inline sólo imágenes rasterizadas, audio, video, PDF y texto plano", () => {
+    for (const tipo of [
+      "image/jpeg",
+      "IMAGE/PNG",
+      "image/webp",
+      "video/mp4",
+      "video/quicktime",
+      "audio/mpeg",
+      "application/pdf",
+      "text/plain; charset=utf-8",
+    ]) {
+      assert.equal(isInlineSafeContentType(tipo), true, tipo);
+      assert.equal(isActiveContentType(tipo), false, tipo);
+    }
   });
 
   it("genera Content-Disposition seguro y codificado", () => {

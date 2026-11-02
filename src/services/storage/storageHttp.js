@@ -1,18 +1,43 @@
 const path = require("node:path");
 const { pipeline } = require("node:stream/promises");
 
-const ACTIVE_CONTENT_TYPES = new Set([
-  "application/atom+xml",
-  "application/ecmascript",
-  "application/javascript",
-  "application/rss+xml",
-  "application/xhtml+xml",
-  "application/xml",
-  "image/svg+xml",
-  "text/html",
-  "text/ecmascript",
-  "text/javascript",
-  "text/xml",
+/**
+ * Tipos que se pueden servir inline desde el origen de la intranet.
+ *
+ * Es una lista blanca a propósito. La lista negra anterior (HTML, SVG, XML…)
+ * dejaba pasar cualquier `application/*+xml` (MathML, RDF…), que el navegador
+ * abre como documento XML y en el que ejecuta un <script> XHTML. Como el
+ * Content-Type de un comprobante o un adjunto lo declara quien lo sube, lo
+ * que no está aquí se entrega como descarga, en un sandbox y sin su tipo.
+ *
+ * Ninguno de estos tipos ejecuta código en el documento: imágenes rasterizadas,
+ * audio, video, texto plano (con nosniff no se reinterpreta como HTML) y PDF
+ * (el visor del navegador corre aislado del origen).
+ */
+const INLINE_SAFE_CONTENT_TYPES = new Set([
+  "image/jpeg",
+  "image/pjpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+  "image/avif",
+  "image/x-icon",
+  "image/vnd.microsoft.icon",
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "video/quicktime",
+  "video/x-m4v",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/aac",
+  "audio/ogg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/webm",
+  "application/pdf",
+  "text/plain",
 ]);
 
 function baseContentType(contentType) {
@@ -22,8 +47,16 @@ function baseContentType(contentType) {
     .toLowerCase();
 }
 
+function isInlineSafeContentType(contentType) {
+  return INLINE_SAFE_CONTENT_TYPES.has(baseContentType(contentType));
+}
+
+/**
+ * ¿Hay que neutralizar este tipo (descarga + sandbox)? Todo lo que no está en
+ * la lista blanca, incluido un tipo vacío o desconocido.
+ */
 function isActiveContentType(contentType) {
-  return ACTIVE_CONTENT_TYPES.has(baseContentType(contentType));
+  return !isInlineSafeContentType(contentType);
 }
 
 function contentDispositionFor(file = {}) {
@@ -121,8 +154,9 @@ async function pipeStoredStream(stream, res, signal) {
 }
 
 module.exports = {
-  ACTIVE_CONTENT_TYPES,
+  INLINE_SAFE_CONTENT_TYPES,
   baseContentType,
+  isInlineSafeContentType,
   isActiveContentType,
   contentDispositionFor,
   parseByteRange,
