@@ -44,6 +44,7 @@ const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
 const { crossOriginProtection } = require("./middlewares/crossOriginProtection");
 const { securityHeaders, cspReportRouter } = require("./middlewares/securityHeaders");
+const { saveSessionBeforeRedirect } = require("./middlewares/saveSessionBeforeRedirect");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
 const { checkSessionAccount, currentWorkAreaId } = require("./services/access/accountStatus");
@@ -331,6 +332,7 @@ app.use(
     },
   }),
 );
+app.use(saveSessionBeforeRedirect);
 
 // La sesión se renueva sola en cada petición y guarda el rol del login: se
 // contrasta con la base para que deshabilitar, eliminar o cambiar el rol de
