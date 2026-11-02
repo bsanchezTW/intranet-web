@@ -638,9 +638,11 @@ router.get("/perfil", async (req, res) => {
     titulo: "Mi perfil",
     documentoConfig: nationalIdClientConfig(),
     documentoBloqueado,
-    success: req.query.ok || null,
-    error: req.query.error || null,
-    passwordError: req.query.password_error || null,
+    success: typeof req.query.ok === "string" ? req.query.ok : null,
+    error: typeof req.query.error === "string" ? req.query.error : null,
+    // Viene de la URL: la vista lo escapa, pero sólo se acepta texto.
+    passwordError:
+      typeof req.query.password_error === "string" ? req.query.password_error : null,
     openPasswordModal: req.query.openPasswordModal === "1",
     usuario: {
       ...raw,

@@ -348,7 +348,7 @@
 <script>
   const modal = document.getElementById('modalReglasCurso');
   const tituloModal = document.getElementById('modalCursoTitulo');
-  const progresoData = <%- JSON.stringify(typeof progresoUsuario !== 'undefined' ? progresoUsuario : {}) %>;
+  const progresoData = <%- JSON.stringify(typeof progresoUsuario !== 'undefined' ? progresoUsuario : {}).replace(/</g, '\\u003c') %>;
 
   function mostrarCursos(idLista, cardElement, titulo) {
     const area = document.getElementById('areaDespliegueCursos');

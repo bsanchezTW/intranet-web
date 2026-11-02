@@ -1026,10 +1026,10 @@
     (function initUsernameFields() {
       // Misma lista que valida el servidor (config/country.js), inyectada para
       // no mantener dos copias que se desincronicen.
-      const ALLOWED_DOMAINS = new Set(<%- JSON.stringify(countryConfig.allowedLoginDomains) %>);
-      const FORBIDDEN_TLD = <%- JSON.stringify(countryConfig.forbiddenEmailTld) %>;
-      const DEFAULT_DOMAIN = <%- JSON.stringify(countryConfig.corporateEmailDomain) %>;
-      const COUNTRY_NAME = <%- JSON.stringify(countryConfig.name) %>;
+      const ALLOWED_DOMAINS = new Set(<%- JSON.stringify(countryConfig.allowedLoginDomains).replace(/</g, '\\u003c') %>);
+      const FORBIDDEN_TLD = <%- JSON.stringify(countryConfig.forbiddenEmailTld).replace(/</g, '\\u003c') %>;
+      const DEFAULT_DOMAIN = <%- JSON.stringify(countryConfig.corporateEmailDomain).replace(/</g, '\\u003c') %>;
+      const COUNTRY_NAME = <%- JSON.stringify(countryConfig.name).replace(/</g, '\\u003c') %>;
       const FOREIGN_DOMAIN_MSG = 'El dominio .' + FORBIDDEN_TLD + ' no está disponible en ' + COUNTRY_NAME + '.';
 
       function isForbiddenDomain(domain) {
@@ -1179,7 +1179,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/js/profile-photo-cropper.js?v=20261013b"></script>
   <script src="/js/password-strength.js?v=20260916q"></script>
-  <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
+  <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()).replace(/</g, '\\u003c') %>;</script>
   <script src="/js/phone.js?v=20260910n"></script>
   <script>
     (function initRegisterForm() {
