@@ -72,6 +72,19 @@ describe("integración con Postgres", { skip: !URL_PG && "sin INTEGRATION_PG_URL
     );
   });
 
+  it("tareas: un solo proceso gana el periodo", async () => {
+    const { createJobRunner } = require("../src/services/jobs/jobRunner");
+    let corridas = 0;
+    const jobs = [{ name: "prueba", intervalMs: 60 * 60 * 1000, enabled: () => true, run: async () => { corridas += 1; return "ok"; } }];
+    const procesos = Array.from({ length: 6 }, () => createJobRunner({ db, schema: SCHEMA, jobs }));
+    await Promise.all(procesos.map((p) => p.runJob("prueba")));
+    assert.equal(corridas, 1);
+    assert.equal((await procesos[0].runJob("prueba")).status, "no-toca");
+    assert.equal((await procesos[0].runJob("prueba", { force: true })).ran, true);
+    const { rows } = await pool.query(`SELECT last_status FROM ${SCHEMA}.job_runs WHERE name = 'prueba'`);
+    assert.equal(rows[0].last_status, "ok");
+  });
+
   it("cupo del asistente: el ON CONFLICT con tope es atómico", async () => {
     const { createAssistantQuota } = require("../src/services/assistant/assistantQuota");
     const quota = createAssistantQuota({

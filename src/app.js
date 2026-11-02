@@ -100,7 +100,11 @@ const {
   DEFAULT_APP_CATALOG,
 } = require("./constants/appCatalogs");
 const { rememberReturnTo } = require("./utils/returnTo");
-const vacationRequestService = require("./services/vacations/vacationRequestService");
+const {
+  createJobRunner,
+  defaultJobs,
+  inProcessJobsEnabled,
+} = require("./services/jobs/jobRunner");
 
 // ================================
 // Inicializar app
@@ -731,112 +735,18 @@ app.use((req, res) => {
 });
 
 // ==========================================
-// TAREA 1: CERRAR TICKETS ANTIGUOS
+// TAREAS PROGRAMADAS
 // ==========================================
-function iniciarTareaCierreTickets() {
-  const ejecutarCierre = async () => {
-    try {
-      const sql = `
-        UPDATE support_tickets 
-        SET status = 'closed', closed_at = NOW(), auto_closed = TRUE
-        WHERE status = 'pending_close' 
-        AND resolved_at < (NOW() - INTERVAL '1 day')
-      `;
-
-      const result = await db.query(sql);
-      const afectados = result.rowCount || result.affectedRows || 0;
-
-      if (afectados > 0) {
-        logger.info("cron", `cerrados ${afectados} ticket(s) pendiente(s) de cierre`);
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutarCierre();
-  setInterval(ejecutarCierre, 3600000);
-  return first;
-}
-
-// ==========================================
-// TAREA 2: LIMPIEZA DE HISTORIAL
-// ==========================================
-function iniciarLimpiezaHistorial() {
-  const ejecutarLimpieza = async () => {
-    try {
-      const sql = `
-        DELETE FROM change_log 
-        WHERE created_at < (NOW() - INTERVAL '5 days')
-      `;
-
-      const result = await db.query(sql);
-      const borrados = result.rowCount || result.affectedRows || 0;
-
-      if (borrados > 0) {
-        logger.info("cron", `eliminados ${borrados} registro(s) de historial`);
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutarLimpieza();
-  setInterval(ejecutarLimpieza, 43200000);
-  return first;
-}
-
-// ==========================================
-// TAREA 2b: BORRADORES DE GASTOS CADUCADOS
-// ==========================================
-// Un borrador sin cambios en DRAFT_TTL_DAYS días se elimina con sus líneas y
-// sus comprobantes del bucket: nadie va a volver por él y sólo ocupa espacio.
-function iniciarPurgaBorradoresGastos() {
-  const expenseRequests = require("./services/expenses/expenseRequestService");
-  const ejecutar = async () => {
-    try {
-      const { drafts, files } = await expenseRequests.purgeStaleDrafts();
-      if (drafts > 0) {
-        logger.info("cron", `eliminados ${drafts} borrador(es) de gastos y ${files} comprobante(s)`);
-      }
-      // Después de la purga, para que sus archivos no cuenten como en uso.
-      const huerfanos = await expenseRequests.purgeOrphanUploads();
-      if (huerfanos.deleted > 0) {
-        logger.info("cron", `eliminados ${huerfanos.deleted} comprobante(s) de gastos sin solicitud`);
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutar();
-  setInterval(ejecutar, 43200000);
-  return first;
-}
-
-// ==========================================
-// TAREA 3: TRANSICIONES DE ESTADO DE VACACIONES
-// ==========================================
-function iniciarTransicionesVacaciones() {
-  const ejecutar = async () => {
-    try {
-      const { inProgress, completed } =
-        await vacationRequestService.runDailyStatusTransitions();
-      if (inProgress > 0 || completed > 0) {
-        logger.info(
-          "cron",
-          `vacaciones: ${inProgress} en curso, ${completed} completadas`,
-        );
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutar();
-  setInterval(ejecutar, 43200000);
-  return first;
-}
+// Cierre de tickets, limpieza de historial, purga de gastos y transiciones
+// de vacaciones. Quién las corre lo decide la base (services/jobs): sin
+// duplicados entre procesos ni repeticiones en cada reinicio. Con un cron
+// del servidor (scripts/tareas.js) se apaga el intervalo con
+// IN_PROCESS_JOBS=false.
+const jobRunner = createJobRunner({
+  db,
+  schema: getCountryDbBinding(countryConfig.code).schema,
+  jobs: defaultJobs({ db, isFeatureEnabled }),
+});
 
 async function sincronizarUsuariosDeshabilitados() {
   try {
@@ -1124,10 +1034,7 @@ async function runStartupDbTasks() {
     await step();
   }
 
-  if (isFeatureEnabled("supportTickets")) await iniciarTareaCierreTickets();
-  await iniciarLimpiezaHistorial();
-  if (isFeatureEnabled("vacations")) await iniciarTransicionesVacaciones();
-  await iniciarPurgaBorradoresGastos();
+  if (inProcessJobsEnabled()) jobRunner.startInterval();
 }
 
 function startBackgroundJobs() {
