@@ -1,4 +1,4 @@
-const { rememberReturnTo } = require("../utils/returnTo");
+const { denyUnauthenticated, denyForbidden } = require("../utils/httpResponses");
 const { canManageRrhh } = require("../services/access/staffAccess");
 
 /**
@@ -9,22 +9,9 @@ const { canManageRrhh } = require("../services/access/staffAccess");
  * administrador de otra área ya no opera aquí: ocultar el menú no basta, la
  * ruta también se cierra.
  */
-function wantsJsonResponse(req) {
-  const accept = req.headers.accept || "";
-  return req.xhr || accept.includes("application/json");
-}
-
 function requireRrhhManager() {
   return async (req, res, next) => {
-    if (!req.session || !req.session.user) {
-      rememberReturnTo(req);
-      if (wantsJsonResponse(req)) {
-        return res
-          .status(401)
-          .json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
-      }
-      return res.redirect("/login");
-    }
+    if (!req.session || !req.session.user) return denyUnauthenticated(req, res);
 
     try {
       if (await canManageRrhh(req.session.user)) return next();
@@ -34,12 +21,7 @@ function requireRrhhManager() {
 
     const message =
       "Sólo los administradores de RRHH e Informática pueden entrar a esta sección.";
-    if (wantsJsonResponse(req)) {
-      return res.status(403).json({ error: message });
-    }
-    return res.status(403).render("acceso_no_permitido", {
-      titulo: "Acceso no permitido",
-    });
+    return denyForbidden(req, res, message);
   };
 }
 

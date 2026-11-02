@@ -99,7 +99,7 @@ const {
   APP_CATALOG_VALUES,
   DEFAULT_APP_CATALOG,
 } = require("./constants/appCatalogs");
-const { rememberReturnTo } = require("./utils/returnTo");
+const { wantsJson, denyUnauthenticated } = require("./utils/httpResponses");
 const {
   createJobRunner,
   defaultJobs,
@@ -352,7 +352,7 @@ app.use(async (req, res, next) => {
 
   return req.session.destroy(() => {
     res.clearCookie(countryConfig.sessionCookieName);
-    if (wantsJsonResponse(req)) {
+    if (wantsJson(req)) {
       return res.status(401).json({ error: "Tu cuenta ya no tiene acceso a la intranet." });
     }
     return res.redirect("/login");
@@ -631,29 +631,10 @@ app.use(async (req, res, next) => {
 // ================================
 // Middleware de protección
 // ================================
-function wantsJsonResponse(req) {
-  const accept = req.headers.accept || "";
-  const requestedWith = String(req.get("X-Requested-With") || "");
-  const contentType = String(req.get("Content-Type") || "");
-  return (
-    req.xhr ||
-    requestedWith.toLowerCase() === "fetch" ||
-    accept.includes("application/json") ||
-    contentType.includes("application/json") ||
-    /\/(api|upload)\//.test(req.originalUrl) ||
-    req.originalUrl.includes("/adjuntos/")
-  );
-}
 
 function requireAuth(req, res, next) {
   if (req.session && req.session.user) return next();
-  rememberReturnTo(req);
-  if (wantsJsonResponse(req)) {
-    return res
-      .status(401)
-      .json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
-  }
-  return res.redirect("/login");
+  return denyUnauthenticated(req, res);
 }
 
 // ================================
