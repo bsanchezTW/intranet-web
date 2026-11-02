@@ -124,8 +124,6 @@ let baseUrl;
 let throttle;
 
 before(async () => {
-  process.env.AUTH_USER = "";
-  process.env.AUTH_PASS = "";
   stubModule("db.js", fakePool);
   stubModule("services/mailer.js", {
     sendMail: async (msg) => {
@@ -313,6 +311,24 @@ describe("código de verificación", () => {
 });
 
 describe("login", () => {
+  it("AUTH_USER/AUTH_PASS ya no abren una sesión de administrador", async () => {
+    process.env.AUTH_USER = "admin";
+    process.env.AUTH_PASS = "Clave#Maestra2026";
+    try {
+      const res = await browser()("POST", "/login", {
+        username: "admin",
+        domain: "transworld.cl",
+        password: "Clave#Maestra2026",
+      });
+      assert.equal(res.status, 401);
+    } finally {
+      delete process.env.AUTH_USER;
+      delete process.env.AUTH_PASS;
+    }
+    const source = fs.readFileSync(path.join(SRC, "routes/auth.js"), "utf8");
+    assert.doesNotMatch(source, /AUTH_USER|AUTH_PASS/);
+  });
+
   it("tras cinco contraseñas erradas bloquea la cuenta un rato, aunque la sexta sea correcta", async () => {
     seedUser();
     const request = browser();

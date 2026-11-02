@@ -20,7 +20,6 @@ const { isRrhhAreaName } = require("../../constants/rrhhArea");
 
 const CACHE_TTL_MS = 60 * 1000;
 const NO_ACCESS = Object.freeze({ informaticaAdmin: false, rrhhAdmin: false, canManageRrhh: false });
-const FULL_ACCESS = Object.freeze({ informaticaAdmin: true, rrhhAdmin: false, canManageRrhh: true });
 
 let cache = { expiresAt: 0, byUserId: new Map() };
 
@@ -33,14 +32,6 @@ function accessProfile({ role, area_name: areaName, managed_area_names: managed 
   const informaticaAdmin = isSupportAreaName(areaName);
   const rrhhAdmin = [areaName, ...(managed || [])].some((name) => isRrhhAreaName(name, countryCode));
   return { informaticaAdmin, rrhhAdmin, canManageRrhh: informaticaAdmin || rrhhAdmin };
-}
-
-/**
- * El login de emergencia de AUTH_USER/AUTH_PASS (id 0) no existe en `users`
- * ni tiene área: es la cuenta de desarrollo, así que conserva acceso total.
- */
-function isMasterLogin(user) {
-  return user.id === 0 && isAdministrador(normalizeRole(user.role));
 }
 
 async function fetchProfiles() {
@@ -65,7 +56,6 @@ async function fetchProfiles() {
  */
 async function profileFor(user) {
   if (!user || user.id == null) return NO_ACCESS;
-  if (isMasterLogin(user)) return FULL_ACCESS;
 
   if (cache.expiresAt <= Date.now()) {
     try {

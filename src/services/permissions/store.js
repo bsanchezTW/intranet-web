@@ -505,8 +505,8 @@ async function revokeFromUser({ userId, permissionKey, deleteIds = [], deny = fa
 
 /**
  * Marca o desmarca a un superadmin. Nadie cambia su propia marca y nunca
- * queda la intranet sin un superadmin activo (el login de emergencia no
- * cuenta: es para recuperar el acceso, no para operar).
+ * queda la intranet sin un superadmin activo. Si igual faltara (la base se
+ * editó a mano), se recupera con scripts/superadmin.js desde el servidor.
  */
 async function setSuperadmin(userId, value, actorId) {
   const id = toId(userId);

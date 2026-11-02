@@ -409,16 +409,6 @@ router.post("/login", limitByIp("login"), async (req, res) => {
   const username = bodyString(req.body && req.body.username);
   const password = bodyString(req.body && req.body.password);
   const domain = bodyString(req.body && req.body.domain);
-  const validUser =
-    typeof process.env.AUTH_USER === "string"
-      ? process.env.AUTH_USER.trim()
-      : "";
-  const validPass =
-    typeof process.env.AUTH_PASS === "string"
-      ? process.env.AUTH_PASS.trim()
-      : "";
-  const envBypassEnabled = validUser.length > 0 && validPass.length > 0;
-
   const fail = (status, error) => {
     if (json) return res.status(status).json({ ok: false, error });
     return renderAuthPage(res, "login", { status, error });
@@ -428,30 +418,6 @@ router.post("/login", limitByIp("login"), async (req, res) => {
     if (json) return res.json({ ok: true, redirect });
     return res.redirect(redirect);
   };
-
-  // Solo permitir bypass estático si AUTH_USER y AUTH_PASS están configurados (no vacíos).
-  if (
-    envBypassEnabled &&
-    username.length > 0 &&
-    password.length > 0 &&
-    safeEqualString(username, validUser) &&
-    safeEqualString(password, validPass)
-  ) {
-    try {
-      await regenerateSession(req);
-    } catch (err) {
-      logger.error("auth", err);
-      return fail(500, "No se pudo iniciar la sesión. Intenta de nuevo.");
-    }
-    req.session.user = {
-      id: 0,
-      username: validUser,
-      role: ROLES.ADMINISTRADOR,
-      email: null,
-      foto: null,
-    };
-    return succeed(consumeReturnTo(req.session));
-  }
 
   try {
     if (!username.trim() || !password) {

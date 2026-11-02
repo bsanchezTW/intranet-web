@@ -148,8 +148,6 @@ let server;
 let baseUrl;
 
 before(async () => {
-  process.env.AUTH_USER = "";
-  process.env.AUTH_PASS = "";
   stubModule("db.js", fakePool);
   stubModule("services/mailer.js", {
     sendMail: async (msg) => {
