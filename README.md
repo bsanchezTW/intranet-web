@@ -63,6 +63,8 @@ test/
 
 **Tareas programadas** (cierre de tickets, limpieza de historial, purga de gastos, vacaciones): la app las revisa cada 5 minutos y `<schema>.job_runs` decide que corran una sola vez por periodo. Para no depender de que Passenger mantenga vivo el proceso, programa en cPanel → Cron Jobs, cada 15 minutos y por país, `node scripts/tareas.js --pais CL` (y `--pais PE`), y define `IN_PROCESS_JOBS=false` en la app.
 
+**Correo de soporte** (`npm run email-listener`): procesa todos los correos nuevos por UID (el último procesado queda en `<schema>.email_intake_state`; la primera vez parte del final del buzón), reconecta solo si IMAP se corta e ignora respuestas automáticas, rebotes y correos de la propia casilla.
+
 El test de integración con Postgres (`test/pg-integration.test.js`) corre sólo con `INTEGRATION_PG_URL` apuntando a una base desechable.
 
 Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas columnas nuevas también se aseguran al arrancar (`asegurar*` en `src/app.js`), por ejemplo las de autenticación (`confirm_attempts`, `password_reset_token_hash`, `password_reset_expires`).

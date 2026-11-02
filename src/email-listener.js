@@ -1,105 +1,57 @@
 // email-listener.js
 //
-// Escucha el buzón IMAP del correo de soporte
-// y crea un ticket nuevo en la tabla `support_tickets` por cada correo entrante.
+// Escucha el buzón IMAP de soporte y crea un ticket en `support_tickets` por
+// cada correo nuevo. La lógica (UID, reconexión, filtros) vive en
+// services/tickets/emailIntake.js.
 
 require("./config/env");
 const { isFeatureEnabled } = require("./config/features");
 const { getCurrentCountry } = require("./config/country");
-const { DEFAULT_TICKET_CATEGORY } = require("./constants/ticketCategories");
+const logger = require("./utils/logger");
 
 if (!isFeatureEnabled("supportTickets")) {
-  console.log(
-    `[email-listener] Tickets no disponibles en ${getCurrentCountry()}. Saliendo.`,
-  );
+  logger.info("correo", `Tickets no disponibles en ${getCurrentCountry()}. Saliendo.`);
   process.exit(0);
 }
 
-const { ImapFlow } = require('imapflow');
-const { simpleParser } = require('mailparser');
-const db = require('./db');
+const { ImapFlow } = require("imapflow");
+const { simpleParser } = require("mailparser");
+const db = require("./db");
+const { getCountryDbBinding } = require("./config/supabaseProjects");
+const { createEmailIntake, createEmailListener } = require("./services/tickets/emailIntake");
 
-async function main() {
-  const client = new ImapFlow({
-    host: process.env.IMAP_HOST || 'outlook.office365.com',
-    port: process.env.IMAP_PORT ? Number(process.env.IMAP_PORT) : 993,
-    secure: true,
-    auth: {
-      user: process.env.IMAP_USER,
-      pass: process.env.IMAP_PASS 
-    }
-  });
+const intake = createEmailIntake({
+  db,
+  schema: getCountryDbBinding(getCurrentCountry()).schema,
+  parse: (source) => simpleParser(source),
+  // Los correos que manda la propia casilla (notificaciones) no son tickets.
+  ownAddress: process.env.IMAP_USER,
+  logger,
+});
 
-  console.log('Conectando a IMAP...');
-  await client.connect();
-  console.log('Conectado a IMAP.');
+const listener = createEmailListener({
+  createClient: () =>
+    new ImapFlow({
+      host: process.env.IMAP_HOST || "outlook.office365.com",
+      port: process.env.IMAP_PORT ? Number(process.env.IMAP_PORT) : 993,
+      secure: true,
+      auth: { user: process.env.IMAP_USER, pass: process.env.IMAP_PASS },
+      logger: false,
+    }),
+  intake,
+  logger,
+});
 
-  await client.mailboxOpen('INBOX');
-  console.log('INBOX abierto. Esperando nuevos correos...');
-
-  client.on('exists', async () => {
-    try {
-      const seq = client.mailbox.exists; // último mensaje
-      const message = await client.fetchOne(seq, { source: true });
-
-      const parsed = await simpleParser(message.source);
-
-      const from = parsed.from && parsed.from.value && parsed.from.value[0];
-      const requester_email = from ? from.address : null;
-      const requester_name = from ? (from.name || from.address) : null;
-
-      const title = (parsed.subject || '(sin asunto)').substring(0, 255);
-      const description =
-        parsed.text || parsed.html || '(sin contenido en el correo)';
-
-      const category = DEFAULT_TICKET_CATEGORY;
-      const priority = 'medium';
-      const status = 'open';
-
-      if (!requester_email) {
-        console.log(
-          'Correo recibido sin remitente válido, no se crea ticket.'
-        );
-        return;
-      }
-
-      const { rows } = await db.queryRetryIdCollision(
-        `
-        INSERT INTO support_tickets (
-          title,
-          description,
-          category,
-          priority,
-          status,
-          requester_name,
-          requester_email
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id
-      `,
-        [
-          title,
-          description,
-          category,
-          priority,
-          status,
-          requester_name,
-          requester_email
-        ],
-      );
-
-      console.log(
-        `Ticket creado desde email. ID: ${rows[0].id}, remitente: ${requester_email}`
-      );
-    } catch (err) {
-      console.error('Error procesando nuevo correo:', err);
-    }
-  });
-
-  client.on('error', (err) => {
-    console.error('Error en cliente IMAP:', err);
-  });
+async function shutdown(signal) {
+  logger.info("correo", `${signal}: cerrando`);
+  await listener.stop();
+  await db.pool.end().catch(() => {});
+  process.exit(0);
 }
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
-main().catch((err) => {
-  console.error('Error iniciando email-listener:', err);
+listener.run().catch((err) => {
+  logger.error("correo", err);
+  process.exit(1);
 });
