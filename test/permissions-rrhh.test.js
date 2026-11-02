@@ -202,6 +202,39 @@ describe("escalada de RRHH", () => {
     }), null, "habilitar sigue en RRHH");
   });
 
+  it("sólo el superadmin cambia el correo de un administrador o superadmin", () => {
+    const cambio = { antes: { email: "ana@transworld.cl" }, despues: { email: "otra@gmail.com" } };
+    assert.equal(
+      rechazoEscalada({ actorId: actor, targetId: 31, objetivoPrivilegiado: true, ...cambio }),
+      "correo-privilegiado",
+    );
+    assert.equal(
+      rechazoEscalada({ superadmin: true, actorId: actor, targetId: 31, objetivoPrivilegiado: true, ...cambio }),
+      null,
+    );
+    assert.equal(
+      rechazoEscalada({ actorId: actor, targetId: 31, objetivoPrivilegiado: false, ...cambio }),
+      null,
+      "el correo de un usuario común lo corrige RRHH",
+    );
+    assert.equal(
+      rechazoEscalada({ actorId: actor, targetId: actor, objetivoPrivilegiado: true, ...cambio }),
+      null,
+      "cada uno corrige el suyo",
+    );
+    assert.equal(
+      rechazoEscalada({
+        actorId: actor,
+        targetId: 31,
+        objetivoPrivilegiado: true,
+        antes: { email: "Ana@Transworld.cl" },
+        despues: { email: " ana@transworld.cl" },
+      }),
+      null,
+      "mayúsculas y espacios no son un cambio",
+    );
+  });
+
   it("renombrar o crear un área con nombre que da permisos es del superadmin", () => {
     assert.equal(rechazoNombreArea({ antes: "Comercial", despues: "Informática" }), "nombre-area-sensible");
     assert.equal(rechazoNombreArea({ antes: "TI", despues: "Comercial" }), "nombre-area-sensible");

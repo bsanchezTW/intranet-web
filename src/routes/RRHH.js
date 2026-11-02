@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fileStorage = require("../services/fileStorage");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
-const { ROLES, ALL_ROLES, isDeshabilitado } = require("../constants/roles");
+const { ROLES, ALL_ROLES, isDeshabilitado, isAdministrador } = require("../constants/roles");
 const {
   DEFAULT_COLOR,
   COLOR_PALETTE,
@@ -268,6 +268,20 @@ function invalidarCachesDeArea() {
   invalidateAccountStatus();
   // Área, jefatura y rol cambian quién recibe qué en Gestión de Permisos.
   invalidatePermissions();
+}
+
+/**
+ * ¿La persona es superadmin? La columna la crea permissionSchema al arrancar;
+ * si todavía no existe, nadie lo es.
+ */
+async function esSuperadmin(userId) {
+  try {
+    const { rows } = await db.query("SELECT is_superadmin FROM users WHERE id = $1", [userId]);
+    return Boolean(rows[0] && rows[0].is_superadmin);
+  } catch (err) {
+    if (err && err.code === "42703") return false;
+    throw err;
+  }
 }
 
 function negarPermiso(res) {
@@ -927,9 +941,18 @@ router.post(
         superadmin: Boolean(req.perms && req.perms.superadmin),
         actorId: req.session.user && req.session.user.id,
         targetId: id,
-        antes: { role: prevUser.role, areaId: prevUser.work_area_id },
-        despues: { role: roleToSave, areaId },
+        antes: { role: prevUser.role, areaId: prevUser.work_area_id, email: prevUser.email },
+        despues: { role: roleToSave, areaId, email: emailClean },
+        objetivoPrivilegiado:
+          isAdministrador(prevUser.role) || (await esSuperadmin(id)),
       });
+      if (motivo === "correo-privilegiado") {
+        return redirectPersonalEditarError(
+          res,
+          id,
+          "Sólo el superadmin puede cambiar el correo de un administrador.",
+        );
+      }
       if (motivo) return negarPermiso(res);
       const registro = { ownerId: Number(id), areaId: prevUser.work_area_id };
       for (const clave of clavesDeEdicion(cambios)) {
