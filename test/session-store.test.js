@@ -25,7 +25,8 @@ function fakeDb({ clock }) {
       const q = sql.replace(/\s+/g, " ").trim();
       log.push(q);
       let m;
-      if ((m = /^CREATE TABLE IF NOT EXISTS (\w+\.sessions)/.exec(q))) {
+      // La tabla y su índice llegan en una sola consulta con lock (lockedDdl).
+      if ((m = /^SELECT pg_advisory_xact_lock\(hashtext\('(\w+\.sessions)'\)\); CREATE TABLE IF NOT EXISTS \1 .*CREATE INDEX IF NOT EXISTS/.exec(q))) {
         if (!tables.has(m[1])) tables.set(m[1], new Map());
         return { rows: [], rowCount: 0 };
       }
@@ -93,7 +94,8 @@ describe("PgSessionStore", () => {
     const store = new PgSessionStore({ db, schema: "chile", now: clock.now });
     await promisify(store, "set", "abc", sessionData(clock, { user: { id: 7 } }));
     assert.ok(db.tables.has("chile.sessions"));
-    assert.equal(db.log.filter((q) => q.startsWith("CREATE TABLE")).length, 1);
+    assert.equal(db.log.filter((q) => q.includes("CREATE TABLE")).length, 1);
+    assert.match(db.log[0], /^SELECT pg_advisory_xact_lock\(hashtext\('chile\.sessions'\)\);/, "el lock va antes del DDL");
     assert.ok(db.log.every((q) => !/ sessions\b/.test(q) || /chile\.sessions/.test(q)), "nunca usa la tabla sin schema");
   });
 

@@ -27,7 +27,7 @@ function quotaDb({ failWith = null } = {}) {
       const q = sql.replace(/\s+/g, " ").trim();
       log.push(q);
       if (failWith) throw failWith;
-      if (/^CREATE TABLE IF NOT EXISTS \w+\.assistant_usage/.test(q)) return { rows: [] };
+      if (/^SELECT pg_advisory_xact_lock\(hashtext\('\w+\.assistant_usage'\)\); CREATE TABLE IF NOT EXISTS \w+\.assistant_usage/.test(q)) return { rows: [] };
       if (/^INSERT INTO \w+\.assistant_usage/.test(q)) {
         const [userId, , limit] = params;
         const key = `${userId}|hoy`;

@@ -29,6 +29,49 @@ describe("integración con Postgres", { skip: !URL_PG && "sin INTEGRATION_PG_URL
     await pool.end();
   });
 
+  it("tablas que se crean al primer uso: varios procesos a la vez no chocan", async () => {
+    // Schema propio y vacío: es el primer despliegue, con varios procesos de
+    // Passenger atendiendo peticiones a la vez. Sin el lock de lockedDdl, uno
+    // choca con otro en los catálogos (23505) y esa petición responde 500.
+    const FRESCO = "it_primer_uso";
+    await pool.query(`DROP SCHEMA IF EXISTS ${FRESCO} CASCADE`);
+    await pool.query(`CREATE SCHEMA ${FRESCO}`);
+    try {
+      const { PgSessionStore } = require("../src/services/session/pgSessionStore");
+      const { createAssistantQuota } = require("../src/services/assistant/assistantQuota");
+      const { createJobRunner } = require("../src/services/jobs/jobRunner");
+      const { createEmailIntake } = require("../src/services/tickets/emailIntake");
+      const silent = { info() {}, warn() {}, error() {} };
+      const PROCESOS = 8;
+      const primerUso = [];
+      for (let i = 0; i < PROCESOS; i += 1) {
+        const store = new PgSessionStore({ db, schema: FRESCO });
+        primerUso.push(new Promise((resolve, reject) => store.get("x", (err) => (err ? reject(err) : resolve()))));
+        primerUso.push(
+          createAssistantQuota({ db, schema: FRESCO, timezone: "UTC", limits: { daily: 100, perMinute: 100 } })
+            .reserve(1)
+            .then((r) => { if (!r.ok) throw new Error(r.error); }),
+        );
+        primerUso.push(
+          createJobRunner({ db, schema: FRESCO, jobs: [{ name: "x", intervalMs: 1000, enabled: () => true, run: async () => "ok" }] })
+            .runJob("x"),
+        );
+        primerUso.push(createEmailIntake({ db, schema: FRESCO, parse: async () => ({}), logger: silent }).loadState());
+      }
+      const resultados = await Promise.allSettled(primerUso);
+      const fallos = resultados.filter((r) => r.status === "rejected").map((r) => r.reason.message);
+      assert.deepEqual(fallos, []);
+
+      const { rows } = await pool.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name`,
+        [FRESCO],
+      );
+      assert.deepEqual(rows.map((r) => r.table_name), ["assistant_usage", "email_intake_state", "job_runs", "sessions"]);
+    } finally {
+      await pool.query(`DROP SCHEMA IF EXISTS ${FRESCO} CASCADE`);
+    }
+  });
+
   it("sesiones: guarda, lee, renueva, vence y borra", async () => {
     const { PgSessionStore } = require("../src/services/session/pgSessionStore");
     const store = new PgSessionStore({ db, schema: SCHEMA, touchIntervalMs: 0 });

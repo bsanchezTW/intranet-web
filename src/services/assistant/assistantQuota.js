@@ -1,5 +1,6 @@
 const logger = require("../../utils/logger");
 const { createRateLimiter } = require("../../utils/rateLimiter");
+const { lockedDdl } = require("../schema/lockedDdl");
 
 /**
  * Cuota del asistente por persona.
@@ -46,14 +47,16 @@ function createAssistantQuota({ db, schema, timezone, limits = quotaLimits(), no
     if (!readyPromise) {
       readyPromise = db
         .query(
-          `CREATE TABLE IF NOT EXISTS ${table} (
-             user_id       integer NOT NULL,
-             day           date    NOT NULL,
-             turns         integer NOT NULL DEFAULT 0,
-             input_tokens  bigint  NOT NULL DEFAULT 0,
-             output_tokens bigint  NOT NULL DEFAULT 0,
-             PRIMARY KEY (user_id, day)
-           )`,
+          lockedDdl(table, [
+            `CREATE TABLE IF NOT EXISTS ${table} (
+               user_id       integer NOT NULL,
+               day           date    NOT NULL,
+               turns         integer NOT NULL DEFAULT 0,
+               input_tokens  bigint  NOT NULL DEFAULT 0,
+               output_tokens bigint  NOT NULL DEFAULT 0,
+               PRIMARY KEY (user_id, day)
+             )`,
+          ]),
         )
         .catch((err) => {
           readyPromise = null;

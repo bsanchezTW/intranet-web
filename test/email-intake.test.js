@@ -56,7 +56,7 @@ function fakeDb({ failInsertOnce = false } = {}) {
     tickets,
     async query(sql, params = []) {
       const q = sql.replace(/\s+/g, " ").trim();
-      if (/^CREATE TABLE IF NOT EXISTS \w+\.email_intake_state/.test(q)) return { rows: [] };
+      if (/^SELECT pg_advisory_xact_lock\(hashtext\('\w+\.email_intake_state'\)\); CREATE TABLE IF NOT EXISTS \w+\.email_intake_state/.test(q)) return { rows: [] };
       if (/^SELECT uid_validity, last_uid FROM \w+\.email_intake_state/.test(q)) {
         const s = state.get(params[0]);
         return { rows: s ? [{ uid_validity: s.uid_validity, last_uid: String(s.last_uid) }] : [] };

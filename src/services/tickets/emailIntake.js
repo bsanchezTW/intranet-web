@@ -1,5 +1,6 @@
 const { DEFAULT_TICKET_CATEGORY } = require("../../constants/ticketCategories");
 const { htmlToText } = require("../../utils/sanitizeContent");
+const { lockedDdl } = require("../schema/lockedDdl");
 
 /**
  * Correos del buzón de soporte → tickets (lo usa src/email-listener.js).
@@ -71,12 +72,14 @@ function createEmailIntake({ db, schema, parse, ownAddress = "", logger = consol
     if (!readyPromise) {
       readyPromise = db
         .query(
-          `CREATE TABLE IF NOT EXISTS ${table} (
-             mailbox      varchar(100) PRIMARY KEY,
-             uid_validity varchar(40)  NOT NULL,
-             last_uid     bigint       NOT NULL,
-             updated_at   timestamptz  NOT NULL DEFAULT NOW()
-           )`,
+          lockedDdl(table, [
+            `CREATE TABLE IF NOT EXISTS ${table} (
+               mailbox      varchar(100) PRIMARY KEY,
+               uid_validity varchar(40)  NOT NULL,
+               last_uid     bigint       NOT NULL,
+               updated_at   timestamptz  NOT NULL DEFAULT NOW()
+             )`,
+          ]),
         )
         .catch((err) => {
           readyPromise = null;

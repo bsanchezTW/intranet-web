@@ -20,7 +20,7 @@ function jobsDb(clock) {
     async query(sql, params = []) {
       const q = sql.replace(/\s+/g, " ").trim();
       log.push(q);
-      if (/^CREATE TABLE IF NOT EXISTS \w+\.job_runs/.test(q)) return { rows: [] };
+      if (/^SELECT pg_advisory_xact_lock\(hashtext\('\w+\.job_runs'\)\); CREATE TABLE IF NOT EXISTS \w+\.job_runs/.test(q)) return { rows: [] };
       if (/^INSERT INTO \w+\.job_runs AS j/.test(q)) {
         const [name, periodo] = params;
         const row = runs.get(name);

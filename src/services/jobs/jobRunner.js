@@ -1,4 +1,5 @@
 const logger = require("../../utils/logger");
+const { lockedDdl } = require("../schema/lockedDdl");
 
 /**
  * Tareas programadas (cierre de tickets, limpieza de historial, purga de
@@ -88,13 +89,15 @@ function createJobRunner({ db, schema, jobs }) {
     if (!readyPromise) {
       readyPromise = db
         .query(
-          `CREATE TABLE IF NOT EXISTS ${table} (
-             name         varchar(80) PRIMARY KEY,
-             last_run     timestamptz NOT NULL,
-             last_status  varchar(10),
-             last_message text,
-             finished_at  timestamptz
-           )`,
+          lockedDdl(table, [
+            `CREATE TABLE IF NOT EXISTS ${table} (
+               name         varchar(80) PRIMARY KEY,
+               last_run     timestamptz NOT NULL,
+               last_status  varchar(10),
+               last_message text,
+               finished_at  timestamptz
+             )`,
+          ]),
         )
         .catch((err) => {
           readyPromise = null;

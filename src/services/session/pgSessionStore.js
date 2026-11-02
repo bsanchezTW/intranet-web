@@ -1,5 +1,6 @@
 const { Store } = require("express-session");
 const logger = require("../../utils/logger");
+const { lockedDdl } = require("../schema/lockedDdl");
 
 /**
  * Store de express-session sobre Postgres (la misma base de la app).
@@ -64,18 +65,18 @@ class PgSessionStore extends Store {
   /** Crea la tabla una vez; si falla, el siguiente uso lo reintenta. */
   ready() {
     if (!this.readyPromise) {
+      // Tabla e índice en una transacción con lock: sin choques entre
+      // procesos que arrancan a la vez (ver lockedDdl).
       this.readyPromise = this.db
         .query(
-          `CREATE TABLE IF NOT EXISTS ${this.table} (
-             sid    varchar(255) PRIMARY KEY,
-             sess   jsonb        NOT NULL,
-             expire timestamptz  NOT NULL
-           )`,
-        )
-        .then(() =>
-          this.db.query(
+          lockedDdl(this.table, [
+            `CREATE TABLE IF NOT EXISTS ${this.table} (
+               sid    varchar(255) PRIMARY KEY,
+               sess   jsonb        NOT NULL,
+               expire timestamptz  NOT NULL
+             )`,
             `CREATE INDEX IF NOT EXISTS sessions_expire_idx ON ${this.table} (expire)`,
-          ),
+          ]),
         )
         .catch((err) => {
           this.readyPromise = null;
