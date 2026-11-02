@@ -16,6 +16,8 @@ const compression = require("compression");
 const path = require("path");
 const { createReadStream } = require("fs");
 const session = require("express-session");
+const { PgSessionStore } = require("./services/session/pgSessionStore");
+const { getCountryDbBinding } = require("./config/supabaseProjects");
 const expressLayouts = require("express-ejs-layouts");
 const db = require("./db");
 const { eventSlugFromContentPath } = require("./utils/eventAccess");
@@ -280,16 +282,38 @@ app.use("/media", async (req, res, next) => {
 // ================================
 // Sesiones (antes de /content para poder exigir auth)
 // ================================
+// Vence tras 4 horas sin actividad: `rolling` la renueva en cada petición.
+const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 4;
+// En Postgres y no en memoria: sobrevive a reinicios y la comparten los
+// procesos de Passenger. Tabla del schema del país (ver PgSessionStore).
+const sessionStore = new PgSessionStore({
+  db,
+  schema: getCountryDbBinding(countryConfig.code).schema,
+  ttlMs: SESSION_MAX_AGE_MS,
+});
+sessionStore.startPruning();
+
 app.use(
   session({
     // El nombre lleva el país porque las cookies se comparten entre puertos del
     // mismo host: sin esto, Chile en :3000 y Perú en :3001 se pisan la sesión.
     name: countryConfig.sessionCookieName,
     secret: SESSION_SECRET,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    rolling: true, // ¡CLAVE! Renueva el tiempo de la cookie en cada petición al backend
-    cookie: { maxAge: 1000 * 60 * 60 * 4 }, // Aumentamos la base a 4 horas por seguridad
+    rolling: true,
+    cookie: {
+      maxAge: SESSION_MAX_AGE_MS,
+      httpOnly: true,
+      // Lax: un formulario de otro sitio no lleva la cookie. Los enlaces de
+      // correo y el regreso de LinkedIn son GET de primer nivel y sí la llevan.
+      sameSite: "lax",
+      // "auto": Secure cuando la petición llega por HTTPS (con `trust proxy`
+      // detrás del proxy). Un `true` fijo sin `trust proxy` dejaría a todos
+      // sin poder iniciar sesión.
+      secure: "auto",
+    },
   }),
 );
 

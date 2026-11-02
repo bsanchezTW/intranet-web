@@ -1719,3 +1719,13 @@ END$$;
 
 SELECT peru.ensure_id_strategy();
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA peru TO intranet_peru;
+
+-- Sesiones de express-session (src/services/session/pgSessionStore.js).
+-- La app también la crea al primer uso. Va en el schema del país: una tabla
+-- compartida dejaría que la cookie de un país abra sesión en el otro.
+CREATE TABLE IF NOT EXISTS peru.sessions (
+  sid    varchar(255) PRIMARY KEY,
+  sess   jsonb        NOT NULL,
+  expire timestamptz  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_expire_idx ON peru.sessions (expire);
