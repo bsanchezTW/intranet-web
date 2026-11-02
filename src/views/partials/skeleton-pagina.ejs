@@ -1,0 +1,88 @@
+<%#
+  Velo de carga de layout.ejs: la forma de la página mientras llega su CSS.
+  La variante la elige utils/pageSkeleton.js según la ruta.
+%>
+<% const variante = typeof esqueletoPagina !== 'undefined' ? esqueletoPagina : 'contenido'; %>
+<div class="cargando-pagina" role="status">
+  <div class="cargando-pagina__contenido" aria-hidden="true">
+    <% if (variante === 'inicio') { %>
+      <div class="sk-pila">
+        <span class="sk sk--titulo sk--w40"></span>
+        <span class="sk sk--w25"></span>
+      </div>
+      <div class="sk-dash">
+        <div class="sk-pila">
+          <div class="sk-tarjeta">
+            <div class="sk-accesos">
+              <% for (let i = 0; i < 6; i += 1) { %><span class="sk sk--control"></span><% } %>
+            </div>
+          </div>
+          <span class="sk sk-destacado"></span>
+          <div class="sk-tarjeta">
+            <span class="sk sk--titulo sk--w25"></span>
+            <% for (let i = 0; i < 5; i += 1) { %>
+              <div class="sk-noticia">
+                <span class="sk sk--avatar"></span>
+                <span class="sk"></span>
+              </div>
+            <% } %>
+          </div>
+        </div>
+        <div class="sk-pila">
+          <% for (let i = 0; i < 3; i += 1) { %>
+            <div class="sk-tarjeta">
+              <span class="sk sk--titulo sk--w60"></span>
+              <span class="sk"></span>
+              <span class="sk sk--w80"></span>
+            </div>
+          <% } %>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="sk-cabecera">
+        <span class="sk sk--icono"></span>
+        <div class="sk-pila">
+          <span class="sk sk--titulo sk--w60"></span>
+          <span class="sk sk--w80"></span>
+        </div>
+      </div>
+      <% if (variante === 'tarjetas') { %>
+        <div class="sk-reja">
+          <% for (let i = 0; i < 6; i += 1) { %>
+            <div class="sk-tarjeta sk-tarjeta--foto">
+              <span class="sk sk--foto"></span>
+              <div class="sk-pila">
+                <span class="sk sk--w80"></span>
+                <span class="sk sk--w60"></span>
+              </div>
+            </div>
+          <% } %>
+        </div>
+      <% } else if (variante === 'tabla') { %>
+        <div class="sk-tarjeta">
+          <span class="sk sk--control sk--w40"></span>
+          <% for (let i = 0; i < 8; i += 1) { %>
+            <div class="sk-fila">
+              <span class="sk sk--avatar"></span>
+              <span class="sk"></span>
+              <span class="sk sk--w80"></span>
+              <span class="sk sk--w60"></span>
+              <span class="sk sk--w40"></span>
+            </div>
+          <% } %>
+        </div>
+      <% } else { %>
+        <div class="sk-tarjeta">
+          <span class="sk sk--titulo sk--w40"></span>
+          <span class="sk"></span>
+          <span class="sk"></span>
+          <span class="sk sk--w80"></span>
+          <span class="sk sk--w60"></span>
+          <span class="sk sk--control"></span>
+          <span class="sk sk--control"></span>
+        </div>
+      <% } %>
+    <% } %>
+  </div>
+  <span class="sr-only">Cargando…</span>
+</div>

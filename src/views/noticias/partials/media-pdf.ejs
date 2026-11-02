@@ -37,9 +37,14 @@ if (tam) meta.push(tam);
                style="width:100%; height:auto; display:block;">
         </div>
       <% } else { %>
-        <p class="pdf-visor__estado">
-          <span class="pdf-cargando">Preparando el documento…</span>
-        </p>
+        <div class="pdf-pagina pdf-esqueleto" role="status">
+          <span class="sr-only">Preparando el documento…</span>
+          <span class="sk sk--titulo sk--w60" aria-hidden="true"></span>
+          <span class="sk" aria-hidden="true"></span>
+          <span class="sk" aria-hidden="true"></span>
+          <span class="sk sk--w80" aria-hidden="true"></span>
+          <span class="sk sk--w60" aria-hidden="true"></span>
+        </div>
       <% } %>
     </div>
   </article>

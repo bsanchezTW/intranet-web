@@ -147,10 +147,10 @@ main {
 .cargando-pagina {
   position: fixed;
   inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Bajo la barra superior (z-index 1000): la navegación sigue a la vista y
+     sólo el contenido de la página aparece como esqueleto. */
+  z-index: 900;
+  overflow: hidden;
   /* El mismo fondo que el body: si el velo fuera plano se vería un salto de
      color justo al desaparecer. */
   background-color: var(--color-bg, #f2f5fa);
@@ -159,17 +159,16 @@ main {
   transition: opacity 0.25s ease, visibility 0.25s ease;
 }
 
-.cargando-pagina__spinner {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 3px solid var(--color-border-strong, #d3dce6);
-  border-top-color: var(--brand, #0f4c81);
-  animation: cargando-giro 0.7s linear infinite;
-}
-
-@keyframes cargando-giro {
-  to { transform: rotate(360deg); }
+/* Mismo ancho y relleno que .contenedor-principal. */
+.cargando-pagina__contenido {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 22px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--layout-content-max-width, 1200px);
+  margin: 0 auto;
+  padding: calc(var(--shell-height, 64px) + 28px) 20px 20px;
 }
 
 body.login-split-page .cargando-pagina {
@@ -183,17 +182,159 @@ html.pagina-lista .cargando-pagina {
   pointer-events: none;
 }
 
-/* La regla global de movimiento reducido (más abajo) congela cualquier
-   animación; un indicador de carga congelado parece un error, así que aquí gira
-   igual, sólo que despacio. */
 @media (prefers-reduced-motion: reduce) {
-  .cargando-pagina__spinner {
-    animation-duration: 1.8s !important;
-    animation-iteration-count: infinite !important;
-  }
-
   .cargando-pagina {
     transition: none;
+  }
+}
+
+/* ── Esqueletos de carga ──────────────────────────────────────────────────────
+   Reemplazan a los spinners mientras carga contenido: dibujan la forma de lo
+   que viene y la página no salta al llegar. Los spinners quedan sólo dentro de
+   botones, donde indican una acción en curso y no contenido por llegar.
+
+   Con movimiento reducido la regla global (más abajo) detiene el brillo y queda
+   el bloque quieto, que se sigue leyendo como un contenido por llegar. */
+
+:root {
+  --sk-base: rgba(15, 76, 129, 0.09);
+  --sk-brillo: rgba(255, 255, 255, 0.62);
+}
+
+.sk {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  background-color: var(--sk-base);
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 30%,
+    var(--sk-brillo) 50%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  background-size: 200% 100%;
+  animation: sk-brillo 1.4s ease-in-out infinite;
+}
+
+@keyframes sk-brillo {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+.sk--titulo { height: 24px; }
+.sk--control { height: 38px; border-radius: 10px; }
+.sk--boton { width: 120px; height: 36px; border-radius: 10px; }
+.sk--icono { width: 52px; height: 52px; flex-shrink: 0; border-radius: 15px; }
+.sk--avatar { width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; }
+.sk--foto { height: auto; aspect-ratio: 16 / 10; border-radius: 0; }
+
+.sk--w25 { width: 25%; }
+.sk--w40 { width: 40%; }
+.sk--w60 { width: 60%; }
+.sk--w80 { width: 80%; }
+
+/* Piezas con que se arman los esqueletos de cada vista. */
+.sk-pila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.sk-tarjeta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.sk-tarjeta--foto {
+  padding: 0 0 18px;
+}
+
+.sk-tarjeta--foto > .sk-pila {
+  padding: 0 18px;
+}
+
+.sk-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.sk-cabecera > .sk-pila {
+  flex: 1 1 auto;
+  max-width: 420px;
+}
+
+.sk-reja {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.sk-dash {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 22px;
+  align-items: start;
+}
+
+.sk-accesos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.sk-destacado {
+  height: 220px;
+  border-radius: 14px;
+}
+
+.sk-noticia {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.sk-fila {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 18px;
+  padding: 8px 0;
+}
+
+/* Campo de formulario: etiqueta y control. */
+.sk-campo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+}
+
+.sk-campo > .sk:first-child {
+  width: 40%;
+  height: 10px;
+}
+
+@media (max-width: 900px) {
+  .sk-dash {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sk-fila {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .sk-fila > .sk:nth-child(n + 3) {
+    display: none;
   }
 }
 

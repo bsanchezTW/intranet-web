@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= formatPageTitle(titulo || "Iniciar sesión") %></title>
-  <link rel="stylesheet" href="/css/login.css?v=20260925a">
+  <link rel="stylesheet" href="/css/login.css?v=20261102a">
   <script>
     (function () {
       var raiz = document.documentElement;
@@ -35,7 +35,23 @@
 <body class="login-split-page">
 
   <div class="cargando-pagina" role="status">
-    <span class="cargando-pagina__spinner" aria-hidden="true"></span>
+    <div class="login-esqueleto" aria-hidden="true">
+      <div class="login-esqueleto__panel">
+        <span class="sk sk--titulo sk--w40 login-esqueleto__logo"></span>
+        <span class="sk sk--titulo sk--w80"></span>
+        <span class="sk sk--w60"></span>
+        <div class="sk-campo">
+          <span class="sk"></span>
+          <span class="sk sk--control"></span>
+        </div>
+        <div class="sk-campo">
+          <span class="sk"></span>
+          <span class="sk sk--control"></span>
+        </div>
+        <span class="sk sk--control"></span>
+      </div>
+      <span class="login-esqueleto__visual"></span>
+    </div>
     <span class="sr-only">Cargando…</span>
   </div>
 

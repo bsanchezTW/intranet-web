@@ -24,7 +24,7 @@ const { getMonogram } = require("../utils/monogram");
 // Súbela SIEMPRE que cambie noticias.css o los scripts del módulo: los
 // estáticos se sirven con `maxAge: 1d`, así que sin bump el navegador se queda
 // con la hoja anterior y la vista se ve rota.
-const CSS_VERSION = "20260917r";
+const CSS_VERSION = "20261102a";
 
 const ASSETS = {
   extraCss: [`/css/noticias.css?v=${CSS_VERSION}`],

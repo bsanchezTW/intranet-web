@@ -365,7 +365,9 @@
       var destino = cuerpo.querySelector('[data-colaborador-alertas]');
       if (error && destino) destino.appendChild(error);
     }
-    var CARGANDO = '<p class="modal-loading">Cargando colaborador…</p>';
+    // El esqueleto lo renderiza personal.ejs en el hueco: se guarda para volver a
+    // ponerlo en cada apertura.
+    var CARGANDO = cuerpo.innerHTML;
     var destruirFormulario = null;
 
     // Abrir y cerrar deprisa deja peticiones en vuelo. Cada apertura se queda

@@ -1,0 +1,39 @@
+<%# Lo que se ve en el modal de edición mientras llega la ficha: misma anatomía
+    que persona_editar_modal, así nada salta cuando se reemplaza. %>
+<header class="modal-head">
+  <h2 class="sr-only" id="editarColaboradorTitle">Editar colaborador</h2>
+  <div class="sk-pila" aria-hidden="true">
+    <span class="sk sk--titulo sk--w25"></span>
+    <span class="sk sk--w40"></span>
+  </div>
+</header>
+
+<div class="modal-body modal-body--split colaborador-modal__body" role="status">
+  <span class="sr-only">Cargando colaborador…</span>
+  <aside class="modal-aside colaborador-aside" aria-hidden="true">
+    <span class="sk colaborador-esqueleto__foto"></span>
+    <span class="sk sk--boton"></span>
+    <span class="sk sk--w60"></span>
+  </aside>
+
+  <div class="modal-main" aria-hidden="true">
+    <% for (let seccion = 0; seccion < 3; seccion += 1) { %>
+      <section class="modal-section">
+        <span class="sk sk--w25"></span>
+        <div class="campos-grid">
+          <% for (let campo = 0; campo < 4; campo += 1) { %>
+            <div class="sk-campo">
+              <span class="sk"></span>
+              <span class="sk sk--control"></span>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    <% } %>
+  </div>
+</div>
+
+<footer class="modal-foot" aria-hidden="true">
+  <span class="sk sk--boton"></span>
+  <span class="sk sk--boton"></span>
+</footer>

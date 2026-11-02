@@ -279,6 +279,10 @@
 
   display: grid;
   grid-template-columns: var(--modal-aside-width) minmax(0, 1fr);
+  /* La fila ocupa todo el cuerpo: con el align-content: start de .modal-body
+     mide lo que su contenido y, en pantallas altas, el fondo gris del lateral
+     termina antes de llegar al pie. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   padding: 0;
   overflow: hidden;
@@ -946,6 +950,7 @@ body.modal-open {
      apiladas en una pantalla chica se pisan. */
   .modal-body--split {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     overflow-y: auto;
   }
 

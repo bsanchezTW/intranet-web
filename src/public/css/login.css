@@ -812,6 +812,49 @@ body.login-split-page {
   transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
 }
 
+/* Esqueleto del velo de carga: panel del formulario y foto de fondo. */
+.login-esqueleto {
+  display: flex;
+  height: 100%;
+}
+
+.login-esqueleto__panel {
+  display: grid;
+  /* Columna de 448 px como máximo, igual que el formulario real. */
+  grid-template-columns: minmax(0, 448px);
+  justify-content: center;
+  align-content: center;
+  justify-items: center;
+  gap: 16px;
+  box-sizing: border-box;
+  width: var(--login-panel-width);
+  padding: 28px 56px;
+}
+
+.login-esqueleto__panel > .sk-campo {
+  width: 100%;
+}
+
+.login-esqueleto__logo {
+  margin-bottom: 20px;
+}
+
+.login-esqueleto__visual {
+  flex: 1 1 auto;
+  background: linear-gradient(165deg, #0b2440 0%, #0f4c81 100%);
+}
+
+@media (max-width: 960px) {
+  .login-esqueleto__panel {
+    width: 100%;
+    padding: 28px 24px;
+  }
+
+  .login-esqueleto__visual {
+    display: none;
+  }
+}
+
 /* Enviado: el formulario navega, y hasta que el servidor responda el botón
    muestra el icono girando. Sin esto se puede pulsar dos veces. */
 .login-split__submit__spinner {
