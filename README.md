@@ -61,6 +61,8 @@ scripts/       lanzador por país y utilidades
 test/
 ```
 
+El test de integración con Postgres (`test/pg-integration.test.js`) corre sólo con `INTEGRATION_PG_URL` apuntando a una base desechable.
+
 Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas columnas nuevas también se aseguran al arrancar (`asegurar*` en `src/app.js`), por ejemplo las de autenticación (`confirm_attempts`, `password_reset_token_hash`, `password_reset_expires`).
 
 ## Seguridad
@@ -73,6 +75,7 @@ Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas column
 - **Cabeceras** (`src/middlewares/securityHeaders.js`): `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS por HTTPS y una CSP mínima aplicada (`frame-ancestors`, `base-uri`, `object-src`). La CSP completa va en `Content-Security-Policy-Report-Only`: lo que bloquearía aparece en el log con la etiqueta `csp` y es la lista de scripts inline por migrar antes de aplicarla.
 
 - **TLS hacia Postgres**: con `DB_SSL_CA` (ruta al `.crt` de Supabase, Database Settings → SSL Configuration, o el PEM en la variable) se verifica el certificado del pooler. Sin ella la conexión se cifra pero no se verifica, y el log lo advierte al arrancar.
+- **Asistente**: cupo por persona de `ASSISTANT_DAILY_TURNS` consultas al día (50) y `ASSISTANT_TURNS_PER_MINUTE` por minuto (6), contado en `<schema>.assistant_usage` junto con los tokens.
 - **Recuperar acceso**: no hay login de emergencia por la web (`AUTH_USER`/`AUTH_PASS` se eliminaron). Si nadie puede entrar a Gestión de Permisos: `node scripts/superadmin.js --pais CL --correo persona@transworld.cl` desde el servidor (queda en `perm_audit`).
 
 Si encuentras un problema de seguridad, avísale directamente al equipo de Informática en vez de abrir un issue.

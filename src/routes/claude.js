@@ -29,8 +29,19 @@ const { isFinanceApprover } = require("../services/expenses/financeTeam");
 const { canManageRrhh } = require("../services/access/staffAccess");
 const { listAppsByCatalog } = require("../services/appCatalogService");
 const { ticketModalUrl } = require("../utils/ticketRedirect");
+const db = require("../db");
+const { getCountryConfig } = require("../config/country");
+const { getCountryDbBinding } = require("../config/supabaseProjects");
+const { createAssistantQuota } = require("../services/assistant/assistantQuota");
 
 const router = express.Router();
+
+// Cupo diario y por minuto de cada persona (ver assistantQuota).
+const quota = createAssistantQuota({
+  db,
+  schema: getCountryDbBinding(getCountryConfig().code).schema,
+  timezone: getCountryConfig().timezone,
+});
 
 router.use((req, res, next) => {
   if (!req.session || !req.session.user) {
@@ -135,6 +146,12 @@ router.post("/api/chat", async (req, res) => {
       .json({ error: `El mensaje es demasiado largo (máximo ${MAX_MESSAGE_CHARS} caracteres).` });
   }
 
+  // Antes de abrir el stream y de llamar a la API: sin cupo no hay gasto.
+  const cupo = await quota.reserve(req.session.user.id);
+  if (!cupo.ok) {
+    return res.status(cupo.reason === "base" ? 503 : 429).json({ error: cupo.error });
+  }
+
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache",
@@ -209,6 +226,7 @@ router.post("/api/chat", async (req, res) => {
 
     // Consumo por turno, para comparar costos antes y después de cada ajuste.
     const { usage } = result;
+    quota.record(sessionUser.id, usage);
     logger.info(
       "asistente",
       `usuario=${sessionUser.id} rondas=${result.rounds} entrada=${usage.input_tokens} ` +

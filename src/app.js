@@ -12,7 +12,7 @@ const logger = require("./utils/logger");
 process.env.TZ = countryConfig.timezone;
 
 const express = require("express");
-const compression = require("compression");
+const { httpCompression } = require("./utils/httpCompression");
 const path = require("path");
 const { createReadStream } = require("fs");
 const session = require("express-session");
@@ -148,7 +148,7 @@ app.disable("x-powered-by");
 // Cabeceras de seguridad y CSP (aplicada mínima + sólo reporte) en todas las
 // respuestas, estáticos incluidos.
 app.use(securityHeaders());
-app.use(compression());
+app.use(httpCompression());
 // Reportes CSP del navegador: antes de la protección CSRF, que no los manda
 // el usuario sino el navegador por su cuenta.
 app.use(cspReportRouter());
