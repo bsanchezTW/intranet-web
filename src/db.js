@@ -15,6 +15,7 @@ const {
 } = require("./config/supabaseProjects");
 const { isIdPrimaryKeyCollision } = require("./utils/idCollision");
 const logger = require("./utils/logger");
+const { resolveDbSsl, isUnverifiedTls, connectionStringForSsl } = require("./config/dbSsl");
 
 const DEFAULT_POOL_MAX = 8;
 const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
@@ -31,16 +32,19 @@ function looksLikeSupabaseHost() {
   );
 }
 
-function resolveSsl() {
-  const flag = String(process.env.DB_SSL || "").trim().toLowerCase();
-  if (flag === "true" || flag === "1") {
-    return { rejectUnauthorized: false };
-  }
-  if (flag === "false" || flag === "0") {
-    return false;
-  }
+let unverifiedTlsWarned = false;
 
-  return looksLikeSupabaseHost() ? { rejectUnauthorized: false } : false;
+/** TLS de la conexión (config/dbSsl). Avisa una vez si no se verifica. */
+function resolveSsl() {
+  const ssl = resolveDbSsl(process.env);
+  if (isUnverifiedTls(ssl) && !unverifiedTlsWarned) {
+    unverifiedTlsWarned = true;
+    logger.warn(
+      "db",
+      "TLS sin verificar el certificado del servidor: define DB_SSL_CA con la CA de Supabase",
+    );
+  }
+  return ssl;
 }
 
 function postgresOptionsForCountry(country = process.env.COUNTRY) {
@@ -90,7 +94,7 @@ function createPool() {
 
   if (process.env.DATABASE_URL?.trim()) {
     return new Pool({
-      connectionString: process.env.DATABASE_URL.trim(),
+      connectionString: connectionStringForSsl(process.env.DATABASE_URL.trim(), ssl),
       ssl,
       ...extra,
       ...limits,

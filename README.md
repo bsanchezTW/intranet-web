@@ -72,6 +72,7 @@ Los cambios de esquema se aplican a mano a partir de `supabase/`. Algunas column
 - **Sesiones**: en `<schema del país>.sessions` (Postgres), cookie `HttpOnly`, `SameSite=Lax` y `Secure` cuando la petición llega por HTTPS.
 - **Cabeceras** (`src/middlewares/securityHeaders.js`): `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS por HTTPS y una CSP mínima aplicada (`frame-ancestors`, `base-uri`, `object-src`). La CSP completa va en `Content-Security-Policy-Report-Only`: lo que bloquearía aparece en el log con la etiqueta `csp` y es la lista de scripts inline por migrar antes de aplicarla.
 
+- **TLS hacia Postgres**: con `DB_SSL_CA` (ruta al `.crt` de Supabase, Database Settings → SSL Configuration, o el PEM en la variable) se verifica el certificado del pooler. Sin ella la conexión se cifra pero no se verifica, y el log lo advierte al arrancar.
 - **Recuperar acceso**: no hay login de emergencia por la web (`AUTH_USER`/`AUTH_PASS` se eliminaron). Si nadie puede entrar a Gestión de Permisos: `node scripts/superadmin.js --pais CL --correo persona@transworld.cl` desde el servidor (queda en `perm_audit`).
 
 Si encuentras un problema de seguridad, avísale directamente al equipo de Informática en vez de abrir un issue.
