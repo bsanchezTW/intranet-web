@@ -811,6 +811,240 @@ button.logistica-icono-btn {
   padding-bottom: 16px;
 }
 
+/* ── Gestión de flota ────────────────────────────────────────────────────── */
+
+.silueta {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.silueta .silueta__cuerpo { fill: var(--brand-soft); }
+.silueta .silueta__vidrio { fill: var(--color-surface); }
+.silueta .silueta__rueda { fill: var(--color-surface); }
+
+.flota-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.flota-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.flota-card.is-inactivo { opacity: 0.7; }
+
+.flota-card__head {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.flota-card__silueta {
+  color: var(--brand);
+}
+
+.flota-card__id {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.flota-card__patente {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.flota-card__patente .logistica-patente { font-size: 0.95rem; }
+
+.flota-card__modelo {
+  color: var(--color-heading);
+  font-size: 0.92rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.flota-card__admin {
+  display: flex;
+  align-self: start;
+  gap: 6px;
+}
+
+.flota-card__admin form { margin: 0; }
+
+.flota-card__datos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.flota-card__datos > div { min-width: 0; }
+.flota-card__docs { grid-column: 1 / -1; }
+
+.flota-card__datos dt {
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.flota-card__datos dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0 0;
+  color: var(--color-text);
+  font-size: 0.88rem;
+}
+
+.flota-card__datos dd a { color: var(--brand); font-weight: 700; }
+
+.flota-card__acciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: auto;
+}
+
+.flota-accion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 58px;
+  padding: 8px 6px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.flota-accion .icon-svg { font-size: 1.15rem; color: var(--brand); }
+
+.flota-accion:hover,
+.flota-accion:focus-visible {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-deep, var(--brand));
+}
+
+.flota-baja {
+  margin-top: 26px;
+}
+
+.flota-baja > summary {
+  margin-bottom: 14px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Elección del tipo de vehículo: radios nativos con forma de tarjeta. */
+.tipo-opciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.tipo-opcion { position: relative; display: block; cursor: pointer; }
+
+.tipo-opcion input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tipo-opcion__caja {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 16px 14px 14px;
+  border: 2px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  color: var(--color-text-subtle);
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tipo-opcion__caja .silueta { max-width: 130px; }
+
+.tipo-opcion__nombre {
+  color: var(--color-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.tipo-opcion__ayuda {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.tipo-opcion:hover .tipo-opcion__caja { border-color: var(--color-border-strong); }
+.tipo-opcion input:focus-visible + .tipo-opcion__caja { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.tipo-opcion input:checked + .tipo-opcion__caja {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tipo-opciones.is-invalid .tipo-opcion__caja { border-color: rgba(208, 92, 92, 0.6); }
+
+/* Al elegir un tipo el aviso ya no aplica. */
+.tipo-opciones.is-invalid:has(input:checked) .tipo-opcion__caja { border-color: var(--color-border); }
+.tipo-opciones.is-invalid:has(input:checked) input:checked + .tipo-opcion__caja { border-color: var(--brand); }
+.tipo-opciones:has(input:checked) + .tipo-opciones__error { display: none; }
+
+.tipo-opciones__error {
+  margin: -6px 0 16px;
+  color: var(--down);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+/* Historial: ficha del vehículo arriba. */
+.historial-ficha {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+}
+
+.historial-ficha .flota-card__silueta { max-width: 140px; }
+
+@media (max-width: 720px) {
+  .flota-grid { grid-template-columns: 1fr; }
+  .flota-card__head { grid-template-columns: 72px minmax(0, 1fr) auto; }
+  .historial-ficha { grid-template-columns: 1fr; }
+  .historial-ficha .flota-card__silueta { max-width: 120px; }
+}
+
 /* Tablet: la observación baja a su propia línea, bajo el ítem. */
 @media (max-width: 980px) and (min-width: 721px) {
   .checklist-grupo { --checklist-cols: minmax(0, 1fr) calc(3 * 60px + 2px); }

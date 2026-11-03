@@ -15,24 +15,22 @@
 <div class="contenedor">
 
   <div class="page-header">
-    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'clipboard-check' }) %></span>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'clipboard-check' }) %></span>
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
-        <a href="/procesos#seccion-logistica">Logística</a>
+        <a href="<%= FLOTA %>">Gestión de flota</a>
       </nav>
-      <h2 class="page-title">Checklist de vehículos</h2>
+      <h2 class="page-title">Revisiones mecánicas</h2>
       <p class="page-description">Revisiones registradas de la flota, con su número correlativo. Consulta cualquiera o imprímela.</p>
     </div>
     <div class="page-header-actions">
-      <% if (puedeFlota) { %>
-        <a href="/logistica/vehiculos" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'truck' }) %> Flota</a>
-      <% } %>
+      <a href="<%= FLOTA %>" class="page-header-btn page-header-btn--secundario"><%- include('../../../partials/icon', { name: 'truck' }) %> Gestión de flota</a>
       <% if (puedePlantilla) { %>
-        <a href="/logistica/checklists/plantilla" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'settings' }) %> Ítems</a>
+        <a href="<%= MECANICA %>/items" class="page-header-btn page-header-btn--secundario"><%- include('../../../partials/icon', { name: 'settings' }) %> Ítems</a>
       <% } %>
-      <% if (puedeRegistrar) { %>
-        <a href="/logistica/checklists/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Registrar checklist</a>
+      <% if (puedeRevisar) { %>
+        <a href="<%= MECANICA %>/nueva" class="page-header-btn"><%- include('../../../partials/icon', { name: 'plus' }) %> Nueva revisión</a>
       <% } %>
     </div>
   </div>
@@ -55,10 +53,10 @@
     </div>
   </div>
 
-  <form class="logistica-filtros" method="get" action="/logistica/checklists" role="search">
+  <form class="logistica-filtros" method="get" action="<%= MECANICA %>" role="search">
     <label class="logistica-filtros__buscar">
       <span class="sr-only">Buscar</span>
-      <%- include('../../partials/icon', { name: 'search' }) %>
+      <%- include('../../../partials/icon', { name: 'search' }) %>
       <input type="search" name="q" value="<%= filtros.q %>" placeholder="Patente, conductor, firmante o número" maxlength="80">
     </label>
     <label class="logistica-filtros__campo">
@@ -79,7 +77,7 @@
       <input type="date" name="hasta" value="<%= filtros.hasta %>">
     </label>
     <button type="submit" class="logistica-chip">Filtrar</button>
-    <% if (hayFiltro) { %><a href="/logistica/checklists" class="logistica-filtros__limpiar">Limpiar</a><% } %>
+    <% if (hayFiltro) { %><a href="<%= MECANICA %>" class="logistica-filtros__limpiar">Limpiar</a><% } %>
     <div class="logistica-filtros__estados" role="group" aria-label="Resultado">
       <% RESULTADOS.forEach(([valor, texto]) => { %>
         <button type="submit" name="resultado" value="<%= valor %>" class="logistica-chip<%= filtros.resultado === valor ? ' is-active' : '' %>"<%= filtros.resultado === valor ? ' aria-pressed="true"' : '' %>><%= texto %></button>
@@ -89,18 +87,18 @@
 
   <% if (!lista.length) { %>
     <div class="logistica-vacio">
-      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'clipboard-check' }) %></span>
+      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'clipboard-check' }) %></span>
       <% if (hayFiltro) { %>
-        <p>Ningún checklist coincide con la búsqueda.</p>
-        <a href="/logistica/checklists">Ver todos</a>
+        <p>Ninguna revisión coincide con la búsqueda.</p>
+        <a href="<%= MECANICA %>">Ver todas</a>
       <% } else if (!vehiculos.length) { %>
         <p class="logistica-vacio__titulo">Todavía no hay vehículos en la flota</p>
-        <p>Para registrar el primer checklist, primero agrega los vehículos de la empresa.</p>
-        <% if (puedeFlota) { %><a href="/logistica/vehiculos" class="page-header-btn"><%- include('../../partials/icon', { name: 'truck' }) %> Ir a la flota</a><% } %>
+        <p>Para registrar la primera revisión, primero agrega los vehículos de la empresa.</p>
+        <a href="<%= FLOTA %>" class="page-header-btn"><%- include('../../../partials/icon', { name: 'truck' }) %> Ir a Gestión de flota</a>
       <% } else { %>
-        <p>Todavía no se ha registrado ningún checklist.</p>
-        <% if (puedeRegistrar) { %>
-          <a href="/logistica/checklists/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Registrar el primero</a>
+        <p>Todavía no se ha registrado ninguna revisión mecánica.</p>
+        <% if (puedeRevisar) { %>
+          <a href="<%= MECANICA %>/nueva" class="page-header-btn"><%- include('../../../partials/icon', { name: 'plus' }) %> Registrar el primero</a>
         <% } %>
       <% } %>
     </div>
@@ -122,7 +120,7 @@
           <% lista.forEach((c) => { const anulado = c.status === 'voided'; %>
             <tr class="<%= anulado ? 'is-anulado' : '' %>">
               <td data-label="Número">
-                <a class="logistica-numero" href="/logistica/checklists/<%= c.id %>"><%= c.number %></a>
+                <a class="logistica-numero" href="<%= MECANICA %>/<%= c.id %>"><%= c.number %></a>
                 <span class="logistica-sub"><%= labelFrom(INSPECTION_KINDS, c.inspection_kind) %></span>
               </td>
               <td data-label="Fecha"><%= formatDate(c.inspection_date) %></td>
@@ -144,8 +142,8 @@
                 <% } %>
               </td>
               <td class="logistica-tabla__acciones">
-                <a href="/logistica/checklists/<%= c.id %>" class="logistica-icono-btn" title="Ver <%= c.number %>" aria-label="Ver <%= c.number %>"><%- include('../../partials/icon', { name: 'file-text' }) %></a>
-                <a href="/logistica/checklists/<%= c.id %>/pdf" target="_blank" rel="noopener" class="logistica-icono-btn" title="Imprimir <%= c.number %>" aria-label="Imprimir <%= c.number %>"><%- include('../../partials/icon', { name: 'printer' }) %></a>
+                <a href="<%= MECANICA %>/<%= c.id %>" class="logistica-icono-btn" title="Ver <%= c.number %>" aria-label="Ver <%= c.number %>"><%- include('../../../partials/icon', { name: 'file-text' }) %></a>
+                <a href="<%= MECANICA %>/<%= c.id %>/pdf" target="_blank" rel="noopener" class="logistica-icono-btn" title="Imprimir <%= c.number %>" aria-label="Imprimir <%= c.number %>"><%- include('../../../partials/icon', { name: 'printer' }) %></a>
               </td>
             </tr>
           <% }) %>
@@ -153,7 +151,7 @@
       </table>
     </div>
     <% if (lista.length >= limite) { %>
-      <p class="logistica-nota">Se muestran los <%= limite %> checklists más recientes. Usa los filtros para encontrar los anteriores.</p>
+      <p class="logistica-nota">Se muestran las <%= limite %> revisiones más recientes. Usa los filtros para encontrar los anteriores.</p>
     <% } %>
   <% } %>
 </div>

@@ -1,5 +1,5 @@
 const db = require("../../db");
-const { VEHICLE_KINDS, formatKm } = require("../../constants/vehicleChecklist");
+const { isVehicleKind, formatKm } = require("../../constants/vehicleChecklist");
 const { toDateOnly, addDays, formatDisplay } = require("../../utils/vacationDateUtils");
 const { cleanText, parseOptionalInt, parseOptionalDate } = require("./inputs");
 
@@ -55,7 +55,9 @@ function normalizeVehicleInput(body = {}) {
   values.plate = plate || cleanText(body.plate, 12);
   if (!plate) errors.plate = "Ingresa la patente: de 5 a 8 letras y números.";
 
-  values.kind = VEHICLE_KINDS.some((k) => k.value === body.kind) ? body.kind : "camioneta";
+  // El tipo define el modelo de la revisión física: no hay uno por defecto.
+  values.kind = isVehicleKind(body.kind) ? body.kind : "";
+  if (!values.kind) errors.kind = "Elige el tipo de vehículo.";
   values.brand = cleanText(body.brand, 60);
   values.model = cleanText(body.model, 60);
   values.notes = cleanText(body.notes, 300);
@@ -144,9 +146,21 @@ const COLUMNS = `
 async function listVehicles({ includeInactive = true } = {}) {
   const { rows } = await db.query(
     `SELECT ${COLUMNS},
-            (SELECT MAX(c.inspection_date)::text FROM vehicle_checklists c
-              WHERE c.vehicle_id = v.id AND c.status = 'registered') AS last_checklist_date
+            ult.id AS last_checklist_id,
+            ult.inspection_date::text AS last_checklist_date,
+            ult.result AS last_checklist_result,
+            ult.number_year AS last_checklist_year,
+            ult.number_seq AS last_checklist_seq,
+            (SELECT COUNT(*)::int FROM vehicle_checklists c
+              WHERE c.vehicle_id = v.id AND c.status = 'registered') AS checklists_count
        FROM logistics_vehicles v
+       LEFT JOIN LATERAL (
+         SELECT c.id, c.inspection_date, c.result, c.number_year, c.number_seq
+           FROM vehicle_checklists c
+          WHERE c.vehicle_id = v.id AND c.status = 'registered'
+          ORDER BY c.inspection_date DESC, c.id DESC
+          LIMIT 1
+       ) ult ON TRUE
       WHERE $1::boolean OR v.active
       ORDER BY v.active DESC, v.plate ASC`,
     [includeInactive],

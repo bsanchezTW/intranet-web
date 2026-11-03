@@ -387,7 +387,7 @@ function renderChecklistPdf(registro) {
       margin: 0,
       autoFirstPage: false,
       bufferPages: true,
-      info: { Title: `Checklist ${registro.number}`, Creator: "Intranet Transworld" },
+      info: { Title: `Revisión mecánica ${registro.number}`, Creator: "Intranet Transworld" },
     });
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));

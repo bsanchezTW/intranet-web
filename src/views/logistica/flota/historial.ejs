@@ -1,0 +1,92 @@
+<%
+  const x = vehiculo;
+  const lista = Array.isArray(mecanicas) ? mecanicas : [];
+  const alertas = documentAlerts(x, today);
+  const tipoOk = isVehicleKind(x.kind);
+%>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'clock' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
+        <span><%= x.plate %></span>
+      </nav>
+      <h2 class="page-title">Historial de <%= x.plate %></h2>
+      <p class="page-description"><%= vehicleLabel(x) || 'Sin modelo' %><%= tipoOk ? ` · ${labelFrom(VEHICLE_KINDS, x.kind)}` : '' %><%= x.active ? '' : ' · Dado de baja' %></p>
+    </div>
+    <div class="page-header-actions">
+      <% if (puedeAdministrar) { %>
+        <a href="<%= FLOTA %>/<%= x.id %>/editar" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'edit' }) %> Editar</a>
+      <% } %>
+      <% if (x.active) { %>
+        <a href="<%= FLOTA %>/<%= x.id %>/revision-fisica" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'camera' }) %> Revisión física</a>
+        <% if (puedeRevisar) { %>
+          <a href="<%= MECANICA %>/nueva?vehiculo=<%= x.id %>" class="page-header-btn"><%- include('../../partials/icon', { name: 'clipboard-check' }) %> Revisión mecánica</a>
+        <% } %>
+      <% } %>
+    </div>
+  </div>
+
+  <section class="logistica-panel historial-ficha" aria-label="Ficha del vehículo" style="padding-bottom: 18px; margin-bottom: 18px;">
+    <span class="flota-card__silueta"><%- include('../partials/silueta', { tipo: x.kind }) %></span>
+    <dl class="logistica-datos" style="margin: 0;">
+      <div><dt>Patente</dt><dd><span class="logistica-patente"><%= x.plate %></span></dd></div>
+      <div><dt>Kilometraje</dt><dd><%= formatKm(x.odometer_km) %></dd></div>
+      <% documentsFor(country).forEach((d) => { const a = alertas.find((al) => al.label === d.label); %>
+        <div><dt><%= d.label %></dt><dd><%= formatDate(x[d.field]) %><% if (a) { %> <span class="logistica-alerta logistica-alerta--<%= a.state %>"><%= a.state === 'vencido' ? 'Vencido' : 'Por vencer' %></span><% } %></dd></div>
+      <% }) %>
+      <% const mantencion = alertas.find((al) => al.label === 'Mantención'); %>
+      <div><dt>Próx. mantención</dt><dd><%= formatKm(x.next_maintenance_km) %><% if (mantencion) { %> <span class="logistica-alerta logistica-alerta--<%= mantencion.state %>"><%= mantencion.state === 'vencido' ? 'Vencida' : 'Por vencer' %></span><% } %></dd></div>
+      <% if (x.notes) { %><div class="logistica-datos--ancho"><dt>Notas</dt><dd><%= x.notes %></dd></div><% } %>
+    </dl>
+  </section>
+
+  <section class="logistica-panel" aria-labelledby="hist-mecanicas" style="padding-bottom: 18px;">
+    <h3 class="logistica-panel__titulo" id="hist-mecanicas">
+      <%- include('../../partials/icon', { name: 'clipboard-check' }) %> Revisiones mecánicas
+      <span class="logistica-panel__extra"><%= lista.length %></span>
+    </h3>
+    <% if (!lista.length) { %>
+      <p class="logistica-panel__desc" style="margin-bottom: 0;">Este vehículo todavía no tiene revisiones mecánicas.</p>
+    <% } else { %>
+      <div class="logistica-tabla-wrap" style="margin-top: 12px;">
+        <table class="logistica-tabla logistica-tabla--tarjetas">
+          <thead>
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col">Número</th>
+              <th scope="col">Conductor</th>
+              <th scope="col" class="num">Kilometraje</th>
+              <th scope="col">Resultado</th>
+              <th scope="col"><span class="sr-only">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% lista.forEach((c) => { const anulado = c.status === 'voided'; %>
+              <tr class="<%= anulado ? 'is-anulado' : '' %>">
+                <td data-label="Fecha"><%= formatDate(c.inspection_date) %><span class="logistica-sub"><%= labelFrom(INSPECTION_KINDS, c.inspection_kind) %></span></td>
+                <td data-label="Número"><a class="logistica-numero" href="<%= MECANICA %>/<%= c.id %>"><%= c.number %></a></td>
+                <td data-label="Conductor"><%= c.driver_name %></td>
+                <td data-label="Kilometraje" class="num"><%= formatKm(c.odometer_km) %></td>
+                <td data-label="Resultado">
+                  <% if (anulado) { %>
+                    <span class="logistica-estado logistica-estado--anulado">Anulada</span>
+                  <% } else { %>
+                    <span class="logistica-estado logistica-estado--<%= c.result %>"><%= resultLabel(c.result) %></span>
+                  <% } %>
+                </td>
+                <td class="logistica-tabla__acciones">
+                  <a href="<%= MECANICA %>/<%= c.id %>/pdf" target="_blank" rel="noopener" class="logistica-icono-btn" title="Imprimir <%= c.number %>" aria-label="Imprimir <%= c.number %>"><%- include('../../partials/icon', { name: 'printer' }) %></a>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+</div>

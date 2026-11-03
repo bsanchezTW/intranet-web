@@ -1,0 +1,31 @@
+<%
+  const x = vehiculo;
+  const tipoOk = isVehicleKind(x.kind);
+%>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'camera' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
+        <span><%= x.plate %></span>
+      </nav>
+      <h2 class="page-title">Revisión física de <%= x.plate %></h2>
+      <p class="page-description">Abolladuras, rayones y partes rotas, marcadas sobre el modelo del vehículo con su observación y sus fotos.</p>
+    </div>
+  </div>
+
+  <div class="logistica-vacio">
+    <span class="flota-card__silueta" style="width: 160px;"><%- include('../partials/silueta', { tipo: x.kind }) %></span>
+    <p class="logistica-vacio__titulo">Módulo en construcción</p>
+    <% if (tipoOk) { %>
+      <p>Aquí se recorrerá el modelo 3D de <%= labelFrom(VEHICLE_KINDS, x.kind).toLowerCase() %>: tocas una zona, como el parachoques delantero, y le agregas la observación y las fotos del daño.</p>
+    <% } else { %>
+      <p>Este vehículo no tiene tipo todavía. Elige si es minivan, camioneta pickup o camión: de eso depende el modelo de su revisión física.</p>
+    <% } %>
+    <a href="<%= FLOTA %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'arrow-left' }) %> Volver a Gestión de flota</a>
+  </div>
+</div>

@@ -28,20 +28,17 @@
 <% } %>
 <%
   const hojasRutaNav = features.logistics && can('logistica.acceso') && can('logistica.hoja_ruta.ver');
-  const checklistsNav = features.logistics && can('logistica.acceso') && (can('logistica.checklist.ver') || can('logistica.checklist.crear'));
-  const flotaNav = features.logistics && can('logistica.acceso') && can('logistica.vehiculo.ver');
+  const flotaNav = features.logistics && can('logistica.acceso')
+    && (can('logistica.vehiculo.ver') || can('logistica.checklist.ver') || can('logistica.checklist.crear'));
 %>
-<% if (hojasRutaNav || checklistsNav || flotaNav) { %>
+<% if (hojasRutaNav || flotaNav) { %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Logística</span>
+  <% if (flotaNav) { %>
+  <a href="/logistica/flota">Gestión de flota</a>
+  <% } %>
   <% if (hojasRutaNav) { %>
   <a href="/logistica/hojas-de-ruta">Hojas de ruta</a>
-  <% } %>
-  <% if (checklistsNav) { %>
-  <a href="/logistica/checklists">Checklist de vehículos</a>
-  <% } %>
-  <% if (flotaNav) { %>
-  <a href="/logistica/vehiculos">Flota de vehículos</a>
   <% } %>
 </div>
 <% } %>

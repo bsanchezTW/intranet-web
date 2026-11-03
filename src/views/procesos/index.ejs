@@ -9,8 +9,9 @@
   const puedeLetras = features.billsOfExchange && typeof canIssueBills !== 'undefined' && canIssueBills;
   // Logística: cada tarjeta con su permiso; la sección sólo si queda alguna.
   const veHojasRuta = features.logistics && can('logistica.acceso') && can('logistica.hoja_ruta.ver');
-  const veChecklists = features.logistics && can('logistica.acceso') && (can('logistica.checklist.ver') || can('logistica.checklist.crear'));
-  const veFlota = features.logistics && can('logistica.acceso') && can('logistica.vehiculo.ver');
+  // A Gestión de flota llega quien ve la flota o quien registra o ve revisiones.
+  const veFlota = features.logistics && can('logistica.acceso')
+    && (can('logistica.vehiculo.ver') || can('logistica.checklist.ver') || can('logistica.checklist.crear'));
 
   // Sin área no hay jefe, y sin jefe en todo el organigrama no hay a quién
   // enviarle la solicitud.
@@ -178,7 +179,7 @@
   </section>
   <% } %>
 
-  <% if (veHojasRuta || veChecklists || veFlota) { %>
+  <% if (veHojasRuta || veFlota) { %>
   <!-- ═══════════ Logística ═══════════ -->
   <section class="seccion" id="seccion-logistica" aria-labelledby="seccion-logistica-titulo">
     <div class="seccion__head">
@@ -205,22 +206,12 @@
         </a>
       <% } %>
 
-      <% if (veChecklists) { %>
-        <a href="/logistica/checklists" class="procesos-card">
-          <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'clipboard-check' }) %></span>
-          <div class="procesos-card__cuerpo">
-            <h4 class="procesos-card__titulo">Checklist de vehículos</h4>
-            <p class="procesos-card__desc">Revisa el estado de un vehículo antes de salir y guarda el registro firmado por quien lo inspeccionó.</p>
-          </div>
-        </a>
-      <% } %>
-
       <% if (veFlota) { %>
-        <a href="/logistica/vehiculos" class="procesos-card">
-          <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'truck' }) %></span>
+        <a href="/logistica/flota" class="procesos-card">
+          <span class="procesos-card__tile procesos-card__tile--green" aria-hidden="true"><%- include('../partials/icon', { name: 'truck' }) %></span>
           <div class="procesos-card__cuerpo">
-            <h4 class="procesos-card__titulo">Flota de vehículos</h4>
-            <p class="procesos-card__desc">Patentes, kilometraje y vencimientos de la revisión técnica y los seguros de cada vehículo.</p>
+            <h4 class="procesos-card__titulo">Gestión de flota</h4>
+            <p class="procesos-card__desc">Los vehículos de la empresa, con su revisión mecánica, su revisión física y el historial de cada uno.</p>
           </div>
         </a>
       <% } %>

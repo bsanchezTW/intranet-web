@@ -38,35 +38,36 @@
 <div class="contenedor">
 
   <div class="page-header">
-    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'clipboard-check' }) %></span>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'clipboard-check' }) %></span>
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
-        <a href="/logistica/checklists">Checklist de vehículos</a> <span aria-hidden="true">/</span>
-        <span>Registrar</span>
+        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
+        <a href="<%= MECANICA %>">Revisiones mecánicas</a> <span aria-hidden="true">/</span>
+        <span>Nueva</span>
       </nav>
-      <h2 class="page-title">Check list diario</h2>
-      <p class="page-description">Estado mecánico del vehículo antes de usarlo. Al guardarlo recibe su número y ya no se puede modificar.</p>
+      <h2 class="page-title">Revisión mecánica</h2>
+      <p class="page-description">El «Check list diario»: estado mecánico del vehículo antes de usarlo. Al guardarla recibe su número y ya no se puede modificar.</p>
     </div>
   </div>
 
   <% if (hayErrores) { %>
     <div class="flash-msg flash-msg--error" role="alert">
-      <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'alert-triangle' }) %></span>
       <span><%= err.general || ['Revisa los campos marcados antes de guardar.', err.items].filter(Boolean).join(' ') %></span>
     </div>
   <% } %>
 
   <% if (!vehiculos.length) { %>
     <div class="logistica-vacio">
-      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'truck' }) %></span>
+      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'truck' }) %></span>
       <p class="logistica-vacio__titulo">No hay vehículos activos en la flota</p>
-      <p>Agrega al menos un vehículo antes de registrar un checklist.</p>
-      <% if (puedeFlota) { %><a href="/logistica/vehiculos/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar vehículo</a><% } %>
+      <p>Agrega al menos un vehículo antes de registrar una revisión mecánica.</p>
+      <% if (puedeFlota) { %><a href="<%= FLOTA %>/nuevo" class="page-header-btn"><%- include('../../../partials/icon', { name: 'plus' }) %> Agregar vehículo</a><% } %>
     </div>
   <% } else { %>
 
-  <form method="post" action="/logistica/checklists" class="logistica-form" id="checklistForm" novalidate>
+  <form method="post" action="<%= MECANICA %>" class="logistica-form" id="checklistForm" novalidate>
 
     <!-- ═══════════ Encabezado ═══════════ -->
     <section class="logistica-panel" aria-labelledby="panel-vehiculo">
@@ -200,7 +201,7 @@
       <h3 class="logistica-panel__titulo" id="panel-cierre">
         <span class="logistica-panel__num" aria-hidden="true">3</span> Observaciones y firma
       </h3>
-      <p class="logistica-panel__desc">El checklist queda firmado con tu nombre y la hora en que lo guardas.</p>
+      <p class="logistica-panel__desc">La revisión queda firmada con tu nombre y la hora en que lo guardas.</p>
 
       <div class="campos-grid">
         <div class="campo-form campo-form--ancho">
@@ -224,9 +225,9 @@
     </section>
 
     <div class="logistica-form__acciones">
-      <a href="/logistica/checklists" class="page-header-btn page-header-btn--secundario">Cancelar</a>
-      <button type="submit" name="accion" value="guardar" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'check' }) %> <span>Guardar</span></button>
-      <button type="submit" name="accion" value="imprimir" class="page-header-btn"><%- include('../../partials/icon', { name: 'printer' }) %> <span>Guardar e imprimir PDF</span></button>
+      <a href="<%= FLOTA %>" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+      <button type="submit" name="accion" value="guardar" class="page-header-btn page-header-btn--secundario"><%- include('../../../partials/icon', { name: 'check' }) %> <span>Guardar</span></button>
+      <button type="submit" name="accion" value="imprimir" class="page-header-btn"><%- include('../../../partials/icon', { name: 'printer' }) %> <span>Guardar e imprimir PDF</span></button>
     </div>
   </form>
   <% } %>

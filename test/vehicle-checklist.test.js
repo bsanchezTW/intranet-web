@@ -1,10 +1,12 @@
-const { describe, it } = require("node:test");
+const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 
 process.env.COUNTRY = process.env.COUNTRY || "CL";
 
 const {
   ANSWERS,
+  VEHICLE_KINDS,
+  isVehicleKind,
   computeResult,
   formatChecklistNumber,
   defaultTemplate,
@@ -104,17 +106,30 @@ describe("flota — formulario y vencimientos", () => {
   });
 
   it("valida año, kilometraje y fechas", () => {
-    const ok = normalizeVehicleInput({ plate: "abcd12", kind: "furgon", model_year: "2022", odometer_km: "120.500", insurance_due: "2027-03-31" });
+    const ok = normalizeVehicleInput({ plate: "abcd12", kind: "minivan", model_year: "2022", odometer_km: "120.500", insurance_due: "2027-03-31" });
     assert.equal(ok.ok, true);
     assert.equal(ok.values.plate, "ABCD12");
-    assert.equal(ok.values.kind, "furgon");
+    assert.equal(ok.values.kind, "minivan");
     assert.equal(ok.values.odometer_km, 120500);
     assert.equal(ok.values.technical_review_due, null);
 
     const mal = normalizeVehicleInput({ plate: "x", model_year: "22", odometer_km: "12,5", insurance_due: "2027-02-30", gas_review_due: "ayer", next_maintenance_km: "diez" });
     assert.equal(mal.ok, false);
-    assert.deepEqual(Object.keys(mal.errors).sort(), ["gas_review_due", "insurance_due", "model_year", "next_maintenance_km", "odometer_km", "plate"]);
-    assert.equal(normalizeVehicleInput({ plate: "ABCD12", next_maintenance_km: "50.000" }).values.next_maintenance_km, 50000);
+    assert.deepEqual(Object.keys(mal.errors).sort(), ["gas_review_due", "insurance_due", "kind", "model_year", "next_maintenance_km", "odometer_km", "plate"]);
+    assert.equal(normalizeVehicleInput({ plate: "ABCD12", kind: "pickup", next_maintenance_km: "50.000" }).values.next_maintenance_km, 50000);
+  });
+
+  it("el tipo es minivan, camioneta pickup o camión, sin uno por defecto", () => {
+    assert.deepEqual(VEHICLE_KINDS.map((k) => k.value), ["minivan", "pickup", "camion"]);
+    for (const tipo of ["minivan", "pickup", "camion"]) {
+      assert.equal(normalizeVehicleInput({ plate: "ABCD12", kind: tipo }).ok, true, tipo);
+    }
+    for (const viejo of ["", "camioneta", "furgon", "automovil", "otro"]) {
+      const { errors } = normalizeVehicleInput({ plate: "ABCD12", kind: viejo });
+      assert.equal(errors.kind, "Elige el tipo de vehículo.", viejo);
+    }
+    assert.equal(isVehicleKind("camion"), true);
+    assert.equal(isVehicleKind("motocicleta"), false);
   });
 
   it("avisa documentos vencidos, por vencer (30 días) y la mantención (1.000 km)", () => {
@@ -282,5 +297,49 @@ describe("logística — schema y permisos", () => {
       }
       assert.deepEqual(getPermission("logistica.checklist.ver", country).scopes, ["propio", "todo"]);
     }
+  });
+
+  it("los vehículos de la primera versión pasan a los tipos nuevos", () => {
+    const sql = DDL_STATEMENTS.join("\n");
+    assert.match(sql, /WHEN 'camioneta' THEN 'pickup' WHEN 'furgon' THEN 'minivan'/);
+    assert.match(sql, /ALTER COLUMN kind SET DEFAULT 'pickup'/);
+  });
+});
+
+describe("Gestión de flota — direcciones de la primera versión", () => {
+  const express = require("express");
+  let server;
+  let base;
+
+  before(async () => {
+    const app = express();
+    // Sesión y permisos de prueba: las redirecciones no tocan la base.
+    app.use((req, res, next) => {
+      req.session = { user: { id: 1, role: "Administrador" } };
+      req.perms = { mode: "aplicar", can: () => true, canOnRecord: () => true };
+      next();
+    });
+    app.use("/logistica", require("../src/routes/logistica"));
+    await new Promise((resolve) => { server = app.listen(0, resolve); });
+    base = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  after(() => new Promise((resolve) => server.close(resolve)));
+
+  const destino = async (path) => {
+    const res = await fetch(base + path, { redirect: "manual" });
+    return [res.status, res.headers.get("location")];
+  };
+
+  it("la flota y el checklist redirigen a Gestión de flota", async () => {
+    assert.deepEqual(await destino("/logistica/vehiculos"), [301, "/logistica/flota"]);
+    assert.deepEqual(await destino("/logistica/vehiculos/nuevo"), [301, "/logistica/flota/nuevo"]);
+    assert.deepEqual(await destino("/logistica/vehiculos/7/editar"), [301, "/logistica/flota/7/editar"]);
+    assert.deepEqual(await destino("/logistica/checklists"), [301, "/logistica/flota/mecanica"]);
+    assert.deepEqual(await destino("/logistica/checklists?vehiculo=3&resultado=apto"), [301, "/logistica/flota/mecanica?vehiculo=3&resultado=apto"]);
+    assert.deepEqual(await destino("/logistica/checklists/nuevo?vehiculo=3"), [301, "/logistica/flota/mecanica/nueva?vehiculo=3"]);
+    assert.deepEqual(await destino("/logistica/checklists/plantilla"), [301, "/logistica/flota/mecanica/items"]);
+    assert.deepEqual(await destino("/logistica/checklists/12"), [301, "/logistica/flota/mecanica/12"]);
+    assert.deepEqual(await destino("/logistica/checklists/12/pdf"), [301, "/logistica/flota/mecanica/12/pdf"]);
   });
 });

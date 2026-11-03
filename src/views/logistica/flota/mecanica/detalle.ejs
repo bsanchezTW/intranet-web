@@ -12,22 +12,23 @@
 <div class="contenedor">
 
   <div class="page-header">
-    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'clipboard-check' }) %></span>
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'clipboard-check' }) %></span>
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
-        <a href="/logistica/checklists">Checklist de vehículos</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
+        <a href="<%= MECANICA %>">Revisiones mecánicas</a> <span aria-hidden="true">/</span>
         <span><%= r.number %></span>
       </nav>
-      <h2 class="page-title">Checklist <%= r.number %></h2>
+      <h2 class="page-title">Revisión mecánica <%= r.number %></h2>
       <p class="page-description">
         <%= r.vehicle_plate %><% if (r.vehicle_label) { %> · <%= r.vehicle_label %><% } %>
         · <%= formatDate(r.inspection_date) %> · <%= labelFrom(INSPECTION_KINDS, r.inspection_kind) %>
       </p>
     </div>
     <div class="page-header-actions">
-      <a href="/logistica/checklists/<%= r.id %>/pdf" target="_blank" rel="noopener" class="page-header-btn">
-        <%- include('../../partials/icon', { name: 'printer' }) %> Imprimir
+      <a href="<%= MECANICA %>/<%= r.id %>/pdf" target="_blank" rel="noopener" class="page-header-btn">
+        <%- include('../../../partials/icon', { name: 'printer' }) %> Imprimir
       </a>
     </div>
   </div>
@@ -41,9 +42,9 @@
 
   <% if (anulado) { %>
     <div class="logistica-anulado" role="note">
-      <span class="logistica-anulado__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'x-circle' }) %></span>
+      <span class="logistica-anulado__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'x-circle' }) %></span>
       <span>
-        <strong>Checklist anulado</strong> el <%= anuladoEl %><% if (r.voided_by_name) { %> por <%= r.voided_by_name %><% } %>.
+        <strong>Revisión anulada</strong> el <%= anuladoEl %><% if (r.voided_by_name) { %> por <%= r.voided_by_name %><% } %>.
         Motivo: <%= r.void_reason %>
       </span>
     </div>
@@ -115,16 +116,16 @@
 
     <% if (!anulado && puedeAnular) { %>
       <details class="logistica-anular">
-        <summary><%- include('../../partials/icon', { name: 'x-circle' }) %> Anular este checklist</summary>
-        <form method="post" action="/logistica/checklists/<%= r.id %>/anular"
-              data-confirm="El checklist <%= r.number %> quedará anulado. Seguirá en el registro, pero ya no cuenta como revisión válida."
-              data-confirm-title="¿Anular el checklist?" data-confirm-accept="Anular" data-confirm-tone="peligro">
+        <summary><%- include('../../../partials/icon', { name: 'x-circle' }) %> Anular esta revisión</summary>
+        <form method="post" action="<%= MECANICA %>/<%= r.id %>/anular"
+              data-confirm="La revisión <%= r.number %> quedará anulada. Seguirá en el registro, pero ya no cuenta como revisión válida."
+              data-confirm-title="¿Anular la revisión?" data-confirm-accept="Anular" data-confirm-tone="peligro">
           <div class="campo-form">
             <label for="motivo">Motivo <span class="required-mark">*</span></label>
             <textarea id="motivo" name="motivo" rows="2" maxlength="300" minlength="5" required placeholder="Por ejemplo: se registró con la patente equivocada."></textarea>
           </div>
           <div>
-            <button type="submit" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'x-circle' }) %> Anular</button>
+            <button type="submit" class="page-header-btn page-header-btn--secundario"><%- include('../../../partials/icon', { name: 'x-circle' }) %> Anular</button>
           </div>
         </form>
       </details>

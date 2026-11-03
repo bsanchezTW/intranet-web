@@ -1,0 +1,165 @@
+<%
+  const lista = Array.isArray(flota) ? flota : [];
+  const activos = lista.filter((x) => x.active);
+  const deBaja = lista.filter((x) => !x.active);
+  const conVencidos = activos.filter((x) => documentAlerts(x, today).some((a) => a.state === 'vencido')).length;
+  const revisadosHoy = activos.filter((x) => x.last_checklist_date === today).length;
+  const sinTipo = activos.filter((x) => !isVehicleKind(x.kind)).length;
+%>
+
+<% function tarjeta(x) {
+     const alertas = documentAlerts(x, today);
+     const tieneDocs = documentsFor(country).some((d) => x[d.field]) || x.next_maintenance_km != null;
+     const tipoOk = isVehicleKind(x.kind);
+%>
+  <article class="flota-card<%= x.active ? '' : ' is-inactivo' %>" aria-labelledby="vehiculo-<%= x.id %>">
+    <div class="flota-card__head">
+      <span class="flota-card__silueta"><%- include('../partials/silueta', { tipo: x.kind }) %></span>
+      <div class="flota-card__id">
+        <h3 class="flota-card__patente" id="vehiculo-<%= x.id %>"><span class="logistica-patente"><%= x.plate %></span></h3>
+        <span class="flota-card__modelo"><%= vehicleLabel(x) || 'Sin modelo' %></span>
+        <% if (tipoOk) { %>
+          <span class="logistica-sub"><%= labelFrom(VEHICLE_KINDS, x.kind) %></span>
+        <% } else { %>
+          <span class="logistica-alerta logistica-alerta--por_vencer">Tipo por definir</span>
+        <% } %>
+      </div>
+      <% if (puedeAdministrar) { %>
+        <div class="flota-card__admin">
+          <a href="<%= FLOTA %>/<%= x.id %>/editar" class="logistica-icono-btn" title="Editar <%= x.plate %>" aria-label="Editar <%= x.plate %>"><%- include('../../partials/icon', { name: 'edit' }) %></a>
+          <form method="post" action="<%= FLOTA %>/<%= x.id %>/estado"
+                <% if (x.active) { %>data-confirm="<%= x.plate %> dejará de aparecer al registrar revisiones. Su historial se conserva." data-confirm-title="¿Dar de baja el vehículo?" data-confirm-accept="Dar de baja" data-confirm-tone="peligro"<% } %>>
+            <input type="hidden" name="activo" value="<%= x.active ? '0' : '1' %>">
+            <button type="submit" class="logistica-icono-btn<%= x.active ? ' logistica-icono-btn--peligro' : '' %>" title="<%= x.active ? 'Dar de baja' : 'Reactivar' %> <%= x.plate %>" aria-label="<%= x.active ? 'Dar de baja' : 'Reactivar' %> <%= x.plate %>"><%- include('../../partials/icon', { name: x.active ? 'archive' : 'repeat' }) %></button>
+          </form>
+        </div>
+      <% } %>
+    </div>
+
+    <dl class="flota-card__datos">
+      <div><dt>Kilometraje</dt><dd><%= formatKm(x.odometer_km) %></dd></div>
+      <div>
+        <dt>Revisión mecánica</dt>
+        <dd>
+          <% if (x.last_checklist_id) { %>
+            <% if (puedeVerRevisiones) { %><a href="<%= MECANICA %>/<%= x.last_checklist_id %>"><%= formatDate(x.last_checklist_date) %></a><% } else { %><%= formatDate(x.last_checklist_date) %><% } %>
+            <span class="logistica-estado logistica-estado--<%= x.last_checklist_result %>"><%= resultLabel(x.last_checklist_result) %></span>
+          <% } else { %>
+            <span class="logistica-sub">Sin revisiones</span>
+          <% } %>
+        </dd>
+      </div>
+      <div class="flota-card__docs">
+        <dt>Documentos</dt>
+        <dd>
+          <% if (!tieneDocs) { %>
+            <span class="logistica-sub">Sin vencimientos cargados</span>
+          <% } else if (!alertas.length) { %>
+            <span class="logistica-estado logistica-estado--apto">Al día</span>
+          <% } else { %>
+            <span class="logistica-alertas">
+              <% alertas.forEach((a) => { %>
+                <span class="logistica-alerta logistica-alerta--<%= a.state %>" title="<%= a.label %>: <%= a.detail %>"><%= a.label %></span>
+              <% }) %>
+            </span>
+          <% } %>
+        </dd>
+      </div>
+    </dl>
+
+    <% if (x.active) { %>
+      <div class="flota-card__acciones">
+        <% if (puedeRevisar) { %>
+          <a href="<%= MECANICA %>/nueva?vehiculo=<%= x.id %>" class="flota-accion"><%- include('../../partials/icon', { name: 'clipboard-check' }) %><span>Revisión mecánica</span></a>
+        <% } %>
+        <a href="<%= FLOTA %>/<%= x.id %>/revision-fisica" class="flota-accion"><%- include('../../partials/icon', { name: 'camera' }) %><span>Revisión física</span></a>
+        <a href="<%= FLOTA %>/<%= x.id %>/historial" class="flota-accion"><%- include('../../partials/icon', { name: 'clock' }) %><span>Historial</span></a>
+      </div>
+    <% } else { %>
+      <div class="flota-card__acciones">
+        <a href="<%= FLOTA %>/<%= x.id %>/historial" class="flota-accion"><%- include('../../partials/icon', { name: 'clock' }) %><span>Historial</span></a>
+      </div>
+    <% } %>
+  </article>
+<% } %>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'truck' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="/procesos#seccion-logistica">Logística</a>
+      </nav>
+      <h2 class="page-title">Gestión de flota</h2>
+      <p class="page-description">Cada vehículo con su revisión mecánica, su revisión física y su historial.</p>
+    </div>
+    <div class="page-header-actions">
+      <% if (puedeVerRevisiones) { %>
+        <a href="<%= MECANICA %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'file-text' }) %> Revisiones mecánicas</a>
+      <% } %>
+      <% if (puedePlantilla) { %>
+        <a href="<%= MECANICA %>/items" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'settings' }) %> Ítems</a>
+      <% } %>
+      <% if (puedeAdministrar) { %>
+        <a href="<%= FLOTA %>/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar vehículo</a>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (error) { %>
+    <div hidden data-toast="<%= error %>" data-toast-tone="error"></div>
+  <% } %>
+
+  <% if (!lista.length) { %>
+    <div class="logistica-vacio">
+      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'truck' }) %></span>
+      <p class="logistica-vacio__titulo">La flota está vacía</p>
+      <p>Agrega los vehículos de la empresa: su tipo, patente y los vencimientos de sus documentos.</p>
+      <% if (puedeAdministrar) { %>
+        <a href="<%= FLOTA %>/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar el primero</a>
+      <% } %>
+    </div>
+  <% } else { %>
+    <div class="logistica-resumen">
+      <div class="logistica-resumen__dato">
+        <span class="logistica-resumen__label">Vehículos activos</span>
+        <strong><%= activos.length %></strong>
+      </div>
+      <div class="logistica-resumen__dato">
+        <span class="logistica-resumen__label">Con revisión mecánica hoy</span>
+        <strong><%= revisadosHoy %></strong>
+      </div>
+      <div class="logistica-resumen__dato">
+        <span class="logistica-resumen__label">Con documentos vencidos</span>
+        <strong class="<%= conVencidos ? 'is-alerta' : '' %>"><%= conVencidos %></strong>
+      </div>
+    </div>
+
+    <% if (sinTipo && puedeAdministrar) { %>
+      <div class="procesos-aviso" style="margin-bottom: 18px;">
+        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'info' }) %></span>
+        <span><%= sinTipo === 1 ? 'Un vehículo no tiene' : `${sinTipo} vehículos no tienen` %> tipo (minivan, camioneta pickup o camión). Edítalo para elegirlo: de eso depende su revisión física.</span>
+      </div>
+    <% } %>
+
+    <% if (activos.length) { %>
+      <div class="flota-grid">
+        <% activos.forEach((x) => { tarjeta(x); }) %>
+      </div>
+    <% } %>
+
+    <% if (deBaja.length) { %>
+      <details class="flota-baja"<%= activos.length ? '' : ' open' %>>
+        <summary><%= deBaja.length %> <%= deBaja.length === 1 ? 'vehículo dado de baja' : 'vehículos dados de baja' %></summary>
+        <div class="flota-grid">
+          <% deBaja.forEach((x) => { tarjeta(x); }) %>
+        </div>
+      </details>
+    <% } %>
+  <% } %>
+</div>

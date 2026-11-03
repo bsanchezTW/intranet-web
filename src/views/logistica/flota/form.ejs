@@ -16,11 +16,11 @@
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
-        <a href="/logistica/vehiculos">Flota de vehículos</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
         <span><%= editando ? vehiculo.plate : 'Agregar' %></span>
       </nav>
       <h2 class="page-title"><%= editando ? `Editar ${vehiculo.plate}` : 'Agregar vehículo' %></h2>
-      <p class="page-description">Con los vencimientos cargados, la flota y el checklist avisan cuando un documento venció o está por vencer.</p>
+      <p class="page-description">El tipo define el modelo de la revisión física. Con los vencimientos cargados, la flota avisa cuando un documento venció o está por vencer.</p>
     </div>
   </div>
 
@@ -31,10 +31,30 @@
     </div>
   <% } %>
 
-  <form method="post" action="<%= editando ? `/logistica/vehiculos/${vehiculo.id}` : '/logistica/vehiculos' %>" class="logistica-form" novalidate>
+  <form method="post" action="<%= editando ? `${FLOTA}/${vehiculo.id}` : FLOTA %>" class="logistica-form" novalidate>
+    <section class="logistica-panel" aria-labelledby="panel-tipo">
+      <h3 class="logistica-panel__titulo" id="panel-tipo">
+        <span class="logistica-panel__num" aria-hidden="true">1</span> Tipo de vehículo <span class="required-mark">*</span>
+      </h3>
+      <p class="logistica-panel__desc">Con él se arma el modelo que se recorre en la revisión física para marcar abolladuras, rayones o partes rotas.</p>
+      <div class="tipo-opciones<%= invalido('kind') %>" role="radiogroup" aria-labelledby="panel-tipo"<% if (err.kind) { %> aria-describedby="err-kind"<% } %>>
+        <% VEHICLE_KINDS.forEach((k) => { %>
+          <label class="tipo-opcion">
+            <input type="radio" name="kind" value="<%= k.value %>"<%= v.kind === k.value ? ' checked' : '' %> required>
+            <span class="tipo-opcion__caja">
+              <%- include('../partials/silueta', { tipo: k.value }) %>
+              <span class="tipo-opcion__nombre"><%= k.label %></span>
+              <span class="tipo-opcion__ayuda"><%= k.hint %></span>
+            </span>
+          </label>
+        <% }) %>
+      </div>
+      <% if (err.kind) { %><p class="tipo-opciones__error" id="err-kind"><%= err.kind %></p><% } %>
+    </section>
+
     <section class="logistica-panel" aria-labelledby="panel-datos">
       <h3 class="logistica-panel__titulo" id="panel-datos">
-        <span class="logistica-panel__num" aria-hidden="true">1</span> Datos del vehículo
+        <span class="logistica-panel__num" aria-hidden="true">2</span> Datos del vehículo
       </h3>
       <p class="logistica-panel__desc">La patente se guarda en mayúsculas y sin guiones.</p>
       <div class="campos-grid">
@@ -42,14 +62,6 @@
           <label for="plate">Patente <span class="required-mark">*</span></label>
           <input type="text" id="plate" name="plate" value="<%= v.plate || '' %>" maxlength="12" autocomplete="off" placeholder="<%= peru ? 'ABC123' : 'ABCD12' %>" required style="text-transform: uppercase;">
           <% mensaje('plate') %>
-        </div>
-        <div class="campo-form">
-          <label for="kind">Tipo</label>
-          <select id="kind" name="kind">
-            <% VEHICLE_KINDS.forEach((k) => { %>
-              <option value="<%= k.value %>"<%= v.kind === k.value ? ' selected' : '' %>><%= k.label %></option>
-            <% }) %>
-          </select>
         </div>
         <div class="campo-form">
           <label for="brand">Marca</label>
@@ -68,17 +80,17 @@
           <label for="odometer_km">Kilometraje actual</label>
           <input type="text" id="odometer_km" name="odometer_km" value="<%= v.odometer_km ?? '' %>" inputmode="numeric" maxlength="9">
           <% mensaje('odometer_km') %>
-          <span class="campo-form__ayuda">Cada checklist lo actualiza; corrígelo aquí si quedó mal.</span>
+          <span class="campo-form__ayuda">Cada revisión mecánica lo actualiza; corrígelo aquí si quedó mal.</span>
         </div>
       </div>
     </section>
 
     <section class="logistica-panel" aria-labelledby="panel-documentos">
       <h3 class="logistica-panel__titulo" id="panel-documentos">
-        <span class="logistica-panel__num" aria-hidden="true">2</span> Vencimientos y mantención
+        <span class="logistica-panel__num" aria-hidden="true">3</span> Vencimientos y mantención
         <span class="logistica-panel__extra">Opcional</span>
       </h3>
-      <p class="logistica-panel__desc">Se avisa desde 30 días antes de cada vencimiento, y 1.000 km antes de la mantención. Cada checklist guarda estos datos como estaban ese día.</p>
+      <p class="logistica-panel__desc">Se avisa desde 30 días antes de cada vencimiento, y 1.000 km antes de la mantención. Cada revisión mecánica guarda estos datos como estaban ese día.</p>
       <div class="campos-grid">
         <div class="campo-form<%= invalido('technical_review_due') %>">
           <label for="technical_review_due">Revisión técnica</label>
@@ -115,7 +127,7 @@
     </section>
 
     <div class="logistica-form__acciones">
-      <a href="/logistica/vehiculos" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+      <a href="<%= FLOTA %>" class="page-header-btn page-header-btn--secundario">Cancelar</a>
       <button type="submit" class="page-header-btn"><%- include('../../partials/icon', { name: 'check' }) %> <span><%= editando ? 'Guardar cambios' : 'Agregar vehículo' %></span></button>
     </div>
   </form>

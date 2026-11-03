@@ -31,14 +31,24 @@ const RESULTS = Object.freeze({
 /** Nivel de combustible al revisar (opcional). */
 const FUEL_LEVELS = Object.freeze(["Reserva", "1/4", "1/2", "3/4", "Lleno"]);
 
+/**
+ * Tipo de vehículo: define el modelo 3D y las zonas de la revisión física.
+ * Los furgones (como el Maxus de la planilla) usan el de minivan.
+ */
 const VEHICLE_KINDS = Object.freeze([
-  { value: "camioneta", label: "Camioneta" },
-  { value: "furgon", label: "Furgón" },
-  { value: "camion", label: "Camión" },
-  { value: "automovil", label: "Automóvil" },
-  { value: "motocicleta", label: "Motocicleta" },
-  { value: "otro", label: "Otro" },
+  { value: "minivan", label: "Minivan", hint: "Furgones y vans de pasajeros o carga" },
+  { value: "pickup", label: "Camioneta pickup", hint: "Cabina simple o doble con tolva" },
+  { value: "camion", label: "Camión", hint: "Cabina con caja, plano o chasis" },
 ]);
+
+/**
+ * ¿Es uno de los tres tipos? Los de la primera versión de la flota que no
+ * tienen equivalente (automóvil, motocicleta, otro) quedan "por definir"
+ * hasta que se edite el vehículo; ver logisticsSchema.js.
+ */
+function isVehicleKind(value) {
+  return VEHICLE_KINDS.some((k) => k.value === value);
+}
 
 const MAX_SEQ = 99999;
 
@@ -73,7 +83,7 @@ function computeResult(answers) {
 /**
  * Plantilla inicial: el «Check list diario» en papel de Logística, con sus
  * categorías y en su orden. Se inserta una sola vez (si la tabla está vacía)
- * y después se administra desde /logistica/checklists/plantilla.
+ * y después se administra desde /logistica/flota/mecanica/items.
  *
  * Diferencias con la hoja: "Nivel líquido de frenos" era un encabezado con
  * dos ítems de frenos y queda dentro de Frenos; los dos "Estado de llantas"
@@ -193,6 +203,7 @@ module.exports = {
   RESULTS,
   FUEL_LEVELS,
   VEHICLE_KINDS,
+  isVehicleKind,
   MAX_SEQ,
   labelFrom,
   formatKm,
