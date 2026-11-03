@@ -110,7 +110,9 @@ describe("cobertura del modo sombra", () => {
    * Mientras el modo sea 'sombra', un permiso usado en una ruta o una vista sin
    * regla antigua decidiría con la configuración nueva y le cambiaría algo a
    * alguien. Cada módulo que se migra suma sus reglas a legacyRules.js.
+   * Los módulos que nacieron con permisos no tienen un "hoy" que conservar.
    */
+  const NACIDOS_CON_PERMISOS = ["logistica."];
   it("todo permiso usado en rutas y vistas tiene regla antigua", () => {
     const ROOT = path.join(__dirname, "..", "src");
     const USOS = [
@@ -133,6 +135,7 @@ describe("cobertura del modo sombra", () => {
       for (const patron of USOS) {
         for (const m of texto.matchAll(patron)) {
           for (const key of m[1].match(/[a-z_]+(?:\.[a-z_]+)+/g) || []) {
+            if (NACIDOS_CON_PERMISOS.some((p) => key.startsWith(p))) continue;
             if (!hasLegacyRule(key)) sinRegla.push(`${path.relative(ROOT, file)}: ${key}`);
           }
         }

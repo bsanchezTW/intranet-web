@@ -31,6 +31,7 @@ const MODULES = [
   require("./vacaciones"),
   require("./gastos"),
   require("./letras"),
+  require("./logistica"),
   require("./soporte"),
   require("./asistente"),
 ];

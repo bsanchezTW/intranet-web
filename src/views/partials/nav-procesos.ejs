@@ -1,5 +1,5 @@
 <%
-  /* Mismas secciones que la portada de /procesos: Finanzas, Documentos generales, Mi área/Áreas. */
+  /* Mismas secciones que la portada de /procesos: Finanzas, Logística, Documentos generales, Mi área/Áreas. */
   const adminNav = typeof veListadoCarpetas !== 'undefined' && veListadoCarpetas;
   const areaNavId = (typeof currentUser !== 'undefined' && currentUser && currentUser.work_area_id)
     ? currentUser.work_area_id
@@ -23,6 +23,25 @@
   <% } %>
   <% if (letrasNav) { %>
   <a href="/letras">Letras de cambio</a>
+  <% } %>
+</div>
+<% } %>
+<%
+  const hojasRutaNav = features.logistics && can('logistica.acceso') && can('logistica.hoja_ruta.ver');
+  const checklistsNav = features.logistics && can('logistica.acceso') && (can('logistica.checklist.ver') || can('logistica.checklist.crear'));
+  const flotaNav = features.logistics && can('logistica.acceso') && can('logistica.vehiculo.ver');
+%>
+<% if (hojasRutaNav || checklistsNav || flotaNav) { %>
+<div class="nav-menu-group">
+  <span class="nav-menu-group__label">Logística</span>
+  <% if (hojasRutaNav) { %>
+  <a href="/logistica/hojas-de-ruta">Hojas de ruta</a>
+  <% } %>
+  <% if (checklistsNav) { %>
+  <a href="/logistica/checklists">Checklist de vehículos</a>
+  <% } %>
+  <% if (flotaNav) { %>
+  <a href="/logistica/vehiculos">Flota de vehículos</a>
   <% } %>
 </div>
 <% } %>

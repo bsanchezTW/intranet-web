@@ -1,0 +1,110 @@
+<%
+  const lista = Array.isArray(items) ? items : [];
+  const err = errors || {};
+  const v = values || {};
+  const nuevoConError = Object.keys(err).length > 0 && !editId;
+  const activos = lista.filter((i) => i.active).length;
+  let categoriaActual = null;
+%>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'settings' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="/logistica/checklists">Checklist de vehículos</a> <span aria-hidden="true">/</span>
+        <span>Ítems</span>
+      </nav>
+      <h2 class="page-title">Ítems del checklist</h2>
+      <p class="page-description">
+        <%= activos %> <%= activos === 1 ? 'ítem activo' : 'ítems activos' %>. Los cambios valen para los checklists nuevos; los ya registrados conservan su texto.
+      </p>
+    </div>
+  </div>
+
+  <% if (typeof success !== 'undefined' && success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div hidden data-toast="<%= error %>" data-toast-tone="error"></div>
+  <% } %>
+
+  <% if (editId && Object.keys(err).length) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= Object.values(err)[0] %></span>
+    </div>
+  <% } %>
+
+  <section class="logistica-panel plantilla-nuevo" aria-labelledby="plantilla-nuevo">
+    <h3 class="logistica-panel__titulo" id="plantilla-nuevo">
+      <span class="logistica-panel__num" aria-hidden="true"><%- include('../../partials/icon', { name: 'plus' }) %></span> Agregar ítem
+    </h3>
+    <p class="logistica-panel__desc">Usa una categoría existente para que quede en el mismo grupo. Marca «Crítico» si una falla impide usar el vehículo.</p>
+    <form method="post" action="/logistica/checklists/plantilla">
+      <div class="campos-grid">
+        <div class="campo-form<%= nuevoConError && err.category ? ' is-invalid' : '' %>">
+          <label for="category">Categoría <span class="required-mark">*</span></label>
+          <input type="text" id="category" name="category" value="<%= nuevoConError ? v.category || '' : '' %>" maxlength="60" list="categorias" required>
+          <datalist id="categorias">
+            <% categorias.forEach((c) => { %><option value="<%= c %>"></option><% }) %>
+          </datalist>
+          <% if (nuevoConError && err.category) { %><span class="campo-form__error"><%= err.category %></span><% } %>
+        </div>
+        <div class="campo-form campo-form--doble<%= nuevoConError && err.label ? ' is-invalid' : '' %>">
+          <label for="label">Ítem <span class="required-mark">*</span></label>
+          <input type="text" id="label" name="label" value="<%= nuevoConError ? v.label || '' : '' %>" maxlength="160" required>
+          <% if (nuevoConError && err.label) { %><span class="campo-form__error"><%= err.label %></span><% } %>
+        </div>
+      </div>
+      <div class="plantilla-nuevo__acciones">
+        <label class="plantilla-check"><input type="checkbox" name="critical" value="1"<%= nuevoConError && v.critical ? ' checked' : '' %>> Crítico</label>
+        <button type="submit" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="logistica-tabla-wrap">
+    <table class="logistica-tabla logistica-tabla--tarjetas">
+      <thead>
+        <tr>
+          <th scope="col">Orden</th>
+          <th scope="col">Categoría</th>
+          <th scope="col">Ítem</th>
+          <th scope="col">Crítico</th>
+          <th scope="col"><span class="sr-only">Acciones</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% lista.forEach((item) => {
+             const formId = `item-${item.id}`;
+             const enError = Number(editId) === Number(item.id);
+             const valor = enError ? v : item;
+        %>
+          <tr class="plantilla-fila<%= item.active ? '' : ' is-inactivo' %>">
+            <td data-label="Orden"><input form="<%= formId %>" type="number" name="sort_order" value="<%= valor.sort_order ?? '' %>" min="0" step="1" aria-label="Orden"></td>
+            <td data-label="Categoría"><input form="<%= formId %>" type="text" name="category" value="<%= valor.category %>" maxlength="60" list="categorias" aria-label="Categoría" required></td>
+            <td data-label="Ítem">
+              <input form="<%= formId %>" type="text" name="label" value="<%= valor.label %>" maxlength="160" aria-label="Ítem" required>
+              <% if (!item.active) { %><span class="logistica-sub">Desactivado: no se pide en los checklists nuevos.</span><% } %>
+            </td>
+            <td data-label="Crítico">
+              <label class="plantilla-check"><input form="<%= formId %>" type="checkbox" name="critical" value="1"<%= valor.critical ? ' checked' : '' %>> Crítico</label>
+            </td>
+            <td class="logistica-tabla__acciones">
+              <form id="<%= formId %>" method="post" action="/logistica/checklists/plantilla/<%= item.id %>">
+                <button type="submit" class="logistica-accion">Guardar</button>
+              </form>
+              <form method="post" action="/logistica/checklists/plantilla/<%= item.id %>/estado">
+                <input type="hidden" name="activo" value="<%= item.active ? '0' : '1' %>">
+                <button type="submit" class="logistica-accion<%= item.active ? ' logistica-accion--peligro' : '' %>"><%= item.active ? 'Desactivar' : 'Activar' %></button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>

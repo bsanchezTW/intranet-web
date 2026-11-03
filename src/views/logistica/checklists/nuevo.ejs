@@ -1,0 +1,215 @@
+<%
+  const v = values || {};
+  const err = errors || {};
+  const hayErrores = Object.keys(err).length > 0;
+  const plantilla = Array.isArray(items) ? items : [];
+  const vehiculos = Array.isArray(flota) ? flota : [];
+  const personas = Array.isArray(conductores) ? conductores : [];
+  const respuestas = new Map((v.answers || []).map((a) => [String(a.item_id), a]));
+
+  // Ítems agrupados por categoría, en el orden de la plantilla.
+  const grupos = [];
+  plantilla.forEach((item) => {
+    let grupo = grupos.find((g) => g.categoria === item.category);
+    if (!grupo) { grupo = { categoria: item.category, items: [] }; grupos.push(grupo); }
+    grupo.items.push(item);
+  });
+
+  const vehiculoElegido = vehiculos.find((x) => String(x.id) === String(v.vehicle_id)) || null;
+  const otroConductor = v.driver_choice === driverOther;
+
+  function invalido(campo) { return err[campo] ? ' is-invalid' : ''; }
+%>
+
+<% function mensaje(campo) { if (err[campo]) { %><span class="campo-form__error" id="err-<%= campo %>"><%= err[campo] %></span><% } } %>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'clipboard-check' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="/logistica/checklists">Checklist de vehículos</a> <span aria-hidden="true">/</span>
+        <span>Registrar</span>
+      </nav>
+      <h2 class="page-title">Registrar checklist</h2>
+      <p class="page-description">Revisa el vehículo antes de usarlo. Al registrarlo recibe su número y queda guardado; ya no se puede modificar.</p>
+    </div>
+  </div>
+
+  <% if (hayErrores) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= err.general || ['Revisa los campos marcados antes de registrar.', err.items].filter(Boolean).join(' ') %></span>
+    </div>
+  <% } %>
+
+  <% if (!vehiculos.length) { %>
+    <div class="logistica-vacio">
+      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'truck' }) %></span>
+      <p class="logistica-vacio__titulo">No hay vehículos activos en la flota</p>
+      <p>Agrega al menos un vehículo antes de registrar un checklist.</p>
+      <% if (puedeFlota) { %><a href="/logistica/vehiculos/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar vehículo</a><% } %>
+    </div>
+  <% } else { %>
+
+  <form method="post" action="/logistica/checklists" class="logistica-form" id="checklistForm" novalidate>
+
+    <!-- ═══════════ Vehículo ═══════════ -->
+    <section class="logistica-panel" aria-labelledby="panel-vehiculo">
+      <h3 class="logistica-panel__titulo" id="panel-vehiculo">
+        <span class="logistica-panel__num" aria-hidden="true">1</span> Vehículo y conductor
+      </h3>
+      <p class="logistica-panel__desc">El kilometraje es el que marca el tablero al momento de revisar.</p>
+
+      <div class="campos-grid">
+        <div class="campo-form<%= invalido('vehicle_id') %>">
+          <label for="vehicle_id">Vehículo <span class="required-mark">*</span></label>
+          <select id="vehicle_id" name="vehicle_id" required>
+            <option value="">Elige la patente</option>
+            <% vehiculos.forEach((x) => { const alertas = documentAlerts(x, today); %>
+              <option value="<%= x.id %>"
+                      data-km="<%= x.odometer_km == null ? '' : x.odometer_km %>"
+                      data-km-texto="<%= formatKm(x.odometer_km) %>"
+                      data-alertas="<%= JSON.stringify(alertas.map((a) => ({ texto: `${a.label} ${a.state === 'vencido' ? 'vencida' : 'por vencer'} (${formatDate(a.due)})`, estado: a.state }))) %>"
+                      <%= String(v.vehicle_id) === String(x.id) ? 'selected' : '' %>>
+                <%= x.plate %><%= vehicleLabel(x) ? ` · ${vehicleLabel(x)}` : '' %>
+              </option>
+            <% }) %>
+          </select>
+          <% mensaje('vehicle_id') %>
+        </div>
+        <div class="campo-form<%= invalido('odometer_km') %>">
+          <label for="odometer_km">Kilometraje <span class="required-mark">*</span></label>
+          <input type="text" id="odometer_km" name="odometer_km" value="<%= v.odometer_km ?? '' %>" inputmode="numeric" maxlength="9" autocomplete="off" required>
+          <% mensaje('odometer_km') %>
+          <span class="campo-form__ayuda" id="kmAyuda"><%= vehiculoElegido && vehiculoElegido.odometer_km != null ? `Último registrado: ${formatKm(vehiculoElegido.odometer_km)}` : 'En kilómetros, sin decimales.' %></span>
+        </div>
+        <div class="campo-form">
+          <label for="fuel_level">Combustible</label>
+          <select id="fuel_level" name="fuel_level">
+            <option value="">Sin registrar</option>
+            <% FUEL_LEVELS.forEach((nivel) => { %>
+              <option value="<%= nivel %>"<%= v.fuel_level === nivel ? ' selected' : '' %>><%= nivel %></option>
+            <% }) %>
+          </select>
+        </div>
+      </div>
+      <div class="logistica-vehiculo-avisos logistica-alertas" id="vehiculoAvisos" aria-live="polite"><% if (vehiculoElegido) { documentAlerts(vehiculoElegido, today).forEach((a) => { %><span class="logistica-alerta logistica-alerta--<%= a.state %>"><%= a.label %> <%= a.state === 'vencido' ? 'vencida' : 'por vencer' %> (<%= formatDate(a.due) %>)</span><% }) } %></div>
+
+      <div class="campos-grid">
+        <div class="campo-form<%= invalido('inspection_date') %>">
+          <label for="inspection_date">Fecha de la revisión <span class="required-mark">*</span></label>
+          <input type="date" id="inspection_date" name="inspection_date" value="<%= v.inspection_date || today %>" max="<%= today %>" required>
+          <% mensaje('inspection_date') %>
+        </div>
+        <div class="campo-form<%= invalido('inspection_kind') %>">
+          <label for="inspection_kind">Momento <span class="required-mark">*</span></label>
+          <select id="inspection_kind" name="inspection_kind" required>
+            <% INSPECTION_KINDS.forEach((k) => { %>
+              <option value="<%= k.value %>"<%= v.inspection_kind === k.value ? ' selected' : '' %>><%= k.label %></option>
+            <% }) %>
+          </select>
+          <% mensaje('inspection_kind') %>
+        </div>
+        <div class="campo-form<%= invalido('driver_user_id') %>">
+          <label for="driver_user_id">Conductor <span class="required-mark">*</span></label>
+          <select id="driver_user_id" name="driver_user_id" required>
+            <option value="">Elige al conductor</option>
+            <% personas.forEach((p) => { %>
+              <option value="<%= p.id %>"<%= String(v.driver_choice) === String(p.id) ? ' selected' : '' %>><%= p.name %></option>
+            <% }) %>
+            <option value="<%= driverOther %>"<%= otroConductor ? ' selected' : '' %>>Otra persona (escribir nombre)</option>
+          </select>
+          <% mensaje('driver_user_id') %>
+        </div>
+        <div class="campo-form<%= invalido('driver_name_other') %>" id="conductorOtro"<%= otroConductor ? '' : ' hidden' %>>
+          <label for="driver_name_other">Nombre del conductor <span class="required-mark">*</span></label>
+          <input type="text" id="driver_name_other" name="driver_name_other" value="<%= v.driver_name_other || '' %>" maxlength="160" autocomplete="off">
+          <% mensaje('driver_name_other') %>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ Revisión ═══════════ -->
+    <section class="logistica-panel" aria-labelledby="panel-revision">
+      <h3 class="logistica-panel__titulo" id="panel-revision">
+        <span class="logistica-panel__num" aria-hidden="true">2</span> Revisión
+        <span class="logistica-panel__extra"><%= plantilla.length %> ítems</span>
+      </h3>
+      <p class="logistica-panel__desc">
+        Marca cada ítem. Una falla en un ítem <span class="logistica-estado logistica-estado--critico">Crítico</span> deja el vehículo <strong>no apto</strong> para salir; las demás quedan como observación. Toda falla se describe.
+      </p>
+
+      <% grupos.forEach((grupo, gi) => { %>
+        <div class="checklist-grupo" data-grupo>
+          <div class="checklist-grupo__head">
+            <h4 class="checklist-grupo__titulo"><%= grupo.categoria %></h4>
+            <button type="button" class="checklist-grupo__todo" data-todo-ok>Marcar todo bien</button>
+          </div>
+          <% grupo.items.forEach((item) => {
+               const clave = answerKey(item.id);
+               const previa = respuestas.get(String(item.id)) || {};
+               const marcada = previa.answer || '';
+               const nombreGrupo = `${clave}-label`;
+          %>
+            <div class="checklist-item<%= err[clave] ? ' is-invalid' : '' %>" data-item data-critico="<%= item.critical ? '1' : '0' %>">
+              <div class="checklist-item__label" id="<%= nombreGrupo %>">
+                <%= item.label %>
+                <% if (item.critical) { %><span class="logistica-estado logistica-estado--critico">Crítico</span><% } %>
+                <% if (err[clave]) { %><span class="checklist-item__error"><%= err[clave] %></span><% } %>
+              </div>
+              <div class="checklist-opciones" role="radiogroup" aria-labelledby="<%= nombreGrupo %>">
+                <% ANSWERS.forEach((a) => { %>
+                  <label class="checklist-opcion">
+                    <input type="radio" name="<%= clave %>" value="<%= a.value %>"<%= marcada === a.value ? ' checked' : '' %>>
+                    <span><%= a.short %></span>
+                  </label>
+                <% }) %>
+              </div>
+              <div class="checklist-item__nota" data-nota<%= marcada === 'falla' || previa.comment ? '' : ' hidden' %>>
+                <label class="sr-only" for="<%= commentKey(item.id) %>">Detalle de «<%= item.label %>»</label>
+                <input type="text" id="<%= commentKey(item.id) %>" name="<%= commentKey(item.id) %>" value="<%= previa.comment || '' %>" maxlength="300" placeholder="Describe la falla o la observación">
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      <% }) %>
+    </section>
+
+    <!-- ═══════════ Cierre ═══════════ -->
+    <section class="logistica-panel" aria-labelledby="panel-cierre">
+      <h3 class="logistica-panel__titulo" id="panel-cierre">
+        <span class="logistica-panel__num" aria-hidden="true">3</span> Observaciones y firma
+      </h3>
+      <p class="logistica-panel__desc">El checklist queda firmado con tu nombre y la hora del registro.</p>
+
+      <div class="campos-grid">
+        <div class="campo-form campo-form--ancho">
+          <label for="observations">Observaciones generales</label>
+          <textarea id="observations" name="observations" rows="3" maxlength="1000" placeholder="Opcional: cualquier detalle que no calce en los ítems."><%= v.observations || '' %></textarea>
+        </div>
+      </div>
+
+      <div class="checklist-resultado" id="checklistResultado" aria-live="polite">
+        <span>Resultado:</span>
+        <strong data-resultado-texto>Responde los ítems para ver el resultado.</strong>
+      </div>
+
+      <label class="checklist-declaracion">
+        <input type="checkbox" name="declaro" value="1"<%= v.declaro ? ' checked' : '' %> required>
+        <span>
+          Declaro que revisé personalmente el vehículo y que la información registrada es correcta.
+          <% if (err.declaro) { %><span class="checklist-declaracion__error"><%= err.declaro %></span><% } %>
+        </span>
+      </label>
+    </section>
+
+    <div class="logistica-form__acciones">
+      <a href="/logistica/checklists" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+      <button type="submit" class="page-header-btn"><%- include('../../partials/icon', { name: 'check' }) %> <span>Registrar checklist</span></button>
+    </div>
+  </form>
+  <% } %>
+</div>

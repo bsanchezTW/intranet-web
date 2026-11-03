@@ -29,6 +29,7 @@ const FEATURE_KEYS = [
   "expenseRequests",
   "vacations",
   "billsOfExchange",
+  "logistics",
 ];
 
 const FEATURE_MATRIX = {
@@ -59,6 +60,9 @@ const FEATURE_MATRIX = {
     vacations: false,
     // Letras de cambio: el talonario y el girador (RUC) son de Transworld Perú.
     billsOfExchange: false,
+    // Logística (/logistica, sección de Procesos): hojas de ruta y checklist
+    // de vehículos. En desarrollo: sin permisos asignados no aparece a nadie.
+    logistics: true,
   },
   PE: {
     // Sin tabla linkedin_posts ni tokens; no se sincroniza el feed.
@@ -86,6 +90,8 @@ const FEATURE_MATRIX = {
     // Letras de cambio giradas por Transworld Power and Telecom S.A.C.
     // (/letras, sección Finanzas de Procesos). Sólo el área de Finanzas.
     billsOfExchange: true,
+    // Logística: el mismo módulo que en Chile, con su flota y sus registros.
+    logistics: true,
   },
 };
 

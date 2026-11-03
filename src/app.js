@@ -66,6 +66,10 @@ const gastosRoutes = isFeatureEnabled("expenseRequests")
 const letrasRoutes = isFeatureEnabled("billsOfExchange")
   ? require("./routes/letras")
   : null;
+const logisticaRoutes = isFeatureEnabled("logistics")
+  ? require("./routes/logistica")
+  : null;
+const { ensureLogisticsSchema } = require("./services/logistics/logisticsSchema");
 const requireFinanceStaff = require("./middlewares/requireFinanceStaff");
 const { isFinanceStaff } = require("./services/expenses/financeTeam");
 const {
@@ -658,6 +662,9 @@ if (letrasRoutes) {
     letrasRoutes,
   );
 }
+if (logisticaRoutes) {
+  app.use("/logistica", requireAuth, requireFeature("logistics"), logisticaRoutes);
+}
 if (ticketsRoutes) {
   app.use("/soporte", requireAuth, requireFeature("supportTickets"), ticketsRoutes);
   // La página se llamó /sistemas. Los enlaces y correos viejos conservan el camino.
@@ -798,6 +805,14 @@ async function asegurarSchemaLetras() {
   }
 }
 
+async function asegurarSchemaLogistica() {
+  try {
+    await ensureLogisticsSchema();
+  } catch (err) {
+    logger.error("logistica", err);
+  }
+}
+
 async function asegurarSchemaAreas() {
   try {
     await ensureWorkAreaSchema();
@@ -842,6 +857,7 @@ async function runStartupDbTasks() {
   ];
   if (isFeatureEnabled("supportTickets")) steps.push(asegurarSchemaTickets);
   if (isFeatureEnabled("billsOfExchange")) steps.push(asegurarSchemaLetras);
+  if (isFeatureEnabled("logistics")) steps.push(asegurarSchemaLogistica);
   steps.push(async () => {
     await asegurarSchemaGastos();
     await asegurarSchemaCentrosCosto();

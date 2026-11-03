@@ -1,0 +1,110 @@
+<%
+  const v = values || {};
+  const err = errors || {};
+  const hayErrores = Object.keys(err).length > 0;
+  const editando = !!vehiculo;
+  const peru = country === 'PE';
+  function invalido(campo) { return err[campo] ? ' is-invalid' : ''; }
+%>
+
+<% function mensaje(campo) { if (err[campo]) { %><span class="campo-form__error" id="err-<%= campo %>"><%= err[campo] %></span><% } } %>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'truck' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="/logistica/vehiculos">Flota de vehículos</a> <span aria-hidden="true">/</span>
+        <span><%= editando ? vehiculo.plate : 'Agregar' %></span>
+      </nav>
+      <h2 class="page-title"><%= editando ? `Editar ${vehiculo.plate}` : 'Agregar vehículo' %></h2>
+      <p class="page-description">Con los vencimientos cargados, la flota y el checklist avisan cuando un documento venció o está por vencer.</p>
+    </div>
+  </div>
+
+  <% if (hayErrores) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span>Revisa los campos marcados antes de guardar.</span>
+    </div>
+  <% } %>
+
+  <form method="post" action="<%= editando ? `/logistica/vehiculos/${vehiculo.id}` : '/logistica/vehiculos' %>" class="logistica-form" novalidate>
+    <section class="logistica-panel" aria-labelledby="panel-datos">
+      <h3 class="logistica-panel__titulo" id="panel-datos">
+        <span class="logistica-panel__num" aria-hidden="true">1</span> Datos del vehículo
+      </h3>
+      <p class="logistica-panel__desc">La patente se guarda en mayúsculas y sin guiones.</p>
+      <div class="campos-grid">
+        <div class="campo-form<%= invalido('plate') %>">
+          <label for="plate">Patente <span class="required-mark">*</span></label>
+          <input type="text" id="plate" name="plate" value="<%= v.plate || '' %>" maxlength="12" autocomplete="off" placeholder="<%= peru ? 'ABC123' : 'ABCD12' %>" required style="text-transform: uppercase;">
+          <% mensaje('plate') %>
+        </div>
+        <div class="campo-form">
+          <label for="kind">Tipo</label>
+          <select id="kind" name="kind">
+            <% VEHICLE_KINDS.forEach((k) => { %>
+              <option value="<%= k.value %>"<%= v.kind === k.value ? ' selected' : '' %>><%= k.label %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="campo-form">
+          <label for="brand">Marca</label>
+          <input type="text" id="brand" name="brand" value="<%= v.brand || '' %>" maxlength="60">
+        </div>
+        <div class="campo-form">
+          <label for="model">Modelo</label>
+          <input type="text" id="model" name="model" value="<%= v.model || '' %>" maxlength="60">
+        </div>
+        <div class="campo-form<%= invalido('model_year') %>">
+          <label for="model_year">Año</label>
+          <input type="text" id="model_year" name="model_year" value="<%= v.model_year ?? '' %>" inputmode="numeric" maxlength="4">
+          <% mensaje('model_year') %>
+        </div>
+        <div class="campo-form<%= invalido('odometer_km') %>">
+          <label for="odometer_km">Kilometraje actual</label>
+          <input type="text" id="odometer_km" name="odometer_km" value="<%= v.odometer_km ?? '' %>" inputmode="numeric" maxlength="9">
+          <% mensaje('odometer_km') %>
+          <span class="campo-form__ayuda">Cada checklist lo actualiza; corrígelo aquí si quedó mal.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="logistica-panel" aria-labelledby="panel-documentos">
+      <h3 class="logistica-panel__titulo" id="panel-documentos">
+        <span class="logistica-panel__num" aria-hidden="true">2</span> Vencimientos
+        <span class="logistica-panel__extra">Opcional</span>
+      </h3>
+      <p class="logistica-panel__desc">Se avisa desde 30 días antes de cada vencimiento.</p>
+      <div class="campos-grid">
+        <div class="campo-form<%= invalido('technical_review_due') %>">
+          <label for="technical_review_due">Revisión técnica</label>
+          <input type="date" id="technical_review_due" name="technical_review_due" value="<%= v.technical_review_due || '' %>">
+          <% mensaje('technical_review_due') %>
+        </div>
+        <div class="campo-form<%= invalido('circulation_permit_due') %>">
+          <label for="circulation_permit_due">Permiso de circulación</label>
+          <input type="date" id="circulation_permit_due" name="circulation_permit_due" value="<%= v.circulation_permit_due || '' %>">
+          <% mensaje('circulation_permit_due') %>
+        </div>
+        <div class="campo-form<%= invalido('insurance_due') %>">
+          <label for="insurance_due"><%= peru ? 'SOAT' : 'Seguro obligatorio (SOAP)' %></label>
+          <input type="date" id="insurance_due" name="insurance_due" value="<%= v.insurance_due || '' %>">
+          <% mensaje('insurance_due') %>
+        </div>
+        <div class="campo-form campo-form--ancho">
+          <label for="notes">Notas</label>
+          <input type="text" id="notes" name="notes" value="<%= v.notes || '' %>" maxlength="300" placeholder="Por ejemplo: asignado a bodega.">
+        </div>
+      </div>
+    </section>
+
+    <div class="logistica-form__acciones">
+      <a href="/logistica/vehiculos" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+      <button type="submit" class="page-header-btn"><%- include('../../partials/icon', { name: 'check' }) %> <span><%= editando ? 'Guardar cambios' : 'Agregar vehículo' %></span></button>
+    </div>
+  </form>
+</div>
