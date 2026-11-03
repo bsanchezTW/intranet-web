@@ -20,6 +20,7 @@ const {
   formatKm,
   formatChecklistNumber,
 } = require("../constants/vehicleChecklist");
+const { GROUPS: ZONE_GROUPS, modelFor } = require("../constants/vehicleZones");
 const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
 
 /**
@@ -28,7 +29,7 @@ const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
  *
  *   /logistica/flota                       vehículos con sus tres botones
  *   /logistica/flota/:id/historial         historial de un vehículo
- *   /logistica/flota/:id/revision-fisica   revisión física (en construcción)
+ *   /logistica/flota/:id/revision-fisica   revisión física sobre el modelo 3D
  *   /logistica/flota/mecanica/...          revisión mecánica (el checklist)
  *
  * Se monta en /logistica y no bajo /procesos por la misma razón que /letras:
@@ -40,7 +41,7 @@ const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
 const FLOTA = "/logistica/flota";
 const MECANICA = `${FLOTA}/mecanica`;
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261103d"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261103f"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -560,6 +561,9 @@ router.get("/flota/:id/revision-fisica", accesoFlota, async (req, res) => {
     res.render("logistica/flota/fisica", {
       titulo: `Revisión física de ${vehiculo.plate}`,
       vehiculo,
+      modelo: modelFor(vehiculo.kind),
+      grupos: ZONE_GROUPS,
+      ...permisosFlota(req),
       ...VIEW_HELPERS,
       extraCss: EXTRA_CSS,
     });

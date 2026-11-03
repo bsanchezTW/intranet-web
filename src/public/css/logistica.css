@@ -1045,6 +1045,179 @@ button.logistica-icono-btn {
   .historial-ficha .flota-card__silueta { max-width: 120px; }
 }
 
+/* ── Revisión física: visor 3D y zonas ───────────────────────────────────── */
+
+.fisica-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: 18px;
+}
+
+.fisica-visor { padding-bottom: 14px; }
+
+.fisica-visor__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.fisica-visor__head .logistica-panel__titulo { margin: 0; }
+
+.fisica-vistas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fisica-vistas .logistica-chip[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.fisica-visor__marco {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 50% 38%, var(--color-surface) 0%, var(--color-surface-muted) 100%);
+}
+
+.fisica-visor__lienzo {
+  display: block;
+  width: 100%;
+  height: clamp(300px, 52vh, 560px);
+  cursor: grab;
+  touch-action: none;
+}
+
+.fisica-visor__lienzo:active { cursor: grabbing; }
+.fisica-visor__lienzo[hidden] { display: none; }
+
+.fisica-visor__cargando {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-subtle);
+  font-size: 0.88rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.fisica-visor.is-listo .fisica-visor__cargando,
+.fisica-visor__aviso:not([hidden]) ~ .fisica-visor__cargando { display: none; }
+
+.fisica-visor__etiqueta {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--color-heading);
+  color: var(--color-surface);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.fisica-visor__etiqueta[hidden] { display: none; }
+
+.fisica-visor__aviso {
+  margin: 0;
+  padding: 48px 20px;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.fisica-visor__aviso[hidden] { display: none; }
+
+.fisica-visor__ayuda {
+  margin: 10px 2px 0;
+  color: var(--color-text-subtle);
+  font-size: 0.8rem;
+}
+
+.fisica-lateral {
+  display: grid;
+  gap: 18px;
+}
+
+.fisica-zona { padding-bottom: 18px; border-color: var(--brand); }
+.fisica-zona[hidden] { display: none; }
+
+.fisica-zona__grupo {
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fisica-zona__nombre {
+  margin: 2px 0 8px;
+  color: var(--color-heading);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.fisica-zona__pronto {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.fisica-lista { padding-bottom: 16px; }
+
+.fisica-lista__grupo + .fisica-lista__grupo { margin-top: 12px; }
+
+.fisica-lista__grupo .checklist-grupo__titulo { margin: 10px 0 6px; }
+
+.fisica-lista__zonas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fisica-zona-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fisica-zona-btn:hover { border-color: var(--brand); color: var(--brand); }
+
+.fisica-zona-btn[aria-pressed="true"] {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+
+.fisica-zona-btn[data-estado="danio"] { border-color: var(--down); color: var(--down); }
+.fisica-zona-btn[data-estado="reparado"] { border-color: var(--green-deep); color: var(--green-ink); }
+
+@media (max-width: 1100px) {
+  .fisica-layout { grid-template-columns: 1fr; }
+}
+
+/* Celular: un lienzo casi cuadrado, para que quepa el vehículo y la lista. */
+@media (max-width: 720px) {
+  .fisica-visor__lienzo { height: clamp(260px, 82vw, 380px); }
+  .fisica-visor__head { align-items: flex-start; }
+}
+
 /* Tablet: la observación baja a su propia línea, bajo el ítem. */
 @media (max-width: 980px) and (min-width: 721px) {
   .checklist-grupo { --checklist-cols: minmax(0, 1fr) calc(3 * 60px + 2px); }

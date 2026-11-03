@@ -1,6 +1,14 @@
 <%
   const x = vehiculo;
-  const tipoOk = isVehicleKind(x.kind);
+  const tipoOk = isVehicleKind(x.kind) && modelo;
+  const VISTAS_BOTONES = [
+    ['general', '3/4'],
+    ['frente', 'Frente'],
+    ['atras', 'Atrás'],
+    ['izquierdo', 'Izquierda'],
+    ['derecho', 'Derecha'],
+    ['arriba', 'Arriba'],
+  ];
 %>
 
 <div class="contenedor">
@@ -14,18 +22,69 @@
         <span><%= x.plate %></span>
       </nav>
       <h2 class="page-title">Revisión física de <%= x.plate %></h2>
-      <p class="page-description">Abolladuras, rayones y partes rotas, marcadas sobre el modelo del vehículo con su observación y sus fotos.</p>
+      <p class="page-description"><%= vehicleLabel(x) || 'Sin modelo' %><%= tipoOk ? ` · ${labelFrom(VEHICLE_KINDS, x.kind)}` : '' %>. Abolladuras, rayones y partes rotas, marcadas sobre el modelo con su observación y sus fotos.</p>
     </div>
   </div>
 
-  <div class="logistica-vacio">
-    <span class="flota-card__silueta" style="width: 160px;"><%- include('../partials/silueta', { tipo: x.kind }) %></span>
-    <p class="logistica-vacio__titulo">Módulo en construcción</p>
-    <% if (tipoOk) { %>
-      <p>Aquí se recorrerá el modelo 3D de <%= labelFrom(VEHICLE_KINDS, x.kind).toLowerCase() %>: tocas una zona, como el parachoques delantero, y le agregas la observación y las fotos del daño.</p>
-    <% } else { %>
-      <p>Este vehículo no tiene tipo todavía. Elige si es minivan, camioneta pickup o camión: de eso depende el modelo de su revisión física.</p>
-    <% } %>
-    <a href="<%= FLOTA %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'arrow-left' }) %> Volver a Gestión de flota</a>
+  <% if (!tipoOk) { %>
+    <div class="logistica-vacio">
+      <span class="flota-card__silueta" style="width: 160px;"><%- include('../partials/silueta', { tipo: x.kind }) %></span>
+      <p class="logistica-vacio__titulo">Falta el tipo del vehículo</p>
+      <p>Elige si es minivan, camioneta pickup o camión: de eso depende el modelo de su revisión física.</p>
+      <% if (puedeAdministrar) { %>
+        <a href="<%= FLOTA %>/<%= x.id %>/editar" class="page-header-btn"><%- include('../../partials/icon', { name: 'edit' }) %> Elegir el tipo</a>
+      <% } else { %>
+        <a href="<%= FLOTA %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'arrow-left' }) %> Volver a Gestión de flota</a>
+      <% } %>
+    </div>
+  <% } else { %>
+
+  <div class="fisica-layout">
+    <section class="logistica-panel fisica-visor" data-modelo data-datos="modeloDatos" aria-labelledby="fisica-modelo-titulo">
+      <div class="fisica-visor__head">
+        <h3 class="logistica-panel__titulo" id="fisica-modelo-titulo">Modelo del vehículo</h3>
+        <div class="fisica-vistas" role="group" aria-label="Vista">
+          <% VISTAS_BOTONES.forEach(([valor, texto], i) => { %>
+            <button type="button" class="logistica-chip" data-vista="<%= valor %>" aria-pressed="<%= i === 0 %>"><%= texto %></button>
+          <% }) %>
+        </div>
+      </div>
+      <div class="fisica-visor__marco">
+        <canvas class="fisica-visor__lienzo" data-modelo-lienzo role="img" aria-label="Modelo 3D de <%= labelFrom(VEHICLE_KINDS, x.kind).toLowerCase() %>. Elige las zonas en la lista."></canvas>
+        <span class="fisica-visor__cargando" aria-hidden="true">Cargando el modelo…</span>
+        <span class="fisica-visor__etiqueta" data-modelo-etiqueta hidden></span>
+        <p class="fisica-visor__aviso" data-modelo-aviso hidden role="status"></p>
+      </div>
+      <p class="fisica-visor__ayuda">Arrastra para girar, pellizca o usa la rueda para acercar, y toca una zona para elegirla. La izquierda es el lado del conductor.</p>
+    </section>
+
+    <aside class="fisica-lateral">
+      <section class="logistica-panel fisica-zona" data-zona-panel hidden aria-live="polite" aria-labelledby="fisica-zona-nombre">
+        <span class="fisica-zona__grupo" data-zona-grupo></span>
+        <h3 class="fisica-zona__nombre" id="fisica-zona-nombre" data-zona-nombre></h3>
+        <p class="fisica-zona__pronto">Pronto: aquí agregarás el tipo de daño, la observación y las fotos de esta zona.</p>
+      </section>
+
+      <section class="logistica-panel fisica-lista" aria-labelledby="fisica-lista-titulo">
+        <h3 class="logistica-panel__titulo" id="fisica-lista-titulo">
+          Zonas
+          <span class="logistica-panel__extra"><%= modelo.zones.length %></span>
+        </h3>
+        <% grupos.forEach((g) => { const del = modelo.zones.filter((z) => z.group === g.value); if (!del.length) return; %>
+          <div class="fisica-lista__grupo">
+            <h4 class="checklist-grupo__titulo"><%= g.label %></h4>
+            <div class="fisica-lista__zonas">
+              <% del.forEach((z) => { %>
+                <button type="button" class="fisica-zona-btn" data-zona="<%= z.code %>" aria-pressed="false"><%= z.label %></button>
+              <% }) %>
+            </div>
+          </div>
+        <% }) %>
+      </section>
+    </aside>
   </div>
+
+  <script type="application/json" id="modeloDatos"><%- JSON.stringify({ kind: x.kind, model: modelo, groups: grupos }).replace(/</g, '\\u003c') %></script>
+  <script type="module" src="/js/flota-modelo.js?v=20261103c"></script>
+  <% } %>
 </div>
