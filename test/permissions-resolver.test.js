@@ -300,8 +300,10 @@ describe("superadmin, emergencia y país", () => {
     assert.equal(p.can("clave.inventada"), false);
   });
 
-  it("el login de emergencia (id 0) es superadmin", () => {
-    assert.equal(computePermissions({}, { id: 0 }, { catalog: CL }).can(APROBAR_FINANZAS), true);
+  it("id 0 (el login de emergencia, que ya no existe) no tiene permisos", () => {
+    const p = computePermissions({}, { id: 0 }, { catalog: CL });
+    assert.equal(p.superadmin, false);
+    assert.equal(p.can(APROBAR_FINANZAS), false);
   });
 
   it("una asignación de un módulo que el país no tiene no cuenta", () => {

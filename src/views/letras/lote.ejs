@@ -167,7 +167,7 @@
   </section>
 </div>
 
-<script>
+<script nonce="<%= locals.cspNonce %>">
   // Anular pide el motivo con el diálogo propio de la intranet (modal.js).
   document.querySelectorAll('.letras-anular').forEach(function (form) {
     form.addEventListener('submit', async function (event) {

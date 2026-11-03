@@ -1,4 +1,4 @@
-const { rememberReturnTo } = require("../utils/returnTo");
+const { denyUnauthenticated, denyForbidden, respondNotFound } = require("../utils/httpResponses");
 const { allKeys, getPermission } = require("../services/permissions/catalog");
 const permissions = require("../services/permissions/permissionService");
 const { decide } = require("../services/permissions/decide");
@@ -24,11 +24,6 @@ const { legacyContext } = require("../services/permissions/legacyRules");
 
 const KNOWN_KEYS = new Set(allKeys());
 
-function wantsJsonResponse(req) {
-  const accept = req.headers.accept || "";
-  return req.xhr || accept.includes("application/json") || /\/(upload|api)\//.test(req.originalUrl);
-}
-
 function assertKnown(keys) {
   if (!keys.length) throw new Error("requirePermission: falta la clave del permiso");
   for (const key of keys) {
@@ -43,18 +38,11 @@ function requireAnyPermission(...keys) {
   return async (req, res, next) => {
     // Ninguna existe en este país: la ruta tampoco.
     if (!keys.some((key) => getPermission(key))) {
-      if (wantsJsonResponse(req)) return res.status(404).json({ error: "No encontrado" });
-      return res.status(404).render("404", { titulo: "Página no encontrada" });
+      return respondNotFound(req, res);
     }
 
     const user = req.session && req.session.user;
-    if (!user) {
-      rememberReturnTo(req);
-      if (wantsJsonResponse(req)) {
-        return res.status(401).json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
-      }
-      return res.redirect("/login");
-    }
+    if (!user) return denyUnauthenticated(req, res);
 
     try {
       if (!req.perms) req.perms = await permissions.resolve(user);
@@ -66,10 +54,7 @@ function requireAnyPermission(...keys) {
     const path = req.originalUrl;
     if (keys.some((key) => decide(req.perms, key, legacyCtx, { path }))) return next();
 
-    if (wantsJsonResponse(req)) {
-      return res.status(403).json({ error: "No tienes permiso para esta acción." });
-    }
-    return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    return denyForbidden(req, res);
   };
 }
 

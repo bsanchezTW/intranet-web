@@ -1,4 +1,4 @@
-const { rememberReturnTo } = require("../utils/returnTo");
+const { denyUnauthenticated, denyForbidden } = require("../utils/httpResponses");
 const { isFinanceStaff } = require("../services/expenses/financeTeam");
 
 /**
@@ -10,21 +10,10 @@ const { isFinanceStaff } = require("../services/expenses/financeTeam");
  * trabajo de Finanzas, no un permiso del rol.
  */
 
-function wantsJsonResponse(req) {
-  const accept = req.headers.accept || "";
-  return req.xhr || accept.includes("application/json") || /\/api\//.test(req.path);
-}
-
 function requireFinanceStaff() {
   return async (req, res, next) => {
     const user = req.session && req.session.user;
-    if (!user) {
-      rememberReturnTo(req);
-      if (wantsJsonResponse(req)) {
-        return res.status(401).json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
-      }
-      return res.redirect("/login");
-    }
+    if (!user) return denyUnauthenticated(req, res);
 
     try {
       if (await isFinanceStaff(user)) return next();
@@ -33,10 +22,7 @@ function requireFinanceStaff() {
       console.error("[Letras] Error resolviendo el personal de Finanzas:", err.message);
     }
 
-    if (wantsJsonResponse(req)) {
-      return res.status(403).json({ error: "Sólo el área de Finanzas emite letras de cambio." });
-    }
-    return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    return denyForbidden(req, res, "Sólo el área de Finanzas emite letras de cambio.");
   };
 }
 

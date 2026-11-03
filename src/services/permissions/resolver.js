@@ -258,9 +258,6 @@ function computePermissions(snapshot, user, { catalog, now = Date.now() } = {}) 
   const userId = toId(user && user.id);
   if (userId == null) return emptyPermissions(catalog);
 
-  // El login de emergencia no existe en `users`: es superadmin por definición.
-  if (userId === 0) return new EffectivePermissions({ userId, superadmin: true, catalog });
-
   const row = snapshot.users && snapshot.users.get(userId);
   if (!row || !canLogin(normalizeRole(row.role))) return emptyPermissions(catalog, userId);
   if (row.is_superadmin) return new EffectivePermissions({ userId, superadmin: true, catalog });

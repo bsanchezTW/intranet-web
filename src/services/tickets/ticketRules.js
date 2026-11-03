@@ -4,6 +4,7 @@ const {
   normalizeTicketCategory,
 } = require("../../constants/ticketCategories");
 const { ticketPriorityToDb, ticketPriorityFromDb } = require("../../utils/schemaMappers");
+const { normalizeRelativePath } = require("../storage/storagePath");
 
 /**
  * Reglas de un ticket de Soporte, sin base de datos ni correo: las comparten
@@ -17,6 +18,58 @@ const MAX_DESCRIPTION_CHARS = 2000;
 const MAX_ATTACHMENTS = 10;
 const ATTACHMENT_KINDS = Object.freeze(["image", "video", "pdf", "doc"]);
 const DOCUMENT_EXTENSIONS = Object.freeze([".pdf", ".doc", ".docx"]);
+
+const ATTACHMENT_FOLDER = "tickets_adjuntos";
+const MAX_ATTACHMENT_NAME_CHARS = 255;
+
+/**
+ * Adjuntos de una respuesta, tal como llegan del navegador (JSON en
+ * `adjuntos_data`), reducidos a lo que se puede guardar: sólo archivos de
+ * ESTE ticket subidos por /tickets/upload (tickets_adjuntos/<id>_…), con la
+ * URL rearmada aquí. Antes se guardaba el JSON tal cual y la URL terminaba
+ * en un href: `javascript:` en la respuesta del dueño se ejecutaba al hacer
+ * clic quien atendía el ticket, y se podía enlazar un archivo de otro ticket.
+ *
+ * @returns {Array<{ url: string, nombre: string, tipo: string }>}
+ */
+function sanitizeReplyAttachments(raw, ticketId) {
+  const id = Number(ticketId);
+  if (!Number.isSafeInteger(id) || id <= 0) return [];
+
+  let list;
+  try {
+    list = typeof raw === "string" ? JSON.parse(raw || "[]") : raw;
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(list)) return [];
+
+  const prefix = `${ATTACHMENT_FOLDER}/${id}_`;
+  const seen = new Set();
+  const attachments = [];
+  for (const item of list) {
+    if (attachments.length >= MAX_ATTACHMENTS) break;
+    if (!item || typeof item.url !== "string") continue;
+    let key;
+    try {
+      key = normalizeRelativePath(item.url);
+    } catch {
+      continue;
+    }
+    const fileName = key.startsWith(prefix) ? key.slice(ATTACHMENT_FOLDER.length + 1) : "";
+    if (!fileName || fileName.includes("/") || seen.has(key)) continue;
+    seen.add(key);
+
+    const nombre = String(item.nombre ?? "").trim().slice(0, MAX_ATTACHMENT_NAME_CHARS) || fileName;
+    const tipo = ATTACHMENT_KINDS.includes(item.tipo) ? item.tipo : "doc";
+    attachments.push({
+      url: `/content/${ATTACHMENT_FOLDER}/${encodeURIComponent(fileName)}`,
+      nombre,
+      tipo,
+    });
+  }
+  return attachments;
+}
 
 /** Prioridad guardable ("low" | "medium" | "high"); acepta también "Baja", "Media", "Alta". */
 function normalizeTicketPriority(value) {
@@ -129,6 +182,7 @@ module.exports = {
   isAllowedAttachment,
   attachmentFileName,
   replyAttachmentFileName,
+  sanitizeReplyAttachments,
   validateAttachmentFiles,
   validateTicketInput,
 };

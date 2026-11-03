@@ -6,7 +6,9 @@ const crypto = require("crypto");
 const fileStorage = require("../services/fileStorage");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
-const { ROLES, ALL_ROLES, isDeshabilitado } = require("../constants/roles");
+const { ROLES, ALL_ROLES, isDeshabilitado, isAdministrador } = require("../constants/roles");
+const { publicErrorMessage } = require("../utils/publicError");
+const { hashPassword } = require("../services/auth/passwords");
 const {
   DEFAULT_COLOR,
   COLOR_PALETTE,
@@ -149,17 +151,10 @@ function parseFechaNacimiento(fecha) {
   return { month: parseInt(m[2], 10) - 1, day: parseInt(m[3], 10) };
 }
 
-function pbkdf2Hash(password, saltHex) {
-  const salt = Buffer.from(saltHex, "hex");
-  return crypto
-    .pbkdf2Sync(password, salt, 120000, 32, "sha256")
-    .toString("hex");
-}
-
-function generarCredencialesTemporales() {
+/** Clave temporal para el primer acceso: se manda por correo y se cambia al entrar. */
+async function generarCredencialesTemporales() {
   const passwordTemporal = crypto.randomBytes(4).toString("hex");
-  const saltHex = crypto.randomBytes(16).toString("hex");
-  const hashHex = pbkdf2Hash(passwordTemporal, saltHex);
+  const { hash: hashHex, salt: saltHex } = await hashPassword(passwordTemporal);
   return { passwordTemporal, saltHex, hashHex };
 }
 
@@ -268,6 +263,20 @@ function invalidarCachesDeArea() {
   invalidateAccountStatus();
   // Área, jefatura y rol cambian quién recibe qué en Gestión de Permisos.
   invalidatePermissions();
+}
+
+/**
+ * ¿La persona es superadmin? La columna la crea permissionSchema al arrancar;
+ * si todavía no existe, nadie lo es.
+ */
+async function esSuperadmin(userId) {
+  try {
+    const { rows } = await db.query("SELECT is_superadmin FROM users WHERE id = $1", [userId]);
+    return Boolean(rows[0] && rows[0].is_superadmin);
+  } catch (err) {
+    if (err && err.code === "42703") return false;
+    throw err;
+  }
 }
 
 function negarPermiso(res) {
@@ -589,7 +598,7 @@ router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, r
 
     if (crearCuentaIntranet) {
       const { passwordTemporal, saltHex, hashHex } =
-        generarCredencialesTemporales();
+        await generarCredencialesTemporales();
 
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
@@ -693,7 +702,7 @@ router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, r
     console.error("Error creando usuario:", err);
     return redirectPersonalCrearError(
       res,
-      `Error al crear el usuario: ${err.message}`,
+      publicErrorMessage(err, "Error al crear el usuario"),
     );
   }
 });
@@ -927,9 +936,18 @@ router.post(
         superadmin: Boolean(req.perms && req.perms.superadmin),
         actorId: req.session.user && req.session.user.id,
         targetId: id,
-        antes: { role: prevUser.role, areaId: prevUser.work_area_id },
-        despues: { role: roleToSave, areaId },
+        antes: { role: prevUser.role, areaId: prevUser.work_area_id, email: prevUser.email },
+        despues: { role: roleToSave, areaId, email: emailClean },
+        objetivoPrivilegiado:
+          isAdministrador(prevUser.role) || (await esSuperadmin(id)),
       });
+      if (motivo === "correo-privilegiado") {
+        return redirectPersonalEditarError(
+          res,
+          id,
+          "Sólo el superadmin puede cambiar el correo de un administrador.",
+        );
+      }
       if (motivo) return negarPermiso(res);
       const registro = { ownerId: Number(id), areaId: prevUser.work_area_id };
       for (const clave of clavesDeEdicion(cambios)) {
@@ -1117,7 +1135,7 @@ router.post("/enviar-clave/:id", requirePermission("rrhh.colaborador.enviar_clav
     }
 
     const { passwordTemporal, saltHex, hashHex } =
-      generarCredencialesTemporales();
+      await generarCredencialesTemporales();
     await db.query(
       `UPDATE users
        SET password_hash = $1,

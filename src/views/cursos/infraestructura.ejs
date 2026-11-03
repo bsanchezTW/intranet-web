@@ -218,13 +218,13 @@
            else imgUrl = '/img/fondo-home.png';
        }
   %>
-    <div class="cat-card" id="card-<%= index %>" onclick="mostrarCursos('<%= idLista %>', this, '<%= subseccion %>')">
+    <div class="cat-card" id="card-<%= index %>" data-accion="mostrarCursos" data-args="<%= JSON.stringify([idLista, { $el: true }, subseccion]) %>">
       
       <% if (can('cursos.material.editar')) { %>
-        <button class="btn-edit-sub" onclick="event.stopPropagation(); abrirModalEditarSub('<%= subseccion %>', '<%= imgUrl %>')">Editar</button>
+        <button class="btn-edit-sub" data-accion="abrirModalEditarSub" data-args="<%= JSON.stringify([subseccion, imgUrl]) %>">Editar</button>
       <% } %>
 
-      <img src="<%= imgUrl %>" alt="<%= subseccion %>" onerror="this.src='/img/fondo-home.png'" style="object-fit: contain; padding: 20px; background: #fcfcfc;" />
+      <img src="<%= imgUrl %>" alt="<%= subseccion %>" data-fallback-src="/img/fondo-home.png" style="object-fit: contain; padding: 20px; background: #fcfcfc;" />
       <div class="cat-card-header">
         <h3><%= subseccion %></h3>
         <span class="toggle-icon">▼</span>
@@ -245,7 +245,7 @@
            let completado = typeof progresoUsuario !== 'undefined' && progresoUsuario[curso.id] && progresoUsuario[curso.id].status === 'evaluated';
            let btnClass = completado ? 'btn-prueba btn-completado' : 'btn-prueba';
       %>
-        <button class="<%= btnClass %>" onclick="abrirModalReglas('<%= curso.title %>', <%= curso.id %>)">
+        <button class="<%= btnClass %>" data-accion="abrirModalReglas" data-args="<%= JSON.stringify([curso.title, curso.id]) %>">
           <span style="flex: 1; text-align: left;"><%= curso.title %></span>
           <% if (completado) { %> 
             <span title="Curso Aprobado" style="margin-left: 10px; font-weight: bold; font-size: 1.3rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.15);">✓</span> 
@@ -260,15 +260,15 @@
 
 <h2 class="section-title">Marcas</h2>
 <section class="marcas-grid">
-  <img src="/img/pemsalogo.png" alt="Pemsa" onerror="this.src='/img/fondo-home.png'"/>
-  <img src="/img/konradlogo.png" alt="Konrad" onerror="this.src='/img/fondo-home.png'"/>
-  <img src="/img/cdplogo.png" alt="CDP" onerror="this.src='/img/fondo-home.png'"/>
-  <img src="/img/lslogo.png" alt="LS Cable" onerror="this.src='/img/fondo-home.png'"/>
+  <img src="/img/pemsalogo.png" alt="Pemsa" data-fallback-src="/img/fondo-home.png"/>
+  <img src="/img/konradlogo.png" alt="Konrad" data-fallback-src="/img/fondo-home.png"/>
+  <img src="/img/cdplogo.png" alt="CDP" data-fallback-src="/img/fondo-home.png"/>
+  <img src="/img/lslogo.png" alt="LS Cable" data-fallback-src="/img/fondo-home.png"/>
   
-  <img src="/img/fosterlogo.png" alt="Foster" onerror="this.src='/img/fondo-home.png'"/>
-  <img src="/img/radwinlogo.png" alt="Radwin" onerror="this.src='/img/fondo-home.png'"/>
-  <img src="/img/flukenetworkslogo.png" alt="Fluke Networks" onerror="this.src='/img/fondo-home.png'"/>
-  <img src="/img/3zlogo.png" alt="3Z" onerror="this.src='/img/fondo-home.png'"/>
+  <img src="/img/fosterlogo.png" alt="Foster" data-fallback-src="/img/fondo-home.png"/>
+  <img src="/img/radwinlogo.png" alt="Radwin" data-fallback-src="/img/fondo-home.png"/>
+  <img src="/img/flukenetworkslogo.png" alt="Fluke Networks" data-fallback-src="/img/fondo-home.png"/>
+  <img src="/img/3zlogo.png" alt="3Z" data-fallback-src="/img/fondo-home.png"/>
 </section>
 
 <div class="sep"></div>
@@ -276,7 +276,7 @@
 <div class="material-header-container">
   <h2 class="section-title" style="margin: 0; text-align: left;">Material de estudio</h2>
   <% if (can('cursos.material.crear')) { %>
-    <button class="btn-primario" onclick="abrirModalNuevoMaterial('Equipamiento Activo')" style="margin:0; background: #003a70;">+ Subir Archivo</button>
+    <button class="btn-primario" data-accion="abrirModalNuevoMaterial" data-args='["Equipamiento Activo"]' style="margin:0; background: #003a70;">+ Subir Archivo</button>
   <% } %>
 </div>
 
@@ -309,7 +309,7 @@
             <% if (can('cursos.material.editar') || can('cursos.material.eliminar')) { %>
             <div class="material-actions">
                 <% if (can('cursos.material.editar')) { %>
-                <button type="button" class="btn-material btn-mat-edit" onclick="abrirModalEditarMaterial('<%= mat.id %>', '<%= mat.name.replace(/'/g, "\\'") %>')" title="Editar nombre o archivo">
+                <button type="button" class="btn-material btn-mat-edit" data-accion="abrirModalEditarMaterial" data-args="<%= JSON.stringify([String(mat.id), mat.name]) %>" title="Editar nombre o archivo">
                     Editar
                 </button>
                 <% } %>
@@ -416,8 +416,8 @@
     </div>
     <div class="modal-foot">
       <button type="button" class="btn-secundario" data-modal-close>Cancelar</button>
-      <a href="javascript:void(0)" class="btn-secundario" id="btnVerResultados" style="display: none;">Ver resultados</a>
-      <a href="javascript:void(0)" class="btn-primario" id="btnAccionPrincipal">Iniciar curso</a>
+      <a href="#" class="btn-secundario" id="btnVerResultados" style="display: none;">Ver resultados</a>
+      <a href="#" class="btn-primario" id="btnAccionPrincipal">Iniciar curso</a>
     </div>
   </div>
 </div>
@@ -453,10 +453,10 @@
   </div>
 </div>
 
-<script>
+<script nonce="<%= locals.cspNonce %>">
   const modal = document.getElementById('modalReglasCurso');
   const tituloModal = document.getElementById('modalCursoTitulo');
-  const progresoData = <%- JSON.stringify(typeof progresoUsuario !== 'undefined' ? progresoUsuario : {}) %>;
+  const progresoData = <%- JSON.stringify(typeof progresoUsuario !== 'undefined' ? progresoUsuario : {}).replace(/</g, '\\u003c') %>;
 
   function mostrarCursos(idLista, cardElement, titulo) {
     const area = document.getElementById('areaDespliegueCursos');
@@ -496,8 +496,9 @@
         btnResultados.style.display = 'inline-flex';
         btnResultados.href = `/cursos/evaluacion/${idCurso}`;
         btnPrincipal.innerText = 'Repetir curso';
-        btnPrincipal.href = 'javascript:void(0)';
-        btnPrincipal.onclick = async function() {
+        btnPrincipal.href = '#';
+        btnPrincipal.onclick = async function(event) {
+          event.preventDefault();
             const repetir = await IntranetDialog.confirm({
                 title: '¿Repetir el curso?',
                 message: 'Se reiniciará tu progreso de video para que lo veas nuevamente.',

@@ -1,29 +1,14 @@
 // src/middlewares/requireRole.js
-const { rememberReturnTo } = require("../utils/returnTo");
+const { denyUnauthenticated, denyForbidden } = require("../utils/httpResponses");
 const {
   roleMatchesRoute,
   ROLES,
   ROLES_INTRANET_ACTIVOS,
 } = require("../constants/roles");
 
-function wantsJsonResponse(req) {
-  const accept = req.headers.accept || "";
-  return (
-    req.xhr ||
-    accept.includes("application/json") ||
-    /\/(upload|api\/)/.test(req.path)
-  );
-}
-
 function requireRole(...roles) {
   return (req, res, next) => {
-    if (!req.session || !req.session.user) {
-      rememberReturnTo(req);
-      if (wantsJsonResponse(req)) {
-        return res.status(401).json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
-      }
-      return res.redirect("/login");
-    }
+    if (!req.session || !req.session.user) return denyUnauthenticated(req, res);
 
     const role = req.session.user.role;
 
@@ -31,13 +16,7 @@ function requireRole(...roles) {
       return next();
     }
 
-    if (wantsJsonResponse(req)) {
-      return res.status(403).json({ error: "No tienes permiso para esta acción." });
-    }
-
-    return res
-      .status(403)
-      .render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    return denyForbidden(req, res);
   };
 }
 

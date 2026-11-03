@@ -3,6 +3,17 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const EMAIL_ERROR = "Correo incorrecto";
 const EMAIL_REQUIRED = "Correo requerido";
 
+/**
+ * ¿Son el mismo buzón? Sin distinguir mayúsculas ni espacios: un ticket
+ * creado por correo trae el remitente como lo escribió su cliente
+ * ("Ana@Transworld.cl") y su dueño inicia sesión como ana@transworld.cl.
+ */
+function sameEmail(a, b) {
+  const x = String(a ?? "").trim().toLowerCase();
+  const y = String(b ?? "").trim().toLowerCase();
+  return x !== "" && x === y;
+}
+
 function isValidEmail(email) {
   return EMAIL_PATTERN.test(String(email || "").trim());
 }
@@ -25,6 +36,7 @@ function validateEmail(email, { required = false } = {}) {
 }
 
 module.exports = {
+  sameEmail,
   EMAIL_PATTERN,
   EMAIL_ERROR,
   isValidEmail,

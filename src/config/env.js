@@ -79,6 +79,14 @@ if (!hasDatabaseUrl && !hasDiscreteDbVars) {
   );
 }
 
+// DB_SSL_CA (opcional) tiene que ser un certificado legible: si no, mejor
+// fallar al arrancar que conectar sin la verificación que se pidió.
+try {
+  require("./dbSsl").resolveDbSsl(process.env);
+} catch (error) {
+  errors.push(error.message);
+}
+
 // ── Storage privado ────────────────────────────────────────────────────────
 // Valida credenciales, límites y que BD y Storage sean el mismo proyecto.
 // Chile y Perú lo comparten; el cruce que sí se bloquea es bucket o rol

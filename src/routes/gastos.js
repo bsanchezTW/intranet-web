@@ -40,6 +40,7 @@ const {
 } = require("../constants/expenseCategories");
 const { formatDisplay } = require("../utils/vacationDateUtils");
 const funds = require("../services/expenses/expenseFundService");
+const { publicErrorMessage } = require("../utils/publicError");
 
 /**
  * Centro de gastos: rendiciones y solicitudes de fondos.
@@ -85,13 +86,16 @@ function redirectError(res, path, msg) {
   return res.redirect(`${path}?error=${encodeURIComponent(msg)}`);
 }
 
+/**
+ * Avisos de la URL. Express ya los decodifica: decodificarlos otra vez
+ * rompía con un "%" suelto (URIError → la página caía en "Error cargando").
+ * Sólo texto: un ?error[]= llegaría como lista.
+ */
 function flashFrom(req) {
+  const texto = (value) => (typeof value === "string" && value ? value : null);
   return {
-    success:
-      req.query.ok === "1"
-        ? decodeURIComponent(req.query.msg || "Operación exitosa")
-        : null,
-    error: req.query.error ? decodeURIComponent(req.query.error) : null,
+    success: req.query.ok === "1" ? texto(req.query.msg) || "Operación exitosa" : null,
+    error: texto(req.query.error),
   };
 }
 
@@ -293,7 +297,7 @@ router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
     const raw = err.message || "";
     const error = /fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(raw)
       ? "No se pudo guardar el comprobante en el almacenamiento. Inténtalo de nuevo."
-      : raw || "Error al subir el archivo";
+      : publicErrorMessage(err, "Error al subir el archivo");
     res.status(500).json({ error });
   }
 });
@@ -622,3 +626,4 @@ router.post("/:id/cancelar", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.flashFrom = flashFrom;

@@ -47,8 +47,8 @@
       <% } %>
       
       <div style="display: flex; justify-content: center; gap: 15px; margin-top: 20px;">
-          <button class="btn-enviar" style="width: auto; padding: 10px 30px; background: #82D200;" onclick="window.location.href='/cursos'">Volver a Cursos</button>
-          <button id="btn-reintentar" class="btn-enviar" style="width: auto; padding: 10px 30px; background: #e74c3c; display: <%= yaEvaluado ? 'inline-block' : 'none' %>;" onclick="reintentarCurso()">Repetir curso</button>
+          <button class="btn-enviar" style="width: auto; padding: 10px 30px; background: #82D200;" data-ir="/cursos">Volver a Cursos</button>
+          <button id="btn-reintentar" class="btn-enviar" style="width: auto; padding: 10px 30px; background: #e74c3c; display: <%= yaEvaluado ? 'inline-block' : 'none' %>;" data-accion="reintentarCurso">Repetir curso</button>
       </div>
   </div>
 
@@ -82,7 +82,7 @@
   </form>
 </div>
 
-<script>
+<script nonce="<%= locals.cspNonce %>">
   const cursoId = "<%= curso.id %>";
   const form = document.getElementById('formExamen');
   const radios = document.querySelectorAll('input[type="radio"]');

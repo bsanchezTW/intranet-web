@@ -60,11 +60,12 @@ async function loadAccounts() {
  *   { action: "update", role }         → sigue activa con otro rol.
  *   { action: "end" }                  → deshabilitada o eliminada.
  *
- * El login de emergencia (id 0) no existe en `users` y siempre se mantiene.
+ * Toda sesión corresponde a una fila de `users`. El antiguo login de
+ * emergencia (id 0, AUTH_USER/AUTH_PASS) ya no existe: una sesión que lo
+ * traiga se cierra como la de cualquier cuenta que no está en la base.
  */
 function sessionAccountState(sessionUser, account) {
   if (!sessionUser) return { action: "keep" };
-  if (Number(sessionUser.id) === 0) return { action: "keep" };
   if (!account || !canLogin(account.role)) return { action: "end" };
   if (account.role !== normalizeRole(sessionUser.role)) {
     return { action: "update", role: account.role };
@@ -74,7 +75,7 @@ function sessionAccountState(sessionUser, account) {
 
 /** Estado de la sesión contra la base. Sin datos de la base, la mantiene. */
 async function checkSessionAccount(sessionUser) {
-  if (!sessionUser || Number(sessionUser.id) === 0) return { action: "keep" };
+  if (!sessionUser) return { action: "keep" };
   const accounts = await loadAccounts();
   if (!accounts) return { action: "keep" };
   return sessionAccountState(sessionUser, accounts.get(Number(sessionUser.id)));

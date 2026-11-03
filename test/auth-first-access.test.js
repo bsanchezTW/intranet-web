@@ -32,6 +32,16 @@ function pbkdf2Hash(password, saltHex) {
 const users = new Map();
 const mails = [];
 
+/** Fila con ese hash de enlace aún vigente (lo que hace el WHERE real). */
+function byResetHash(hash) {
+  return [...users.values()].find(
+    (u) =>
+      u.password_reset_token_hash === hash &&
+      u.password_reset_expires instanceof Date &&
+      u.password_reset_expires > new Date(),
+  );
+}
+
 const fakePool = {
   async query(sql, params = []) {
     const q = sql.replace(/\s+/g, " ").trim();
@@ -49,9 +59,47 @@ const fakePool = {
       );
       return { rows: row ? [{ ...row }] : [] };
     }
-    if (/^UPDATE users SET confirm_token = \$1, confirm_expires = \$2 WHERE id = \$3/.test(q)) {
-      Object.assign(users.get(params[2]), { confirm_token: params[0], confirm_expires: params[1] });
+    if (/^UPDATE users SET confirm_token = \$1, confirm_expires = \$2, confirm_attempts = 0 WHERE id = \$3/.test(q)) {
+      Object.assign(users.get(params[2]), {
+        confirm_token: params[0],
+        confirm_expires: params[1],
+        confirm_attempts: 0,
+      });
       return { rows: [] };
+    }
+    if (/^UPDATE users SET confirm_attempts = COALESCE\(confirm_attempts, 0\) \+ 1 WHERE id = \$1 AND confirm_token IS NOT NULL RETURNING/.test(q)) {
+      const u = users.get(Number(params[0]));
+      if (!u || u.confirm_token == null) return { rows: [] };
+      u.confirm_attempts = (u.confirm_attempts || 0) + 1;
+      return { rows: [{ confirm_attempts: u.confirm_attempts, confirm_token: u.confirm_token }] };
+    }
+    if (/^UPDATE users SET confirm_token = NULL, confirm_expires = NULL WHERE id = \$1$/.test(q)) {
+      Object.assign(users.get(Number(params[0])), { confirm_token: null, confirm_expires: null });
+      return { rows: [] };
+    }
+    if (/^UPDATE users SET password_reset_token_hash = \$1, password_reset_expires = NOW\(\) \+ \$2::interval WHERE id = \$3/.test(q)) {
+      const minutes = Number(String(params[1]).split(" ")[0]);
+      Object.assign(users.get(Number(params[2])), {
+        password_reset_token_hash: params[0],
+        password_reset_expires: new Date(Date.now() + minutes * 60000),
+      });
+      return { rows: [] };
+    }
+    if (/^SELECT id FROM users WHERE password_reset_token_hash = \$1 AND password_reset_expires > NOW\(\)/.test(q)) {
+      const row = byResetHash(params[0]);
+      return { rows: row ? [{ id: row.id }] : [] };
+    }
+    if (/^UPDATE users SET password_hash = \$1, password_salt = \$2, must_change_password = FALSE, password_reset_token_hash = NULL, password_reset_expires = NULL WHERE password_reset_token_hash = \$3/.test(q)) {
+      const row = byResetHash(params[2]);
+      if (!row) return { rows: [] };
+      Object.assign(row, {
+        password_hash: params[0],
+        password_salt: params[1],
+        must_change_password: false,
+        password_reset_token_hash: null,
+        password_reset_expires: null,
+      });
+      return { rows: [{ id: row.id, email: row.email }] };
     }
     if (/^UPDATE users SET email_confirmed = TRUE/.test(q)) {
       Object.assign(users.get(params[0]), {
@@ -100,8 +148,6 @@ let server;
 let baseUrl;
 
 before(async () => {
-  process.env.AUTH_USER = "";
-  process.env.AUTH_PASS = "";
   stubModule("db.js", fakePool);
   stubModule("services/mailer.js", {
     sendMail: async (msg) => {
@@ -210,6 +256,7 @@ function seedUser(overrides = {}) {
 beforeEach(() => {
   users.clear();
   mails.length = 0;
+  require(path.join(SRC, "services/access/authThrottle")).resetAll();
 });
 
 describe("primer acceso con contraseña temporal", () => {
@@ -268,8 +315,10 @@ describe("recuperar contraseña", () => {
       domain: "transworld.cl",
     });
     assert.equal(res.headers.get("location"), "/login?reset=1");
-    assert.notEqual(users.get(5).password_hash, original);
+    // Pedir el enlace no toca la contraseña: nadie deja sin acceso a otro.
+    assert.equal(users.get(5).password_hash, original);
     assert.equal(mails[0].to, "ana@transworld.cl");
+    assert.match(mails[0].cta.href, /^\/reset-password\?token=[A-Za-z0-9_-]{43}$/);
   });
 
   it("rechaza el dominio del otro país", async () => {

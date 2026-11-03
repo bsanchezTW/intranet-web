@@ -12,10 +12,12 @@ const logger = require("./utils/logger");
 process.env.TZ = countryConfig.timezone;
 
 const express = require("express");
-const compression = require("compression");
+const { httpCompression } = require("./utils/httpCompression");
 const path = require("path");
 const { createReadStream } = require("fs");
 const session = require("express-session");
+const { PgSessionStore } = require("./services/session/pgSessionStore");
+const { getCountryDbBinding } = require("./config/supabaseProjects");
 const expressLayouts = require("express-ejs-layouts");
 const db = require("./db");
 const { eventSlugFromContentPath } = require("./utils/eventAccess");
@@ -35,10 +37,14 @@ const permisosRoutes = require("./routes/permisos");
 const noticiasRoutes = require("./routes/noticias");
 const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
+const { publicErrorMessage, isUserFacingError } = require("./utils/publicError");
 const { pageSkeletonFor } = require("./utils/pageSkeleton");
 const { phoneClientConfig } = require("./utils/phone");
 const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
+const { crossOriginProtection } = require("./middlewares/crossOriginProtection");
+const { securityHeaders, cspReportRouter } = require("./middlewares/securityHeaders");
+const { saveSessionBeforeRedirect } = require("./middlewares/saveSessionBeforeRedirect");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
 const { checkSessionAccount, currentWorkAreaId } = require("./services/access/accountStatus");
@@ -90,12 +96,14 @@ const { ensureExpenseSchema } = require("./services/expenses/expenseSchema");
 const {
   ensureCostCenterSchema,
 } = require("./services/costCenters/costCenterSchema");
+const { runMigrations } = require("./services/schema/migrator");
+const migrations = require("./migrations");
+const { wantsJson, denyUnauthenticated } = require("./utils/httpResponses");
 const {
-  APP_CATALOG_VALUES,
-  DEFAULT_APP_CATALOG,
-} = require("./constants/appCatalogs");
-const { rememberReturnTo } = require("./utils/returnTo");
-const vacationRequestService = require("./services/vacations/vacationRequestService");
+  createJobRunner,
+  defaultJobs,
+  inProcessJobsEnabled,
+} = require("./services/jobs/jobRunner");
 
 // ================================
 // Inicializar app
@@ -139,7 +147,17 @@ app.locals.eventPreviewUrl = (url) => eventThumbnails.previewUrl(url) || url;
 // ================================
 // Middlewares Básicos
 // ================================
-app.use(compression());
+app.disable("x-powered-by");
+// Cabeceras de seguridad y CSP (aplicada mínima + sólo reporte) en todas las
+// respuestas, estáticos incluidos.
+app.use(securityHeaders());
+app.use(httpCompression());
+// Reportes CSP del navegador: antes de la protección CSRF, que no los manda
+// el usuario sino el navegador por su cuenta.
+app.use(cspReportRouter());
+// CSRF: antes de leer el cuerpo. Rechaza POST/PUT/PATCH/DELETE que el
+// navegador marca como de otro sitio (ver crossOriginProtection).
+app.use(crossOriginProtection());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -280,18 +298,41 @@ app.use("/media", async (req, res, next) => {
 // ================================
 // Sesiones (antes de /content para poder exigir auth)
 // ================================
+// Vence tras 4 horas sin actividad: `rolling` la renueva en cada petición.
+const SESSION_MAX_AGE_MS = 1000 * 60 * 60 * 4;
+// En Postgres y no en memoria: sobrevive a reinicios y la comparten los
+// procesos de Passenger. Tabla del schema del país (ver PgSessionStore).
+const sessionStore = new PgSessionStore({
+  db,
+  schema: getCountryDbBinding(countryConfig.code).schema,
+  ttlMs: SESSION_MAX_AGE_MS,
+});
+sessionStore.startPruning();
+
 app.use(
   session({
     // El nombre lleva el país porque las cookies se comparten entre puertos del
     // mismo host: sin esto, Chile en :3000 y Perú en :3001 se pisan la sesión.
     name: countryConfig.sessionCookieName,
     secret: SESSION_SECRET,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
-    rolling: true, // ¡CLAVE! Renueva el tiempo de la cookie en cada petición al backend
-    cookie: { maxAge: 1000 * 60 * 60 * 4 }, // Aumentamos la base a 4 horas por seguridad
+    rolling: true,
+    cookie: {
+      maxAge: SESSION_MAX_AGE_MS,
+      httpOnly: true,
+      // Lax: un formulario de otro sitio no lleva la cookie. Los enlaces de
+      // correo y el regreso de LinkedIn son GET de primer nivel y sí la llevan.
+      sameSite: "lax",
+      // "auto": Secure cuando la petición llega por HTTPS (con `trust proxy`
+      // detrás del proxy). Un `true` fijo sin `trust proxy` dejaría a todos
+      // sin poder iniciar sesión.
+      secure: "auto",
+    },
   }),
 );
+app.use(saveSessionBeforeRedirect);
 
 // La sesión se renueva sola en cada petición y guarda el rol del login: se
 // contrasta con la base para que deshabilitar, eliminar o cambiar el rol de
@@ -311,7 +352,7 @@ app.use(async (req, res, next) => {
 
   return req.session.destroy(() => {
     res.clearCookie(countryConfig.sessionCookieName);
-    if (wantsJsonResponse(req)) {
+    if (wantsJson(req)) {
       return res.status(401).json({ error: "Tu cuenta ya no tiene acceso a la intranet." });
     }
     return res.redirect("/login");
@@ -590,29 +631,10 @@ app.use(async (req, res, next) => {
 // ================================
 // Middleware de protección
 // ================================
-function wantsJsonResponse(req) {
-  const accept = req.headers.accept || "";
-  const requestedWith = String(req.get("X-Requested-With") || "");
-  const contentType = String(req.get("Content-Type") || "");
-  return (
-    req.xhr ||
-    requestedWith.toLowerCase() === "fetch" ||
-    accept.includes("application/json") ||
-    contentType.includes("application/json") ||
-    /\/(api|upload)\//.test(req.originalUrl) ||
-    req.originalUrl.includes("/adjuntos/")
-  );
-}
 
 function requireAuth(req, res, next) {
   if (req.session && req.session.user) return next();
-  rememberReturnTo(req);
-  if (wantsJsonResponse(req)) {
-    return res
-      .status(401)
-      .json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
-  }
-  return res.redirect("/login");
+  return denyUnauthenticated(req, res);
 }
 
 // ================================
@@ -673,20 +695,19 @@ app.use((err, req, res, next) => {
   if (err?.stack) console.error(err.stack);
   if (res.headersSent) return next(err);
 
-  const isLocal =
-    process.env.NODE_ENV !== "production" ||
-    /localhost|127\.0\.0\.1/i.test(String(process.env.APP_BASE_URL || ""));
-  const message = isLocal && err?.message
-    ? `Error interno del servidor: ${err.message}`
-    : "Error interno del servidor";
+  // Un 4xx (JSON mal formado, cuerpo muy grande…) es del cliente y su
+  // mensaje se muestra; el resto es un 500 sin detalles internos, salvo con
+  // NODE_ENV=development (ver utils/publicError).
+  const status = isUserFacingError(err) ? Number(err.statusCode || err.status) : 500;
+  const message = publicErrorMessage(err, "Error interno del servidor");
 
   const acceptsJson =
     req.xhr ||
     req.get("accept")?.includes("application/json") ||
     req.originalUrl.includes("/api/");
 
-  if (acceptsJson) return res.status(500).json({ error: message });
-  return res.status(500).send(message);
+  if (acceptsJson) return res.status(status).json({ error: message });
+  return res.status(status).type("text/plain").send(message);
 });
 
 // Manejo de 404
@@ -695,112 +716,18 @@ app.use((req, res) => {
 });
 
 // ==========================================
-// TAREA 1: CERRAR TICKETS ANTIGUOS
+// TAREAS PROGRAMADAS
 // ==========================================
-function iniciarTareaCierreTickets() {
-  const ejecutarCierre = async () => {
-    try {
-      const sql = `
-        UPDATE support_tickets 
-        SET status = 'closed', closed_at = NOW(), auto_closed = TRUE
-        WHERE status = 'pending_close' 
-        AND resolved_at < (NOW() - INTERVAL '1 day')
-      `;
-
-      const result = await db.query(sql);
-      const afectados = result.rowCount || result.affectedRows || 0;
-
-      if (afectados > 0) {
-        logger.info("cron", `cerrados ${afectados} ticket(s) pendiente(s) de cierre`);
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutarCierre();
-  setInterval(ejecutarCierre, 3600000);
-  return first;
-}
-
-// ==========================================
-// TAREA 2: LIMPIEZA DE HISTORIAL
-// ==========================================
-function iniciarLimpiezaHistorial() {
-  const ejecutarLimpieza = async () => {
-    try {
-      const sql = `
-        DELETE FROM change_log 
-        WHERE created_at < (NOW() - INTERVAL '5 days')
-      `;
-
-      const result = await db.query(sql);
-      const borrados = result.rowCount || result.affectedRows || 0;
-
-      if (borrados > 0) {
-        logger.info("cron", `eliminados ${borrados} registro(s) de historial`);
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutarLimpieza();
-  setInterval(ejecutarLimpieza, 43200000);
-  return first;
-}
-
-// ==========================================
-// TAREA 2b: BORRADORES DE GASTOS CADUCADOS
-// ==========================================
-// Un borrador sin cambios en DRAFT_TTL_DAYS días se elimina con sus líneas y
-// sus comprobantes del bucket: nadie va a volver por él y sólo ocupa espacio.
-function iniciarPurgaBorradoresGastos() {
-  const expenseRequests = require("./services/expenses/expenseRequestService");
-  const ejecutar = async () => {
-    try {
-      const { drafts, files } = await expenseRequests.purgeStaleDrafts();
-      if (drafts > 0) {
-        logger.info("cron", `eliminados ${drafts} borrador(es) de gastos y ${files} comprobante(s)`);
-      }
-      // Después de la purga, para que sus archivos no cuenten como en uso.
-      const huerfanos = await expenseRequests.purgeOrphanUploads();
-      if (huerfanos.deleted > 0) {
-        logger.info("cron", `eliminados ${huerfanos.deleted} comprobante(s) de gastos sin solicitud`);
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutar();
-  setInterval(ejecutar, 43200000);
-  return first;
-}
-
-// ==========================================
-// TAREA 3: TRANSICIONES DE ESTADO DE VACACIONES
-// ==========================================
-function iniciarTransicionesVacaciones() {
-  const ejecutar = async () => {
-    try {
-      const { inProgress, completed } =
-        await vacationRequestService.runDailyStatusTransitions();
-      if (inProgress > 0 || completed > 0) {
-        logger.info(
-          "cron",
-          `vacaciones: ${inProgress} en curso, ${completed} completadas`,
-        );
-      }
-    } catch (err) {
-      logger.error("cron", err);
-    }
-  };
-
-  const first = ejecutar();
-  setInterval(ejecutar, 43200000);
-  return first;
-}
+// Cierre de tickets, limpieza de historial, purga de gastos y transiciones
+// de vacaciones. Quién las corre lo decide la base (services/jobs): sin
+// duplicados entre procesos ni repeticiones en cada reinicio. Con un cron
+// del servidor (scripts/tareas.js) se apaga el intervalo con
+// IN_PROCESS_JOBS=false.
+const jobRunner = createJobRunner({
+  db,
+  schema: getCountryDbBinding(countryConfig.code).schema,
+  jobs: defaultJobs({ db, isFeatureEnabled }),
+});
 
 async function sincronizarUsuariosDeshabilitados() {
   try {
@@ -816,162 +743,21 @@ async function sincronizarUsuariosDeshabilitados() {
   }
 }
 
-// El correo es identificador único de usuario: la BD lo garantiza con un
-// índice único (ignora mayúsculas/minúsculas y espacios).
-async function asegurarCorreoUnico() {
-  try {
-    await db.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx
-      ON users (LOWER(TRIM(email)))
-      WHERE email IS NOT NULL AND TRIM(email) <> ''
-    `);
-  } catch (err) {
-    logger.error("usuarios", err);
-  }
-}
-
-async function asegurarColumnaNoticiasDestacada() {
-  try {
-    await db.query(`
-      ALTER TABLE news_articles
-        ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT false
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_news_articles_featured ON news_articles (featured)
-        WHERE featured = true
-    `);
-  } catch (err) {
-    logger.error("noticias", err);
-  }
-}
-
-async function asegurarColumnasApps() {
-  try {
-    const { rows } = await db.query(`
-      SELECT c.relkind
-      FROM pg_class c
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = current_schema() AND c.relname = 'applications'
-      LIMIT 1
-    `);
-    // Vista sobre shared.applications: las columnas ya viven en el catálogo compartido.
-    if (rows[0] && rows[0].relkind === "v") return;
-  } catch (err) {
-    logger.error("apps", err);
-    return;
-  }
-  // En serie: cada ALTER en paralelo abre otra conexión al pooler.
-  await asegurarColumnaAppsIconUrl();
-  await asegurarColumnaAppsUrlIos();
-  await asegurarColumnaAppsUrlWeb();
-  await asegurarColumnaAppsCatalog();
-  await asegurarColumnaAppsOrden();
-}
-
-async function asegurarColumnaAppsIconUrl() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS icon_url TEXT
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-async function asegurarColumnaAppsUrlIos() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS url_ios TEXT
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-async function asegurarColumnaAppsUrlWeb() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS url_web TEXT
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
 /**
- * Separa el catálogo comercial (vista Apps) del de autoayuda (vista Soporte).
- * Las filas existentes quedan en el catálogo corporativo por el DEFAULT, así que
- * la migración no toca lo ya publicado en /apps.
+ * Cambios de esquema versionados (src/migrations, services/schema/migrator).
+ * Un fallo se registra y la app sigue: igual que antes con los asegurar*.
  */
-async function asegurarColumnaAppsCatalog() {
+async function aplicarMigraciones() {
   try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS catalog VARCHAR(20) NOT NULL
-        DEFAULT '${DEFAULT_APP_CATALOG}'
-    `);
-    await db.query(`
-      DO $do$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint con
-          JOIN pg_class c ON c.oid = con.conrelid
-          JOIN pg_namespace n ON n.oid = c.relnamespace
-          WHERE con.conname = 'applications_catalog_check'
-            AND c.relname = 'applications'
-            AND n.nspname = current_schema()
-        ) THEN
-          ALTER TABLE applications
-            ADD CONSTRAINT applications_catalog_check
-            CHECK (catalog IN (${APP_CATALOG_VALUES.map((v) => `'${v}'`).join(", ")}));
-        END IF;
-      END
-      $do$;
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_applications_catalog
-        ON applications (catalog)
-    `);
+    const { applied } = await runMigrations({
+      connect: () => db.pool.connect(),
+      schema: getCountryDbBinding(countryConfig.code).schema,
+      migrations,
+      logger,
+    });
+    if (applied.length) logger.info("migraciones", `aplicadas: ${applied.join(", ")}`);
   } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-/**
- * Orden manual de las tarjetas dentro de cada catálogo.
- *
- * Nace en NULL a propósito: mientras nadie reordene, el listado conserva el
- * orden por fecha que tenía, y las apps nuevas caen al final hasta que se las
- * coloque a mano.
- */
-async function asegurarColumnaAppsOrden() {
-  try {
-    await db.query(`
-      ALTER TABLE applications
-        ADD COLUMN IF NOT EXISTS sort_order INTEGER
-    `);
-    await db.query(`
-      CREATE INDEX IF NOT EXISTS idx_applications_catalog_orden
-        ON applications (catalog, sort_order)
-    `);
-  } catch (err) {
-    logger.error("apps", err);
-  }
-}
-
-/** Preferencia de la banda del home. NULL conserva el orden del país. */
-async function asegurarColumnaAccesosHome() {
-  try {
-    await db.query(`
-      ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS home_quick_access jsonb
-    `);
-  } catch (err) {
-    logger.error("home", err);
+    logger.error("migraciones", err);
   }
 }
 
@@ -1046,10 +832,7 @@ async function runStartupDbTasks() {
   await db.warmPool();
 
   const steps = [
-    asegurarCorreoUnico,
-    asegurarColumnaNoticiasDestacada,
-    asegurarColumnasApps,
-    asegurarColumnaAccesosHome,
+    aplicarMigraciones,
     sincronizarUsuariosDeshabilitados,
     asegurarSchemaVacaciones,
     async () => {
@@ -1068,14 +851,13 @@ async function runStartupDbTasks() {
     await step();
   }
 
-  if (isFeatureEnabled("supportTickets")) await iniciarTareaCierreTickets();
-  await iniciarLimpiezaHistorial();
-  if (isFeatureEnabled("vacations")) await iniciarTransicionesVacaciones();
-  await iniciarPurgaBorradoresGastos();
+  if (inProcessJobsEnabled()) jobRunner.startInterval();
 }
 
 function startBackgroundJobs() {
   runStartupDbTasks().catch((err) => logger.error("db", err));
+  // Datos de la portada (indicadores, clima, LinkedIn, eventos).
+  indexRoutes.startHomeBackgroundJobs();
 }
 
 function onHttpListening(bindLabel) {

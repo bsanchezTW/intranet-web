@@ -35,7 +35,7 @@ const filtrosVisibles = FILTROS.filter(f => tiposPresentes.has(f.tipo));
     </div>
     <% if (puedeEscribir) { %>
     <div class="page-header-actions">
-      <button type="button" class="page-header-btn" onclick="abrirModalCrearNoticia()">
+      <button type="button" class="page-header-btn" data-accion="abrirModalCrearNoticia">
         <%- include('../partials/icon', { name: 'plus' }) %> Publicar noticia
       </button>
     </div>
@@ -113,7 +113,7 @@ const filtrosVisibles = FILTROS.filter(f => tiposPresentes.has(f.tipo));
               <span class="media-placeholder" aria-hidden="true"><%- include('../partials/icon', { name: 'news' }) %></span>
               <% if (n.image) { %>
                 <img src="<%= n.image %>" alt="" loading="lazy" decoding="async"
-                     onerror="this.remove()">
+                     data-si-falla="quitar">
               <% } %>
               <% if (n.resumen.total) { %>
                 <span class="noticia-card__adjuntos" title="<%= n.resumen.total %> archivo<%= n.resumen.total === 1 ? '' : 's' %> adjunto<%= n.resumen.total === 1 ? '' : 's' %>">

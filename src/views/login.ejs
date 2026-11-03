@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= formatPageTitle(titulo || "Iniciar sesión") %></title>
   <link rel="stylesheet" href="/css/login.css?v=20261102a">
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     (function () {
       var raiz = document.documentElement;
       function listo() { raiz.classList.add('pagina-lista'); }
@@ -21,7 +21,7 @@
     })();
   </script>
   <noscript><style>.cargando-pagina { display: none; }</style></noscript>
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     try {
       if (sessionStorage.getItem('loginShellReady') === '1') {
         document.documentElement.classList.add('login-shell-settled');
@@ -85,15 +85,17 @@
             },
             forgot: {
               heading: 'Recuperar contraseña',
-              subheading: 'Ingresa tu correo corporativo y te enviaremos una contraseña temporal',
+              subheading: 'Ingresa tu usuario y te enviaremos un enlace para crear una contraseña nueva',
             },
             verify: locals.awaitingAdmin
               ? { heading: 'Correo verificado', subheading: 'Tu correo fue confirmado correctamente' }
               : { heading: 'Verificar correo', subheading: 'Enviamos un código de 6 dígitos a tu correo. Ingrésalo para activar tu cuenta.' },
-            reset: {
-              heading: 'Crear nueva contraseña',
-              subheading: 'Por seguridad, debes cambiar tu contraseña temporal antes de continuar',
-            },
+            reset: locals.resetToken
+              ? { heading: 'Crear nueva contraseña', subheading: 'Elige la contraseña nueva de tu cuenta' }
+              : {
+                  heading: 'Crear nueva contraseña',
+                  subheading: 'Por seguridad, debes cambiar tu contraseña temporal antes de continuar',
+                },
           };
           const copy = viewCopy[activeView] || viewCopy.login;
         %>
@@ -146,7 +148,7 @@
                 autocomplete="current-password"
                 required
               >
-              <button type="button" class="login-field__toggle" onclick="toggleVisibility('login-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+              <button type="button" class="login-field__toggle" data-accion="toggleVisibility" data-args='["login-password",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
@@ -237,7 +239,7 @@
               <div class="login-field login-field--password">
                 <label class="login-field__label" for="reg-password">Contraseña</label>
                 <input type="password" id="reg-password" name="password" class="login-field__input" required minlength="8" autocomplete="new-password">
-                <button type="button" class="login-field__toggle" tabindex="-1" onclick="toggleVisibility('reg-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+                <button type="button" class="login-field__toggle" tabindex="-1" data-accion="toggleVisibility" data-args='["reg-password",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
                 <p class="login-field__error" data-error-for="reg-password" hidden></p>
@@ -245,7 +247,7 @@
               <div class="login-field login-field--password">
                 <label class="login-field__label" for="reg-password2">Repetir contraseña</label>
                 <input type="password" id="reg-password2" name="password2" class="login-field__input" required minlength="8" autocomplete="new-password">
-                <button type="button" class="login-field__toggle" tabindex="-1" onclick="toggleVisibility('reg-password2', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+                <button type="button" class="login-field__toggle" tabindex="-1" data-accion="toggleVisibility" data-args='["reg-password2",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
                 <p class="login-field__error" data-error-for="reg-password2" hidden></p>
@@ -396,6 +398,9 @@
         <!-- ── Restablecer contraseña temporal ── -->
         <div class="login-view" data-view="reset"<% if (activeView !== 'reset') { %> hidden<% } %>>
           <form action="/reset-password" method="POST" novalidate>
+            <% if (locals.resetToken) { %>
+              <input type="hidden" name="reset_token" value="<%= resetToken %>">
+            <% } %>
             <div class="login-field login-field--password">
               <label class="login-field__label" for="reset-password">Nueva contraseña</label>
               <input
@@ -408,7 +413,7 @@
                 minlength="8"
                 <% if (activeView === 'reset') { %>autofocus<% } %>
               >
-              <button type="button" class="login-field__toggle" onclick="toggleVisibility('reset-password', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+              <button type="button" class="login-field__toggle" data-accion="toggleVisibility" data-args='["reset-password",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
@@ -443,7 +448,7 @@
                 required
                 minlength="8"
               >
-              <button type="button" class="login-field__toggle" onclick="toggleVisibility('reset-password2', this)" title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
+              <button type="button" class="login-field__toggle" data-accion="toggleVisibility" data-args='["reset-password2",{"$el":true}]' title="Mostrar u ocultar contraseña" aria-label="Mostrar u ocultar contraseña">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
             </div>
@@ -600,7 +605,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     function toggleVisibility(inputId, btn) {
       const input = document.getElementById(inputId);
       const isHidden = input.type === 'password';
@@ -650,7 +655,7 @@
           path: '/forgot-password',
           title: 'Recuperar contraseña',
           heading: 'Recuperar contraseña',
-          subheading: 'Ingresa tu correo corporativo y te enviaremos una contraseña temporal'
+          subheading: 'Ingresa tu usuario y te enviaremos un enlace para crear una contraseña nueva'
         },
         verify: {
           path: '/verify-email',
@@ -673,7 +678,7 @@
         confirmed: 'Correo verificado correctamente. Ya puedes iniciar sesión.',
         pending: 'Debes verificar tu correo con el código de 6 dígitos antes de ingresar.',
         exists: 'Ese correo ya está registrado. Inicia sesión.',
-        reset: 'Se ha enviado una nueva contraseña a tu correo.',
+        reset: 'Si el usuario está registrado, te enviamos un enlace para crear una contraseña nueva. Vence en 30 minutos.',
         changed: 'Contraseña actualizada correctamente. Ingresa con tu correo y nueva contraseña.'
       };
 
@@ -1042,10 +1047,10 @@
     (function initUsernameFields() {
       // Misma lista que valida el servidor (config/country.js), inyectada para
       // no mantener dos copias que se desincronicen.
-      const ALLOWED_DOMAINS = new Set(<%- JSON.stringify(countryConfig.allowedLoginDomains) %>);
-      const FORBIDDEN_TLD = <%- JSON.stringify(countryConfig.forbiddenEmailTld) %>;
-      const DEFAULT_DOMAIN = <%- JSON.stringify(countryConfig.corporateEmailDomain) %>;
-      const COUNTRY_NAME = <%- JSON.stringify(countryConfig.name) %>;
+      const ALLOWED_DOMAINS = new Set(<%- JSON.stringify(countryConfig.allowedLoginDomains).replace(/</g, '\\u003c') %>);
+      const FORBIDDEN_TLD = <%- JSON.stringify(countryConfig.forbiddenEmailTld).replace(/</g, '\\u003c') %>;
+      const DEFAULT_DOMAIN = <%- JSON.stringify(countryConfig.corporateEmailDomain).replace(/</g, '\\u003c') %>;
+      const COUNTRY_NAME = <%- JSON.stringify(countryConfig.name).replace(/</g, '\\u003c') %>;
       const FOREIGN_DOMAIN_MSG = 'El dominio .' + FORBIDDEN_TLD + ' no está disponible en ' + COUNTRY_NAME + '.';
 
       function isForbiddenDomain(domain) {
@@ -1195,9 +1200,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="/js/profile-photo-cropper.js?v=20261013b"></script>
   <script src="/js/password-strength.js?v=20260916q"></script>
-  <script>window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()) %>;</script>
+  <script nonce="<%= locals.cspNonce %>">window.__PHONE_CONFIG__ = <%- JSON.stringify(phoneClientConfig()).replace(/</g, '\\u003c') %>;</script>
   <script src="/js/phone.js?v=20260910n"></script>
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     (function initRegisterForm() {
       const passwordInput = document.getElementById('reg-password');
       const password2Input = document.getElementById('reg-password2');
@@ -1412,7 +1417,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="<%= locals.cspNonce %>">
     /**
      * Estado "enviando" de los botones de los formularios de acceso.
      *

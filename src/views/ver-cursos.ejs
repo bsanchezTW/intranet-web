@@ -56,7 +56,7 @@
 
     <% if (cursos && cursos.length > 0) { %>
         <% cursos.forEach(curso => { %>
-            <div class="curso-card" style="cursor: pointer;" onclick="window.location.href='/cursos/evaluacion/<%= curso.course_id || curso.id %>'">
+            <div class="curso-card" style="cursor: pointer;" data-ir="/cursos/evaluacion/<%= curso.course_id || curso.id %>">
                 <div class="curso-info">
                     <h3 class="curso-title"><%= curso.title %></h3>
                     <div class="curso-meta">

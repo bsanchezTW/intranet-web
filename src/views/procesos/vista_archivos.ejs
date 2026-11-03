@@ -75,7 +75,7 @@
 
     <% if (puedeSubir) { %>
     <div class="page-header-actions">
-      <button type="button" class="page-header-btn" onclick="IntranetModal.open('modalSubir')">
+      <button type="button" class="page-header-btn" data-accion="IntranetModal.open" data-args='["modalSubir"]'>
         <%- include('../partials/icon', { name: 'plus' }) %> Subir documento
       </button>
     </div>
@@ -219,7 +219,7 @@
 <% } %>
 
 <% if (puedeSubir || puedeEditar || puedeEliminar) { %>
-<script>
+<script nonce="<%= locals.cspNonce %>">
   (function () {
     "use strict";
 

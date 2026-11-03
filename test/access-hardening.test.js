@@ -27,9 +27,9 @@ describe("estado de la cuenta en cada petición", () => {
     assert.deepEqual(sessionAccountState(sesion, undefined), { action: "end" });
   });
 
-  it("no toca el login de emergencia (id 0), que no existe en users", () => {
+  it("una sesión con id 0 (el login de emergencia, que ya no existe) se cierra", () => {
     assert.deepEqual(sessionAccountState({ id: 0, role: "Administrador" }, undefined), {
-      action: "keep",
+      action: "end",
     });
   });
 });

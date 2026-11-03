@@ -64,6 +64,9 @@ loadSharedEnv();
 // Perú en :3001 no debe heredarlos.
 process.env.COUNTRY = country;
 process.env.PORT = String(port);
+// En local se ve el detalle de los errores internos (utils/publicError); en
+// el servidor, si NODE_ENV no está definido, no.
+if (!process.env.NODE_ENV) process.env.NODE_ENV = "development";
 process.env.APP_BASE_URL = baseUrl;
 process.env.SUPABASE_STORAGE_BUCKET = defaultStorageBucketForCountry(country);
 

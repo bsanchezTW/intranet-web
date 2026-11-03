@@ -2,6 +2,7 @@ const path = require("node:path");
 const {
   detectMimeFromMagicBytes,
   MIME_BY_EXTENSION,
+  normalizeRelativePath,
 } = require("../storage/storagePath");
 
 /** Carpeta de documentos legacy cuyo slug no correspondía a ningún área. */
@@ -47,6 +48,27 @@ function folderForUpload(seccion, area) {
   const folderArea = String(area || "").trim() || GENERAL_AREA;
   if (!section) throw new Error("Falta la sección del documento.");
   return `documentos/${section}/${folderArea}`;
+}
+
+/**
+ * Clave del archivo que /procesos/:seccion/:area/subir puede registrar, o
+ * null. Tiene que ser un archivo directo de la carpeta de ESA sección y área
+ * (la misma de /upload). Antes se guardaba el public_id del formulario: quien
+ * podía subir en un área registraba un documento que apuntaba al archivo de
+ * otra, se lo mostraba a su área y, al borrarlo, borraba el archivo ajeno.
+ */
+function uploadedDocumentPath(seccion, area, publicId) {
+  let folder;
+  let key;
+  try {
+    folder = folderForUpload(seccion, area);
+    key = normalizeRelativePath(publicId);
+  } catch {
+    return null;
+  }
+  if (!key.startsWith(`${folder}/`)) return null;
+  const fileName = key.slice(folder.length + 1);
+  return fileName && !fileName.includes("/") ? key : null;
 }
 
 function folderForRow(table, row = {}) {
@@ -146,6 +168,7 @@ module.exports = {
   areaSegmentForDocument,
   folderForUpload,
   folderForRow,
+  uploadedDocumentPath,
   fileNameForLegacyObject,
   destinationPath,
   extensionFromContentType,

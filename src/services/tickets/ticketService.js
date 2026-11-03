@@ -101,7 +101,7 @@ async function requesterFor(user) {
     const name = [row.first_name, row.last_name].filter(Boolean).join(" ");
     return { name: name || row.email, email: row.email };
   }
-  // El login de emergencia (id 0) no existe en `users`.
+  // La cuenta ya no está en `users` (eliminada): se usa lo de la sesión.
   return {
     name: user.nombre || user.username || "Usuario",
     email: user.email || user.username || null,
@@ -258,7 +258,7 @@ async function listOpenTicketsForUser(user, { limit = 5 } = {}) {
   const { rows } = await db.query(
     `SELECT id, title, category, status
        FROM support_tickets
-      WHERE requester_email = $1 AND status <> 'closed'
+      WHERE LOWER(TRIM(requester_email)) = LOWER(TRIM($1)) AND status <> 'closed'
       ORDER BY created_at DESC
       LIMIT $2`,
     [email, limit],

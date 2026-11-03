@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS peru.users (
   email_confirmed boolean DEFAULT false,
   confirm_token character varying(255),
   confirm_expires timestamp without time zone,
+  -- Intentos fallidos contra el código vigente: al quinto se invalida.
+  confirm_attempts integer NOT NULL DEFAULT 0,
+  -- «Olvidé mi contraseña»: sólo el SHA-256 del enlace de un solo uso.
+  password_reset_token_hash character varying(64),
+  password_reset_expires timestamp with time zone,
   photo text,
   created_at timestamp without time zone DEFAULT now(),
   must_change_password boolean DEFAULT false,
@@ -1714,3 +1719,13 @@ END$$;
 
 SELECT peru.ensure_id_strategy();
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA peru TO intranet_peru;
+
+-- Sesiones de express-session (src/services/session/pgSessionStore.js).
+-- La app también la crea al primer uso. Va en el schema del país: una tabla
+-- compartida dejaría que la cookie de un país abra sesión en el otro.
+CREATE TABLE IF NOT EXISTS peru.sessions (
+  sid    varchar(255) PRIMARY KEY,
+  sess   jsonb        NOT NULL,
+  expire timestamptz  NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sessions_expire_idx ON peru.sessions (expire);

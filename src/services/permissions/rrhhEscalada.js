@@ -33,6 +33,16 @@ function rechazoNombreArea({ superadmin = false, antes = null, despues = null } 
   return areaSensible(antes) !== areaSensible(despues) ? "nombre-area-sensible" : null;
 }
 
+function normCorreo(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+/**
+ * `objetivoPrivilegiado`: la persona editada es Administrador o superadmin.
+ * Su correo es la llave de la cuenta (login y «Olvidé mi contraseña»):
+ * quien lo cambia por uno propio se queda con la cuenta. Sólo el superadmin
+ * lo cambia; cada uno sí puede corregir el suyo.
+ */
 function rechazoEscalada({
   superadmin = false,
   actorId = null,
@@ -40,6 +50,7 @@ function rechazoEscalada({
   antes = {},
   despues = {},
   areaNombre = null,
+  objetivoPrivilegiado = false,
 } = {}) {
   if (superadmin) return null;
 
@@ -60,6 +71,11 @@ function rechazoEscalada({
   }
 
   if (despues.designaJefe && isSupportAreaName(areaNombre)) return "jefe-informatica";
+
+  if (!propio && objetivoPrivilegiado && antes.email !== undefined && despues.email !== undefined
+      && normCorreo(antes.email) !== normCorreo(despues.email)) {
+    return "correo-privilegiado";
+  }
   return null;
 }
 

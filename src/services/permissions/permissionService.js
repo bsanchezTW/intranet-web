@@ -15,7 +15,7 @@ const { computePermissions, emptyPermissions } = require("./resolver");
  *     una vigencia que la afecta.
  *
  * Ante un error de base se queda con la última foto; sin ninguna, nadie
- * tiene permisos (salvo el login de emergencia).
+ * tiene permisos.
  */
 
 const VERSION_POLL_MS = 5 * 1000;
@@ -154,7 +154,6 @@ async function getSnapshot() {
 async function resolve(user) {
   const catalog = getCatalog();
   if (!user || user.id == null) return emptyPermissions(catalog);
-  if (Number(user.id) === 0) return computePermissions({}, user, { catalog });
 
   const current = await getSnapshot();
   if (!current) return emptyPermissions(catalog, Number(user.id));

@@ -64,10 +64,30 @@ describe("staffAccess — permisos por área y rol", () => {
     );
   });
 
-  it("el login de emergencia (id 0) conserva acceso total sin consultar la base", async () => {
-    const master = { id: 0, role: "Administrador" };
-    assert.equal(await canManageRrhh(master), true);
-    assert.equal(await isInformaticaAdmin(master), true);
-    assert.equal(await canManageRrhh(null), false);
+  it("id 0 con rol Administrador (el login de emergencia que ya no existe) no tiene acceso", async () => {
+    // staffAccess con una base que no tiene a nadie con id 0.
+    const dbId = require.resolve("../src/db");
+    const staffId = require.resolve("../src/services/access/staffAccess");
+    const prevDb = require.cache[dbId];
+    const prevStaff = require.cache[staffId];
+    require.cache[dbId] = {
+      id: dbId,
+      filename: dbId,
+      loaded: true,
+      exports: { query: async () => ({ rows: [{ id: 5, role: "Administrador", area_name: "Informática", managed_area_names: [] }] }) },
+    };
+    delete require.cache[staffId];
+    try {
+      const fresh = require("../src/services/access/staffAccess");
+      const master = { id: 0, role: "Administrador" };
+      assert.equal(await fresh.canManageRrhh(master), false);
+      assert.equal(await fresh.isInformaticaAdmin(master), false);
+      assert.equal(await fresh.canManageRrhh({ id: 5, role: "Administrador" }), true);
+      assert.equal(await fresh.canManageRrhh(null), false);
+    } finally {
+      if (prevDb) require.cache[dbId] = prevDb;
+      else delete require.cache[dbId];
+      require.cache[staffId] = prevStaff;
+    }
   });
 });

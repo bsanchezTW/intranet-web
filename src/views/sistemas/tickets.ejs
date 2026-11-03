@@ -54,7 +54,7 @@
       <% if (esAdmin) { %>
       <div class="soporte-seccion__acciones">
         <% if (apps.length > 1) { %><%- include('../partials/app-orden-boton') %><% } %>
-        <button type="button" class="apps-add-btn" onclick="toggleFormulario()">
+        <button type="button" class="apps-add-btn" data-accion="toggleFormulario">
           <span aria-hidden="true">+</span> Agregar herramienta
         </button>
       </div>

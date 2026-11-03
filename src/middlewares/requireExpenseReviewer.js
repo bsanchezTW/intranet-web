@@ -1,4 +1,4 @@
-const { rememberReturnTo } = require("../utils/returnTo");
+const { denyUnauthenticated, denyForbidden } = require("../utils/httpResponses");
 const { isAdministrador, normalizeRole } = require("../constants/roles");
 const { isAreaManager } = require("../services/expenses/areaManager");
 const { isFinanceApprover } = require("../services/expenses/financeTeam");
@@ -16,27 +16,10 @@ const { isFinanceApprover } = require("../services/expenses/financeTeam");
  * puerta a quien no revisa nada.
  */
 
-function wantsJsonResponse(req) {
-  const accept = req.headers.accept || "";
-  return (
-    req.xhr ||
-    accept.includes("application/json") ||
-    /\/(upload|api\/)/.test(req.path)
-  );
-}
-
 function requireExpenseReviewer() {
   return async (req, res, next) => {
     const user = req.session && req.session.user;
-    if (!user) {
-      rememberReturnTo(req);
-      if (wantsJsonResponse(req)) {
-        return res
-          .status(401)
-          .json({ error: "Sesión expirada. Vuelve a iniciar sesión." });
-      }
-      return res.redirect("/login");
-    }
+    if (!user) return denyUnauthenticated(req, res);
 
     try {
       if (isAdministrador(normalizeRole(user.role))) return next();
@@ -47,14 +30,7 @@ function requireExpenseReviewer() {
       console.error("[Gastos] Error resolviendo revisor:", err.message);
     }
 
-    if (wantsJsonResponse(req)) {
-      return res
-        .status(403)
-        .json({ error: "No tienes permiso para gestionar solicitudes." });
-    }
-    return res
-      .status(403)
-      .render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    return denyForbidden(req, res, "No tienes permiso para gestionar solicitudes.");
   };
 }
 
