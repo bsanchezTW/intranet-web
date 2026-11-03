@@ -68,14 +68,14 @@
               </td>
               <td data-label="Kilometraje" class="num"><%= formatKm(x.odometer_km) %></td>
               <td data-label="Documentos">
-                <% if (!x.technical_review_due && !x.circulation_permit_due && !x.insurance_due) { %>
+                <% if (!documentsFor(country).some((d) => x[d.field]) && x.next_maintenance_km == null) { %>
                   <span class="logistica-sub">Sin vencimientos cargados</span>
                 <% } else if (!alertas.length) { %>
                   <span class="logistica-estado logistica-estado--apto">Al día</span>
                 <% } else { %>
                   <div class="logistica-alertas">
                     <% alertas.forEach((a) => { %>
-                      <span class="logistica-alerta logistica-alerta--<%= a.state %>" title="<%= a.state === 'vencido' ? 'Venció' : 'Vence' %> el <%= formatDate(a.due) %>"><%= a.label %></span>
+                      <span class="logistica-alerta logistica-alerta--<%= a.state %>" title="<%= a.label %>: <%= a.detail %>"><%= a.label %></span>
                     <% }) %>
                   </div>
                 <% } %>

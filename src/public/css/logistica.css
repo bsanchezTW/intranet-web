@@ -402,16 +402,46 @@ button.logistica-icono-btn {
 
 /* ── Ítems del checklist ─────────────────────────────────────────────────── */
 
-.checklist-grupo + .checklist-grupo { margin-top: 6px; }
+/* Como la planilla: Descripción · Sí / No / N/A · Observaciones. El
+   encabezado de cada categoría y sus ítems comparten las columnas. */
+.checklist-grupo {
+  --checklist-cols: minmax(0, 1fr) calc(3 * 60px + 2px) minmax(200px, 0.85fr);
+}
+
+.checklist-grupo + .checklist-grupo { margin-top: 10px; }
 
 .checklist-grupo__head {
+  display: grid;
+  grid-template-columns: var(--checklist-cols);
+  align-items: center;
+  gap: 8px 16px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+
+.checklist-grupo__cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Comparte la celda con "Todo Sí", que se alinea a la derecha. */
+.checklist-grupo__obs {
+  grid-column: 3;
+  grid-row: 1;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 0 8px;
-  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .checklist-grupo__titulo {
@@ -423,7 +453,11 @@ button.logistica-icono-btn {
   text-transform: uppercase;
 }
 
+/* "Todo Sí" va en la columna de observaciones, alineado a la derecha. */
 .checklist-grupo__todo {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
   padding: 0;
   border: 0;
   background: none;
@@ -437,12 +471,15 @@ button.logistica-icono-btn {
 
 .checklist-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: var(--checklist-cols);
   align-items: center;
   gap: 8px 16px;
-  padding: 10px 0;
+  min-height: 40px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--color-border);
 }
+
+.checklist-item.is-no { background: rgba(208, 92, 92, 0.05); }
 
 .checklist-item:last-child { border-bottom: 0; }
 
@@ -464,7 +501,7 @@ button.logistica-icono-btn {
 .checklist-item.is-invalid .checklist-opciones { box-shadow: 0 0 0 2px rgba(208, 92, 92, 0.45); }
 
 .checklist-item__nota {
-  grid-column: 1 / -1;
+  grid-column: 3;
 }
 
 .checklist-item__nota[hidden] { display: none; }
@@ -486,9 +523,11 @@ button.logistica-icono-btn {
   box-shadow: 0 0 0 3px var(--brand-soft);
 }
 
-/* Botonera Bien / Con falla / No aplica: radios nativos con forma de segmento. */
+/* Botonera Sí / No / N/A: radios nativos con forma de segmento. */
 .checklist-opciones {
   display: inline-flex;
+  grid-column: 2;
+  width: max-content;
   border: 1px solid var(--color-border-strong);
   border-radius: 10px;
   overflow: hidden;
@@ -506,9 +545,8 @@ button.logistica-icono-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
-  height: 36px;
-  padding: 0 12px;
+  width: 60px;
+  height: 34px;
   background: var(--color-surface);
   color: var(--color-text-muted);
   font-size: 0.8rem;
@@ -524,6 +562,44 @@ button.logistica-icono-btn {
 .checklist-opcion input[value="ok"]:checked + span { background: var(--green-deep); color: #fff; }
 .checklist-opcion input[value="falla"]:checked + span { background: var(--down); color: #fff; }
 .checklist-opcion input[value="na"]:checked + span { background: var(--color-text-subtle); color: #fff; }
+
+/* Encabezado de la planilla: documentos y mantención del vehículo elegido. */
+.checklist-ficha {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 2px 0 18px;
+}
+
+.checklist-ficha[hidden] { display: none; }
+
+.checklist-ficha__dato {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+
+.checklist-ficha__dato dt {
+  color: var(--color-text-subtle);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.checklist-ficha__dato dd {
+  margin: 2px 0 0;
+  color: var(--color-heading);
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.checklist-ficha__dato.is-vencido { border-color: rgba(208, 92, 92, 0.45); background: rgba(208, 92, 92, 0.08); }
+.checklist-ficha__dato.is-vencido dd { color: var(--down); }
+.checklist-ficha__dato.is-por_vencer { border-color: rgba(214, 150, 32, 0.45); background: rgba(214, 150, 32, 0.1); }
 
 /* Resultado en vivo y declaración. */
 .checklist-resultado {
@@ -735,6 +811,15 @@ button.logistica-icono-btn {
   padding-bottom: 16px;
 }
 
+/* Tablet: la observación baja a su propia línea, bajo el ítem. */
+@media (max-width: 980px) and (min-width: 721px) {
+  .checklist-grupo { --checklist-cols: minmax(0, 1fr) calc(3 * 60px + 2px); }
+  .checklist-grupo__obs { display: none; }
+  .checklist-grupo__todo { grid-column: 1; justify-self: end; }
+  .checklist-grupo__titulo { grid-column: 1; grid-row: 1; }
+  .checklist-item__nota { grid-column: 1 / -1; }
+}
+
 /* ── Móvil: cada fila de la tabla se vuelve una tarjeta ──────────────────── */
 
 @media (max-width: 720px) {
@@ -777,8 +862,14 @@ button.logistica-icono-btn {
   .logistica-panel { padding: 18px 16px 4px; }
   .logistica-datos { grid-template-columns: 1fr; }
 
-  .checklist-item { grid-template-columns: 1fr; }
-  .checklist-opciones { width: 100%; }
+  .checklist-grupo { --checklist-cols: 1fr; }
+  .checklist-grupo__cols,
+  .checklist-grupo__obs { display: none; }
+  .checklist-grupo__head { grid-template-columns: 1fr auto; }
+  .checklist-grupo__todo { grid-column: 2; }
+  .checklist-item { padding: 10px 4px; }
+  .checklist-opciones { grid-column: 1; width: 100%; }
+  .checklist-item__nota { grid-column: 1; }
   .checklist-opcion { flex: 1; }
-  .checklist-opcion span { width: 100%; min-width: 0; height: 42px; }
+  .checklist-opcion span { width: 100%; height: 42px; }
 }

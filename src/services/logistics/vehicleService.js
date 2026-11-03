@@ -1,6 +1,6 @@
 const db = require("../../db");
-const { VEHICLE_KINDS } = require("../../constants/vehicleChecklist");
-const { toDateOnly, addDays } = require("../../utils/vacationDateUtils");
+const { VEHICLE_KINDS, formatKm } = require("../../constants/vehicleChecklist");
+const { toDateOnly, addDays, formatDisplay } = require("../../utils/vacationDateUtils");
 const { cleanText, parseOptionalInt, parseOptionalDate } = require("./inputs");
 
 /**
@@ -12,12 +12,25 @@ const { cleanText, parseOptionalInt, parseOptionalDate } = require("./inputs");
 
 /** Días de anticipación con que un documento del vehículo se marca "por vencer". */
 const DUE_SOON_DAYS = 30;
+/** Kilómetros de anticipación para avisar la próxima mantención. */
+const MAINTENANCE_SOON_KM = 1000;
 
+/**
+ * Documentos con vencimiento, como en el encabezado de la planilla. La
+ * revisión de gases es chilena (`countries`); en Perú no se pide.
+ */
 const VEHICLE_DOCUMENTS = Object.freeze([
   { field: "technical_review_due", label: "Revisión técnica" },
+  { field: "gas_review_due", label: "Revisión de gases", countries: ["CL"] },
   { field: "circulation_permit_due", label: "Permiso de circulación" },
   { field: "insurance_due", label: "Seguro obligatorio" },
 ]);
+
+/** Documentos que se piden en el país. */
+function documentsFor(countryCode) {
+  const code = String(countryCode || "").toUpperCase();
+  return VEHICLE_DOCUMENTS.filter((d) => !d.countries || d.countries.includes(code));
+}
 
 class VehicleInputError extends Error {
   constructor(message, field = "plate") {
@@ -61,6 +74,13 @@ function normalizeVehicleInput(body = {}) {
     errors.odometer_km = "Ingresa el kilometraje en números enteros.";
   }
 
+  const next = parseOptionalInt(body.next_maintenance_km);
+  values.next_maintenance_km = next.value;
+  if (!next.ok) {
+    values.next_maintenance_km = cleanText(body.next_maintenance_km, 12);
+    errors.next_maintenance_km = "Ingresa el kilometraje en números enteros.";
+  }
+
   for (const { field } of VEHICLE_DOCUMENTS) {
     const date = parseOptionalDate(body[field]);
     values[field] = date.value;
@@ -73,18 +93,31 @@ function normalizeVehicleInput(body = {}) {
   return { values, errors, ok: Object.keys(errors).length === 0 };
 }
 
+function displayDate(iso) {
+  return formatDisplay(iso).replace(/-/g, "/");
+}
+
 /**
- * Documentos vencidos o por vencer de un vehículo, para avisar en la flota y
- * en el checklist: [{ label, due, state: 'vencido' | 'por_vencer' }].
+ * Documentos vencidos o por vencer y mantención cercana de un vehículo, para
+ * avisar en la flota y en el checklist:
+ *   [{ label, state: 'vencido' | 'por_vencer', detail, due? }]
+ * `detail` es el texto corto que acompaña la etiqueta ("venció el 30/10/2026").
  */
 function documentAlerts(vehicle, today) {
   const soon = addDays(today, DUE_SOON_DAYS);
   const alerts = [];
+  if (!vehicle) return alerts;
   for (const { field, label } of VEHICLE_DOCUMENTS) {
-    const due = vehicle && toDateOnly(vehicle[field]);
+    const due = toDateOnly(vehicle[field]);
     if (!due) continue;
-    if (due < today) alerts.push({ label, due, state: "vencido" });
-    else if (due <= soon) alerts.push({ label, due, state: "por_vencer" });
+    if (due < today) alerts.push({ label, due, state: "vencido", detail: `venció el ${displayDate(due)}` });
+    else if (due <= soon) alerts.push({ label, due, state: "por_vencer", detail: `vence el ${displayDate(due)}` });
+  }
+  const next = vehicle.next_maintenance_km == null ? null : Number(vehicle.next_maintenance_km);
+  const km = vehicle.odometer_km == null ? null : Number(vehicle.odometer_km);
+  if (next != null && km != null) {
+    if (km >= next) alerts.push({ label: "Mantención", state: "vencido", detail: `tocaba a los ${formatKm(next)}` });
+    else if (next - km <= MAINTENANCE_SOON_KM) alerts.push({ label: "Mantención", state: "por_vencer", detail: `a los ${formatKm(next)}` });
   }
   return alerts;
 }
@@ -102,8 +135,10 @@ function vehicleLabel(vehicle) {
 const COLUMNS = `
   v.id, v.plate, v.kind, v.brand, v.model, v.model_year, v.odometer_km,
   v.technical_review_due::text AS technical_review_due,
+  v.gas_review_due::text AS gas_review_due,
   v.circulation_permit_due::text AS circulation_permit_due,
   v.insurance_due::text AS insurance_due,
+  v.next_maintenance_km,
   v.notes, v.active, v.created_at, v.updated_at`;
 
 async function listVehicles({ includeInactive = true } = {}) {
@@ -133,8 +168,10 @@ function vehicleParams(values) {
     values.model_year,
     values.odometer_km,
     values.technical_review_due,
+    values.gas_review_due,
     values.circulation_permit_due,
     values.insurance_due,
+    values.next_maintenance_km,
     values.notes || null,
   ];
 }
@@ -151,9 +188,9 @@ async function createVehicle(values, userId) {
     const { rows } = await db.query(
       `INSERT INTO logistics_vehicles (
          plate, kind, brand, model, model_year, odometer_km,
-         technical_review_due, circulation_permit_due, insurance_due, notes,
-         created_by, updated_by
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
+         technical_review_due, gas_review_due, circulation_permit_due, insurance_due,
+         next_maintenance_km, notes, created_by, updated_by
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
        RETURNING id`,
       [...vehicleParams(values), userId ?? null],
     );
@@ -168,9 +205,10 @@ async function updateVehicle(id, values, userId) {
     const { rowCount } = await db.query(
       `UPDATE logistics_vehicles
           SET plate = $1, kind = $2, brand = $3, model = $4, model_year = $5,
-              odometer_km = $6, technical_review_due = $7, circulation_permit_due = $8,
-              insurance_due = $9, notes = $10, updated_by = $11, updated_at = NOW()
-        WHERE id = $12`,
+              odometer_km = $6, technical_review_due = $7, gas_review_due = $8,
+              circulation_permit_due = $9, insurance_due = $10, next_maintenance_km = $11,
+              notes = $12, updated_by = $13, updated_at = NOW()
+        WHERE id = $14`,
       [...vehicleParams(values), userId ?? null, id],
     );
     return rowCount > 0;
@@ -190,7 +228,9 @@ async function setVehicleActive(id, active, userId) {
 
 module.exports = {
   DUE_SOON_DAYS,
+  MAINTENANCE_SOON_KM,
   VEHICLE_DOCUMENTS,
+  documentsFor,
   VehicleInputError,
   normalizePlate,
   normalizeVehicleInput,

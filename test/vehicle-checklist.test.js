@@ -4,14 +4,17 @@ const assert = require("node:assert/strict");
 process.env.COUNTRY = process.env.COUNTRY || "CL";
 
 const {
+  ANSWERS,
   computeResult,
   formatChecklistNumber,
   defaultTemplate,
+  PROVISIONAL_TEMPLATE_LABELS,
 } = require("../src/constants/vehicleChecklist");
 const {
   normalizePlate,
   normalizeVehicleInput,
   documentAlerts,
+  documentsFor,
   vehicleLabel,
 } = require("../src/services/logistics/vehicleService");
 const {
@@ -64,14 +67,31 @@ describe("checklist de vehículos — resultado y numeración", () => {
     assert.equal(formatChecklistNumber(2027, 12345), "CV-12345-2027");
   });
 
-  it("la plantilla inicial nombra los documentos de cada país", () => {
-    const cl = defaultTemplate("CL").map((i) => i.label);
-    const pe = defaultTemplate("PE").map((i) => i.label);
-    assert.ok(cl.includes("Seguro obligatorio (SOAP) vigente"));
-    assert.ok(pe.includes("SOAT vigente"));
-    const orden = defaultTemplate("CL").map((i) => i.sort_order);
+  it("la plantilla inicial es la del «Check list diario» en papel", () => {
+    const items = defaultTemplate();
+    assert.equal(items.length, 52);
+    assert.deepEqual([...new Set(items.map((i) => i.category))], [
+      "Sistema de luces", "Sistema motor", "Frenos", "Neumáticos", "Carrocería y chasis",
+      "Dirección", "Líquidos y filtros", "Transmisión", "Accesorios", "Implementos",
+    ]);
+    const labels = items.map((i) => i.label);
+    assert.ok(labels.includes("Foco faenero"));
+    assert.ok(labels.includes("Caja de herramientas Bauker (116 piezas)"));
+    assert.equal(new Set(labels).size, labels.length, "sin ítems repetidos");
+    const orden = items.map((i) => i.sort_order);
     assert.deepEqual(orden, [...orden].sort((a, b) => a - b));
-    assert.ok(defaultTemplate("CL").some((i) => i.critical));
+    assert.ok(items.find((i) => i.label === "Frenos").critical);
+    assert.equal(items.find((i) => i.label === "Antena radial").critical, false);
+  });
+
+  it("la plantilla provisoria no comparte el conjunto con la real", () => {
+    // Si coincidieran, seedDefaultTemplate borraría la plantilla real.
+    const reales = defaultTemplate().map((i) => i.label);
+    assert.ok(reales.some((l) => !PROVISIONAL_TEMPLATE_LABELS.includes(l)));
+  });
+
+  it("las respuestas se leen Sí / No / N/A", () => {
+    assert.deepEqual(ANSWERS.map((a) => [a.value, a.short]), [["ok", "Sí"], ["falla", "No"], ["na", "N/A"]]);
   });
 });
 
@@ -91,21 +111,36 @@ describe("flota — formulario y vencimientos", () => {
     assert.equal(ok.values.odometer_km, 120500);
     assert.equal(ok.values.technical_review_due, null);
 
-    const mal = normalizeVehicleInput({ plate: "x", model_year: "22", odometer_km: "12,5", insurance_due: "2027-02-30" });
+    const mal = normalizeVehicleInput({ plate: "x", model_year: "22", odometer_km: "12,5", insurance_due: "2027-02-30", gas_review_due: "ayer", next_maintenance_km: "diez" });
     assert.equal(mal.ok, false);
-    assert.deepEqual(Object.keys(mal.errors).sort(), ["insurance_due", "model_year", "odometer_km", "plate"]);
+    assert.deepEqual(Object.keys(mal.errors).sort(), ["gas_review_due", "insurance_due", "model_year", "next_maintenance_km", "odometer_km", "plate"]);
+    assert.equal(normalizeVehicleInput({ plate: "ABCD12", next_maintenance_km: "50.000" }).values.next_maintenance_km, 50000);
   });
 
-  it("avisa documentos vencidos y por vencer (30 días)", () => {
+  it("avisa documentos vencidos, por vencer (30 días) y la mantención (1.000 km)", () => {
     const alertas = documentAlerts(
-      { technical_review_due: "2026-11-02", circulation_permit_due: "2026-12-01", insurance_due: "2027-06-01" },
+      {
+        technical_review_due: "2026-11-02",
+        gas_review_due: "2026-11-20",
+        circulation_permit_due: "2026-12-10",
+        insurance_due: "2027-06-01",
+        odometer_km: 49500,
+        next_maintenance_km: 50000,
+      },
       TODAY,
     );
-    assert.deepEqual(alertas.map((a) => [a.label, a.state]), [
-      ["Revisión técnica", "vencido"],
-      ["Permiso de circulación", "por_vencer"],
+    assert.deepEqual(alertas.map((a) => [a.label, a.state, a.detail]), [
+      ["Revisión técnica", "vencido", "venció el 02/11/2026"],
+      ["Revisión de gases", "por_vencer", "vence el 20/11/2026"],
+      ["Mantención", "por_vencer", "a los 50.000 km"],
     ]);
+    assert.equal(documentAlerts({ odometer_km: 50100, next_maintenance_km: 50000 }, TODAY)[0].state, "vencido");
     assert.equal(vehicleLabel(VEHICLES[0]), "Toyota Hilux 2022");
+  });
+
+  it("la revisión de gases sólo se pide en Chile", () => {
+    assert.ok(documentsFor("CL").some((d) => d.field === "gas_review_due"));
+    assert.ok(!documentsFor("PE").some((d) => d.field === "gas_review_due"));
   });
 });
 
@@ -124,14 +159,14 @@ describe("checklist — validación del formulario", () => {
     ]);
   });
 
-  it("exige responder todo y describir cada falla", () => {
+  it("exige responder todo; la observación de un No es opcional", () => {
     const { ok, errors, values } = normalizeChecklistInput(
       body({ [answerKey(11)]: "falla", [answerKey(13)]: undefined }),
       ctx,
     );
     assert.equal(ok, false);
-    assert.equal(errors[answerKey(11)], "Describe la falla.");
-    assert.equal(errors[answerKey(13)], "Marca una opción.");
+    assert.equal(errors[answerKey(11)], undefined, "un No sin observación vale");
+    assert.equal(errors[answerKey(13)], "Marca Sí, No o N/A.");
     assert.equal(errors.items, "Falta responder 1 ítem.");
     assert.equal(values.result, "no_apto");
 
@@ -141,6 +176,7 @@ describe("checklist — validación del formulario", () => {
     );
     assert.equal(descrita.ok, true);
     assert.equal(descrita.values.result, "observado");
+    assert.equal(descrita.values.answers[1].comment, "Intermitente izquierdo quemado");
   });
 
   it("rechaza fecha futura, kilometraje menor al registrado y falta de declaración", () => {
@@ -195,17 +231,24 @@ describe("checklist — PDF", () => {
     status: "registered",
     created_by_name: "Bastián Dummy",
     created_at: new Date("2026-11-03T12:00:00Z"),
-    answers: defaultTemplate("CL").map((item, i) => ({
+    technical_review_due: "2026-10-01",
+    gas_review_due: "2027-01-15",
+    insurance_due: "2027-03-31",
+    next_maintenance_km: 50000,
+    answers: defaultTemplate().map((item, i) => ({
       ...item,
       position: i + 1,
-      answer: i === 3 ? "falla" : "ok",
-      comment: i === 3 ? "Licencia vencida el mes pasado." : null,
+      answer: i === 5 ? "falla" : i === 40 ? "na" : "ok",
+      comment: i === 5 ? "Foco faenero sin ampolleta." : null,
     })),
   };
 
-  it("genera un PDF", async () => {
+  const paginas = (pdf) => (pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length;
+
+  it("la planilla completa cabe en una hoja", async () => {
     const pdf = await renderChecklistPdf(registro);
     assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+    assert.equal(paginas(pdf), 1);
   });
 
   it("un checklist anulado y largo también se imprime", async () => {
@@ -217,8 +260,7 @@ describe("checklist — PDF", () => {
       answers: [...registro.answers, ...registro.answers, ...registro.answers],
     };
     const pdf = await renderChecklistPdf(largo);
-    const paginas = pdf.toString("latin1").match(/\/Type \/Page\b/g) || [];
-    assert.ok(paginas.length >= 2);
+    assert.ok(paginas(pdf) >= 2);
   });
 });
 

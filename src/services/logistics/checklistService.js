@@ -91,16 +91,15 @@ function normalizeChecklistInput(body = {}, { items = [], vehicles = [], drivers
     if (!driver) errors.driver_user_id = "Elige al conductor.";
   }
 
-  // Ítems: todos se responden; una falla exige describirla.
+  // Ítems: todos se responden (Sí / No / N/A). La observación es opcional,
+  // como la columna OBS de la planilla; el formulario la ofrece al marcar No.
   let sinResponder = 0;
   values.answers = items.map((item, index) => {
     const answer = ANSWERS.some((a) => a.value === body[answerKey(item.id)]) ? body[answerKey(item.id)] : "";
     const comment = cleanText(body[commentKey(item.id)], 300);
     if (!answer) {
       sinResponder += 1;
-      errors[answerKey(item.id)] = "Marca una opción.";
-    } else if (answer === "falla" && !comment) {
-      errors[answerKey(item.id)] = "Describe la falla.";
+      errors[answerKey(item.id)] = "Marca Sí, No o N/A.";
     }
     return {
       item_id: Number(item.id),
@@ -186,7 +185,13 @@ async function createChecklist(values, userId) {
     await client.query("SELECT pg_advisory_xact_lock($1)", [NUMBERING_LOCK_KEY]);
 
     const { rows: vehicleRows } = await client.query(
-      "SELECT id, plate, brand, model, model_year, active FROM logistics_vehicles WHERE id = $1 FOR UPDATE",
+      `SELECT id, plate, brand, model, model_year, active,
+              technical_review_due::text AS technical_review_due,
+              gas_review_due::text AS gas_review_due,
+              circulation_permit_due::text AS circulation_permit_due,
+              insurance_due::text AS insurance_due,
+              next_maintenance_km
+         FROM logistics_vehicles WHERE id = $1 FOR UPDATE`,
       [values.vehicle_id],
     );
     const vehicle = vehicleRows[0];
@@ -207,8 +212,10 @@ async function createChecklist(values, userId) {
          number_year, number_seq, inspection_date, inspection_kind,
          vehicle_id, vehicle_plate, vehicle_label, odometer_km, fuel_level,
          driver_user_id, driver_name, result, observations,
-         created_by, created_by_name
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+         created_by, created_by_name,
+         technical_review_due, gas_review_due, circulation_permit_due, insurance_due,
+         next_maintenance_km
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        RETURNING id`,
       [
         year,
@@ -226,6 +233,11 @@ async function createChecklist(values, userId) {
         values.observations || null,
         userId ?? null,
         signer,
+        vehicle.technical_review_due,
+        vehicle.gas_review_due,
+        vehicle.circulation_permit_due,
+        vehicle.insurance_due,
+        vehicle.next_maintenance_km,
       ],
     );
     const checklistId = rows[0].id;
@@ -278,6 +290,9 @@ const COLUMNS = `
   c.id, c.number_year, c.number_seq, c.inspection_date::text AS inspection_date,
   c.inspection_kind, c.vehicle_id, c.vehicle_plate, c.vehicle_label, c.odometer_km,
   c.fuel_level, c.driver_user_id, c.driver_name, c.result, c.observations,
+  c.technical_review_due::text AS technical_review_due, c.gas_review_due::text AS gas_review_due,
+  c.circulation_permit_due::text AS circulation_permit_due, c.insurance_due::text AS insurance_due,
+  c.next_maintenance_km,
   c.status, c.void_reason, c.voided_at, c.created_by, c.created_by_name, c.created_at,
   NULLIF(TRIM(CONCAT_WS(' ', vu.first_name, vu.last_name)), '') AS voided_by_name`;
 

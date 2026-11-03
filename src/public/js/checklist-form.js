@@ -1,8 +1,8 @@
 /**
- * Formulario del checklist de vehículos: resultado en vivo, detalle de las
- * fallas, "marcar todo bien" por categoría, avisos del vehículo elegido y el
- * conductor escrito a mano. Sin JS el formulario funciona igual: el servidor
- * valida y calcula el resultado.
+ * Formulario del checklist de vehículos: resultado en vivo, observación al
+ * lado de cada ítem marcado "No", "Todo Sí" por categoría, ficha del
+ * vehículo elegido (documentos y mantención) y el conductor escrito a mano.
+ * Sin JS el formulario funciona igual: el servidor valida y calcula.
  */
 (function () {
   const form = document.getElementById("checklistForm");
@@ -22,30 +22,30 @@
     return marcada ? marcada.value : "";
   }
 
-  function actualizarNota(item) {
+  // La observación aparece al marcar No y se queda si ya tiene texto.
+  function actualizarItem(item) {
+    const no = respuesta(item) === "falla";
+    item.classList.toggle("is-no", no);
     const nota = item.querySelector("[data-nota]");
     if (!nota) return;
     const input = nota.querySelector("input");
-    const falla = respuesta(item) === "falla";
-    nota.hidden = !falla && !input.value.trim();
-    input.required = falla;
+    nota.hidden = !no && !input.value.trim();
   }
 
   function actualizarResultado() {
     if (!resultado) return;
     let faltan = 0;
-    let fallas = 0;
-    let criticas = 0;
+    let noes = 0;
+    let criticos = 0;
     for (const item of items) {
       const r = respuesta(item);
       if (!r) faltan += 1;
       if (r === "falla") {
-        fallas += 1;
-        if (item.dataset.critico === "1") criticas += 1;
+        noes += 1;
+        if (item.dataset.critico === "1") criticos += 1;
       }
     }
-    const clave = criticas ? "no_apto" : fallas ? "observado" : "apto";
-    const info = RESULTADOS[clave];
+    const info = RESULTADOS[criticos ? "no_apto" : noes ? "observado" : "apto"];
     resultado.innerHTML = "";
     const badge = document.createElement("span");
     badge.className = `logistica-estado logistica-estado--${info.clase}`;
@@ -60,54 +60,56 @@
 
   form.addEventListener("change", (event) => {
     const item = event.target.closest("[data-item]");
-    if (item && event.target.type === "radio") {
-      item.classList.remove("is-invalid");
-      actualizarNota(item);
-      if (respuesta(item) === "falla") {
-        const input = item.querySelector("[data-nota] input");
-        if (input) input.focus();
-      }
-      actualizarResultado();
+    if (!item || event.target.type !== "radio") return;
+    item.classList.remove("is-invalid");
+    actualizarItem(item);
+    if (respuesta(item) === "falla") {
+      const input = item.querySelector("[data-nota] input");
+      if (input) input.focus();
     }
+    actualizarResultado();
   });
 
   form.querySelectorAll("[data-todo-ok]").forEach((boton) => {
     boton.addEventListener("click", () => {
-      const grupo = boton.closest("[data-grupo]");
-      grupo.querySelectorAll("[data-item]").forEach((item) => {
+      boton.closest("[data-grupo]").querySelectorAll("[data-item]").forEach((item) => {
         if (respuesta(item)) return;
-        const ok = item.querySelector('input[value="ok"]');
-        if (ok) ok.checked = true;
+        const si = item.querySelector('input[value="ok"]');
+        if (si) si.checked = true;
         item.classList.remove("is-invalid");
-        actualizarNota(item);
+        actualizarItem(item);
       });
       actualizarResultado();
     });
   });
 
-  // Vehículo: kilometraje de referencia y documentos vencidos.
+  // Vehículo: kilometraje de referencia y ficha (modelo, documentos, mantención).
   const vehiculo = document.getElementById("vehicle_id");
   const kmAyuda = document.getElementById("kmAyuda");
-  const avisos = document.getElementById("vehiculoAvisos");
+  const ficha = document.getElementById("vehiculoFicha");
   if (vehiculo) {
     vehiculo.addEventListener("change", () => {
       const opcion = vehiculo.selectedOptions[0];
       if (kmAyuda) {
         kmAyuda.textContent = opcion && opcion.dataset.km
           ? `Último registrado: ${opcion.dataset.kmTexto}`
-          : "En kilómetros, sin decimales.";
+          : "El que marca el tablero, sin decimales.";
       }
-      if (avisos) {
-        avisos.innerHTML = "";
-        let alertas = [];
-        try { alertas = JSON.parse((opcion && opcion.dataset.alertas) || "[]"); } catch (_) { alertas = []; }
-        for (const a of alertas) {
-          const chip = document.createElement("span");
-          chip.className = `logistica-alerta logistica-alerta--${a.estado}`;
-          chip.textContent = a.texto;
-          avisos.appendChild(chip);
-        }
+      if (!ficha) return;
+      let datos = [];
+      try { datos = JSON.parse((opcion && opcion.dataset.ficha) || "[]"); } catch (_) { datos = []; }
+      ficha.innerHTML = "";
+      for (const d of datos) {
+        const caja = document.createElement("div");
+        caja.className = `checklist-ficha__dato${d.estado ? ` is-${d.estado}` : ""}`;
+        const dt = document.createElement("dt");
+        dt.textContent = d.etiqueta;
+        const dd = document.createElement("dd");
+        dd.textContent = d.valor;
+        caja.append(dt, dd);
+        ficha.appendChild(caja);
       }
+      ficha.hidden = datos.length === 0;
     });
   }
 
@@ -123,12 +125,20 @@
     });
   }
 
-  // Doble clic en "Registrar": un solo envío.
-  form.addEventListener("submit", () => {
-    const boton = form.querySelector('button[type="submit"]');
-    if (boton) boton.disabled = true;
+  // Un solo envío. El botón pulsado (Guardar / Guardar e imprimir) se copia a
+  // un campo oculto antes de deshabilitar los botones, que ya no se enviarían.
+  form.addEventListener("submit", (event) => {
+    const boton = event.submitter;
+    if (boton && boton.name) {
+      const oculto = document.createElement("input");
+      oculto.type = "hidden";
+      oculto.name = boton.name;
+      oculto.value = boton.value;
+      form.appendChild(oculto);
+    }
+    form.querySelectorAll('button[type="submit"]').forEach((b) => { b.disabled = true; });
   });
 
-  items.forEach(actualizarNota);
+  items.forEach(actualizarItem);
   actualizarResultado();
 })();

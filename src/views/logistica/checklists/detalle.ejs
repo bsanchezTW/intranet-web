@@ -55,7 +55,7 @@
       <div class="logistica-veredicto">
         <span class="logistica-estado logistica-estado--<%= anulado ? 'anulado' : r.result %>"><%= anulado ? 'Anulado' : resultLabel(r.result) %></span>
         <span class="logistica-sub">
-          <%= respuestas.length %> ítems revisados · <%= fallas.length %> <%= fallas.length === 1 ? 'falla' : 'fallas' %>
+          <%= respuestas.length %> ítems revisados · <%= fallas.length %> no <%= fallas.length === 1 ? 'operativo' : 'operativos' %>
         </span>
       </div>
       <dl class="logistica-datos">
@@ -75,6 +75,10 @@
         <div><dt>Kilometraje</dt><dd><%= formatKm(r.odometer_km) %></dd></div>
         <div><dt>Combustible</dt><dd><%= r.fuel_level || '—' %></dd></div>
         <div class="logistica-datos--ancho"><dt>Conductor</dt><dd><%= r.driver_name %></dd></div>
+        <% documentsFor(country).forEach((d) => { %>
+          <div><dt><%= d.label %></dt><dd><%= formatDate(r[d.field]) %></dd></div>
+        <% }) %>
+        <div><dt>Próx. mantención</dt><dd><%= formatKm(r.next_maintenance_km) %></dd></div>
       </dl>
     </section>
   </div>
@@ -86,9 +90,9 @@
       <table class="logistica-tabla">
         <thead>
           <tr>
-            <th scope="col">Ítem</th>
-            <th scope="col">Estado</th>
-            <th scope="col">Detalle</th>
+            <th scope="col">Descripción</th>
+            <th scope="col">Operativo</th>
+            <th scope="col">Observaciones</th>
           </tr>
         </thead>
         <tbody>

@@ -75,16 +75,23 @@
 
     <section class="logistica-panel" aria-labelledby="panel-documentos">
       <h3 class="logistica-panel__titulo" id="panel-documentos">
-        <span class="logistica-panel__num" aria-hidden="true">2</span> Vencimientos
+        <span class="logistica-panel__num" aria-hidden="true">2</span> Vencimientos y mantención
         <span class="logistica-panel__extra">Opcional</span>
       </h3>
-      <p class="logistica-panel__desc">Se avisa desde 30 días antes de cada vencimiento.</p>
+      <p class="logistica-panel__desc">Se avisa desde 30 días antes de cada vencimiento, y 1.000 km antes de la mantención. Cada checklist guarda estos datos como estaban ese día.</p>
       <div class="campos-grid">
         <div class="campo-form<%= invalido('technical_review_due') %>">
           <label for="technical_review_due">Revisión técnica</label>
           <input type="date" id="technical_review_due" name="technical_review_due" value="<%= v.technical_review_due || '' %>">
           <% mensaje('technical_review_due') %>
         </div>
+        <% if (!peru) { %>
+        <div class="campo-form<%= invalido('gas_review_due') %>">
+          <label for="gas_review_due">Revisión de gases</label>
+          <input type="date" id="gas_review_due" name="gas_review_due" value="<%= v.gas_review_due || '' %>">
+          <% mensaje('gas_review_due') %>
+        </div>
+        <% } %>
         <div class="campo-form<%= invalido('circulation_permit_due') %>">
           <label for="circulation_permit_due">Permiso de circulación</label>
           <input type="date" id="circulation_permit_due" name="circulation_permit_due" value="<%= v.circulation_permit_due || '' %>">
@@ -94,6 +101,11 @@
           <label for="insurance_due"><%= peru ? 'SOAT' : 'Seguro obligatorio (SOAP)' %></label>
           <input type="date" id="insurance_due" name="insurance_due" value="<%= v.insurance_due || '' %>">
           <% mensaje('insurance_due') %>
+        </div>
+        <div class="campo-form<%= invalido('next_maintenance_km') %>">
+          <label for="next_maintenance_km">Próxima mantención (km)</label>
+          <input type="text" id="next_maintenance_km" name="next_maintenance_km" value="<%= v.next_maintenance_km ?? '' %>" inputmode="numeric" maxlength="9">
+          <% mensaje('next_maintenance_km') %>
         </div>
         <div class="campo-form campo-form--ancho">
           <label for="notes">Notas</label>

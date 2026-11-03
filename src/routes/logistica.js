@@ -29,7 +29,7 @@ const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
  * Procesos; aquí no hay una propia.
  */
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261103b"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261103c"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -43,6 +43,7 @@ const VIEW_HELPERS = {
   resultLabel: checklists.resultLabel,
   vehicleLabel: vehicles.vehicleLabel,
   documentAlerts: vehicles.documentAlerts,
+  documentsFor: vehicles.documentsFor,
 };
 
 function flashFrom(req) {
@@ -288,7 +289,7 @@ async function renderChecklistForm(req, res, { values, errors = {}, status = 200
     puedeFlota: decide(req.perms, "logistica.vehiculo.administrar", req.permLegacy),
     ...VIEW_HELPERS,
     extraCss: EXTRA_CSS,
-    extraJs: ["/js/checklist-form.js?v=20261103a"],
+    extraJs: ["/js/checklist-form.js?v=20261103b"],
   });
 }
 
@@ -330,7 +331,10 @@ router.post("/checklists", requirePermission(CREAR), async (req, res) => {
     }
     const link = `/logistica/checklists/${creado.id}`;
     await logChange(req.session.user.id, `registró el checklist ${creado.number}`, link);
-    res.redirect(withFlash(link, { ok: `Checklist ${creado.number} registrado` }));
+    // "Guardar e imprimir": queda guardado igual y se abre el PDF en el visor
+    // del navegador, que ya trae imprimir y descargar.
+    if (req.body.accion === "imprimir") return res.redirect(`${link}/pdf`);
+    res.redirect(withFlash(link, { ok: `Checklist ${creado.number} guardado` }));
   } catch (err) {
     console.error("[Logística] Error registrando checklist:", err);
     res.status(500).send("Error registrando el checklist");

@@ -1,6 +1,6 @@
 const db = require("../../db");
 const { getCurrentCountry } = require("../../config/country");
-const { defaultTemplate } = require("../../constants/vehicleChecklist");
+const { defaultTemplate, PROVISIONAL_TEMPLATE_LABELS } = require("../../constants/vehicleChecklist");
 
 /**
  * Schema de Logística, aplicado de forma idempotente al arrancar (mismo
@@ -28,8 +28,10 @@ const DDL_STATEMENTS = [
     model_year             SMALLINT CHECK (model_year BETWEEN 1950 AND 2100),
     odometer_km            INTEGER CHECK (odometer_km >= 0),
     technical_review_due   DATE,
+    gas_review_due         DATE,
     circulation_permit_due DATE,
     insurance_due          DATE,
+    next_maintenance_km    INTEGER CHECK (next_maintenance_km >= 0),
     notes                  VARCHAR(300),
     active                 BOOLEAN NOT NULL DEFAULT TRUE,
     created_by             INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -62,6 +64,11 @@ const DDL_STATEMENTS = [
     vehicle_label   VARCHAR(160),
     odometer_km     INTEGER NOT NULL CHECK (odometer_km >= 0),
     fuel_level      VARCHAR(8),
+    technical_review_due   DATE,
+    gas_review_due         DATE,
+    circulation_permit_due DATE,
+    insurance_due          DATE,
+    next_maintenance_km    INTEGER,
     driver_user_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
     driver_name     VARCHAR(160) NOT NULL,
     result          VARCHAR(10) NOT NULL CHECK (result IN ('apto','observado','no_apto')),
@@ -93,6 +100,17 @@ const DDL_STATEMENTS = [
     UNIQUE (checklist_id, position)
   )`,
 
+  // Columnas que llegaron con la hoja real (gases, mantención y los
+  // documentos congelados en el checklist), para las bases que ya tenían
+  // las tablas.
+  "ALTER TABLE logistics_vehicles ADD COLUMN IF NOT EXISTS gas_review_due DATE",
+  "ALTER TABLE logistics_vehicles ADD COLUMN IF NOT EXISTS next_maintenance_km INTEGER CHECK (next_maintenance_km >= 0)",
+  "ALTER TABLE vehicle_checklists ADD COLUMN IF NOT EXISTS technical_review_due DATE",
+  "ALTER TABLE vehicle_checklists ADD COLUMN IF NOT EXISTS gas_review_due DATE",
+  "ALTER TABLE vehicle_checklists ADD COLUMN IF NOT EXISTS circulation_permit_due DATE",
+  "ALTER TABLE vehicle_checklists ADD COLUMN IF NOT EXISTS insurance_due DATE",
+  "ALTER TABLE vehicle_checklists ADD COLUMN IF NOT EXISTS next_maintenance_km INTEGER",
+
   // Igual que el resto de tablas: la app entra con BYPASSRLS y PostgREST no
   // ve nada sin una policy.
   "ALTER TABLE logistics_vehicles ENABLE ROW LEVEL SECURITY",
@@ -101,9 +119,22 @@ const DDL_STATEMENTS = [
   "ALTER TABLE vehicle_checklist_answers ENABLE ROW LEVEL SECURITY",
 ];
 
-/** Carga la plantilla inicial sólo si nunca hubo ítems. */
+/**
+ * Carga la plantilla inicial sólo si no hay ítems. Antes, si lo único que
+ * hay es la plantilla provisoria (ningún ítem editado o agregado) y nunca se
+ * registró un checklist, la retira para dejar la de la hoja real.
+ */
 async function seedDefaultTemplate(countryCode = getCurrentCountry()) {
   const items = defaultTemplate(countryCode);
+  await db.query(
+    `DELETE FROM vehicle_checklist_items
+      WHERE NOT EXISTS (SELECT 1 FROM vehicle_checklists)
+        AND NOT EXISTS (
+          SELECT 1 FROM vehicle_checklist_items i
+           WHERE NOT (i.label = ANY($1::text[]))
+        )`,
+    [PROVISIONAL_TEMPLATE_LABELS],
+  );
   await db.query(
     `INSERT INTO vehicle_checklist_items (category, label, critical, sort_order)
      SELECT s.category, s.label, s.critical, s.sort_order
