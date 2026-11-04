@@ -13,10 +13,11 @@ const { cleanText, cleanMultiline, parseOptionalInt, isValidIsoDate, parseId } =
 const { vehicleLabel } = require("./vehicleService");
 
 /**
- * Checklist de vehículos: validación del formulario, numeración correlativa,
- * registro, listado de documentos, anulación y plantilla de ítems.
+ * Revisión mecánica (el checklist): validación del formulario, numeración
+ * correlativa, registro, listado de documentos y anulación. La plantilla de
+ * categorías e ítems está en templateService.js.
  *
- * normalizeChecklistInput y normalizeItemInput son puras para probarlas sin
+ * normalizeChecklistInput es pura para probarla sin
  * base; el resto habla con Postgres.
  *
  * Un checklist registrado no se edita: es el respaldo de que el vehículo se
@@ -121,22 +122,6 @@ function normalizeChecklistInput(body = {}, { items = [], vehicles = [], drivers
   if (!values.declaro) errors.declaro = "Confirma que revisaste el vehículo.";
 
   values.result = computeResult(values.answers.filter((a) => a.answer));
-  return { values, errors, ok: Object.keys(errors).length === 0 };
-}
-
-/** Valida un ítem de la plantilla. */
-function normalizeItemInput(body = {}) {
-  const errors = {};
-  const values = {
-    category: cleanText(body.category, 60),
-    label: cleanText(body.label, 160),
-    critical: body.critical === "1" || body.critical === "on",
-  };
-  if (!values.category) errors.category = "Indica la categoría.";
-  if (!values.label) errors.label = "Escribe el ítem.";
-  const order = parseOptionalInt(body.sort_order);
-  values.sort_order = order.ok ? order.value : null;
-  if (!order.ok) errors.sort_order = "El orden es un número entero.";
   return { values, errors, ok: Object.keys(errors).length === 0 };
 }
 
@@ -378,65 +363,6 @@ async function voidChecklist(id, reason, userId) {
   return rows[0] ? withNumber(rows[0]) : null;
 }
 
-/** Totales del encabezado: registros del mes y vehículos no aptos en 30 días. */
-async function summary(today, scope) {
-  const params = [today, ...(scope ? scope.params : [])];
-  const clause = scope ? scope.clause.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + 1}`) : "TRUE";
-  const { rows } = await db.query(
-    `SELECT
-       COUNT(*) FILTER (WHERE c.inspection_date >= date_trunc('month', $1::date))::int AS del_mes,
-       COUNT(*) FILTER (WHERE c.result = 'no_apto' AND c.inspection_date > $1::date - 30)::int AS no_aptos
-       FROM vehicle_checklists c
-      WHERE c.status = 'registered' AND ${clause}`,
-    params,
-  );
-  return rows[0] || { del_mes: 0, no_aptos: 0 };
-}
-
-// ---------------------------------------------------------------------------
-// Base de datos: plantilla
-// ---------------------------------------------------------------------------
-
-async function listTemplateItems({ includeInactive = false } = {}) {
-  const { rows } = await db.query(
-    `SELECT id, category, label, critical, sort_order, active
-       FROM vehicle_checklist_items
-      WHERE $1::boolean OR active
-      ORDER BY sort_order, id`,
-    [includeInactive],
-  );
-  return rows;
-}
-
-async function createTemplateItem(values) {
-  const { rows } = await db.query(
-    `INSERT INTO vehicle_checklist_items (category, label, critical, sort_order)
-     VALUES ($1, $2, $3, COALESCE($4, (SELECT COALESCE(MAX(sort_order), 0) + 10 FROM vehicle_checklist_items)))
-     RETURNING id`,
-    [values.category, values.label, values.critical, values.sort_order],
-  );
-  return Number(rows[0].id);
-}
-
-/** Editar un ítem no toca los checklists ya registrados: guardan su propio texto. */
-async function updateTemplateItem(id, values) {
-  const { rowCount } = await db.query(
-    `UPDATE vehicle_checklist_items
-        SET category = $2, label = $3, critical = $4, sort_order = COALESCE($5, sort_order)
-      WHERE id = $1`,
-    [id, values.category, values.label, values.critical, values.sort_order],
-  );
-  return rowCount > 0;
-}
-
-async function setTemplateItemActive(id, active) {
-  const { rowCount } = await db.query(
-    "UPDATE vehicle_checklist_items SET active = $2 WHERE id = $1",
-    [id, Boolean(active)],
-  );
-  return rowCount > 0;
-}
-
 module.exports = {
   DRIVER_OTHER,
   LIST_LIMIT,
@@ -444,16 +370,10 @@ module.exports = {
   answerKey,
   commentKey,
   normalizeChecklistInput,
-  normalizeItemInput,
   resultLabel,
   listDrivers,
   createChecklist,
   listChecklists,
   getChecklist,
   voidChecklist,
-  summary,
-  listTemplateItems,
-  createTemplateItem,
-  updateTemplateItem,
-  setTemplateItemActive,
 };

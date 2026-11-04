@@ -7,6 +7,7 @@ const { requireAnyPermission } = require("../middlewares/requirePermission");
 const { decide } = require("../services/permissions/decide");
 const vehicles = require("../services/logistics/vehicleService");
 const checklists = require("../services/logistics/checklistService");
+const template = require("../services/logistics/templateService");
 const { renderChecklistPdf } = require("../services/logistics/checklistPdf");
 const { parseId } = require("../services/logistics/inputs");
 const {
@@ -24,24 +25,29 @@ const { GROUPS: ZONE_GROUPS, modelFor } = require("../constants/vehicleZones");
 const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
 
 /**
- * Logística: Gestión de flota (vehículos, revisión mecánica, revisión física
- * e historial) y, pronto, hojas de ruta.
+ * Logística: Gestión de flota y, pronto, hojas de ruta.
  *
- *   /logistica/flota                       vehículos con sus tres botones
- *   /logistica/flota/:id/historial         historial de un vehículo
+ *   /logistica/flota                       vehículos con sus botones
+ *   /logistica/flota/:id/revisiones        revisiones de un vehículo (también
+ *                                          se despliegan en su tarjeta)
  *   /logistica/flota/:id/revision-fisica   revisión física sobre el modelo 3D
- *   /logistica/flota/mecanica/...          revisión mecánica (el checklist)
+ *   /logistica/flota/mecanica/nueva        revisión mecánica (el checklist)
+ *   /logistica/flota/mecanica/:id          una revisión mecánica y su PDF
+ *   /logistica/flota/mecanica/items        configurar categorías e ítems
  *
- * Se monta en /logistica y no bajo /procesos por la misma razón que /letras:
- * el router de procesos termina en un catch-all (/:seccion/:area) que se
- * tragaría las rutas hijas. Las direcciones de la primera versión
- * (/logistica/vehiculos, /logistica/checklists) redirigen a las nuevas.
+ * Las revisiones se consultan dentro de cada vehículo: no hay listado
+ * general. Se monta en /logistica y no bajo /procesos por la misma razón que
+ * /letras: el router de procesos termina en un catch-all (/:seccion/:area)
+ * que se tragaría las rutas hijas. Las direcciones anteriores
+ * (/logistica/vehiculos, /logistica/checklists, el listado general y el
+ * historial) redirigen a las nuevas.
  */
 
 const FLOTA = "/logistica/flota";
 const MECANICA = `${FLOTA}/mecanica`;
+const ITEMS = `${MECANICA}/items`;
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261103f"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261104a"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -60,6 +66,7 @@ const VIEW_HELPERS = {
   documentsFor: vehicles.documentsFor,
   FLOTA,
   MECANICA,
+  ITEMS,
 };
 
 function flashFrom(req) {
@@ -70,8 +77,9 @@ function flashFrom(req) {
 }
 
 function withFlash(path, { ok, error }) {
-  if (error) return `${path}?error=${encodeURIComponent(error)}`;
-  return `${path}?ok=1&msg=${encodeURIComponent(ok)}`;
+  const [base, hash] = path.split("#");
+  const q = error ? `error=${encodeURIComponent(error)}` : `ok=1&msg=${encodeURIComponent(ok)}`;
+  return `${base}?${q}${hash ? `#${hash}` : ""}`;
 }
 
 function notFound(res) {
@@ -94,7 +102,7 @@ router.use(requirePermission("logistica.acceso"));
 router.get("/", (req, res) => res.redirect("/procesos#seccion-logistica"));
 
 // ---------------------------------------------------------------------------
-// Direcciones de la primera versión: enlaces guardados, change_log y marcadores.
+// Direcciones anteriores: enlaces guardados, change_log y marcadores.
 // ---------------------------------------------------------------------------
 
 function querySuffix(req) {
@@ -104,13 +112,22 @@ function querySuffix(req) {
 
 router.get(/^\/vehiculos(\/.*)?$/, (req, res) => {
   const resto = req.params[0] || "";
-  res.redirect(301, `${FLOTA}${resto === "/nuevo" ? "/nuevo" : resto}${querySuffix(req)}`);
+  res.redirect(301, `${FLOTA}${resto}${querySuffix(req)}`);
 });
 
 router.get(/^\/checklists(\/.*)?$/, (req, res) => {
   const resto = req.params[0] || "";
+  // El listado general ya no existe: lleva a Gestión de flota.
+  if (!resto || resto === "/") return res.redirect(301, FLOTA);
   const destino = { "/nuevo": "/nueva", "/plantilla": "/items" }[resto] ?? resto;
-  res.redirect(301, `${MECANICA}${destino}${querySuffix(req)}`);
+  return res.redirect(301, `${MECANICA}${destino}${querySuffix(req)}`);
+});
+
+router.get("/flota/mecanica", (req, res) => res.redirect(301, FLOTA));
+
+router.get("/flota/:id/historial", (req, res) => {
+  const id = parseId(req.params.id);
+  return id ? res.redirect(301, `${FLOTA}/${id}/revisiones`) : notFound(res);
 });
 
 // ---------------------------------------------------------------------------
@@ -169,48 +186,9 @@ function puedeVerChecklist(req, row) {
 // "mecanica" no se lea como un id.
 // ---------------------------------------------------------------------------
 
-function filtrosFrom(query) {
-  const resultados = ["apto", "observado", "no_apto", "anulados"];
-  return {
-    q: String(query.q || "").trim().slice(0, 80),
-    resultado: resultados.includes(query.resultado) ? query.resultado : "",
-    desde: /^\d{4}-\d{2}-\d{2}$/.test(query.desde || "") ? query.desde : "",
-    hasta: /^\d{4}-\d{2}-\d{2}$/.test(query.hasta || "") ? query.hasta : "",
-    vehiculo: parseId(query.vehiculo),
-  };
-}
-
-router.get("/flota/mecanica", requireAnyPermission(VER, CREAR), async (req, res) => {
-  try {
-    const filtros = filtrosFrom(req.query);
-    const scope = checklistScope(req);
-    const today = todayInCountry();
-    const [registros, resumen, flota] = await Promise.all([
-      checklists.listChecklists({ ...filtros, scope }),
-      checklists.summary(today, scope),
-      vehicles.listVehicles(),
-    ]);
-    res.render("logistica/flota/mecanica/index", {
-      titulo: "Revisiones mecánicas",
-      registros,
-      resumen,
-      filtros,
-      flota,
-      limite: checklists.LIST_LIMIT,
-      ...permisosFlota(req),
-      ...flashFrom(req),
-      ...VIEW_HELPERS,
-      extraCss: EXTRA_CSS,
-    });
-  } catch (err) {
-    console.error("[Logística] Error listando revisiones mecánicas:", err);
-    res.status(500).send("Error cargando las revisiones mecánicas");
-  }
-});
-
 async function formContext() {
   const [items, flota, conductores] = await Promise.all([
-    checklists.listTemplateItems(),
+    template.listTemplateItems(),
     vehicles.listVehicles({ includeInactive: false }),
     checklists.listDrivers(),
   ]);
@@ -231,7 +209,7 @@ async function renderChecklistForm(req, res, { values, errors = {}, status = 200
     puedeFlota: decide(req.perms, ADMIN_FLOTA, req.permLegacy),
     ...VIEW_HELPERS,
     extraCss: EXTRA_CSS,
-    extraJs: ["/js/checklist-form.js?v=20261103b"],
+    extraJs: ["/js/checklist-form.js?v=20261104a"],
   });
 }
 
@@ -283,24 +261,25 @@ router.post("/flota/mecanica", requirePermission(CREAR), async (req, res) => {
   }
 });
 
-// --- Ítems de la revisión mecánica (plantilla) ---------------------------------
+// --- Configurar ítems: categorías y sus ítems -----------------------------------
 
-async function renderTemplate(res, { errors = {}, values = {}, editId = null, status = 200, flash = {} }) {
-  const items = await checklists.listTemplateItems({ includeInactive: true });
+async function renderTemplate(res, { errors = {}, values = {}, foco = null, status = 200, flash = {} }) {
+  const categorias = await template.listCategories();
   res.status(status).render("logistica/flota/mecanica/items", {
-    titulo: "Ítems de la revisión mecánica",
-    items,
+    titulo: "Configurar ítems",
+    categorias,
     errors,
     values,
-    editId,
-    categorias: [...new Set(items.map((i) => i.category))],
+    foco,
     ...flash,
     ...VIEW_HELPERS,
     extraCss: EXTRA_CSS,
+    extraJs: ["/js/flota-items.js?v=20261104a"],
   });
 }
 
-const ITEMS = `${MECANICA}/items`;
+/** Vuelve a la pantalla, a la altura de la categoría que se tocó. */
+const volverA = (categoriaId) => (categoriaId ? `${ITEMS}#categoria-${categoriaId}` : ITEMS);
 
 router.get("/flota/mecanica/items", requirePermission(PLANTILLA), async (req, res) => {
   try {
@@ -311,13 +290,75 @@ router.get("/flota/mecanica/items", requirePermission(PLANTILLA), async (req, re
   }
 });
 
-router.post("/flota/mecanica/items", requirePermission(PLANTILLA), async (req, res) => {
+router.post("/flota/mecanica/items/categorias", requirePermission(PLANTILLA), async (req, res) => {
+  const { values, errors, ok } = template.normalizeCategoryInput(req.body);
   try {
-    const { values, errors, ok } = checklists.normalizeItemInput(req.body);
-    if (!ok) return await renderTemplate(res, { errors, values, status: 422 });
-    await checklists.createTemplateItem(values);
+    if (!ok) return await renderTemplate(res, { errors, values, foco: "nueva", status: 422 });
+    const id = await template.createCategory(values);
+    await logChange(req.session.user.id, `agregó la categoría «${values.name}» a la revisión mecánica`, ITEMS);
+    res.redirect(withFlash(volverA(id), { ok: `Categoría «${values.name}» agregada` }));
+  } catch (err) {
+    if (err instanceof template.TemplateError) {
+      return renderTemplate(res, { errors: { name: err.message }, values, foco: "nueva", status: 409 });
+    }
+    console.error("[Logística] Error agregando categoría:", err);
+    res.status(500).send("Error guardando la categoría");
+  }
+});
+
+router.post("/flota/mecanica/items/categorias/:id", requirePermission(PLANTILLA), async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return notFound(res);
+  const { values, errors, ok } = template.normalizeCategoryInput(req.body);
+  try {
+    if (!ok) return await renderTemplate(res, { errors, values, foco: `categoria-${id}`, status: 422 });
+    if (!(await template.renameCategory(id, values))) return notFound(res);
+    await logChange(req.session.user.id, `renombró la categoría «${values.name}» de la revisión mecánica`, ITEMS);
+    res.redirect(withFlash(volverA(id), { ok: "Categoría renombrada" }));
+  } catch (err) {
+    if (err instanceof template.TemplateError) {
+      return renderTemplate(res, { errors: { name: err.message }, values, foco: `categoria-${id}`, status: 409 });
+    }
+    console.error("[Logística] Error renombrando categoría:", err);
+    res.status(500).send("Error guardando la categoría");
+  }
+});
+
+router.post("/flota/mecanica/items/categorias/:id/eliminar", requirePermission(PLANTILLA), async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return notFound(res);
+  try {
+    const borrada = await template.deleteCategory(id);
+    if (!borrada) return res.redirect(withFlash(ITEMS, { error: "La categoría ya no existe" }));
+    await logChange(req.session.user.id, `eliminó la categoría «${borrada.name}» de la revisión mecánica`, ITEMS);
+    res.redirect(withFlash(ITEMS, { ok: `Categoría «${borrada.name}» eliminada` }));
+  } catch (err) {
+    console.error("[Logística] Error eliminando categoría:", err);
+    res.redirect(withFlash(ITEMS, { error: "No se pudo eliminar la categoría" }));
+  }
+});
+
+router.post("/flota/mecanica/items/categorias/:id/mover", requirePermission(PLANTILLA), async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return notFound(res);
+  try {
+    await template.moveCategory(id, req.body.direccion);
+    res.redirect(volverA(id));
+  } catch (err) {
+    console.error("[Logística] Error moviendo categoría:", err);
+    res.redirect(withFlash(ITEMS, { error: "No se pudo mover la categoría" }));
+  }
+});
+
+router.post("/flota/mecanica/items/categorias/:id/items", requirePermission(PLANTILLA), async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return notFound(res);
+  const { values, errors, ok } = template.normalizeItemInput(req.body);
+  try {
+    if (!ok) return await renderTemplate(res, { errors, values, foco: `nuevo-${id}`, status: 422 });
+    if (!(await template.createItem(id, values))) return notFound(res);
     await logChange(req.session.user.id, `agregó el ítem «${values.label}» a la revisión mecánica`, ITEMS);
-    res.redirect(withFlash(ITEMS, { ok: "Ítem agregado" }));
+    res.redirect(withFlash(volverA(id), { ok: "Ítem agregado" }));
   } catch (err) {
     console.error("[Logística] Error agregando ítem:", err);
     res.status(500).send("Error guardando el ítem");
@@ -327,30 +368,43 @@ router.post("/flota/mecanica/items", requirePermission(PLANTILLA), async (req, r
 router.post("/flota/mecanica/items/:id", requirePermission(PLANTILLA), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return notFound(res);
+  const categoria = parseId(req.body.categoria);
+  const { values, errors, ok } = template.normalizeItemInput(req.body);
   try {
-    const { values, errors, ok } = checklists.normalizeItemInput(req.body);
-    if (!ok) return await renderTemplate(res, { errors, values, editId: id, status: 422 });
-    if (!(await checklists.updateTemplateItem(id, values))) return notFound(res);
+    if (!ok) return await renderTemplate(res, { errors, values, foco: `item-${id}`, status: 422 });
+    if (!(await template.updateItem(id, values))) return notFound(res);
     await logChange(req.session.user.id, `editó el ítem «${values.label}» de la revisión mecánica`, ITEMS);
-    res.redirect(withFlash(ITEMS, { ok: "Ítem actualizado" }));
+    res.redirect(withFlash(volverA(categoria), { ok: "Ítem actualizado" }));
   } catch (err) {
     console.error("[Logística] Error editando ítem:", err);
     res.status(500).send("Error guardando el ítem");
   }
 });
 
-router.post("/flota/mecanica/items/:id/estado", requirePermission(PLANTILLA), async (req, res) => {
+router.post("/flota/mecanica/items/:id/eliminar", requirePermission(PLANTILLA), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return notFound(res);
-  const activar = req.body.activo === "1";
+  const categoria = parseId(req.body.categoria);
   try {
-    if (!(await checklists.setTemplateItemActive(id, activar))) return notFound(res);
-    res.redirect(withFlash(ITEMS, {
-      ok: activar ? "El ítem vuelve a la revisión" : "El ítem ya no se pedirá en las revisiones nuevas",
-    }));
+    const borrado = await template.deleteItem(id);
+    if (!borrado) return res.redirect(withFlash(volverA(categoria), { error: "El ítem ya no existe" }));
+    await logChange(req.session.user.id, `eliminó el ítem «${borrado.label}» de la revisión mecánica`, ITEMS);
+    res.redirect(withFlash(volverA(categoria), { ok: "Ítem eliminado" }));
   } catch (err) {
-    console.error("[Logística] Error cambiando el estado del ítem:", err);
-    res.redirect(withFlash(ITEMS, { error: "No se pudo cambiar el ítem" }));
+    console.error("[Logística] Error eliminando ítem:", err);
+    res.redirect(withFlash(ITEMS, { error: "No se pudo eliminar el ítem" }));
+  }
+});
+
+router.post("/flota/mecanica/items/:id/mover", requirePermission(PLANTILLA), async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return notFound(res);
+  try {
+    await template.moveItem(id, req.body.direccion);
+    res.redirect(volverA(parseId(req.body.categoria)));
+  } catch (err) {
+    console.error("[Logística] Error moviendo ítem:", err);
+    res.redirect(withFlash(ITEMS, { error: "No se pudo mover el ítem" }));
   }
 });
 
@@ -434,6 +488,7 @@ router.get("/flota", accesoFlota, async (req, res) => {
       ...flashFrom(req),
       ...VIEW_HELPERS,
       extraCss: EXTRA_CSS,
+      extraJs: ["/js/flota-revisiones.js?v=20261104a"],
     });
   } catch (err) {
     console.error("[Logística] Error listando la flota:", err);
@@ -504,7 +559,7 @@ router.post("/flota/:id", requirePermission(ADMIN_FLOTA), async (req, res) => {
       }
       throw err;
     }
-    await logChange(req.session.user.id, `editó el vehículo ${values.plate}`, `${FLOTA}/${vehiculo.id}/historial`);
+    await logChange(req.session.user.id, `editó el vehículo ${values.plate}`, `${FLOTA}/${vehiculo.id}/revisiones`);
     res.redirect(withFlash(FLOTA, { ok: `Vehículo ${values.plate} actualizado` }));
   } catch (err) {
     console.error("[Logística] Error editando vehículo:", err);
@@ -521,7 +576,7 @@ router.post("/flota/:id/estado", requirePermission(ADMIN_FLOTA), async (req, res
     await logChange(
       req.session.user.id,
       `${activar ? "reactivó" : "dio de baja"} el vehículo ${vehiculo.plate}`,
-      `${FLOTA}/${vehiculo.id}/historial`,
+      `${FLOTA}/${vehiculo.id}/revisiones`,
     );
     res.redirect(withFlash(FLOTA, {
       ok: activar ? `${vehiculo.plate} vuelve a la flota` : `${vehiculo.plate} quedó dado de baja`,
@@ -532,25 +587,36 @@ router.post("/flota/:id/estado", requirePermission(ADMIN_FLOTA), async (req, res
   }
 });
 
-// --- Historial y revisión física de un vehículo --------------------------------
+// --- Revisiones y revisión física de un vehículo ---------------------------------
 
-router.get("/flota/:id/historial", accesoFlota, async (req, res) => {
+/**
+ * Revisiones de un vehículo. Con ?parcial=1 (lo pide la tarjeta al
+ * desplegarse) responde sólo las listas, sin la página.
+ */
+router.get("/flota/:id/revisiones", accesoFlota, async (req, res) => {
   try {
     const vehiculo = await loadVehicle(req, res);
     if (!vehiculo) return;
     const mecanicas = await checklists.listChecklists({ vehiculo: vehiculo.id, scope: checklistScope(req) });
-    res.render("logistica/flota/historial", {
-      titulo: `Historial de ${vehiculo.plate}`,
+    const datos = {
       vehiculo,
       mecanicas,
       today: todayInCountry(),
       ...permisosFlota(req),
       ...VIEW_HELPERS,
+    };
+    if (req.query.parcial === "1") {
+      res.set("Cache-Control", "private, no-store");
+      return res.render("logistica/flota/partials/revisiones_listas", { ...datos, compacto: true, layout: false });
+    }
+    res.render("logistica/flota/revisiones", {
+      titulo: `Revisiones de ${vehiculo.plate}`,
+      ...datos,
       extraCss: EXTRA_CSS,
     });
   } catch (err) {
-    console.error("[Logística] Error cargando el historial:", err);
-    res.status(500).send("Error cargando el historial");
+    console.error("[Logística] Error cargando las revisiones:", err);
+    res.status(500).send("Error cargando las revisiones");
   }
 });
 

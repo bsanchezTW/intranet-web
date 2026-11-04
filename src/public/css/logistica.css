@@ -563,6 +563,79 @@ button.logistica-icono-btn {
 .checklist-opcion input[value="falla"]:checked + span { background: var(--down); color: #fff; }
 .checklist-opcion input[value="na"]:checked + span { background: var(--color-text-subtle); color: #fff; }
 
+/* Revisión mecánica por categorías: cada una es su tarjeta numerada, con su
+   avance; dentro, la fila de títulos de columna y sus ítems. */
+.checklist-intro { padding-bottom: 6px; }
+
+.checklist-categorias {
+  display: grid;
+  gap: 14px;
+}
+
+.checklist-categoria {
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.checklist-categoria + .checklist-categoria { margin-top: 0; }
+.checklist-categoria.is-completa { border-color: rgba(46, 157, 91, 0.45); }
+
+.checklist-categoria__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 18px;
+  background: var(--color-surface-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.checklist-categoria__nombre {
+  flex: 1 1 160px;
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.checklist-categoria__avance {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.checklist-categoria.is-completa .checklist-categoria__avance {
+  border-color: transparent;
+  background: var(--green-soft);
+  color: var(--green-ink);
+}
+
+.checklist-categoria .checklist-grupo__head {
+  margin: 0;
+  padding: 8px 18px 4px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.checklist-categoria .checklist-item { padding-left: 18px; padding-right: 18px; }
+.checklist-categoria .checklist-item:last-child { border-bottom: 0; }
+
+@media (max-width: 720px) {
+  .checklist-categoria .checklist-grupo__head { display: none; }
+  .checklist-categoria__head { padding: 12px 14px; }
+  .checklist-categoria .checklist-item { padding-left: 14px; padding-right: 14px; }
+}
+
 /* Encabezado de la planilla: documentos y mantención del vehículo elegido. */
 .checklist-ficha {
   display: grid;
@@ -748,27 +821,7 @@ button.logistica-icono-btn {
   margin-top: 12px;
 }
 
-/* ── Plantilla ───────────────────────────────────────────────────────────── */
-
-.plantilla-fila input[type="text"],
-.plantilla-fila input[type="number"] {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 7px 10px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 8px;
-  background: var(--color-input-bg);
-  color: var(--color-input-text);
-  font-size: 0.88rem;
-}
-
-.plantilla-fila input[type="number"] { max-width: 90px; text-align: right; }
-
-.plantilla-fila input:focus {
-  outline: none;
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brand-soft);
-}
+/* ── Configurar ítems: categorías y sus ítems ────────────────────────────── */
 
 .plantilla-check {
   display: inline-flex;
@@ -777,38 +830,267 @@ button.logistica-icono-btn {
   color: var(--color-text-muted);
   font-size: 0.82rem;
   font-weight: 600;
-  white-space: nowrap;
   cursor: pointer;
 }
 
 .plantilla-check input { width: 16px; height: 16px; accent-color: var(--brand); }
 
-.logistica-accion {
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 8px;
+/* Agregar categoría: arriba de todo. */
+.cfg-nueva {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  margin-bottom: 22px;
+  padding: 20px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
   background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  cursor: pointer;
+  box-shadow: var(--shadow);
 }
 
-.logistica-accion:hover { border-color: var(--brand); color: var(--brand); }
-.logistica-accion--peligro:hover { border-color: var(--down); color: var(--down); }
-
-.plantilla-nuevo {
-  margin-bottom: 18px;
-}
-
-.plantilla-nuevo .campos-grid { align-items: end; }
-
-.plantilla-nuevo__acciones {
+.cfg-nueva__titulo {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-bottom: 16px;
+  gap: 10px;
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.cfg-nueva__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 1.05rem;
+}
+
+.cfg-nueva__resumen {
+  margin: 4px 0 0 46px;
+  color: var(--color-text-subtle);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.cfg-nueva__form {
+  display: flex;
+  flex: 1 1 380px;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 560px;
+}
+
+.cfg-nueva__form .campo-form { flex: 1; margin: 0; }
+
+/* Categorías: tarjetas numeradas, en el orden de la revisión. */
+.cfg-categorias {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cfg-categoria {
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  scroll-margin-top: 90px;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.cfg-categoria.is-reciente { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow); }
+
+.cfg-categoria__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 18px;
+  background: var(--color-surface-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cfg-categoria__num {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.cfg-categoria__titulo {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cfg-categoria__titulo h3 {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 1.02rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.cfg-categoria__conteo {
+  color: var(--color-text-subtle);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.cfg-categoria__vacia {
+  margin: 0;
+  padding: 18px 20px 8px;
+  color: var(--color-text-subtle);
+  font-size: 0.86rem;
+}
+
+/* Botones de icono: subir, bajar, editar y eliminar. */
+.cfg-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.cfg-acciones > form { margin: 0; }
+
+.cfg-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 9px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  cursor: pointer;
+  list-style: none;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.cfg-icono::-webkit-details-marker { display: none; }
+.cfg-icono:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.cfg-icono:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.cfg-icono:disabled { opacity: 0.35; cursor: default; }
+.cfg-icono--peligro:hover:not(:disabled) { border-color: var(--down); color: var(--down); }
+
+/* Renombrar / editar: se abre bajo la fila, a todo el ancho. */
+.cfg-editar { position: static; }
+.cfg-editar[open] > .cfg-icono { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+
+.cfg-editar__form {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin-top: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg, var(--shadow));
+}
+
+.cfg-editar__form .campo-form { flex: 1 1 260px; margin: 0; }
+
+.cfg-categoria__head,
+.cfg-item { position: relative; }
+
+/* Ítems de una categoría. */
+.cfg-items {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.cfg-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 18px;
+}
+
+.cfg-item + .cfg-item { border-top: 1px solid var(--color-border); }
+.cfg-item:hover { background: var(--color-surface-muted); }
+
+.cfg-item__num {
+  flex-shrink: 0;
+  width: 24px;
+  color: var(--color-text-subtle);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cfg-item__texto {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+/* Los botones de un ítem se notan al pasar o enfocar; en pantallas táctiles,
+   siempre. */
+.cfg-item .cfg-acciones { opacity: 0.55; transition: opacity 0.15s ease; }
+.cfg-item:hover .cfg-acciones,
+.cfg-item:focus-within .cfg-acciones { opacity: 1; }
+@media (hover: none) { .cfg-item .cfg-acciones { opacity: 1; } }
+
+/* Agregar ítem: al pie de cada categoría. */
+.cfg-agregar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 14px;
+  padding: 12px 18px 16px;
+  border-top: 1px dashed var(--color-border-strong);
+}
+
+.cfg-agregar .campo-form { flex: 1 1 280px; margin: 0; }
+.cfg-agregar .plantilla-check { align-self: center; }
+
+@media (max-width: 720px) {
+  .cfg-nueva { padding: 16px; }
+  .cfg-nueva__resumen { margin-left: 0; }
+  .cfg-nueva__form { flex-direction: column; align-items: stretch; }
+  .cfg-categoria__head { padding: 12px 14px; }
+  .cfg-item { gap: 8px; padding: 8px 10px 8px 12px; }
+  .cfg-item .cfg-acciones { flex-wrap: nowrap; gap: 4px; }
+  .cfg-item .cfg-icono { width: 30px; height: 30px; border-radius: 8px; }
+  .cfg-agregar { padding: 12px 14px 14px; }
 }
 
 /* ── Gestión de flota ────────────────────────────────────────────────────── */
@@ -949,6 +1231,161 @@ button.logistica-icono-btn {
   color: var(--brand-deep, var(--brand));
 }
 
+/* Una tarjeta desplegada crece sola: las de su fila no se estiran. */
+.flota-grid { align-items: start; }
+
+.flota-accion__etiqueta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.flota-accion .flota-accion__flecha {
+  display: inline-flex;
+  color: var(--color-text-subtle);
+  transition: transform 0.2s ease;
+}
+
+.flota-accion .flota-accion__flecha .icon-svg { font-size: 0.9rem; color: inherit; }
+
+.flota-accion--desplegar[aria-expanded="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-deep, var(--brand));
+}
+
+.flota-accion--desplegar[aria-expanded="true"] .flota-accion__flecha { transform: rotate(180deg); color: var(--brand); }
+
+.flota-card.is-desplegada { border-color: var(--brand); }
+
+.flota-card__revisiones {
+  margin: 0 -20px -18px;
+  padding: 14px 20px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+
+.flota-card__revisiones[hidden] { display: none; }
+
+/* Listas de revisiones de un vehículo (tarjeta y página). */
+.rev-listas {
+  display: grid;
+  gap: 14px;
+}
+
+.rev-listas:not(.rev-listas--compacto) {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.rev-lista__titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: var(--color-heading);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.rev-lista__titulo .icon-svg { color: var(--brand); }
+
+.rev-lista__conteo {
+  margin-left: auto;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.rev-lista__vacia {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: 0.84rem;
+}
+
+.rev-filas {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.rev-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+}
+
+.rev-fila + .rev-fila { border-top: 1px solid var(--color-border); }
+
+.rev-fila__enlace {
+  display: grid;
+  flex: 1;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.rev-fila__enlace:hover .rev-fila__numero { color: var(--brand); text-decoration: underline; }
+
+.rev-fila__fecha {
+  color: var(--color-heading);
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rev-fila__numero {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.rev-fila__quien {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--color-text-subtle);
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* En la tarjeta no caben fecha, número, estado e imprimir en una línea: el
+   estado baja bajo el conductor e imprimir queda a la derecha. */
+.rev-listas--compacto .rev-fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+}
+
+.rev-listas--compacto .rev-fila > .logistica-estado { grid-column: 1; justify-self: start; }
+
+.rev-listas--compacto .rev-fila > .cfg-icono { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+
+.rev-fila__numero { white-space: nowrap; }
+
+.rev-fila.is-anulada .rev-fila__fecha,
+.rev-fila.is-anulada .rev-fila__numero { color: var(--color-text-subtle); text-decoration: line-through; }
+
+.rev-lista__mas {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--brand);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .flota-baja {
   margin-top: 26px;
 }
@@ -1047,10 +1484,10 @@ button.logistica-icono-btn {
 
 /* ── Revisión física: visor 3D y zonas ───────────────────────────────────── */
 
+/* El modelo arriba, a todo el ancho; debajo la zona elegida y la lista. */
 .fisica-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 
@@ -1208,9 +1645,14 @@ button.logistica-icono-btn {
 .fisica-zona-btn[data-estado="danio"] { border-color: var(--down); color: var(--down); }
 .fisica-zona-btn[data-estado="reparado"] { border-color: var(--green-deep); color: var(--green-ink); }
 
-@media (max-width: 1100px) {
-  .fisica-layout { grid-template-columns: 1fr; }
+/* Los lados de la lista, en columnas cuando caben. */
+.fisica-lista__grupos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 4px 22px;
 }
+
+.fisica-lista__grupos .fisica-lista__grupo + .fisica-lista__grupo { margin-top: 0; }
 
 /* Celular: un lienzo casi cuadrado, para que quepa el vehículo y la lista. */
 @media (max-width: 720px) {

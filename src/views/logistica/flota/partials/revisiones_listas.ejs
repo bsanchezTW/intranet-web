@@ -1,0 +1,52 @@
+<%
+  /*
+    Revisiones de un vehículo, en dos listas: mecánicas y físicas. La usan la
+    tarjeta de Gestión de flota (compacto: las más recientes) y la página de
+    revisiones del vehículo (todas).
+  */
+  const MAX_COMPACTO = 5;
+  const todas = Array.isArray(mecanicas) ? mecanicas : [];
+  const esCompacto = typeof compacto !== 'undefined' && compacto;
+  const mostradas = esCompacto ? todas.slice(0, MAX_COMPACTO) : todas;
+  const x = vehiculo;
+%>
+<div class="rev-listas<%= esCompacto ? ' rev-listas--compacto' : '' %>">
+  <section class="rev-lista" aria-label="Revisiones mecánicas">
+    <h4 class="rev-lista__titulo">
+      <%- include('../../../partials/icon', { name: 'clipboard-check' }) %> Mecánicas
+      <span class="rev-lista__conteo"><%= todas.length %></span>
+    </h4>
+    <% if (!todas.length) { %>
+      <p class="rev-lista__vacia">Todavía no tiene revisiones mecánicas.</p>
+    <% } else { %>
+      <ul class="rev-filas">
+        <% mostradas.forEach((c) => { const anulada = c.status === 'voided'; %>
+          <li class="rev-fila<%= anulada ? ' is-anulada' : '' %>">
+            <a class="rev-fila__enlace" href="<%= MECANICA %>/<%= c.id %>">
+              <span class="rev-fila__fecha"><%= formatDate(c.inspection_date) %></span>
+              <span class="rev-fila__numero"><%= c.number %></span>
+              <span class="rev-fila__quien"><%= c.driver_name %> · <%= formatKm(c.odometer_km) %></span>
+            </a>
+            <% if (anulada) { %>
+              <span class="logistica-estado logistica-estado--anulado">Anulada</span>
+            <% } else { %>
+              <span class="logistica-estado logistica-estado--<%= c.result %>"><%= resultLabel(c.result) %></span>
+            <% } %>
+            <a href="<%= MECANICA %>/<%= c.id %>/pdf" target="_blank" rel="noopener" class="cfg-icono" title="Imprimir <%= c.number %>" aria-label="Imprimir <%= c.number %>"><%- include('../../../partials/icon', { name: 'printer' }) %></a>
+          </li>
+        <% }) %>
+      </ul>
+      <% if (esCompacto && todas.length > MAX_COMPACTO) { %>
+        <a class="rev-lista__mas" href="<%= FLOTA %>/<%= x.id %>/revisiones">Ver las <%= todas.length %> revisiones mecánicas</a>
+      <% } %>
+    <% } %>
+  </section>
+
+  <section class="rev-lista" aria-label="Revisiones físicas">
+    <h4 class="rev-lista__titulo">
+      <%- include('../../../partials/icon', { name: 'camera' }) %> Físicas
+      <span class="rev-lista__conteo">0</span>
+    </h4>
+    <p class="rev-lista__vacia">Todavía no tiene revisiones físicas.</p>
+  </section>
+</div>

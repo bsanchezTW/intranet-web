@@ -70,6 +70,7 @@
           Zonas
           <span class="logistica-panel__extra"><%= modelo.zones.length %></span>
         </h3>
+        <div class="fisica-lista__grupos">
         <% grupos.forEach((g) => { const del = modelo.zones.filter((z) => z.group === g.value); if (!del.length) return; %>
           <div class="fisica-lista__grupo">
             <h4 class="checklist-grupo__titulo"><%= g.label %></h4>
@@ -80,6 +81,7 @@
             </div>
           </div>
         <% }) %>
+        </div>
       </section>
     </aside>
   </div>

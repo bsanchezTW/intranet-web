@@ -43,7 +43,6 @@
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
         <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
-        <a href="<%= MECANICA %>">Revisiones mecánicas</a> <span aria-hidden="true">/</span>
         <span>Nueva</span>
       </nav>
       <h2 class="page-title">Revisión mecánica</h2>
@@ -147,24 +146,31 @@
       </dl>
     </section>
 
-    <!-- ═══════════ Estado mecánico ═══════════ -->
-    <section class="logistica-panel" aria-labelledby="panel-revision">
+    <!-- ═══════════ Estado mecánico, por categoría ═══════════ -->
+    <section class="logistica-panel checklist-intro" aria-labelledby="panel-revision">
       <h3 class="logistica-panel__titulo" id="panel-revision">
         <span class="logistica-panel__num" aria-hidden="true">2</span> Estado mecánico del vehículo
-        <span class="logistica-panel__extra"><%= plantilla.length %> ítems</span>
+        <span class="logistica-panel__extra" data-avance-total><%= plantilla.length %> ítems</span>
       </h3>
       <p class="logistica-panel__desc">
-        ¿Está operativo? Marca Sí, No o N/A. Al marcar <strong>No</strong> se abre la observación al lado del ítem.
+        ¿Está operativo? Marca Sí, No o N/A en cada categoría. Al marcar <strong>No</strong> se abre la observación al lado del ítem.
         Un No en un ítem <span class="logistica-estado logistica-estado--critico">Crítico</span> deja el vehículo <strong>no apto</strong> para salir.
       </p>
+    </section>
 
-      <% grupos.forEach((grupo) => { %>
-        <div class="checklist-grupo" data-grupo role="group" aria-label="<%= grupo.categoria %>">
-          <div class="checklist-grupo__head">
-            <h4 class="checklist-grupo__titulo"><%= grupo.categoria %></h4>
-            <span class="checklist-grupo__cols" aria-hidden="true"><span>Sí</span><span>No</span><span>N/A</span></span>
-            <span class="checklist-grupo__obs" aria-hidden="true">Observaciones</span>
+    <div class="checklist-categorias">
+      <% grupos.forEach((grupo, gi) => { %>
+        <section class="checklist-grupo checklist-categoria" data-grupo aria-labelledby="categoria-<%= gi %>">
+          <header class="checklist-categoria__head">
+            <span class="cfg-categoria__num" aria-hidden="true"><%= gi + 1 %></span>
+            <h4 class="checklist-categoria__nombre" id="categoria-<%= gi %>"><%= grupo.categoria %></h4>
+            <span class="checklist-categoria__avance" data-avance aria-live="polite">0 de <%= grupo.items.length %></span>
             <button type="button" class="checklist-grupo__todo" data-todo-ok>Todo Sí</button>
+          </header>
+          <div class="checklist-grupo__head" aria-hidden="true">
+            <span class="checklist-grupo__titulo">Ítem</span>
+            <span class="checklist-grupo__cols"><span>Sí</span><span>No</span><span>N/A</span></span>
+            <span class="checklist-grupo__obs">Observaciones</span>
           </div>
           <% grupo.items.forEach((item) => {
                const clave = answerKey(item.id);
@@ -192,9 +198,9 @@
               </div>
             </div>
           <% }) %>
-        </div>
+        </section>
       <% }) %>
-    </section>
+    </div>
 
     <!-- ═══════════ Cierre ═══════════ -->
     <section class="logistica-panel" aria-labelledby="panel-cierre">

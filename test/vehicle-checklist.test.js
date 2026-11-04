@@ -21,10 +21,14 @@ const {
 } = require("../src/services/logistics/vehicleService");
 const {
   normalizeChecklistInput,
-  normalizeItemInput,
   answerKey,
   commentKey,
 } = require("../src/services/logistics/checklistService");
+const {
+  normalizeCategoryInput,
+  normalizeItemInput,
+  reorder,
+} = require("../src/services/logistics/templateService");
 const { renderChecklistPdf } = require("../src/services/logistics/checklistPdf");
 const { DDL_STATEMENTS } = require("../src/services/logistics/logisticsSchema");
 const { getPermission } = require("../src/services/permissions/catalog");
@@ -224,10 +228,22 @@ describe("checklist — validación del formulario", () => {
     assert.match(errors.items, /plantilla/);
   });
 
-  it("valida los ítems de la plantilla", () => {
-    assert.equal(normalizeItemInput({ category: "Luces", label: "Neblineros", critical: "1" }).values.critical, true);
-    const mal = normalizeItemInput({ category: "", label: "", sort_order: "x" });
-    assert.deepEqual(Object.keys(mal.errors).sort(), ["category", "label", "sort_order"]);
+  it("valida las categorías y los ítems de la plantilla", () => {
+    assert.deepEqual(normalizeCategoryInput({ name: "  Sistema   eléctrico " }).values, { name: "Sistema eléctrico" });
+    assert.ok(normalizeCategoryInput({ name: "   " }).errors.name);
+    assert.deepEqual(normalizeItemInput({ label: "Neblineros", critical: "1" }).values, { label: "Neblineros", critical: true });
+    assert.equal(normalizeItemInput({ label: "Neblineros" }).values.critical, false);
+    assert.ok(normalizeItemInput({ label: "" }).errors.label);
+  });
+
+  it("subir o bajar mueve un lugar y no se sale de los extremos", () => {
+    assert.deepEqual(reorder([1, 2, 3], 2, "arriba"), [2, 1, 3]);
+    assert.deepEqual(reorder([1, 2, 3], 2, "abajo"), [1, 3, 2]);
+    assert.deepEqual(reorder([1, 2, 3], 1, "arriba"), [1, 2, 3]);
+    assert.deepEqual(reorder([1, 2, 3], 3, "abajo"), [1, 2, 3]);
+    assert.deepEqual(reorder(["7", "9"], 9, "arriba"), ["9", "7"]);
+    assert.equal(reorder([1, 2], 5, "arriba"), null);
+    assert.equal(reorder([1, 2], 1, "costado"), null);
   });
 });
 
@@ -335,8 +351,11 @@ describe("Gestión de flota — direcciones de la primera versión", () => {
     assert.deepEqual(await destino("/logistica/vehiculos"), [301, "/logistica/flota"]);
     assert.deepEqual(await destino("/logistica/vehiculos/nuevo"), [301, "/logistica/flota/nuevo"]);
     assert.deepEqual(await destino("/logistica/vehiculos/7/editar"), [301, "/logistica/flota/7/editar"]);
-    assert.deepEqual(await destino("/logistica/checklists"), [301, "/logistica/flota/mecanica"]);
-    assert.deepEqual(await destino("/logistica/checklists?vehiculo=3&resultado=apto"), [301, "/logistica/flota/mecanica?vehiculo=3&resultado=apto"]);
+    // El listado general ya no existe: lleva a Gestión de flota.
+    assert.deepEqual(await destino("/logistica/checklists"), [301, "/logistica/flota"]);
+    assert.deepEqual(await destino("/logistica/checklists?vehiculo=3"), [301, "/logistica/flota"]);
+    assert.deepEqual(await destino("/logistica/flota/mecanica"), [301, "/logistica/flota"]);
+    assert.deepEqual(await destino("/logistica/flota/7/historial"), [301, "/logistica/flota/7/revisiones"]);
     assert.deepEqual(await destino("/logistica/checklists/nuevo?vehiculo=3"), [301, "/logistica/flota/mecanica/nueva?vehiculo=3"]);
     assert.deepEqual(await destino("/logistica/checklists/plantilla"), [301, "/logistica/flota/mecanica/items"]);
     assert.deepEqual(await destino("/logistica/checklists/12"), [301, "/logistica/flota/mecanica/12"]);

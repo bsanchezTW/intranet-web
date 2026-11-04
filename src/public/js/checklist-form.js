@@ -32,7 +32,24 @@
     nota.hidden = !no && !input.value.trim();
   }
 
+  // Avance de cada categoría ("3 de 7") y del total.
+  const grupos = [...form.querySelectorAll("[data-grupo]")];
+  const avanceTotal = document.querySelector("[data-avance-total]");
+  function actualizarAvance() {
+    let respondidos = 0;
+    for (const grupo of grupos) {
+      const del = [...grupo.querySelectorAll("[data-item]")];
+      const listos = del.filter((item) => respuesta(item)).length;
+      respondidos += listos;
+      const marca = grupo.querySelector("[data-avance]");
+      if (marca) marca.textContent = `${listos} de ${del.length}`;
+      grupo.classList.toggle("is-completa", listos === del.length && del.length > 0);
+    }
+    if (avanceTotal) avanceTotal.textContent = `${respondidos} de ${items.length} ítems`;
+  }
+
   function actualizarResultado() {
+    actualizarAvance();
     if (!resultado) return;
     let faltan = 0;
     let noes = 0;

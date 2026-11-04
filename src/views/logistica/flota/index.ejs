@@ -28,9 +28,9 @@
         <div class="flota-card__admin">
           <a href="<%= FLOTA %>/<%= x.id %>/editar" class="logistica-icono-btn" title="Editar <%= x.plate %>" aria-label="Editar <%= x.plate %>"><%- include('../../partials/icon', { name: 'edit' }) %></a>
           <form method="post" action="<%= FLOTA %>/<%= x.id %>/estado"
-                <% if (x.active) { %>data-confirm="<%= x.plate %> dejará de aparecer al registrar revisiones. Su historial se conserva." data-confirm-title="¿Dar de baja el vehículo?" data-confirm-accept="Dar de baja" data-confirm-tone="peligro"<% } %>>
+                <% if (x.active) { %>data-confirm="<%= x.plate %> dejará de aparecer al registrar revisiones. Sus revisiones se conservan." data-confirm-title="¿Dar de baja el vehículo?" data-confirm-accept="Dar de baja" data-confirm-tone="peligro"<% } %>>
             <input type="hidden" name="activo" value="<%= x.active ? '0' : '1' %>">
-            <button type="submit" class="logistica-icono-btn<%= x.active ? ' logistica-icono-btn--peligro' : '' %>" title="<%= x.active ? 'Dar de baja' : 'Reactivar' %> <%= x.plate %>" aria-label="<%= x.active ? 'Dar de baja' : 'Reactivar' %> <%= x.plate %>"><%- include('../../partials/icon', { name: x.active ? 'archive' : 'repeat' }) %></button>
+            <button type="submit" class="logistica-icono-btn<%= x.active ? ' logistica-icono-btn--peligro' : '' %>" title="<%= x.active ? 'Dar de baja' : 'Reactivar' %> <%= x.plate %>" aria-label="<%= x.active ? 'Dar de baja' : 'Reactivar' %> <%= x.plate %>"><%- include('../../partials/icon', { name: x.active ? 'ban' : 'repeat' }) %></button>
           </form>
         </div>
       <% } %>
@@ -67,19 +67,21 @@
       </div>
     </dl>
 
-    <% if (x.active) { %>
-      <div class="flota-card__acciones">
-        <% if (puedeRevisar) { %>
-          <a href="<%= MECANICA %>/nueva?vehiculo=<%= x.id %>" class="flota-accion"><%- include('../../partials/icon', { name: 'clipboard-check' }) %><span>Revisión mecánica</span></a>
-        <% } %>
+    <div class="flota-card__acciones">
+      <% if (x.active && puedeRevisar) { %>
+        <a href="<%= MECANICA %>/nueva?vehiculo=<%= x.id %>" class="flota-accion"><%- include('../../partials/icon', { name: 'clipboard-check' }) %><span>Revisión mecánica</span></a>
+      <% } %>
+      <% if (x.active) { %>
         <a href="<%= FLOTA %>/<%= x.id %>/revision-fisica" class="flota-accion"><%- include('../../partials/icon', { name: 'camera' }) %><span>Revisión física</span></a>
-        <a href="<%= FLOTA %>/<%= x.id %>/historial" class="flota-accion"><%- include('../../partials/icon', { name: 'clock' }) %><span>Historial</span></a>
-      </div>
-    <% } else { %>
-      <div class="flota-card__acciones">
-        <a href="<%= FLOTA %>/<%= x.id %>/historial" class="flota-accion"><%- include('../../partials/icon', { name: 'clock' }) %><span>Historial</span></a>
-      </div>
-    <% } %>
+      <% } %>
+      <%# Sin JS es un enlace a la página de revisiones; con JS se despliega aquí. %>
+      <a href="<%= FLOTA %>/<%= x.id %>/revisiones" class="flota-accion flota-accion--desplegar"
+         data-revisiones="<%= FLOTA %>/<%= x.id %>/revisiones?parcial=1" aria-expanded="false" aria-controls="revisiones-<%= x.id %>">
+        <%- include('../../partials/icon', { name: 'file-text' }) %>
+        <span class="flota-accion__etiqueta">Revisiones<span class="flota-accion__flecha" aria-hidden="true"><%- include('../../partials/icon', { name: 'chevron-down' }) %></span></span>
+      </a>
+    </div>
+    <div class="flota-card__revisiones" id="revisiones-<%= x.id %>" hidden></div>
   </article>
 <% } %>
 
@@ -93,14 +95,11 @@
         <a href="/procesos#seccion-logistica">Logística</a>
       </nav>
       <h2 class="page-title">Gestión de flota</h2>
-      <p class="page-description">Cada vehículo con su revisión mecánica, su revisión física y su historial.</p>
+      <p class="page-description">Cada vehículo con su revisión mecánica, su revisión física y sus revisiones anteriores.</p>
     </div>
     <div class="page-header-actions">
-      <% if (puedeVerRevisiones) { %>
-        <a href="<%= MECANICA %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'file-text' }) %> Revisiones mecánicas</a>
-      <% } %>
       <% if (puedePlantilla) { %>
-        <a href="<%= MECANICA %>/items" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'settings' }) %> Ítems</a>
+        <a href="<%= ITEMS %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'settings' }) %> Configurar ítems</a>
       <% } %>
       <% if (puedeAdministrar) { %>
         <a href="<%= FLOTA %>/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar vehículo</a>
