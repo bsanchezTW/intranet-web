@@ -1,0 +1,49 @@
+<%
+  /*
+    Lista de daños: miniatura, zona, tipo, observación y estado, con enlace
+    al daño (donde se ven las fotos y se marca reparado).
+      danios     filas de physicalService (getDamage / listDamages)
+      conZona    agrega «Ver en el modelo» (sólo en la página de revisión física)
+      sinOrigen  no repite la revisión de origen (en el detalle de esa revisión)
+  */
+  const lista = Array.isArray(danios) ? danios : [];
+  const verZona = typeof conZona !== 'undefined' && conZona;
+  const ocultarOrigen = typeof sinOrigen !== 'undefined' && sinOrigen;
+  const ESTADO_CLASE = { abierto: 'no_apto', reparado: 'apto', anulado: 'anulado' };
+%>
+<ul class="danios">
+  <% lista.forEach((d) => { const foto = (d.damage_photos || [])[0]; const fotoRep = (d.repair_photos || [])[0]; %>
+    <li class="danio-fila is-<%= d.status %>">
+      <a class="danio-fila__foto" href="<%= DANIOS %>/<%= d.id %>" tabindex="-1" aria-hidden="true">
+        <% if (foto) { %>
+          <img src="<%= FOTOS %>/<%= (d.status === 'reparado' && fotoRep ? fotoRep : foto).id %>" alt="" loading="lazy" decoding="async">
+        <% } else { %>
+          <%- include('../../../partials/icon', { name: 'image' }) %>
+        <% } %>
+        <% if ((d.damage_photos || []).length > 1) { %><span class="danio-fila__mas">+<%= d.damage_photos.length - 1 %></span><% } %>
+      </a>
+      <div class="danio-fila__texto">
+        <a class="danio-fila__zona" href="<%= DANIOS %>/<%= d.id %>"><%= d.zone_label %></a>
+        <span class="danio-fila__tipo"><%= damageTypeLabel(d.damage_type) %></span>
+        <p class="danio-fila__desc"><%= d.description %></p>
+        <p class="danio-fila__meta">
+          <% if (d.status === 'reparado') { %>
+            Reparado el <%= formatDate(d.repaired_on) %><% if (d.repaired_by_name) { %> · <%= d.repaired_by_name %><% } %>
+          <% } else if (!ocultarOrigen) { %>
+            Desde <%= d.review_number %> · <%= formatDate(d.review_date) %>
+          <% } else if (d.status === 'anulado') { %>
+            Anulado con la revisión
+          <% } else { %>
+            Abierto
+          <% } %>
+        </p>
+      </div>
+      <div class="danio-fila__acciones">
+        <span class="logistica-estado logistica-estado--<%= ESTADO_CLASE[d.status] || 'anulado' %>"><%= damageStateLabel(d.status) %></span>
+        <% if (verZona) { %>
+          <button type="button" class="cfg-icono" data-zona="<%= d.zone_code %>" title="Ver en el modelo" aria-label="Ver <%= d.zone_label %> en el modelo"><%- include('../../../partials/icon', { name: 'search' }) %></button>
+        <% } %>
+      </div>
+    </li>
+  <% }) %>
+</ul>

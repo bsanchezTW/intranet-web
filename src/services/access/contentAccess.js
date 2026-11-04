@@ -19,6 +19,9 @@ const { sameEmail } = require("../../utils/email");
  *       → el dueño o quien puede ver la rendición.
  *   tickets_adjuntos/<id de ticket>_…
  *       → quien abrió el ticket, un administrador o la mesa de ayuda.
+ *   logistica/…
+ *       → nadie por /content: las fotos de daños y las capturas de la
+ *         revisión física las entrega /logistica, que revisa su permiso.
  *
  * El resto (noticias, eventos, apps, cursos, fotos de perfil) es contenido
  * para toda la intranet y basta con la sesión.
@@ -50,6 +53,8 @@ function classifyContentPath(relativePath) {
   const ticket = TICKET_ATTACHMENT.exec(path);
   if (ticket) return { kind: "ticket_attachment", ticketId: Number(ticket[1]) };
   if (path.startsWith("tickets_adjuntos/")) return { kind: "admin_only" };
+
+  if (path.startsWith("logistica/")) return { kind: "module_only" };
 
   return { kind: "open" };
 }
@@ -158,6 +163,9 @@ async function canAccessContent(user, relativePath, { perms = null, legacyCtx = 
     case "ticket_attachment":
       // Fases 7 y 8: adjuntos de tickets, con la regla de hoy.
       return canOpenTicketAttachment(user, rule, isAdmin);
+    case "module_only":
+      // Lo sirve su módulo (con su permiso), nunca /content.
+      return false;
     case "admin_only":
       // Fases 7 y 8: lo que no calza en una carpeta conocida sigue en el administrador.
       return isAdmin;

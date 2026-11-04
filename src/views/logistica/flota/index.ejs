@@ -5,12 +5,16 @@
   const conVencidos = activos.filter((x) => documentAlerts(x, today).some((a) => a.state === 'vencido')).length;
   const revisadosHoy = activos.filter((x) => x.last_checklist_date === today).length;
   const sinTipo = activos.filter((x) => !isVehicleKind(x.kind)).length;
+  const fisicaPendiente = activos.filter((x) => isVehicleKind(x.kind) && physicalReviewAlert(x.last_physical_date, today)).length;
+  const daniosAbiertos = activos.reduce((n, x) => n + (Number(x.open_damages) || 0), 0);
 %>
 
 <% function tarjeta(x) {
      const alertas = documentAlerts(x, today);
      const tieneDocs = documentsFor(country).some((d) => x[d.field]) || x.next_maintenance_km != null;
      const tipoOk = isVehicleKind(x.kind);
+     const avisoFisica = x.active && tipoOk ? physicalReviewAlert(x.last_physical_date, today) : null;
+     const abiertos = Number(x.open_damages) || 0;
 %>
   <article class="flota-card<%= x.active ? '' : ' is-inactivo' %>" aria-labelledby="vehiculo-<%= x.id %>">
     <div class="flota-card__head">
@@ -42,10 +46,33 @@
         <dt>Revisión mecánica</dt>
         <dd>
           <% if (x.last_checklist_id) { %>
-            <% if (puedeVerRevisiones) { %><a href="<%= MECANICA %>/<%= x.last_checklist_id %>"><%= formatDate(x.last_checklist_date) %></a><% } else { %><%= formatDate(x.last_checklist_date) %><% } %>
+            <% if (puedeVerMecanicas) { %><a href="<%= MECANICA %>/<%= x.last_checklist_id %>"><%= formatDate(x.last_checklist_date) %></a><% } else { %><%= formatDate(x.last_checklist_date) %><% } %>
             <span class="logistica-estado logistica-estado--<%= x.last_checklist_result %>"><%= resultLabel(x.last_checklist_result) %></span>
           <% } else { %>
             <span class="logistica-sub">Sin revisiones</span>
+          <% } %>
+        </dd>
+      </div>
+      <div>
+        <dt>Revisión física</dt>
+        <dd>
+          <% if (x.last_physical_date) { %>
+            <%= formatDate(x.last_physical_date) %>
+          <% } else { %>
+            <span class="logistica-sub">Sin revisiones</span>
+          <% } %>
+          <% if (avisoFisica) { %>
+            <span class="logistica-alerta logistica-alerta--por_vencer" title="Revisión física pendiente: <%= avisoFisica.detail %>">Pendiente</span>
+          <% } %>
+        </dd>
+      </div>
+      <div>
+        <dt>Daños</dt>
+        <dd>
+          <% if (abiertos) { %>
+            <a class="logistica-alerta logistica-alerta--vencido flota-card__danios" href="<%= FLOTA %>/<%= x.id %>/revision-fisica"><%= abiertos %> <%= abiertos === 1 ? 'abierto' : 'abiertos' %></a>
+          <% } else { %>
+            <span class="logistica-sub">Ninguno abierto</span>
           <% } %>
         </dd>
       </div>
@@ -136,6 +163,14 @@
       <div class="logistica-resumen__dato">
         <span class="logistica-resumen__label">Con documentos vencidos</span>
         <strong class="<%= conVencidos ? 'is-alerta' : '' %>"><%= conVencidos %></strong>
+      </div>
+      <div class="logistica-resumen__dato">
+        <span class="logistica-resumen__label">Revisión física pendiente</span>
+        <strong class="<%= fisicaPendiente ? 'is-alerta' : '' %>"><%= fisicaPendiente %></strong>
+      </div>
+      <div class="logistica-resumen__dato">
+        <span class="logistica-resumen__label">Daños abiertos</span>
+        <strong class="<%= daniosAbiertos ? 'is-alerta' : '' %>"><%= daniosAbiertos %></strong>
       </div>
     </div>
 

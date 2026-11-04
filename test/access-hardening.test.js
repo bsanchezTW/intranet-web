@@ -66,6 +66,11 @@ describe("/content — qué regla le toca a cada archivo", () => {
     assert.deepEqual(classifyContentPath("tickets_adjuntos/1234_3_2.pdf").ticketId, 1234);
   });
 
+  it("las fotos de Logística no salen por /content", () => {
+    assert.equal(classifyContentPath("logistica/fisicas/2026/abc/danio-1-1.jpg").kind, "module_only");
+    assert.equal(classifyContentPath("logistica/reparaciones/2026/abc/reparacion-1.jpg").kind, "module_only");
+  });
+
   it("el contenido de toda la intranet sigue abierto con la sesión", () => {
     for (const p of ["eventos/aniversario/foto.jpg", "noticias/portada.png", "user/7.jpg", "apps_icons/x.png"]) {
       assert.equal(classifyContentPath(p).kind, "open", p);

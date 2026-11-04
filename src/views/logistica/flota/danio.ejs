@@ -1,0 +1,133 @@
+<%
+  const d = damage;
+  const v = values || {};
+  const err = errors || {};
+  const ESTADO_CLASE = { abierto: 'no_apto', reparado: 'apto', anulado: 'anulado' };
+  const reparadoEl = d.repaired_at ? new Date(d.repaired_at).toLocaleString(countryConfig.locale, { dateStyle: 'short', timeStyle: 'short', timeZone: countryConfig.timezone }) : '';
+%>
+
+<% function mensaje(campo) { %><span class="campo-form__error" data-error-for="<%= campo %>"<%= err[campo] ? '' : ' hidden' %>><%= err[campo] || '' %></span><% } %>
+
+<% function galeria(fotos, titulo) { if (!fotos.length) return; %>
+  <ul class="danio-galeria" aria-label="<%= titulo %>">
+    <% fotos.forEach((p, i) => { %>
+      <li>
+        <a href="<%= FOTOS %>/<%= p.id %>" target="_blank" rel="noopener" class="danio-galeria__foto">
+          <img src="<%= FOTOS %>/<%= p.id %>" alt="<%= titulo %>, foto <%= i + 1 %>" loading="lazy" decoding="async"<% if (p.width && p.height) { %> width="<%= p.width %>" height="<%= p.height %>"<% } %>>
+        </a>
+      </li>
+    <% }) %>
+  </ul>
+<% } %>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'camera' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>/<%= d.vehicle_id %>/revisiones">Revisiones de <%= d.vehicle_plate %></a> <span aria-hidden="true">/</span>
+        <span>Daño</span>
+      </nav>
+      <h2 class="page-title"><%= damageTypeLabel(d.damage_type) %> en <%= d.zone_label.charAt(0).toLowerCase() + d.zone_label.slice(1) %></h2>
+      <p class="page-description"><%= d.vehicle_plate %> · registrado en <%= d.review_number %> el <%= formatDate(d.review_date) %></p>
+    </div>
+    <div class="page-header-actions">
+      <% if (puedeVerSuRevision) { %>
+        <a href="<%= FISICA %>/<%= d.review_id %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'file-text' }) %> Ver <%= d.review_number %></a>
+      <% } %>
+      <a href="<%= FLOTA %>/<%= d.vehicle_id %>/revision-fisica" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'truck' }) %> Ver en el modelo</a>
+    </div>
+  </div>
+
+  <% if (success) { %><div hidden data-toast="<%= success %>"></div><% } %>
+  <% if (error) { %><div hidden data-toast="<%= error %>" data-toast-tone="error"></div><% } %>
+
+  <% if (d.status === 'anulado') { %>
+    <div class="logistica-anulado" role="note">
+      <span class="logistica-anulado__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'x-circle' }) %></span>
+      <span><strong>Daño anulado</strong> junto con la revisión <%= d.review_number %>. No cuenta como daño del vehículo.</span>
+    </div>
+  <% } %>
+
+  <div class="danio-detalle">
+    <section class="logistica-panel" aria-labelledby="danio-titulo">
+      <h3 class="logistica-panel__titulo" id="danio-titulo">
+        Daño
+        <span class="logistica-estado logistica-estado--<%= ESTADO_CLASE[d.status] %>"><%= damageStateLabel(d.status) %></span>
+      </h3>
+      <dl class="logistica-datos">
+        <div><dt>Zona</dt><dd><%= d.zone_label %></dd></div>
+        <div><dt>Tipo</dt><dd><%= damageTypeLabel(d.damage_type) %></dd></div>
+        <div><dt>Registrado en</dt><dd><%= d.review_number %> · <%= formatDate(d.review_date) %></dd></div>
+        <div><dt>Registró</dt><dd><%= d.reported_by_name %></dd></div>
+        <div class="logistica-datos--ancho"><dt>Observación</dt><dd class="danio-detalle__texto"><%= d.description %></dd></div>
+      </dl>
+      <% galeria(d.damage_photos, 'Daño') %>
+    </section>
+
+    <% if (d.status === 'reparado') { %>
+      <section class="logistica-panel danio-reparacion" aria-labelledby="reparacion-titulo">
+        <h3 class="logistica-panel__titulo" id="reparacion-titulo">
+          <%- include('../../partials/icon', { name: 'check-circle' }) %> Reparación
+        </h3>
+        <dl class="logistica-datos">
+          <div><dt>Fecha de la reparación</dt><dd><%= formatDate(d.repaired_on) %></dd></div>
+          <div><dt>Registró</dt><dd><%= d.repaired_by_name || '—' %><% if (reparadoEl) { %> · <%= reparadoEl %><% } %></dd></div>
+          <div class="logistica-datos--ancho"><dt>Qué se hizo</dt><dd class="danio-detalle__texto"><%= d.repair_note %></dd></div>
+        </dl>
+        <% galeria(d.repair_photos, 'Reparación') %>
+      </section>
+    <% } else if (d.status === 'abierto' && puedeReparar) { %>
+      <form class="logistica-panel logistica-form danio-reparar" method="post" action="<%= DANIOS %>/<%= d.id %>/reparar" enctype="multipart/form-data" data-reparar-form novalidate aria-labelledby="reparar-titulo">
+        <h3 class="logistica-panel__titulo" id="reparar-titulo">
+          <%- include('../../partials/icon', { name: 'check-circle' }) %> Marcar como reparado
+        </h3>
+        <p class="logistica-panel__desc">El daño deja de estar abierto y queda en el historial del vehículo con la reparación.</p>
+
+        <div class="flash-msg flash-msg--error" data-form-error<%= err.general ? '' : ' hidden' %> role="alert">
+          <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+          <span data-form-error-texto><%= err.general || '' %></span>
+        </div>
+
+        <div class="campos-grid">
+          <div class="campo-form<%= err.repaired_on ? ' is-invalid' : '' %>">
+            <label for="repaired_on">Fecha de la reparación <span class="required-mark">*</span></label>
+            <input type="date" id="repaired_on" name="repaired_on" value="<%= v.repaired_on || today %>" min="<%= d.review_date %>" max="<%= today %>" required>
+            <% mensaje('repaired_on') %>
+          </div>
+          <div class="campo-form campo-form--ancho<%= err.repair_note ? ' is-invalid' : '' %>">
+            <label for="repair_note">Qué se hizo <span class="required-mark">*</span></label>
+            <textarea id="repair_note" name="repair_note" rows="2" maxlength="500" required placeholder="Por ejemplo: desabollado y pintura en taller Pérez, factura 1234."><%= v.repair_note || '' %></textarea>
+            <% mensaje('repair_note') %>
+          </div>
+        </div>
+
+        <div class="fisica-fotos" data-fotos data-max="<%= MAX_PHOTOS %>">
+          <div class="fisica-fotos__head">
+            <span class="fisica-fotos__titulo">Fotos de la reparación <span class="required-mark">*</span></span>
+            <span class="fisica-fotos__conteo" data-fotos-conteo>De 1 a <%= MAX_PHOTOS %></span>
+          </div>
+          <ul class="fisica-fotos__lista" data-fotos-lista aria-label="Fotos de la reparación"></ul>
+          <div class="fisica-fotos__botones" data-fotos-botones>
+            <label class="page-header-btn page-header-btn--secundario fisica-fotos__boton">
+              <%- include('../../partials/icon', { name: 'camera' }) %> Sacar foto
+              <input type="file" accept="image/*" capture="environment" data-fotos-input class="sr-only">
+            </label>
+            <label class="page-header-btn page-header-btn--secundario fisica-fotos__boton">
+              <%- include('../../partials/icon', { name: 'image' }) %> Elegir fotos
+              <input type="file" name="fotos" accept="image/*" multiple required data-fotos-input class="sr-only">
+            </label>
+          </div>
+          <% mensaje('fotos') %>
+        </div>
+
+        <div class="logistica-form__acciones">
+          <button type="submit" class="page-header-btn"><%- include('../../partials/icon', { name: 'check' }) %> Marcar reparado</button>
+        </div>
+      </form>
+    <% } %>
+  </div>
+</div>

@@ -9,9 +9,12 @@
  *
  * Expone window.flotaModelo para la revisión física:
  *   seleccionar(code)          marca una zona (y gira hasta su lado)
- *   marcar(code, estado)       'danio' | 'reparado' | null
- *   capturar(vista)            PNG (data URL) del modelo desde esa vista
- * y emite el evento "flota:zona" ({ code, label, group }) al elegir una zona.
+ *   marcar(code, estado)       'danio' | 'nuevo' | 'reparado' | null
+ *   capturar(vista, opciones)  JPEG (data URL) del modelo desde esa vista, en
+ *                              fondo blanco y sin la zona elegida resaltada
+ *   listo                      true cuando el 3D cargó
+ * y emite "flota:zona" ({ code, label, group }) al elegir una zona y
+ * "flota:modelo-listo" cuando el 3D está dibujado.
  *
  * Sólo dibuja cuando algo cambia, para no gastar batería en el celular.
  */
@@ -28,6 +31,7 @@ const COLORES = {
 };
 const COLOR_SELECCION = 0x2f6fe0;
 const COLOR_DANIO = 0xd64545;
+const COLOR_NUEVO = 0xe8930c;
 const COLOR_REPARADO = 0x2e9d5b;
 
 // Los datos ponen el lado izquierdo en +z; en three.js (x adelante, y arriba)
@@ -93,7 +97,8 @@ function iniciar(raiz) {
       });
       if (visor) visor.pintar();
     },
-    capturar: (vista) => (visor ? visor.capturar(vista) : null),
+    capturar: (vista, opciones) => (visor ? visor.capturar(vista, opciones) : null),
+    get listo() { return Boolean(visor); },
   };
 
   function fallo(texto) {
@@ -117,6 +122,7 @@ function iniciar(raiz) {
         visor.irA(b.dataset.vista);
       }));
       raiz.classList.add("is-listo");
+      document.dispatchEvent(new CustomEvent("flota:modelo-listo"));
     })
     .catch((err) => {
       console.error("[flota-modelo]", err);
@@ -302,19 +308,25 @@ function crearVisor(THREE, { datos, lienzo, etiqueta, zonas, estados, getSelecci
 
   // --- Colores según selección, daño y paso del mouse ---------------------
   let sobre = null;
-  function pintar() {
-    const sel = getSeleccionada();
+  function colorear({ limpio = false } = {}) {
+    const sel = limpio ? null : getSeleccionada();
+    const encima = limpio ? null : sobre;
     for (const [code, mallas] of zonaMeshes) {
       const estado = estados.get(code);
       for (const m of mallas) {
         let color = m.userData.colorBase;
         if (estado === "danio") color = COLOR_DANIO;
+        else if (estado === "nuevo") color = COLOR_NUEVO;
         else if (estado === "reparado") color = COLOR_REPARADO;
         if (code === sel) color = COLOR_SELECCION;
         m.material.color.setHex(color);
-        m.material.emissive.setHex(code === sobre && code !== sel ? 0x1c3d7a : m.userData.colorBase === COLORES.light ? 0x5c5530 : 0x000000);
+        m.material.emissive.setHex(code === encima && code !== sel ? 0x1c3d7a : m.userData.colorBase === COLORES.light ? 0x5c5530 : 0x000000);
       }
     }
+  }
+
+  function pintar() {
+    colorear();
     dibujar();
   }
 
@@ -419,16 +431,33 @@ function crearVisor(THREE, { datos, lienzo, etiqueta, zonas, estados, getSelecci
   ajustar();
   pintar();
 
-  /** PNG del modelo desde una vista, sin mover la cámara del usuario. */
-  function capturar(vista) {
+  /**
+   * JPEG del modelo desde una vista, a tamaño fijo y en fondo blanco (para el
+   * PDF), con los daños marcados y sin la zona elegida. No mueve la cámara
+   * del usuario: dibuja, lee y vuelve a dejar todo como estaba.
+   */
+  function capturar(vista, { ancho = 1200, alto = 720, calidad = 0.9 } = {}) {
     const v = VISTAS[vista] || VISTAS.general;
     const guardada = { ...camara };
-    aplicarCamara({ ...v, zoom: 1 });
+    const ratio = renderer.getPixelRatio();
+    renderer.setPixelRatio(1);
+    renderer.setSize(ancho, alto, false);
+    camera.aspect = ancho / alto;
+    camera.updateProjectionMatrix();
+    encuadrar();
+    renderer.setClearColor(0xffffff, 1);
+    colorear({ limpio: true });
+    aplicarCamara({ ...v, zoom: 0.86 }); // un poco más cerca: el vehículo llena la imagen
     renderer.render(scene, camera);
-    const png = renderer.domElement.toDataURL("image/png");
-    aplicarCamara(guardada);
-    renderer.render(scene, camera);
-    return png;
+    const url = renderer.domElement.toDataURL("image/jpeg", calidad);
+    renderer.setClearColor(0x000000, 0);
+    renderer.setPixelRatio(ratio);
+    camara.az = guardada.az;
+    camara.el = guardada.el;
+    camara.zoom = guardada.zoom;
+    ajustar();
+    pintar();
+    return url;
   }
 
   return { irA, pintar, capturar };

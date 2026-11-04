@@ -1,0 +1,139 @@
+<%
+  const r = review;
+  const anulada = r.status === 'voided';
+  const nuevos = r.damages || [];
+  const previos = r.previous || [];
+  const capturas = captureViews.filter((cv) => (r.captures || {})[cv.value]);
+  const fmtHora = (valor) => new Date(valor).toLocaleString(countryConfig.locale, { dateStyle: 'short', timeStyle: 'short', timeZone: countryConfig.timezone });
+%>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'camera' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>/<%= r.vehicle_id %>/revisiones">Revisiones de <%= r.vehicle_plate %></a> <span aria-hidden="true">/</span>
+        <span><%= r.number %></span>
+      </nav>
+      <h2 class="page-title">Revisión física <%= r.number %></h2>
+      <p class="page-description">
+        <%= r.vehicle_plate %><% if (r.vehicle_label) { %> · <%= r.vehicle_label %><% } %>
+        · <%= formatDate(r.review_date) %> · <%= reasonLabel(r.reason) %>
+      </p>
+    </div>
+    <div class="page-header-actions">
+      <a href="<%= FISICA %>/<%= r.id %>/pdf" target="_blank" rel="noopener" class="page-header-btn">
+        <%- include('../../../partials/icon', { name: 'printer' }) %> Imprimir
+      </a>
+    </div>
+  </div>
+
+  <% if (success) { %><div hidden data-toast="<%= success %>"></div><% } %>
+  <% if (error) { %><div hidden data-toast="<%= error %>" data-toast-tone="error"></div><% } %>
+
+  <% if (anulada) { %>
+    <div class="logistica-anulado" role="note">
+      <span class="logistica-anulado__icono" aria-hidden="true"><%- include('../../../partials/icon', { name: 'x-circle' }) %></span>
+      <span>
+        <strong>Revisión anulada</strong> el <%= fmtHora(r.voided_at) %><% if (r.voided_by_name) { %> por <%= r.voided_by_name %><% } %>.
+        Motivo: <%= r.void_reason %>. Sus daños quedaron anulados.
+      </span>
+    </div>
+  <% } %>
+
+  <div class="logistica-detalle">
+    <section class="logistica-panel" aria-labelledby="det-resultado">
+      <h3 class="logistica-panel__titulo" id="det-resultado">Resultado</h3>
+      <div class="logistica-veredicto">
+        <% if (anulada) { %>
+          <span class="logistica-estado logistica-estado--anulado">Anulada</span>
+        <% } else if (nuevos.length) { %>
+          <span class="logistica-estado logistica-estado--no_apto"><%= nuevos.length %> <%= nuevos.length === 1 ? 'daño nuevo' : 'daños nuevos' %></span>
+        <% } else { %>
+          <span class="logistica-estado logistica-estado--apto">Sin daños nuevos</span>
+        <% } %>
+        <span class="logistica-sub"><%= previos.length %> <%= previos.length === 1 ? 'daño abierto de antes' : 'daños abiertos de antes' %></span>
+      </div>
+      <dl class="logistica-datos">
+        <div><dt>Registrado por</dt><dd><%= r.created_by_name %></dd></div>
+        <div><dt>Fecha y hora del registro</dt><dd><%= fmtHora(r.created_at) %></dd></div>
+        <% if (r.observations) { %>
+          <div class="logistica-datos--ancho"><dt>Observaciones</dt><dd class="danio-detalle__texto"><%= r.observations %></dd></div>
+        <% } %>
+      </dl>
+    </section>
+
+    <section class="logistica-panel" aria-labelledby="det-vehiculo">
+      <h3 class="logistica-panel__titulo" id="det-vehiculo">Vehículo y conductor</h3>
+      <dl class="logistica-datos">
+        <div><dt>Patente</dt><dd><span class="logistica-patente"><%= r.vehicle_plate %></span></dd></div>
+        <div><dt>Tipo</dt><dd><%= labelFrom(VEHICLE_KINDS, r.vehicle_kind) %></dd></div>
+        <div><dt>Vehículo</dt><dd><%= r.vehicle_label || '—' %></dd></div>
+        <div><dt>Kilometraje</dt><dd><%= formatKm(r.odometer_km) %></dd></div>
+        <div class="logistica-datos--ancho"><dt>Conductor</dt><dd><%= r.driver_name %></dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <section class="logistica-panel" aria-labelledby="det-modelo">
+    <h3 class="logistica-panel__titulo" id="det-modelo">Modelo del vehículo</h3>
+    <% if (!capturas.length) { %>
+      <p class="logistica-panel__desc">Se registró sin capturas del modelo: el navegador no pudo mostrar el 3D.</p>
+    <% } else { %>
+      <p class="logistica-panel__desc">Como quedó al guardar la revisión: en rojo los daños abiertos y los encontrados en esta revisión.</p>
+      <ul class="fisica-capturas">
+        <% capturas.forEach((cv) => { %>
+          <li>
+            <span class="fisica-capturas__lado"><%= cv.label %></span>
+            <img src="<%= FISICA %>/<%= r.id %>/captura/<%= cv.value %>" alt="Modelo: <%= cv.label.toLowerCase() %>" loading="lazy" decoding="async" width="1200" height="720">
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+
+  <section class="logistica-panel" aria-labelledby="det-nuevos">
+    <h3 class="logistica-panel__titulo" id="det-nuevos">
+      Daños encontrados en esta revisión
+      <span class="logistica-panel__extra"><%= nuevos.length %></span>
+    </h3>
+    <% if (!nuevos.length) { %>
+      <p class="logistica-panel__desc">No se encontraron daños nuevos.</p>
+    <% } else { %>
+      <%- include('../partials/danios_lista', { danios: nuevos, sinOrigen: true }) %>
+    <% } %>
+  </section>
+
+  <% if (previos.length) { %>
+    <section class="logistica-panel" aria-labelledby="det-previos">
+      <h3 class="logistica-panel__titulo" id="det-previos">
+        Daños que ya estaban abiertos
+        <span class="logistica-panel__extra"><%= previos.length %></span>
+      </h3>
+      <p class="logistica-panel__desc">Registrados en revisiones anteriores y sin reparar ese día. El estado es el de hoy.</p>
+      <%- include('../partials/danios_lista', { danios: previos }) %>
+    </section>
+  <% } %>
+
+  <% if (!anulada && puedeAnular) { %>
+    <section class="logistica-panel" style="padding-bottom: 18px;">
+      <details class="logistica-anular">
+        <summary><%- include('../../../partials/icon', { name: 'x-circle' }) %> Anular esta revisión</summary>
+        <form method="post" action="<%= FISICA %>/<%= r.id %>/anular"
+              data-confirm="La revisión <%= r.number %> quedará anulada y sus <%= nuevos.length %> daños también. Seguirá en el registro, pero ya no cuenta."
+              data-confirm-title="¿Anular la revisión?" data-confirm-accept="Anular" data-confirm-tone="peligro">
+          <div class="campo-form">
+            <label for="motivo">Motivo <span class="required-mark">*</span></label>
+            <textarea id="motivo" name="motivo" rows="2" maxlength="300" minlength="5" required placeholder="Por ejemplo: se registró en la patente equivocada."></textarea>
+          </div>
+          <div>
+            <button type="submit" class="page-header-btn page-header-btn--secundario"><%- include('../../../partials/icon', { name: 'x-circle' }) %> Anular</button>
+          </div>
+        </form>
+      </details>
+    </section>
+  <% } %>
+</div>

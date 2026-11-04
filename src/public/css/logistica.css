@@ -1722,3 +1722,590 @@ button.logistica-icono-btn {
   .checklist-opcion { flex: 1; }
   .checklist-opcion span { width: 100%; height: 42px; }
 }
+
+/* ── Revisión física: daños, fotos y reparación ──────────────────────────── */
+
+.logistica-resumen { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+.flota-card__datos dd a.flota-card__danios { color: var(--down); font-weight: 700; text-decoration: none; }
+.flota-card__datos dd a.flota-card__danios:hover { background: rgba(208, 92, 92, 0.2); }
+
+/* Pie del visor: leyenda de colores y ayuda. */
+.fisica-visor__pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 18px;
+  margin-top: 10px;
+}
+
+.fisica-visor__pie .fisica-visor__ayuda { margin: 0; }
+
+.fisica-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.fisica-leyenda li { display: inline-flex; align-items: center; gap: 6px; }
+
+.fisica-leyenda__punto {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.fisica-leyenda__punto--danio { background: #d64545; }
+.fisica-leyenda__punto--nuevo { background: #e8930c; }
+.fisica-leyenda__punto--sel { background: #2f6fe0; }
+
+/* Zonas: marca del daño y número de daños de cada una. */
+.fisica-zona-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fisica-zona-btn__marca:empty { display: none; }
+
+.fisica-zona-btn__marca {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--down);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+}
+
+.fisica-zona-btn[data-estado="nuevo"] { border-color: #e8930c; color: #9a5b00; }
+.fisica-zona-btn[data-estado="nuevo"] .fisica-zona-btn__marca { background: #e8930c; }
+.fisica-zona-btn[aria-pressed="true"][data-estado] { border-color: var(--brand); color: #fff; }
+.fisica-zona-btn[aria-pressed="true"] .fisica-zona-btn__marca { background: #fff; color: var(--brand); }
+
+/* Panel de la zona elegida. */
+.fisica-zona {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 20px;
+  box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow);
+  scroll-margin-top: 84px;
+}
+
+.fisica-zona__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fisica-zona__nombre { margin: 2px 0 0; }
+
+.fisica-zona__abiertos:empty,
+.fisica-zona__nuevos:empty { display: none; }
+
+.fisica-zona__subtitulo {
+  margin: 0 0 8px;
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fisica-zona__vacio { margin: 0; color: var(--color-text-muted); font-size: 0.88rem; }
+
+.fisica-zona__danios {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fisica-zona__danio {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--down);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.fisica-zona__danio.is-nuevo { border-left-color: #e8930c; }
+
+.fisica-zona__danio-foto {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+}
+
+.fisica-zona__danio-foto img { width: 100%; height: 100%; object-fit: cover; }
+
+.fisica-zona__danio-tipo {
+  color: var(--color-heading);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+a.fisica-zona__danio-tipo:hover { color: var(--brand); text-decoration: underline; }
+
+.fisica-zona__danio-desc {
+  margin: 2px 0 0;
+  color: var(--color-text);
+  font-size: 0.86rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.fisica-zona__danio-meta { margin: 4px 0 0; color: var(--color-text-subtle); font-size: 0.76rem; }
+
+/* Agregar un daño. */
+.fisica-danio {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 14px;
+  background: var(--color-surface-muted);
+}
+
+.fisica-danio__titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.fisica-danio__titulo .icon-svg { color: var(--brand); }
+
+.fisica-danio .campo-form { margin: 0; }
+
+.fisica-danio__tipos {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fisica-danio__tipos legend {
+  margin-bottom: 6px;
+  color: var(--color-heading);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.tipo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tipo-chip { position: relative; cursor: pointer; }
+
+.tipo-chip input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tipo-chip span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tipo-chip:hover span { border-color: var(--brand); color: var(--brand); }
+.tipo-chip input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
+.tipo-chip input:checked + span { border-color: var(--brand); background: var(--brand); color: #fff; }
+
+.fisica-danio__acciones { display: flex; justify-content: flex-end; }
+
+/* Fotos: miniaturas, contador y botones de cámara / galería. */
+.fisica-fotos { display: grid; gap: 10px; }
+
+.fisica-fotos__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fisica-fotos__titulo { color: var(--color-heading); font-size: 0.86rem; font-weight: 700; }
+
+.fisica-fotos__conteo {
+  color: var(--color-text-subtle);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.fisica-fotos.is-completo .fisica-fotos__conteo { color: var(--green-ink); }
+
+.fisica-fotos__lista {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 150px));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fisica-fotos__lista:empty { display: none; }
+
+.fisica-fotos__item {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+.fisica-fotos__item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.fisica-fotos__quitar {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.72);
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.fisica-fotos__quitar:hover { background: var(--down); }
+.fisica-fotos__quitar:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+.fisica-fotos__botones { display: flex; flex-wrap: wrap; gap: 8px; }
+.fisica-fotos__botones[hidden] { display: none; }
+
+.fisica-fotos__boton { position: relative; cursor: pointer; }
+.fisica-fotos__boton:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.fisica-fotos__ayuda { margin: 0; color: var(--color-text-subtle); font-size: 0.78rem; }
+
+/* Daños nuevos de la revisión (antes de guardar). */
+.fisica-nuevos__vacio {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.fisica-nuevos {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.fisica-nuevo {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid #e8930c;
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.fisica-nuevo.is-invalid { border-color: var(--down); border-left-color: var(--down); background: rgba(208, 92, 92, 0.05); }
+
+.fisica-nuevo__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fisica-nuevo__num {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #e8930c;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.fisica-nuevo__titulo {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  color: var(--color-heading);
+  font-size: 0.92rem;
+}
+
+.fisica-nuevo__tipo { color: var(--color-text-muted); font-size: 0.82rem; font-weight: 700; }
+
+.fisica-nuevo__acciones { display: flex; gap: 6px; }
+
+.fisica-nuevo__desc {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.88rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.fisica-nuevo__fotos {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fisica-nuevo__fotos li {
+  width: 64px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--color-surface-muted);
+}
+
+.fisica-nuevo__fotos img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.fisica-nuevo .campo-form__error { margin: 0; }
+
+/* Botón mientras sube. */
+.page-header-btn.is-cargando { opacity: 0.75; cursor: progress; }
+.page-header-btn.is-cargando .icon-svg { animation: fisica-gira 0.9s linear infinite; }
+
+@keyframes fisica-gira { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-header-btn.is-cargando .icon-svg { animation: none; }
+}
+
+/* Lista de daños (física, revisiones, detalle). */
+.danios {
+  display: grid;
+  margin: 4px 0 14px;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.danio-fila {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.danio-fila + .danio-fila { border-top: 1px solid var(--color-border); }
+
+.danio-fila__foto {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 54px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-subtle);
+}
+
+.danio-fila__foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.danio-fila__mas {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: rgba(17, 24, 39, 0.72);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 16px;
+}
+
+.danio-fila__texto { min-width: 0; }
+
+.danio-fila__zona {
+  color: var(--color-heading);
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.danio-fila__zona:hover { color: var(--brand); text-decoration: underline; }
+
+.danio-fila__tipo {
+  margin-left: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.danio-fila__desc {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.danio-fila__meta { margin: 2px 0 0; color: var(--color-text-subtle); font-size: 0.76rem; }
+
+.danio-fila__acciones { display: flex; align-items: center; gap: 8px; }
+
+.danio-fila.is-anulado .danio-fila__zona,
+.danio-fila.is-anulado .danio-fila__desc { color: var(--color-text-subtle); text-decoration: line-through; }
+
+/* Página de un daño. */
+.danio-detalle { display: grid; gap: 18px; }
+
+.danio-detalle__texto { white-space: pre-line; }
+
+.danio-galeria {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 4px 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.danio-galeria__foto {
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-muted);
+}
+
+.danio-galeria__foto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.25s ease;
+}
+
+.danio-galeria__foto:hover img { transform: scale(1.03); }
+
+.danio-reparacion { border-color: var(--green-deep); }
+.danio-reparacion .logistica-panel__titulo .icon-svg,
+.danio-reparar .logistica-panel__titulo .icon-svg { color: var(--green-ink); }
+
+.danio-reparar { display: grid; gap: 14px; padding-bottom: 18px; }
+.danio-reparar .campos-grid,
+.danio-reparar .logistica-panel__desc { margin: 0; }
+.danio-reparar .logistica-form__acciones { margin: 0; }
+
+/* Capturas del modelo en el detalle de la revisión. */
+.fisica-capturas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 4px 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.fisica-capturas li {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.fisica-capturas__lado {
+  color: #5b6270;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fisica-capturas img { display: block; width: 100%; height: auto; }
+
+/* Revisiones: aviso de daños en la tarjeta y registro en la página. */
+.rev-danios-aviso {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(208, 92, 92, 0.1);
+  color: var(--down);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
+.rev-danios-aviso:hover { background: rgba(208, 92, 92, 0.16); }
+
+.rev-lista--danios { margin-top: 22px; }
+.rev-lista--danios .rev-lista__conteo { font-weight: 700; }
+
+@media (max-width: 720px) {
+  .fisica-danio { padding: 14px 12px; }
+  .fisica-fotos__lista { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fisica-fotos__boton { flex: 1; justify-content: center; }
+  .danio-fila { grid-template-columns: 64px minmax(0, 1fr); gap: 10px 12px; }
+  .danio-fila__foto { width: 64px; height: 48px; }
+  .danio-fila__acciones { grid-column: 2; }
+  .fisica-capturas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .fisica-capturas li { padding: 6px; }
+  .fisica-danio__acciones .page-header-btn { width: 100%; justify-content: center; }
+}

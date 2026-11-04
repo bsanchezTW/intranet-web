@@ -152,7 +152,11 @@ async function listVehicles({ includeInactive = true } = {}) {
             ult.number_year AS last_checklist_year,
             ult.number_seq AS last_checklist_seq,
             (SELECT COUNT(*)::int FROM vehicle_checklists c
-              WHERE c.vehicle_id = v.id AND c.status = 'registered') AS checklists_count
+              WHERE c.vehicle_id = v.id AND c.status = 'registered') AS checklists_count,
+            (SELECT MAX(r.review_date)::text FROM vehicle_physical_reviews r
+              WHERE r.vehicle_id = v.id AND r.status = 'registered') AS last_physical_date,
+            (SELECT COUNT(*)::int FROM vehicle_damages d
+              WHERE d.vehicle_id = v.id AND d.status = 'abierto') AS open_damages
        FROM logistics_vehicles v
        LEFT JOIN LATERAL (
          SELECT c.id, c.inspection_date, c.result, c.number_year, c.number_seq

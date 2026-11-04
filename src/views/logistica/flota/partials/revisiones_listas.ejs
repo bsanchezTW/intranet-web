@@ -2,51 +2,90 @@
   /*
     Revisiones de un vehículo, en dos listas: mecánicas y físicas. La usan la
     tarjeta de Gestión de flota (compacto: las más recientes) y la página de
-    revisiones del vehículo (todas).
+    revisiones del vehículo (todas, más el registro de daños).
   */
   const MAX_COMPACTO = 5;
-  const todas = Array.isArray(mecanicas) ? mecanicas : [];
   const esCompacto = typeof compacto !== 'undefined' && compacto;
-  const mostradas = esCompacto ? todas.slice(0, MAX_COMPACTO) : todas;
   const x = vehiculo;
+  const listas = [
+    {
+      clave: 'mecanicas',
+      titulo: 'Mecánicas',
+      icono: 'clipboard-check',
+      vacia: 'Todavía no tiene revisiones mecánicas.',
+      todas: Array.isArray(mecanicas) ? mecanicas : [],
+      enlace: (c) => `${MECANICA}/${c.id}`,
+      fecha: (c) => c.inspection_date,
+      estado: (c) => ({ clase: c.result, texto: resultLabel(c.result) }),
+    },
+    {
+      clave: 'fisicas',
+      titulo: 'Físicas',
+      icono: 'camera',
+      vacia: 'Todavía no tiene revisiones físicas.',
+      todas: Array.isArray(typeof fisicas !== 'undefined' ? fisicas : null) ? fisicas : [],
+      enlace: (c) => `${FISICA}/${c.id}`,
+      fecha: (c) => c.review_date,
+      estado: (c) => (c.danios
+        ? { clase: 'no_apto', texto: `${c.danios} ${c.danios === 1 ? 'daño nuevo' : 'daños nuevos'}` }
+        : { clase: 'apto', texto: 'Sin daños nuevos' }),
+    },
+  ];
+  const listaDanios = Array.isArray(typeof danios !== 'undefined' ? danios : null) ? danios : [];
+  const abiertos = listaDanios.filter((d) => d.status === 'abierto');
 %>
 <div class="rev-listas<%= esCompacto ? ' rev-listas--compacto' : '' %>">
-  <section class="rev-lista" aria-label="Revisiones mecánicas">
-    <h4 class="rev-lista__titulo">
-      <%- include('../../../partials/icon', { name: 'clipboard-check' }) %> Mecánicas
-      <span class="rev-lista__conteo"><%= todas.length %></span>
-    </h4>
-    <% if (!todas.length) { %>
-      <p class="rev-lista__vacia">Todavía no tiene revisiones mecánicas.</p>
-    <% } else { %>
-      <ul class="rev-filas">
-        <% mostradas.forEach((c) => { const anulada = c.status === 'voided'; %>
-          <li class="rev-fila<%= anulada ? ' is-anulada' : '' %>">
-            <a class="rev-fila__enlace" href="<%= MECANICA %>/<%= c.id %>">
-              <span class="rev-fila__fecha"><%= formatDate(c.inspection_date) %></span>
-              <span class="rev-fila__numero"><%= c.number %></span>
-              <span class="rev-fila__quien"><%= c.driver_name %> · <%= formatKm(c.odometer_km) %></span>
-            </a>
-            <% if (anulada) { %>
-              <span class="logistica-estado logistica-estado--anulado">Anulada</span>
-            <% } else { %>
-              <span class="logistica-estado logistica-estado--<%= c.result %>"><%= resultLabel(c.result) %></span>
-            <% } %>
-            <a href="<%= MECANICA %>/<%= c.id %>/pdf" target="_blank" rel="noopener" class="cfg-icono" title="Imprimir <%= c.number %>" aria-label="Imprimir <%= c.number %>"><%- include('../../../partials/icon', { name: 'printer' }) %></a>
-          </li>
-        <% }) %>
-      </ul>
-      <% if (esCompacto && todas.length > MAX_COMPACTO) { %>
-        <a class="rev-lista__mas" href="<%= FLOTA %>/<%= x.id %>/revisiones">Ver las <%= todas.length %> revisiones mecánicas</a>
+  <% listas.forEach((l) => { const mostradas = esCompacto ? l.todas.slice(0, MAX_COMPACTO) : l.todas; %>
+    <section class="rev-lista" aria-label="Revisiones <%= l.titulo.toLowerCase() %>">
+      <h4 class="rev-lista__titulo">
+        <%- include('../../../partials/icon', { name: l.icono }) %> <%= l.titulo %>
+        <span class="rev-lista__conteo"><%= l.todas.length %></span>
+      </h4>
+      <% if (!l.todas.length) { %>
+        <p class="rev-lista__vacia"><%= l.vacia %></p>
+      <% } else { %>
+        <ul class="rev-filas">
+          <% mostradas.forEach((c) => { const anulada = c.status === 'voided'; const est = l.estado(c); %>
+            <li class="rev-fila<%= anulada ? ' is-anulada' : '' %>">
+              <a class="rev-fila__enlace" href="<%= l.enlace(c) %>">
+                <span class="rev-fila__fecha"><%= formatDate(l.fecha(c)) %></span>
+                <span class="rev-fila__numero"><%= c.number %></span>
+                <span class="rev-fila__quien"><%= c.driver_name %> · <%= formatKm(c.odometer_km) %></span>
+              </a>
+              <% if (anulada) { %>
+                <span class="logistica-estado logistica-estado--anulado">Anulada</span>
+              <% } else { %>
+                <span class="logistica-estado logistica-estado--<%= est.clase %>"><%= est.texto %></span>
+              <% } %>
+              <a href="<%= l.enlace(c) %>/pdf" target="_blank" rel="noopener" class="cfg-icono" title="Imprimir <%= c.number %>" aria-label="Imprimir <%= c.number %>"><%- include('../../../partials/icon', { name: 'printer' }) %></a>
+            </li>
+          <% }) %>
+        </ul>
+        <% if (esCompacto && l.todas.length > MAX_COMPACTO) { %>
+          <a class="rev-lista__mas" href="<%= FLOTA %>/<%= x.id %>/revisiones">Ver las <%= l.todas.length %> revisiones <%= l.titulo.toLowerCase() %></a>
+        <% } %>
       <% } %>
+    </section>
+  <% }) %>
+
+  <% if (esCompacto && abiertos.length) { %>
+    <a class="rev-danios-aviso" href="<%= FLOTA %>/<%= x.id %>/revision-fisica">
+      <%- include('../../../partials/icon', { name: 'alert-triangle' }) %>
+      <span><strong><%= abiertos.length %> <%= abiertos.length === 1 ? 'daño abierto' : 'daños abiertos' %></strong> · ver en el modelo</span>
+    </a>
+  <% } %>
+</div>
+
+<% if (!esCompacto && typeof puedeVerDanios !== 'undefined' && puedeVerDanios) { %>
+  <section class="rev-lista rev-lista--danios" aria-label="Daños del vehículo">
+    <h4 class="rev-lista__titulo">
+      <%- include('../../../partials/icon', { name: 'alert-triangle' }) %> Daños
+      <span class="rev-lista__conteo"><%= abiertos.length %> <%= abiertos.length === 1 ? 'abierto' : 'abiertos' %> · <%= listaDanios.length - abiertos.length %> <%= listaDanios.length - abiertos.length === 1 ? 'reparado' : 'reparados' %></span>
+    </h4>
+    <% if (!listaDanios.length) { %>
+      <p class="rev-lista__vacia">No tiene daños registrados.</p>
+    <% } else { %>
+      <%- include('danios_lista', { danios: listaDanios }) %>
     <% } %>
   </section>
-
-  <section class="rev-lista" aria-label="Revisiones físicas">
-    <h4 class="rev-lista__titulo">
-      <%- include('../../../partials/icon', { name: 'camera' }) %> Físicas
-      <span class="rev-lista__conteo">0</span>
-    </h4>
-    <p class="rev-lista__vacia">Todavía no tiene revisiones físicas.</p>
-  </section>
-</div>
+<% } %>

@@ -12,7 +12,8 @@ const { SCOPE_SETS } = require("../scopes");
  * Las claves `checklist.*` son las de la revisión mecánica (el «Check list
  * diario»): se conservan aunque cambió el nombre, para no perder las
  * asignaciones. "Lo propio" es lo que la persona registró: quien sólo
- * registra ve lo suyo, y Logística lo de toda la flota.
+ * registra ve lo suyo, y Logística lo de toda la flota. La revisión física
+ * sigue la misma regla con sus claves `fisica.*`; reparar un daño es aparte.
  */
 module.exports = {
   module: "logistica",
@@ -31,5 +32,13 @@ module.exports = {
     { key: "logistica.checklist.crear", label: "Registrar revisiones mecánicas" },
     { key: "logistica.checklist.anular", label: "Anular revisiones mecánicas" },
     { key: "logistica.plantilla.administrar", label: "Editar los ítems de la revisión mecánica" },
+    {
+      key: "logistica.fisica.ver",
+      label: "Ver e imprimir revisiones físicas",
+      scopes: SCOPE_SETS.PROPIO_O_TODO,
+    },
+    { key: "logistica.fisica.crear", label: "Registrar revisiones físicas y sus daños" },
+    { key: "logistica.fisica.anular", label: "Anular revisiones físicas" },
+    { key: "logistica.danio.reparar", label: "Marcar daños como reparados" },
   ],
 };

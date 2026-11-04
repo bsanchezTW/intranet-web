@@ -1,4 +1,7 @@
+const os = require("os");
+const fsp = require("fs/promises");
 const express = require("express");
+const multer = require("multer");
 
 const router = express.Router();
 const db = require("../db");
@@ -9,6 +12,20 @@ const vehicles = require("../services/logistics/vehicleService");
 const checklists = require("../services/logistics/checklistService");
 const template = require("../services/logistics/templateService");
 const { renderChecklistPdf } = require("../services/logistics/checklistPdf");
+const physical = require("../services/logistics/physicalService");
+const damagePhotos = require("../services/logistics/damagePhotos");
+const { renderPhysicalPdf } = require("../services/logistics/physicalPdf");
+const {
+  REVIEW_REASONS,
+  DAMAGE_TYPES,
+  MAX_PHOTOS,
+  MAX_DAMAGES,
+  CAPTURE_VIEWS,
+  damageTypeLabel,
+  reasonLabel,
+  damageStateLabel,
+  physicalReviewAlert,
+} = require("../constants/vehiclePhysical");
 const { parseId } = require("../services/logistics/inputs");
 const {
   INSPECTION_KINDS,
@@ -34,6 +51,9 @@ const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
  *   /logistica/flota/mecanica/nueva        revisión mecánica (el checklist)
  *   /logistica/flota/mecanica/:id          una revisión mecánica y su PDF
  *   /logistica/flota/mecanica/items        configurar categorías e ítems
+ *   /logistica/flota/fisica/:id            una revisión física y su PDF
+ *   /logistica/flota/danios/:id            un daño: fotos y reparación
+ *   /logistica/flota/fotos/:id             la foto de un daño (con permiso)
  *
  * Las revisiones se consultan dentro de cada vehículo: no hay listado
  * general. Se monta en /logistica y no bajo /procesos por la misma razón que
@@ -46,8 +66,11 @@ const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
 const FLOTA = "/logistica/flota";
 const MECANICA = `${FLOTA}/mecanica`;
 const ITEMS = `${MECANICA}/items`;
+const FISICA = `${FLOTA}/fisica`;
+const DANIOS = `${FLOTA}/danios`;
+const FOTOS = `${FLOTA}/fotos`;
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261104a"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261104b"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -64,9 +87,20 @@ const VIEW_HELPERS = {
   vehicleLabel: vehicles.vehicleLabel,
   documentAlerts: vehicles.documentAlerts,
   documentsFor: vehicles.documentsFor,
+  REVIEW_REASONS,
+  DAMAGE_TYPES,
+  MAX_PHOTOS,
+  MAX_DAMAGES,
+  damageTypeLabel,
+  reasonLabel,
+  damageStateLabel,
+  physicalReviewAlert,
   FLOTA,
   MECANICA,
   ITEMS,
+  FISICA,
+  DANIOS,
+  FOTOS,
 };
 
 function flashFrom(req) {
@@ -150,19 +184,51 @@ const ADMIN_FLOTA = "logistica.vehiculo.administrar";
 const VER = "logistica.checklist.ver";
 const CREAR = "logistica.checklist.crear";
 const PLANTILLA = "logistica.plantilla.administrar";
+const VER_FISICA = "logistica.fisica.ver";
+const CREAR_FISICA = "logistica.fisica.crear";
+const ANULAR_FISICA = "logistica.fisica.anular";
+const REPARAR = "logistica.danio.reparar";
 
 // A Gestión de flota entra quien ve la flota o quien registra o ve
 // revisiones: el conductor llega por los botones de su vehículo.
-const accesoFlota = requireAnyPermission(VER_FLOTA, VER, CREAR);
+const accesoFlota = requireAnyPermission(VER_FLOTA, VER, CREAR, VER_FISICA, CREAR_FISICA, REPARAR);
 
 function permisosFlota(req) {
   const can = (key) => decide(req.perms, key, req.permLegacy);
   return {
     puedeAdministrar: can(ADMIN_FLOTA),
     puedeRevisar: can(CREAR),
-    puedeVerRevisiones: can(VER) || can(CREAR),
+    puedeRevisarFisica: can(CREAR_FISICA),
+    puedeVerMecanicas: can(VER) || can(CREAR),
+    puedeVerFisicas: can(VER_FISICA) || can(CREAR_FISICA),
+    puedeVerDanios: can(VER_FISICA) || can(CREAR_FISICA) || can(REPARAR),
+    puedeReparar: can(REPARAR),
+    puedeVerRevisiones: can(VER) || can(CREAR) || can(VER_FISICA) || can(CREAR_FISICA) || can(REPARAR),
     puedePlantilla: can(PLANTILLA),
   };
+}
+
+/** Como checklistScope, para las revisiones físicas (sobre r.created_by). */
+function fisicaScope(req) {
+  const scope = req.perms.sqlFilter(VER_FISICA, { ownerColumn: "r.created_by" });
+  if (scope.clause !== "FALSE") return scope;
+  return { clause: "r.created_by = $1", params: [req.session.user.id] };
+}
+
+function puedeVerFisica(req, row) {
+  if (decide(req.perms, VER_FISICA, req.permLegacy, { record: { ownerId: row.created_by } })) return true;
+  return Number(row.created_by) === Number(req.session.user.id) && decide(req.perms, CREAR_FISICA, req.permLegacy);
+}
+
+/**
+ * Un daño (y sus fotos) lo ve quien puede ver su revisión, quien repara y,
+ * mientras está abierto, quien registra revisiones físicas: tiene que saber
+ * qué ya estaba registrado para no repetirlo.
+ */
+function puedeVerDanio(req, damage) {
+  if (puedeVerFisica(req, { created_by: damage.review_created_by })) return true;
+  if (decide(req.perms, REPARAR, req.permLegacy)) return true;
+  return damage.status === "abierto" && decide(req.perms, CREAR_FISICA, req.permLegacy);
 }
 
 /**
@@ -488,7 +554,7 @@ router.get("/flota", accesoFlota, async (req, res) => {
       ...flashFrom(req),
       ...VIEW_HELPERS,
       extraCss: EXTRA_CSS,
-      extraJs: ["/js/flota-revisiones.js?v=20261104a"],
+      extraJs: ["/js/flota-revisiones.js?v=20261104b"],
     });
   } catch (err) {
     console.error("[Logística] Error listando la flota:", err);
@@ -597,12 +663,19 @@ router.get("/flota/:id/revisiones", accesoFlota, async (req, res) => {
   try {
     const vehiculo = await loadVehicle(req, res);
     if (!vehiculo) return;
-    const mecanicas = await checklists.listChecklists({ vehiculo: vehiculo.id, scope: checklistScope(req) });
+    const permisos = permisosFlota(req);
+    const [mecanicas, fisicas, danios] = await Promise.all([
+      checklists.listChecklists({ vehiculo: vehiculo.id, scope: checklistScope(req) }),
+      physical.listPhysicalReviews({ vehiculo: vehiculo.id, scope: fisicaScope(req) }),
+      permisos.puedeVerDanios ? physical.listDamages(vehiculo.id) : Promise.resolve([]),
+    ]);
     const datos = {
       vehiculo,
       mecanicas,
+      fisicas,
+      danios,
       today: todayInCountry(),
-      ...permisosFlota(req),
+      ...permisos,
       ...VIEW_HELPERS,
     };
     if (req.query.parcial === "1") {
@@ -620,22 +693,389 @@ router.get("/flota/:id/revisiones", accesoFlota, async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Revisión física y daños
+// ---------------------------------------------------------------------------
+
+// Las fotos llegan a un temporal en disco (no a memoria) y se procesan de a
+// una. El teléfono las manda reducidas; el límite por archivo cubre una
+// foto original si la reducción no corrió.
+const uploadFotos = multer({
+  dest: os.tmpdir(),
+  limits: {
+    fileSize: 12 * 1024 * 1024,
+    files: MAX_DAMAGES * MAX_PHOTOS + CAPTURE_VIEWS.length,
+    fields: 40,
+    fieldSize: 64 * 1024,
+  },
+});
+
+const esFetch = (req) => req.get("X-Requested-With") === "fetch";
+
+/** Recibe los archivos; si exceden los límites responde un error legible. */
+function recibirFotos(req, res, next) {
+  uploadFotos.any()(req, res, (err) => {
+    if (!err) return next();
+    const mensaje = err.code === "LIMIT_FILE_SIZE"
+      ? "Una de las fotos pesa más de 12 MB. Sácala de nuevo o elige otra."
+      : err.code === "LIMIT_FILE_COUNT"
+        ? `Son ${MAX_PHOTOS} fotos por daño como máximo.`
+        : "No se pudieron recibir las fotos. Vuelve a intentarlo.";
+    borrarTemporales(req);
+    if (esFetch(req)) return res.status(413).json({ errors: { general: mensaje } });
+    return res.status(413).send(mensaje);
+  });
+}
+
+async function borrarTemporales(req) {
+  await Promise.all((req.files || []).map((f) => fsp.unlink(f.path).catch(() => {})));
+}
+
+/** Archivos de un campo, en el orden en que llegaron. */
+function archivosDe(req, campo) {
+  return (req.files || []).filter((f) => f.fieldname === campo);
+}
+
+async function procesarArchivo(file, opciones) {
+  const buffer = await fsp.readFile(file.path);
+  return damagePhotos.processImage(buffer, opciones);
+}
+
+function leerDanios(raw) {
+  try {
+    const list = JSON.parse(String(raw || "[]"));
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
 router.get("/flota/:id/revision-fisica", accesoFlota, async (req, res) => {
   try {
     const vehiculo = await loadVehicle(req, res);
     if (!vehiculo) return;
+    const permisos = permisosFlota(req);
+    const [abiertos, conductores] = await Promise.all([
+      permisos.puedeVerDanios
+        ? physical.listDamages(vehiculo.id).then((l) => l.filter((d) => d.status === "abierto"))
+        : Promise.resolve([]),
+      permisos.puedeRevisarFisica ? checklists.listDrivers() : Promise.resolve([]),
+    ]);
     res.render("logistica/flota/fisica", {
       titulo: `Revisión física de ${vehiculo.plate}`,
       vehiculo,
       modelo: modelFor(vehiculo.kind),
       grupos: ZONE_GROUPS,
-      ...permisosFlota(req),
+      abiertos,
+      conductores,
+      driverOther: checklists.DRIVER_OTHER,
+      today: todayInCountry(),
+      values: {
+        review_date: todayInCountry(),
+        reason: "",
+        driver_choice: String(req.session.user.id),
+      },
+      ...permisos,
+      ...flashFrom(req),
       ...VIEW_HELPERS,
       extraCss: EXTRA_CSS,
     });
   } catch (err) {
     console.error("[Logística] Error cargando la revisión física:", err);
     res.status(500).send("Error cargando la revisión física");
+  }
+});
+
+/**
+ * Registra una revisión física. La manda el formulario por fetch (multipart):
+ * campos, `danios` (JSON con zona, tipo y observación de cada daño nuevo),
+ * foto_<i> por daño y captura_<vista> del modelo. Responde JSON.
+ */
+router.post("/flota/:id/revision-fisica", requirePermission(CREAR_FISICA), recibirFotos, async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    const vehiculo = id ? await vehicles.getVehicle(id) : null;
+    if (!vehiculo) return res.status(404).json({ errors: { general: "El vehículo ya no existe." } });
+    const modelo = modelFor(vehiculo.kind);
+    if (!modelo) return res.status(409).json({ errors: { general: "El vehículo no tiene tipo: elígelo en la flota." } });
+
+    const danios = leerDanios(req.body.danios);
+    const photoCounts = danios.map((_, i) => archivosDe(req, physical.photoField(i)).length);
+    const conductores = await checklists.listDrivers();
+    const { values, errors, ok } = physical.normalizePhysicalInput(req.body, {
+      vehicle: vehiculo,
+      zones: modelo.zones,
+      drivers: conductores,
+      today: todayInCountry(),
+      damages: danios,
+      photoCounts,
+    });
+    if (!ok) return res.status(422).json({ errors });
+
+    const damagePhotosList = [];
+    for (let i = 0; i < values.damages.length; i += 1) {
+      const lista = [];
+      for (const file of archivosDe(req, physical.photoField(i))) {
+        try {
+          lista.push(await procesarArchivo(file));
+        } catch (err) {
+          if (err instanceof damagePhotos.PhotoError) {
+            return res.status(422).json({ errors: { [physical.damageKey(i)]: err.message } });
+          }
+          throw err;
+        }
+      }
+      damagePhotosList.push(lista);
+    }
+    // Las capturas son un apoyo del PDF: si una no sirve, se omite.
+    const captures = {};
+    for (const v of CAPTURE_VIEWS) {
+      const [file] = archivosDe(req, physical.captureField(v.value));
+      if (!file) continue;
+      try {
+        captures[v.value] = await procesarArchivo(file, { maxEdge: 1400 });
+      } catch (err) {
+        console.warn("[Logística] Captura del modelo descartada:", err.message);
+      }
+    }
+
+    let creada;
+    try {
+      creada = await physical.createPhysicalReview(values, { damagePhotos: damagePhotosList, captures }, req.session.user.id);
+    } catch (err) {
+      if (err instanceof physical.PhysicalError) return res.status(409).json({ errors: { general: err.message } });
+      throw err;
+    }
+    const link = `${FISICA}/${creada.id}`;
+    await logChange(req.session.user.id, `registró la revisión física ${creada.number}`, link);
+    const msg = creada.damages
+      ? `Revisión ${creada.number} guardada con ${creada.damages} ${creada.damages === 1 ? "daño nuevo" : "daños nuevos"}`
+      : `Revisión ${creada.number} guardada, sin daños nuevos`;
+    res.json({ ok: true, redirect: withFlash(link, { ok: msg }) });
+  } catch (err) {
+    console.error("[Logística] Error registrando la revisión física:", err);
+    res.status(500).json({ errors: { general: "No se pudo guardar la revisión. Vuelve a intentarlo." } });
+  } finally {
+    await borrarTemporales(req);
+  }
+});
+
+async function loadFisicaVisible(req, res) {
+  const id = parseId(req.params.id);
+  const review = id ? await physical.getPhysicalReview(id) : null;
+  if (!review) {
+    notFound(res);
+    return null;
+  }
+  if (!puedeVerFisica(req, review)) {
+    res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    return null;
+  }
+  return review;
+}
+
+router.get("/flota/fisica/:id", requireAnyPermission(VER_FISICA, CREAR_FISICA), async (req, res) => {
+  try {
+    const review = await loadFisicaVisible(req, res);
+    if (!review) return;
+    res.render("logistica/flota/fisica/detalle", {
+      titulo: `Revisión física ${review.number}`,
+      review,
+      captureViews: CAPTURE_VIEWS,
+      puedeAnular: decide(req.perms, ANULAR_FISICA, req.permLegacy),
+      puedeReparar: decide(req.perms, REPARAR, req.permLegacy),
+      ...flashFrom(req),
+      ...VIEW_HELPERS,
+      extraCss: EXTRA_CSS,
+    });
+  } catch (err) {
+    console.error("[Logística] Error cargando la revisión física:", err);
+    res.status(500).send("Error cargando la revisión física");
+  }
+});
+
+/** Contenido de las imágenes del PDF; lo que Storage no entregue queda fuera. */
+async function imagenesDelPdf(review) {
+  const leer = (ruta) => damagePhotos.readStored(ruta).catch((err) => {
+    console.warn("[Logística] Imagen no disponible para el PDF:", ruta, err.message);
+    return null;
+  });
+  const captures = {};
+  await Promise.all(Object.entries(review.captures || {}).map(async ([vista, ruta]) => {
+    if (damagePhotos.isOwnPath(ruta)) captures[vista] = await leer(ruta);
+  }));
+  const rutas = await physical.photoPaths(review.damages.map((d) => d.id));
+  const photos = new Map();
+  const pendientes = [];
+  for (const lista of rutas.values()) {
+    lista.filter((p) => p.kind === "danio").forEach((p) => {
+      pendientes.push(leer(p.storage_path).then((buf) => { if (buf) photos.set(String(p.id), buf); }));
+    });
+  }
+  await Promise.all(pendientes);
+  return { captures, photos };
+}
+
+router.get("/flota/fisica/:id/pdf", requireAnyPermission(VER_FISICA, CREAR_FISICA), async (req, res) => {
+  try {
+    const review = await loadFisicaVisible(req, res);
+    if (!review) return;
+    const buffer = await renderPhysicalPdf(review, await imagenesDelPdf(review));
+    res.set("Content-Type", "application/pdf");
+    res.set("Content-Disposition", `inline; filename="${review.number}.pdf"`);
+    res.set("Cache-Control", "private, no-store");
+    res.send(buffer);
+  } catch (err) {
+    console.error("[Logística] Error generando el PDF de la revisión física:", err);
+    res.status(500).send("Error generando el PDF");
+  }
+});
+
+async function enviarImagen(res, ruta) {
+  if (!damagePhotos.isOwnPath(ruta)) return notFound(res);
+  const buffer = await damagePhotos.readStored(ruta);
+  res.set("Content-Type", "image/jpeg");
+  res.set("Cache-Control", "private, max-age=86400");
+  res.set("X-Content-Type-Options", "nosniff");
+  return res.send(buffer);
+}
+
+router.get("/flota/fisica/:id/captura/:vista", requireAnyPermission(VER_FISICA, CREAR_FISICA), async (req, res) => {
+  try {
+    const review = await loadFisicaVisible(req, res);
+    if (!review) return;
+    const ruta = (review.captures || {})[req.params.vista];
+    if (!ruta) return notFound(res);
+    await enviarImagen(res, ruta);
+  } catch (err) {
+    console.error("[Logística] Error entregando la captura:", err);
+    res.status(500).send("Error cargando la imagen");
+  }
+});
+
+router.post("/flota/fisica/:id/anular", requirePermission(ANULAR_FISICA), async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return notFound(res);
+  const link = `${FISICA}/${id}`;
+  try {
+    const anulada = await physical.voidPhysicalReview(id, req.body.motivo, req.session.user.id);
+    if (!anulada) return res.redirect(withFlash(link, { error: "La revisión ya estaba anulada o no existe" }));
+    await logChange(req.session.user.id, `anuló la revisión física ${anulada.number}`, link);
+    res.redirect(withFlash(link, { ok: `Revisión ${anulada.number} anulada` }));
+  } catch (err) {
+    if (err instanceof physical.PhysicalError) return res.redirect(withFlash(link, { error: err.message }));
+    console.error("[Logística] Error anulando la revisión física:", err);
+    res.redirect(withFlash(link, { error: "No se pudo anular la revisión" }));
+  }
+});
+
+// --- Daños --------------------------------------------------------------------
+
+async function loadDanioVisible(req, res) {
+  const id = parseId(req.params.id);
+  const damage = id ? await physical.getDamage(id) : null;
+  if (!damage) {
+    notFound(res);
+    return null;
+  }
+  if (!puedeVerDanio(req, damage)) {
+    res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+    return null;
+  }
+  return damage;
+}
+
+function renderDanio(req, res, { damage, values = {}, errors = {}, status = 200 }) {
+  res.status(status).render("logistica/flota/danio", {
+    titulo: `${damage.zone_label} · ${damage.vehicle_plate}`,
+    damage,
+    values: { repaired_on: todayInCountry(), ...values },
+    errors,
+    today: todayInCountry(),
+    puedeReparar: decide(req.perms, REPARAR, req.permLegacy),
+    puedeVerSuRevision: puedeVerFisica(req, { created_by: damage.review_created_by }),
+    ...flashFrom(req),
+    ...VIEW_HELPERS,
+    extraCss: EXTRA_CSS,
+    extraJs: ["/js/flota-fotos.js?v=20261104a"],
+  });
+}
+
+router.get("/flota/danios/:id", accesoFlota, async (req, res) => {
+  try {
+    const damage = await loadDanioVisible(req, res);
+    if (!damage) return;
+    renderDanio(req, res, { damage });
+  } catch (err) {
+    console.error("[Logística] Error cargando el daño:", err);
+    res.status(500).send("Error cargando el daño");
+  }
+});
+
+/**
+ * Marca reparado un daño. Funciona como formulario normal (redirige) y por
+ * fetch (responde JSON), que es como lo manda la página para reducir las
+ * fotos en el teléfono antes de subirlas.
+ */
+router.post("/flota/danios/:id/reparar", requirePermission(REPARAR), recibirFotos, async (req, res) => {
+  const responderErrores = (damage, values, errors, status) => (esFetch(req)
+    ? res.status(status).json({ errors })
+    : renderDanio(req, res, { damage, values, errors, status }));
+  try {
+    const id = parseId(req.params.id);
+    const damage = id ? await physical.getDamage(id) : null;
+    if (!damage) return esFetch(req) ? res.status(404).json({ errors: { general: "El daño ya no existe." } }) : notFound(res);
+    const link = `${DANIOS}/${damage.id}`;
+    if (damage.status !== "abierto") {
+      const error = damage.status === "reparado" ? "Este daño ya estaba marcado como reparado." : "Este daño está anulado.";
+      return esFetch(req) ? res.status(409).json({ errors: { general: error } }) : res.redirect(withFlash(link, { error }));
+    }
+    const archivos = archivosDe(req, "fotos");
+    const { values, errors, ok } = physical.normalizeRepairInput(req.body, {
+      today: todayInCountry(),
+      reportedOn: damage.review_date,
+      photoCount: archivos.length,
+    });
+    if (!ok) return responderErrores(damage, values, errors, 422);
+
+    const fotos = [];
+    for (const file of archivos) {
+      try {
+        fotos.push(await procesarArchivo(file));
+      } catch (err) {
+        if (err instanceof damagePhotos.PhotoError) return responderErrores(damage, values, { fotos: err.message }, 422);
+        throw err;
+      }
+    }
+    const reparado = await physical.repairDamage(damage.id, values, fotos, req.session.user.id);
+    if (!reparado) {
+      const error = "Alguien acaba de cambiar este daño. Revisa cómo quedó.";
+      return esFetch(req) ? res.status(409).json({ errors: { general: error } }) : res.redirect(withFlash(link, { error }));
+    }
+    await logChange(req.session.user.id, `marcó reparado el daño «${damage.zone_label}» de ${damage.vehicle_plate}`, link);
+    const destino = withFlash(link, { ok: "Daño marcado como reparado" });
+    return esFetch(req) ? res.json({ ok: true, redirect: destino }) : res.redirect(destino);
+  } catch (err) {
+    console.error("[Logística] Error marcando el daño reparado:", err);
+    const error = "No se pudo guardar la reparación. Vuelve a intentarlo.";
+    return esFetch(req) ? res.status(500).json({ errors: { general: error } }) : res.status(500).send(error);
+  } finally {
+    await borrarTemporales(req);
+  }
+});
+
+router.get("/flota/fotos/:id", accesoFlota, async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    const foto = id ? await physical.getPhoto(id) : null;
+    if (!foto) return notFound(res);
+    if (!puedeVerDanio(req, { review_created_by: foto.review_created_by, status: foto.damage_status })) {
+      return res.status(403).send("No tienes permiso para ver esta foto");
+    }
+    await enviarImagen(res, foto.storage_path);
+  } catch (err) {
+    console.error("[Logística] Error entregando la foto:", err);
+    res.status(500).send("Error cargando la foto");
   }
 });
 

@@ -9,6 +9,30 @@
     ['derecho', 'Derecha'],
     ['arriba', 'Arriba'],
   ];
+  const v = values || {};
+  const personas = Array.isArray(conductores) ? conductores : [];
+  const abiertosLista = Array.isArray(abiertos) ? abiertos : [];
+  const abiertosPorZona = new Map();
+  abiertosLista.forEach((d) => abiertosPorZona.set(d.zone_code, (abiertosPorZona.get(d.zone_code) || 0) + 1));
+  const otroConductor = v.driver_choice === driverOther;
+  const datosJs = {
+    vehiculo: { id: x.id, plate: x.plate, odometer_km: x.odometer_km },
+    postUrl: `${FLOTA}/${x.id}/revision-fisica`,
+    fotosUrl: FOTOS,
+    daniosUrl: DANIOS,
+    tipos: DAMAGE_TYPES,
+    maxFotos: MAX_PHOTOS,
+    maxDanios: MAX_DAMAGES,
+    puedeRegistrar: Boolean(puedeRevisarFisica),
+    abiertos: abiertosLista.map((d) => ({
+      id: d.id,
+      zone: d.zone_code,
+      tipo: damageTypeLabel(d.damage_type),
+      descripcion: d.description,
+      desde: `${d.review_number} · ${formatDate(d.review_date)}`,
+      fotos: d.damage_photos.map((p) => p.id),
+    })),
+  };
 %>
 
 <div class="contenedor">
@@ -22,9 +46,19 @@
         <span><%= x.plate %></span>
       </nav>
       <h2 class="page-title">Revisión física de <%= x.plate %></h2>
-      <p class="page-description"><%= vehicleLabel(x) || 'Sin modelo' %><%= tipoOk ? ` · ${labelFrom(VEHICLE_KINDS, x.kind)}` : '' %>. Abolladuras, rayones y partes rotas, marcadas sobre el modelo con su observación y sus fotos.</p>
+      <p class="page-description"><%= vehicleLabel(x) || 'Sin modelo' %><%= tipoOk ? ` · ${labelFrom(VEHICLE_KINDS, x.kind)}` : '' %>. Toca la zona del modelo donde hay una abolladura, un rayón o una parte rota y regístrala con su observación y sus fotos.</p>
     </div>
+    <% if (puedeVerRevisiones) { %>
+      <div class="page-header-actions">
+        <a href="<%= FLOTA %>/<%= x.id %>/revisiones" class="page-header-btn page-header-btn--secundario">
+          <%- include('../../partials/icon', { name: 'file-text' }) %> Revisiones
+        </a>
+      </div>
+    <% } %>
   </div>
+
+  <% if (success) { %><div hidden data-toast="<%= success %>"></div><% } %>
+  <% if (error) { %><div hidden data-toast="<%= error %>" data-toast-tone="error"></div><% } %>
 
   <% if (!tipoOk) { %>
     <div class="logistica-vacio">
@@ -39,7 +73,12 @@
     </div>
   <% } else { %>
 
+  <noscript>
+    <div class="flash-msg flash-msg--error" role="alert"><span>La revisión física necesita JavaScript activado en el navegador.</span></div>
+  </noscript>
+
   <div class="fisica-layout">
+    <!-- ═══════════ Modelo ═══════════ -->
     <section class="logistica-panel fisica-visor" data-modelo data-datos="modeloDatos" aria-labelledby="fisica-modelo-titulo">
       <div class="fisica-visor__head">
         <h3 class="logistica-panel__titulo" id="fisica-modelo-titulo">Modelo del vehículo</h3>
@@ -55,38 +94,198 @@
         <span class="fisica-visor__etiqueta" data-modelo-etiqueta hidden></span>
         <p class="fisica-visor__aviso" data-modelo-aviso hidden role="status"></p>
       </div>
-      <p class="fisica-visor__ayuda">Arrastra para girar, pellizca o usa la rueda para acercar, y toca una zona para elegirla. La izquierda es el lado del conductor.</p>
+      <div class="fisica-visor__pie">
+        <ul class="fisica-leyenda" aria-label="Colores del modelo">
+          <li><span class="fisica-leyenda__punto fisica-leyenda__punto--danio" aria-hidden="true"></span> Daño abierto</li>
+          <% if (puedeRevisarFisica) { %><li><span class="fisica-leyenda__punto fisica-leyenda__punto--nuevo" aria-hidden="true"></span> Nuevo en esta revisión</li><% } %>
+          <li><span class="fisica-leyenda__punto fisica-leyenda__punto--sel" aria-hidden="true"></span> Zona elegida</li>
+        </ul>
+        <p class="fisica-visor__ayuda">Arrastra para girar, pellizca o usa la rueda para acercar, y toca una zona para elegirla. La izquierda es el lado del conductor.</p>
+      </div>
     </section>
 
-    <aside class="fisica-lateral">
-      <section class="logistica-panel fisica-zona" data-zona-panel hidden aria-live="polite" aria-labelledby="fisica-zona-nombre">
-        <span class="fisica-zona__grupo" data-zona-grupo></span>
-        <h3 class="fisica-zona__nombre" id="fisica-zona-nombre" data-zona-nombre></h3>
-        <p class="fisica-zona__pronto">Pronto: aquí agregarás el tipo de daño, la observación y las fotos de esta zona.</p>
-      </section>
+    <!-- ═══════════ Zona elegida ═══════════ -->
+    <section class="logistica-panel fisica-zona" data-zona-panel hidden aria-live="polite" aria-labelledby="fisica-zona-nombre" tabindex="-1">
+      <div class="fisica-zona__head">
+        <div>
+          <span class="fisica-zona__grupo" data-zona-grupo></span>
+          <h3 class="fisica-zona__nombre" id="fisica-zona-nombre" data-zona-nombre></h3>
+        </div>
+        <button type="button" class="cfg-icono" data-zona-cerrar aria-label="Cerrar la zona"><%- include('../../partials/icon', { name: 'x' }) %></button>
+      </div>
 
-      <section class="logistica-panel fisica-lista" aria-labelledby="fisica-lista-titulo">
-        <h3 class="logistica-panel__titulo" id="fisica-lista-titulo">
-          Zonas
-          <span class="logistica-panel__extra"><%= modelo.zones.length %></span>
-        </h3>
-        <div class="fisica-lista__grupos">
-        <% grupos.forEach((g) => { const del = modelo.zones.filter((z) => z.group === g.value); if (!del.length) return; %>
-          <div class="fisica-lista__grupo">
-            <h4 class="checklist-grupo__titulo"><%= g.label %></h4>
-            <div class="fisica-lista__zonas">
-              <% del.forEach((z) => { %>
-                <button type="button" class="fisica-zona-btn" data-zona="<%= z.code %>" aria-pressed="false"><%= z.label %></button>
+      <div class="fisica-zona__abiertos" data-zona-abiertos></div>
+      <div class="fisica-zona__nuevos" data-zona-nuevos></div>
+
+      <% if (puedeRevisarFisica) { %>
+        <div class="fisica-danio" data-danio-form>
+          <h4 class="fisica-danio__titulo"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar un daño en esta zona</h4>
+          <fieldset class="fisica-danio__tipos">
+            <legend>Tipo de daño <span class="required-mark">*</span></legend>
+            <div class="tipo-chips" role="radiogroup">
+              <% DAMAGE_TYPES.forEach((t) => { %>
+                <label class="tipo-chip"><input type="radio" name="danio_tipo" value="<%= t.value %>"><span><%= t.label %></span></label>
               <% }) %>
             </div>
+          </fieldset>
+          <div class="campo-form">
+            <label for="danio_desc">Observación <span class="required-mark">*</span></label>
+            <textarea id="danio_desc" rows="2" maxlength="500" placeholder="Por ejemplo: rayón de 20 cm bajo la manilla, se ve el metal."></textarea>
           </div>
-        <% }) %>
+          <div class="fisica-fotos" data-fotos>
+            <div class="fisica-fotos__head">
+              <span class="fisica-fotos__titulo">Fotos <span class="required-mark">*</span></span>
+              <span class="fisica-fotos__conteo" data-fotos-conteo>0 de <%= MAX_PHOTOS %></span>
+            </div>
+            <ul class="fisica-fotos__lista" data-fotos-lista aria-label="Fotos del daño"></ul>
+            <div class="fisica-fotos__botones" data-fotos-botones>
+              <label class="page-header-btn page-header-btn--secundario fisica-fotos__boton">
+                <%- include('../../partials/icon', { name: 'camera' }) %> Sacar foto
+                <input type="file" accept="image/*" capture="environment" data-fotos-input class="sr-only">
+              </label>
+              <label class="page-header-btn page-header-btn--secundario fisica-fotos__boton">
+                <%- include('../../partials/icon', { name: 'image' }) %> Elegir fotos
+                <input type="file" accept="image/*" multiple data-fotos-input class="sr-only">
+              </label>
+            </div>
+            <p class="fisica-fotos__ayuda">De 1 a <%= MAX_PHOTOS %> fotos. Se reducen en tu teléfono antes de subirlas.</p>
+          </div>
+          <p class="campo-form__error" data-danio-error hidden role="alert"></p>
+          <div class="fisica-danio__acciones">
+            <button type="button" class="page-header-btn" data-danio-agregar><%- include('../../partials/icon', { name: 'check' }) %> Agregar daño</button>
+          </div>
         </div>
+      <% } %>
+    </section>
+
+    <!-- ═══════════ Zonas ═══════════ -->
+    <section class="logistica-panel fisica-lista" aria-labelledby="fisica-lista-titulo">
+      <h3 class="logistica-panel__titulo" id="fisica-lista-titulo">
+        Zonas
+        <span class="logistica-panel__extra"><%= modelo.zones.length %></span>
+      </h3>
+      <div class="fisica-lista__grupos">
+      <% grupos.forEach((g) => { const del = modelo.zones.filter((z) => z.group === g.value); if (!del.length) return; %>
+        <div class="fisica-lista__grupo">
+          <h4 class="checklist-grupo__titulo"><%= g.label %></h4>
+          <div class="fisica-lista__zonas">
+            <% del.forEach((z) => { const n = abiertosPorZona.get(z.code) || 0; %>
+              <button type="button" class="fisica-zona-btn" data-zona="<%= z.code %>" aria-pressed="false"<%- n ? ' data-estado="danio"' : '' %>>
+                <%= z.label %><span class="fisica-zona-btn__marca" data-zona-marca><%= n ? n : '' %></span>
+              </button>
+            <% }) %>
+          </div>
+        </div>
+      <% }) %>
+      </div>
+    </section>
+
+    <!-- ═══════════ Daños abiertos ═══════════ -->
+    <% if (puedeVerDanios) { %>
+      <section class="logistica-panel" aria-labelledby="fisica-abiertos-titulo">
+        <h3 class="logistica-panel__titulo" id="fisica-abiertos-titulo">
+          Daños abiertos
+          <span class="logistica-panel__extra"><%= abiertosLista.length %></span>
+        </h3>
+        <% if (!abiertosLista.length) { %>
+          <p class="logistica-panel__desc">El vehículo no tiene daños abiertos.</p>
+        <% } else { %>
+          <p class="logistica-panel__desc">Ya están registrados: no hace falta volver a agregarlos. Siguen abiertos hasta que Logística los marque reparados.</p>
+          <%- include('partials/danios_lista', { danios: abiertosLista, conZona: true }) %>
+        <% } %>
       </section>
-    </aside>
+    <% } %>
+
+    <!-- ═══════════ Nueva revisión ═══════════ -->
+    <% if (puedeRevisarFisica) { %>
+      <form class="logistica-form fisica-form" data-fisica-form method="post" action="<%= FLOTA %>/<%= x.id %>/revision-fisica" novalidate>
+        <div class="flash-msg flash-msg--error" data-form-error hidden role="alert">
+          <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+          <span data-form-error-texto></span>
+        </div>
+
+        <section class="logistica-panel" aria-labelledby="fisica-nuevos-titulo">
+          <h3 class="logistica-panel__titulo" id="fisica-nuevos-titulo">
+            <span class="logistica-panel__num" aria-hidden="true">1</span> Daños nuevos
+            <span class="logistica-panel__extra" data-nuevos-conteo>0</span>
+          </h3>
+          <div data-nuevos-lista>
+            <p class="fisica-nuevos__vacio">Todavía no agregas daños. Toca una zona del modelo para registrar uno; si el vehículo no tiene daños nuevos, puedes guardar igual.</p>
+          </div>
+          <p class="campo-form__error" data-error-for="danios" hidden></p>
+        </section>
+
+        <section class="logistica-panel" aria-labelledby="fisica-datos-titulo">
+          <h3 class="logistica-panel__titulo" id="fisica-datos-titulo">
+            <span class="logistica-panel__num" aria-hidden="true">2</span> Datos de la revisión
+          </h3>
+          <div class="campos-grid">
+            <div class="campo-form">
+              <label for="review_date">Fecha <span class="required-mark">*</span></label>
+              <input type="date" id="review_date" name="review_date" value="<%= v.review_date || today %>" max="<%= today %>" required>
+              <span class="campo-form__error" data-error-for="review_date" hidden></span>
+            </div>
+            <div class="campo-form">
+              <label for="reason">Motivo <span class="required-mark">*</span></label>
+              <select id="reason" name="reason" required>
+                <option value="">Elige el motivo</option>
+                <% REVIEW_REASONS.forEach((r) => { %>
+                  <option value="<%= r.value %>"<%= v.reason === r.value ? ' selected' : '' %>><%= r.label %></option>
+                <% }) %>
+              </select>
+              <span class="campo-form__error" data-error-for="reason" hidden></span>
+            </div>
+            <div class="campo-form">
+              <label for="odometer_km">Kilometraje <span class="required-mark">*</span></label>
+              <input type="text" id="odometer_km" name="odometer_km" value="" inputmode="numeric" maxlength="9" autocomplete="off" required>
+              <span class="campo-form__error" data-error-for="odometer_km" hidden></span>
+              <span class="campo-form__ayuda"><%= x.odometer_km != null ? `Último registrado: ${formatKm(x.odometer_km)}` : 'El que marca el tablero, sin decimales.' %></span>
+            </div>
+            <div class="campo-form">
+              <label for="driver_user_id">Conductor <span class="required-mark">*</span></label>
+              <select id="driver_user_id" name="driver_user_id" required data-conductor>
+                <option value="">Elige al conductor</option>
+                <% personas.forEach((p) => { %>
+                  <option value="<%= p.id %>"<%= String(v.driver_choice) === String(p.id) ? ' selected' : '' %>><%= p.name %></option>
+                <% }) %>
+                <option value="<%= driverOther %>"<%= otroConductor ? ' selected' : '' %>>Otra persona (escribir nombre)</option>
+              </select>
+              <span class="campo-form__error" data-error-for="driver_user_id" hidden></span>
+            </div>
+            <div class="campo-form" data-conductor-otro<%= otroConductor ? '' : ' hidden' %>>
+              <label for="driver_name_other">Nombre del conductor <span class="required-mark">*</span></label>
+              <input type="text" id="driver_name_other" name="driver_name_other" value="" maxlength="160" autocomplete="off">
+              <span class="campo-form__error" data-error-for="driver_name_other" hidden></span>
+            </div>
+            <div class="campo-form campo-form--ancho">
+              <label for="observations">Observaciones generales</label>
+              <textarea id="observations" name="observations" rows="2" maxlength="1000" placeholder="Opcional: cómo ocurrió el incidente, estado general, limpieza…"></textarea>
+            </div>
+          </div>
+
+          <label class="checklist-declaracion">
+            <input type="checkbox" name="declaro" value="1" required>
+            <span>
+              Declaro que revisé el vehículo por fuera y que los daños y fotos registrados son correctos.
+              <span class="checklist-declaracion__error" data-error-for="declaro" hidden></span>
+            </span>
+          </label>
+        </section>
+
+        <div class="logistica-form__acciones">
+          <a href="<%= FLOTA %>" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+          <button type="submit" class="page-header-btn" data-guardar>
+            <%- include('../../partials/icon', { name: 'check' }) %> <span data-guardar-texto>Guardar revisión</span>
+          </button>
+        </div>
+      </form>
+    <% } %>
   </div>
 
   <script type="application/json" id="modeloDatos"><%- JSON.stringify({ kind: x.kind, model: modelo, groups: grupos }).replace(/</g, '\\u003c') %></script>
-  <script type="module" src="/js/flota-modelo.js?v=20261104c"></script>
+  <script type="application/json" id="fisicaDatos"><%- JSON.stringify(datosJs).replace(/</g, '\\u003c') %></script>
+  <script type="module" src="/js/flota-modelo.js?v=20261104e"></script>
+  <script src="/js/flota-fotos.js?v=20261104a" defer></script>
+  <script src="/js/flota-fisica.js?v=20261104a" defer></script>
   <% } %>
 </div>
