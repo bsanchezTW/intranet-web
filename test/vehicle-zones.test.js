@@ -153,6 +153,18 @@ describe("revisión física — modelos de los tres tipos", () => {
     });
   }
 
+  it("los faros de la minivan siguen la nariz, sin flotar ni escalonarse", () => {
+    const { bodies } = MODELS.minivan;
+    const [faro] = zoneFor("minivan", "faro_delantero_izq").shapes;
+    assert.equal(faro.type, "extrude");
+    assert.equal(faro.plane, "side");
+    for (const p of faro.points) {
+      assert.ok(distanciaAlBorde(p, bodies[0].outline) <= 0.035, `[${p}] a ${distanciaAlBorde(p, bodies[0].outline).toFixed(3)} m de la carrocería`);
+    }
+    // No llega al borde redondeado del costado.
+    assert.ok(faro.at + faro.depth / 2 <= bodies[0].half - bodies[0].bevel + 0.001);
+  });
+
   it("las zonas que se repiten entre modelos se llaman igual", () => {
     for (const code of ["parachoques_delantero", "parachoques_trasero", "parabrisas", "espejo_izq", "rueda_delantera_der", "foco_trasero_izq"]) {
       const labels = new Set(Object.keys(MODELS).map((k) => zoneFor(k, code)?.label));

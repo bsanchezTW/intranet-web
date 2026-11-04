@@ -44,10 +44,10 @@ const extrude = (plane, points, depth, at, mat = "body", bevel = 0) => ({
 /** Panel delgado pegado al costado izquierdo de una carrocería de ancho `w`. */
 const sidePanel = (points, w, mat = "body") => extrude("side", points, 0.012, w / 2 + 0.008, mat);
 /**
- * Vidrio del costado: un poco más afuera que los paneles, para que no
- * parpadee cuando queda sobre una puerta (dos caras en el mismo plano).
+ * Vidrio (o faro) del costado: un poco más afuera que los paneles, para que
+ * no parpadee cuando queda sobre una puerta (dos caras en el mismo plano).
  */
-const sideGlass = (points, w) => extrude("side", points, 0.012, w / 2 + 0.022, "glass");
+const sideGlass = (points, w, mat = "glass") => extrude("side", points, 0.012, w / 2 + 0.022, mat);
 
 function round3(n) {
   return Math.round(n * 1000) / 1000;
@@ -119,6 +119,31 @@ function ribbon(points, t) {
   return [...points, ...fuera.reverse()];
 }
 
+/**
+ * Banda que abraza un tramo de la silueta: `dentro` metros hacia el interior
+ * de la carrocería y `fuera` hacia afuera. Para piezas que siguen una curva
+ * (faros sobre la nariz redondeada) sin quedar flotando ni escalonadas.
+ */
+function banda(points, dentro, fuera) {
+  const desplazar = (d) => ribbon(points, d).slice(points.length).reverse();
+  return [...desplazar(fuera), ...desplazar(-dentro).reverse()];
+}
+
+/**
+ * Silueta con un punto cada `paso` metros, para sacar de ella tramos que
+ * sigan también sus partes rectas (la nariz entre dos esquinas).
+ */
+function densificar(points, paso) {
+  const out = [];
+  for (let i = 0; i < points.length; i += 1) {
+    const [x0, y0] = points[i];
+    const [x1, y1] = points[(i + 1) % points.length];
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / paso));
+    for (let k = 0; k < n; k += 1) out.push([x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n]);
+  }
+  return out;
+}
+
 /** Espejo de una forma: del lado izquierdo al derecho. */
 function mirrorShape(s) {
   if (s.type !== "extrude") return { ...s, pos: [s.pos[0], s.pos[1], -s.pos[2]] };
@@ -179,17 +204,24 @@ function minivan() {
   // por dentro de la cara lateral.
   const parabrisasY = (x) => 1.9 - (x - 0.95) * 1.143;
   const pilarY = (x) => parabrisasY(x) - 0.1;
+  // Tramos de la silueta para las piezas del frente: siguen su curva en vez
+  // de ser placas que sobresalen de la nariz.
+  const frente = densificar(perfil, 0.03).filter(([x]) => x >= 2.08);
+  const tramo = (y0, y1) => frente.filter(([, y]) => y >= y0 && y <= y1);
+  const tramoFaro = tramo(0.79, 1.0);
   const pilarX = (y) => 0.95 + (1.9 - 0.1 - y) / 1.143;
 
   const zones = [
     { code: "parachoques_delantero", label: "Parachoques delantero", group: "frente", shapes: [
-      box([0.14, 0.34, W - 0.04], [2.25, 0.47, 0]),
-      box([0.03, 0.1, 0.9], [2.325, 0.42, 0], "dark"), // toma de aire
+      extrude("side", banda(tramo(0.31, 0.62), 0.03, 0.015), W - 2 * BISEL, 0),
+      extrude("side", banda(tramo(0.37, 0.47), 0.02, 0.022), 0.9, 0, "dark"), // toma de aire
     ] },
-    { code: "parrilla", label: "Parrilla", group: "frente", shapes: [box([0.03, 0.17, 0.86], [2.252, 0.8, 0], "dark", { rotZ: 0.4 })] },
+    { code: "parrilla", label: "Parrilla", group: "frente", shapes: [extrude("side", banda(tramo(0.72, 0.9), 0.02, 0.022), 0.8, 0, "dark")] },
     ...pairSameGroup("faro_delantero", "Faro delantero", "frente", [
-      box([0.04, 0.13, 0.4], [2.222, 0.85, 0.63], "light", { rotZ: 0.4 }),
-      box([0.3, 0.1, 0.03], [2.1, 0.88, W / 2 - BISEL / 2], "light", { rotZ: 0.2 }), // se abre hacia el tapabarro
+      // Una sola pieza que abraza el final del capó y la nariz, de la parrilla
+      // hasta antes del borde redondeado, y su vuelta sobre el tapabarro.
+      extrude("side", banda(tramoFaro, 0.02, 0.03), 0.4, 0.62, "light"),
+      sideGlass(rounded([[2.0, 0.88], [2.12, 0.865, 0.02], [2.165, 0.82, 0.02], [2.15, 0.79], [2.02, 0.83]]), W, "light"),
     ]),
     { code: "capo", label: "Capó", group: "frente", shapes: [extrude("side", ribbon([[1.74, 1.02], [1.98, 0.99], [2.16, 0.95]], 0.025), W - 0.16, 0)] },
     { code: "parabrisas", label: "Parabrisas", group: "frente", shapes: [extrude("side", ribbon([[0.97, 1.878], [1.35, 1.444], [1.7, 1.044]], 0.025), W - 0.16, 0, "glass")] },
