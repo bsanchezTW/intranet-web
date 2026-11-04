@@ -172,6 +172,8 @@ function crearVisor(THREE, { datos, lienzo, etiqueta, zonas, estados, getSelecci
         material("grille"),
       );
       mesh.add(llanta);
+    } else if (s.type === "extrude") {
+      return perfil(s);
     } else {
       geo = new THREE.BoxGeometry(...s.size);
       mesh = new THREE.Mesh(geo, material(s.mat));
@@ -179,6 +181,35 @@ function crearVisor(THREE, { datos, lienzo, etiqueta, zonas, estados, getSelecci
     }
     mesh.position.set(s.pos[0], s.pos[1], -s.pos[2]);
     mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), bordes));
+    return mesh;
+  }
+
+  // Polígono extruido (carrocería, paneles, cintas). El bisel no agranda la
+  // silueta: bevelOffset negativo la mantiene en sus medidas.
+  const A_LO_LARGO = new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 1);
+  const HACIA_ARRIBA = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1);
+  function perfil(s) {
+    const bisel = s.bevel || 0;
+    const nucleo = Math.max(s.depth - 2 * bisel, 0.001);
+    const geo = new THREE.ExtrudeGeometry(new THREE.Shape(s.points.map(([a, b]) => new THREE.Vector2(a, b))), {
+      depth: nucleo,
+      bevelEnabled: bisel > 0,
+      bevelThickness: bisel,
+      bevelSize: bisel,
+      bevelOffset: -bisel,
+      bevelSegments: 3,
+      curveSegments: 4,
+    });
+    geo.translate(0, 0, -nucleo / 2);
+    // 'side' ya está a lo ancho; 'front' y 'top' se giran. En todos, la z de
+    // los datos (izquierda) queda en -z de three.js.
+    if (s.plane === "front") geo.applyMatrix4(A_LO_LARGO);
+    if (s.plane === "top") geo.applyMatrix4(HACIA_ARRIBA);
+    const mesh = new THREE.Mesh(geo, material(s.mat));
+    if (s.plane === "side") mesh.position.z = -s.at;
+    else if (s.plane === "front") mesh.position.x = s.at;
+    else mesh.position.y = s.at;
+    mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 35), bordes));
     return mesh;
   }
 
