@@ -43,6 +43,11 @@ const extrude = (plane, points, depth, at, mat = "body", bevel = 0) => ({
 });
 /** Panel delgado pegado al costado izquierdo de una carrocería de ancho `w`. */
 const sidePanel = (points, w, mat = "body") => extrude("side", points, 0.012, w / 2 + 0.008, mat);
+/**
+ * Vidrio del costado: un poco más afuera que los paneles, para que no
+ * parpadee cuando queda sobre una puerta (dos caras en el mismo plano).
+ */
+const sideGlass = (points, w) => extrude("side", points, 0.012, w / 2 + 0.022, "glass");
 
 function round3(n) {
   return Math.round(n * 1000) / 1000;
@@ -140,68 +145,97 @@ function pairSameGroup(code, label, group, shapes, fin = "o") {
 }
 
 // ---------------------------------------------------------------------------
-// Minivan: Maxus eDeliver 3 (4,56 × 1,78 × 1,90 m; 2,91 m entre ejes)
-// Frente corto y redondo, parabrisas muy inclinado que nace casi del capó,
-// puerta lateral corredera sin vidrio y dos puertas traseras.
+// Minivan / furgón Maxus (4,56 × 1,78 × 1,90 m; 2,91 m entre ejes)
+// Capó corto y frente alto: parachoques del color de la carrocería con toma
+// de aire negra, parrilla negra y faros grandes que suben al tapabarro. El
+// parabrisas nace casi sobre la rueda delantera; ventanas en la puerta
+// delantera, la corredera, el costado y atrás.
+//
+// La carrocería lleva bisel de BISEL: su cara lateral plana termina BISEL
+// antes de la silueta, así que los paneles del costado se dibujan al menos
+// eso por dentro (si no, flotan por fuera del pilar o del techo).
 // ---------------------------------------------------------------------------
 
 function minivan() {
   const W = 1.76;
-  const R = 0.34; // rueda 215/65 R16
-  const ejeD = 1.43;
-  const ejeT = -1.48;
+  const R = 0.33; // rueda 195/70 R15
+  const ejeD = 1.55;
+  const ejeT = -1.36;
   const base = 0.3;
+  const BISEL = 0.06;
+  const cintura = 1.26; // borde inferior de las ventanas
+  const ventanaArriba = 1.74;
   const perfil = rounded([
-    [-2.28, base, 0.05],
-    [-2.28, 1.86, 0.16],
-    [0.42, 1.9, 0.3],
-    [1.56, 1.1, 0.26],
-    [2.2, 0.88, 0.2],
-    [2.3, 0.56, 0.12],
-    [2.25, base, 0.05],
+    [-2.26, base, 0.05],
+    [-2.26, 1.86, 0.16],
+    [0.95, 1.9, 0.24],
+    [1.72, 1.02, 0.1],
+    [2.18, 0.94, 0.14],
+    [2.3, 0.66, 0.1],
+    [2.26, base, 0.05],
   ]);
-  const cuerpo = [...perfil, ...arch(ejeD, R, 0.44, base), ...arch(ejeT, R, 0.44, base)];
-  // Línea del parabrisas (de [0.42, 1.9] a [1.56, 1.1]), para recortar el
-  // vidrio de la puerta delantera.
-  const parabrisasY = (x) => 1.9 - (x - 0.42) * 0.7;
+  const cuerpo = [...perfil, ...arch(ejeD, R, 0.45, base), ...arch(ejeT, R, 0.45, base)];
+  // Línea del parabrisas (de [0.95, 1.9] a [1.72, 1.02]) y la del pilar, ya
+  // por dentro de la cara lateral.
+  const parabrisasY = (x) => 1.9 - (x - 0.95) * 1.143;
+  const pilarY = (x) => parabrisasY(x) - 0.1;
+  const pilarX = (y) => 0.95 + (1.9 - 0.1 - y) / 1.143;
 
   const zones = [
-    { code: "parachoques_delantero", label: "Parachoques delantero", group: "frente", shapes: [box([0.16, 0.26, 1.74], [2.24, 0.44, 0], "dark")] },
-    { code: "parrilla", label: "Parrilla", group: "frente", shapes: [box([0.05, 0.12, 1.0], [2.29, 0.64, 0], "dark", { rotZ: 0.22 })] },
-    ...pairSameGroup("faro_delantero", "Faro delantero", "frente", [box([0.06, 0.1, 0.44], [2.17, 0.86, 0.6], "light", { rotZ: 0.75 })]),
-    { code: "capo", label: "Capó", group: "frente", shapes: [extrude("side", ribbon([[1.58, 1.1], [1.9, 1.0], [2.18, 0.9]], 0.025), W - 0.2, 0)] },
-    { code: "parabrisas", label: "Parabrisas", group: "frente", shapes: [extrude("side", ribbon([[0.5, 1.88], [1.05, 1.48], [1.55, 1.12]], 0.025), W - 0.18, 0, "glass")] },
+    { code: "parachoques_delantero", label: "Parachoques delantero", group: "frente", shapes: [
+      box([0.14, 0.34, W - 0.04], [2.25, 0.47, 0]),
+      box([0.03, 0.1, 0.9], [2.325, 0.42, 0], "dark"), // toma de aire
+    ] },
+    { code: "parrilla", label: "Parrilla", group: "frente", shapes: [box([0.03, 0.17, 0.86], [2.252, 0.8, 0], "dark", { rotZ: 0.4 })] },
+    ...pairSameGroup("faro_delantero", "Faro delantero", "frente", [
+      box([0.04, 0.13, 0.4], [2.222, 0.85, 0.63], "light", { rotZ: 0.4 }),
+      box([0.3, 0.1, 0.03], [2.1, 0.88, W / 2 - BISEL / 2], "light", { rotZ: 0.2 }), // se abre hacia el tapabarro
+    ]),
+    { code: "capo", label: "Capó", group: "frente", shapes: [extrude("side", ribbon([[1.74, 1.02], [1.98, 0.99], [2.16, 0.95]], 0.025), W - 0.16, 0)] },
+    { code: "parabrisas", label: "Parabrisas", group: "frente", shapes: [extrude("side", ribbon([[0.97, 1.878], [1.35, 1.444], [1.7, 1.044]], 0.025), W - 0.16, 0, "glass")] },
     ...pair("tapabarro_delantero", "Tapabarro delantero", [sidePanel(rounded([
-      [1.65, 0.74], [1.86, 0.62], [2.27, 0.6], [2.22, 0.86, 0.06], [1.64, 1.07],
+      [1.74, 0.8], [1.88, 0.7], [1.97, 0.58], [2.2, 0.58], [2.22, 0.68, 0.04], [2.12, 0.88, 0.04], [1.76, 0.95],
     ]), W)]),
     ...pair("puerta_delantera", "Puerta delantera", [
-      sidePanel(rounded([[0.86, 0.38], [1.02, 0.38], [1.14, 0.64], [1.32, 0.76], [1.52, 0.75], [1.62, 0.72], [1.62, 1.08], [0.86, 1.24, 0.04]]), W),
-      // Vidrio: sobre la línea de cintura y hasta el pilar del parabrisas.
-      sidePanel(rounded([[0.9, 1.28], [1.3, 1.2], [0.98, parabrisasY(0.98) - 0.07, 0.04], [0.9, parabrisasY(0.9) - 0.07, 0.03]]), W, "glass"),
+      sidePanel(rounded([
+        [0.96, 0.36], [1.07, 0.36], [1.16, 0.62], [1.33, 0.76], [1.52, 0.8], [1.68, 0.79],
+        [1.68, pilarY(1.68) + 0.02], [pilarX(cintura - 0.02), cintura - 0.02], [0.96, cintura - 0.02, 0.03],
+      ]), W),
+      sideGlass(rounded([
+        [0.99, cintura + 0.02], [pilarX(cintura + 0.02) - 0.03, cintura + 0.02],
+        [pilarX(ventanaArriba) - 0.02, ventanaArriba, 0.03], [0.99, ventanaArriba, 0.03],
+      ]), W),
     ], "a"),
     ...pair("puerta_lateral", "Puerta lateral", [
-      sidePanel(rounded([[-0.56, 0.38, 0.04], [0.82, 0.38, 0.04], [0.82, 1.78, 0.06], [-0.56, 1.78, 0.06]]), W),
+      sidePanel(rounded([[-0.44, 0.36, 0.03], [0.92, 0.36, 0.03], [0.92, 1.8, 0.05], [-0.44, 1.8, 0.05]]), W),
+      sideGlass(rounded([[-0.38, cintura + 0.02, 0.04], [0.86, cintura + 0.02, 0.04], [0.86, ventanaArriba, 0.05], [-0.38, ventanaArriba, 0.05]]), W),
     ], "a"),
     ...pair("costado_trasero", "Costado trasero", [
-      sidePanel(rounded([[-2.22, 0.38], [-1.93, 0.38], [-1.78, 0.68], [-1.48, 0.8], [-1.18, 0.68], [-1.03, 0.38], [-0.6, 0.38], [-0.6, 1.78, 0.06], [-2.22, 1.78, 0.1]]), W),
+      sidePanel(rounded([
+        [-2.18, 0.36], [-1.81, 0.36], [-1.68, 0.64], [-1.36, 0.78], [-1.04, 0.64], [-0.91, 0.36], [-0.48, 0.36],
+        [-0.48, 1.8, 0.05], [-2.18, 1.8, 0.1],
+      ]), W),
+      sideGlass(rounded([[-2.06, cintura + 0.02, 0.05], [-0.54, cintura + 0.02, 0.04], [-0.54, ventanaArriba, 0.05], [-1.96, ventanaArriba, 0.1]]), W),
     ]),
-    ...pair("espejo", "Espejo", [box([0.1, 0.2, 0.22], [1.5, 1.24, W / 2 + 0.12], "dark")]),
-    ...pair("rueda_delantera", "Rueda delantera", [wheel([ejeD, R, W / 2 - 0.15], R, 0.22)], "a"),
-    ...pair("rueda_trasera", "Rueda trasera", [wheel([ejeT, R, W / 2 - 0.15], R, 0.22)], "a"),
-    { code: "techo", label: "Techo", group: "arriba", shapes: [extrude("side", ribbon([[-2.12, 1.875], [-0.8, 1.89], [0.3, 1.9]], 0.025), W - 0.22, 0)] },
+    ...pair("espejo", "Espejo", [box([0.1, 0.18, 0.2], [1.6, 1.2, W / 2 + 0.11], "dark")]),
+    ...pair("rueda_delantera", "Rueda delantera", [wheel([ejeD, R, W / 2 - 0.15], R, 0.21)], "a"),
+    ...pair("rueda_trasera", "Rueda trasera", [wheel([ejeT, R, W / 2 - 0.15], R, 0.21)], "a"),
+    { code: "techo", label: "Techo", group: "arriba", shapes: [extrude("side", ribbon([[-2.1, 1.875], [-0.6, 1.89], [0.82, 1.9]], 0.025), W - 0.2, 0)] },
     { code: "puerta_trasera", label: "Puertas traseras", group: "atras", shapes: [
-      extrude("front", rounded([[-0.8, 0.4, 0.04], [0.8, 0.4, 0.04], [0.8, 1.76, 0.1], [-0.8, 1.76, 0.1]]), 0.012, -2.296),
+      extrude("front", rounded([[-0.78, 0.4, 0.04], [0.78, 0.4, 0.04], [0.78, 1.78, 0.1], [-0.78, 1.78, 0.1]]), 0.012, -2.276),
+      // Vidrio un poco más afuera que la puerta, para que no parpadee.
+      extrude("front", rounded([[-0.68, cintura + 0.02, 0.04], [0.68, cintura + 0.02, 0.04], [0.64, 1.7, 0.06], [-0.64, 1.7, 0.06]]), 0.012, -2.292, "glass"),
     ] },
-    { code: "parachoques_trasero", label: "Parachoques trasero", group: "atras", shapes: [box([0.12, 0.2, 1.74], [-2.3, 0.4, 0], "dark")] },
-    ...pairSameGroup("foco_trasero", "Foco trasero", "atras", [box([0.04, 0.5, 0.08], [-2.3, 1.18, 0.82], "tail")]),
+    { code: "parachoques_trasero", label: "Parachoques trasero", group: "atras", shapes: [box([0.12, 0.22, W - 0.02], [-2.28, 0.42, 0], "dark")] },
+    ...pairSameGroup("foco_trasero", "Foco trasero", "atras", [box([0.04, 0.42, 0.1], [-2.275, 1.08, W / 2 - 0.12], "tail")]),
   ];
   const decor = [
-    extrude("side", cuerpo, W, 0, "body", 0.06),
-    // Frente inferior negro y aletas de los pasos de rueda.
-    ...[ejeD, ejeT].flatMap((x) => [1, -1].map((lado) => extrude("side", archBand(x, R, 0.44, 0.5, base), 0.03, lado * (W / 2 + 0.005), "dark"))),
+    extrude("side", cuerpo, W, 0, "body", BISEL),
+    // Aletas de los pasos de rueda.
+    ...[ejeD, ejeT].flatMap((x) => [1, -1].map((lado) => extrude("side", archBand(x, R, 0.45, 0.5, base), 0.03, lado * (W / 2 + 0.005), "dark"))),
     box([4.1, 0.14, 1.3], [0, 0.32, 0], "dark"), // piso y chasis
   ];
-  return { length: 4.6, width: W, height: 1.9, zones, decor };
+  return { length: 4.6, width: W, height: 1.9, zones, decor, bodies: [{ outline: perfil, bevel: BISEL, half: W / 2 }] };
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +270,7 @@ function pickup() {
     ]),
     ...arch(ejeD, R, 0.49, base),
   ];
+  const siluetaFrente = frente.slice(0, frente.length - 13);
   // Vidrios y techo de la cabina doble.
   const cabina = rounded([
     [cabinaAtras + 0.02, cintura - 0.02],
@@ -250,11 +285,12 @@ function pickup() {
     [-2.66, 0.58], [-2.66, 1.14], [tolvaFrente, 1.14], [tolvaFrente, 0.58],
     ...arch(ejeT, R, 0.5, 0.58),
   ];
-  // Tapabarro delantero: sobre la aleta de la rueda, hasta la línea del capó.
+  // Tapabarro delantero: sobre la aleta de la rueda, hasta la línea del capó
+  // (por dentro del bisel, como todos los paneles del costado).
   const tapabarro = [
-    [1.2, 0.62],
+    [1.22, 0.62],
     ...arch(ejeD, R, 0.58, 0.62).reverse(),
-    [2.6, 0.64], [2.62, 1.03], [2.42, 1.11], [1.2, 1.14],
+    [2.56, 0.64], [2.58, 0.98], [2.4, 1.065], [1.22, 1.09],
   ];
 
   const zones = [
@@ -271,11 +307,11 @@ function pickup() {
     { code: "parabrisas", label: "Parabrisas", group: "frente", shapes: [extrude("side", ribbon([[0.44, 1.775], [0.8, 1.464], [1.15, 1.16]], 0.025), anchoVidrios - 0.06, 0, "glass")] },
     ...pair("tapabarro_delantero", "Tapabarro delantero", [sidePanel(tapabarro, W)]),
     ...pair("puerta_delantera", "Puerta delantera", [
-      sidePanel(rounded([[0.24, base + 0.04, 0.04], [1.17, base + 0.04], [1.18, cintura - 0.02], [0.24, cintura, 0.04]]), W),
+      sidePanel(rounded([[0.24, base + 0.06, 0.04], [1.16, base + 0.06], [1.16, cintura - 0.07], [0.24, cintura - 0.06, 0.04]]), W),
       extrude("side", rounded([[0.28, cintura + 0.03], [1.04, cintura + 0.03], [0.46, 1.7, 0.03], [0.28, 1.7, 0.04]]), 0.012, anchoVidrios / 2 + 0.006, "glass"),
     ], "a"),
     ...pair("puerta_trasera", "Puerta trasera", [
-      sidePanel(rounded([[cabinaAtras + 0.04, base + 0.04, 0.04], [0.21, base + 0.04], [0.21, cintura], [cabinaAtras + 0.04, cintura + 0.02, 0.06]]), W),
+      sidePanel(rounded([[cabinaAtras + 0.06, base + 0.06, 0.04], [0.21, base + 0.06], [0.21, cintura - 0.06], [cabinaAtras + 0.06, cintura - 0.05, 0.06]]), W),
       extrude("side", rounded([[-0.86, cintura + 0.03], [0.18, cintura + 0.03], [0.18, 1.7, 0.03], [-0.78, 1.7, 0.08]]), 0.012, anchoVidrios / 2 + 0.006, "glass"),
     ], "a"),
     ...pair("espejo", "Espejo", [box([0.16, 0.15, 0.22], [1.05, 1.3, W / 2 + 0.11], "dark")]),
@@ -304,7 +340,13 @@ function pickup() {
     ...[1, -1].map((lado) => box([2.0, 0.05, 0.16], [0.1, 0.44, lado * (W / 2 + 0.02)], "dark")),
     box([4.9, 0.18, 1.2], [0, 0.42, 0], "dark"), // chasis
   ];
-  return { length: 5.42, width: W, height: 1.8, zones, decor };
+  return {
+    length: 5.42, width: W, height: 1.8, zones, decor,
+    bodies: [
+      { outline: siluetaFrente, bevel: 0.05, half: W / 2 },
+      { outline: cabina, bevel: 0.03, half: anchoVidrios / 2 },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +371,7 @@ function camion() {
     ]),
     ...arch(ejeD, R, 0.6, 0.66),
   ];
+  const siluetaCabina = perfilCabina.slice(0, perfilCabina.length - 13);
   const parabrisasX = (y) => 3.48 + ((2.5 - y) / 0.78) * 0.05;
 
   const zones = [
@@ -367,7 +410,7 @@ function camion() {
     box([6.9, 0.25, 1.0], [0, 0.75, 0], "dark"), // chasis
     ...[1, -1].map((lado) => extrude("side", archBand(ejeD, R, 0.6, 0.66, 0.66), 0.04, lado * (cab / 2 + 0.005), "dark")),
   ];
-  return { length: 7.2, width: W, height: 3.45, zones, decor };
+  return { length: 7.2, width: W, height: 3.45, zones, decor, bodies: [{ outline: siluetaCabina, bevel: 0.08, half: cab / 2 }] };
 }
 
 const MODELS = Object.freeze({

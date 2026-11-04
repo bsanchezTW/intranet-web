@@ -22,6 +22,28 @@ function validShape(s) {
   return false;
 }
 
+function dentro([px, py], poly) {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+
+function distanciaAlBorde([px, py], poly) {
+  let d = Infinity;
+  for (let i = 0; i < poly.length; i += 1) {
+    const [x0, y0] = poly[i];
+    const [x1, y1] = poly[(i + 1) % poly.length];
+    const l2 = (x1 - x0) ** 2 + (y1 - y0) ** 2;
+    const t = l2 ? Math.max(0, Math.min(1, ((px - x0) * (x1 - x0) + (py - y0) * (y1 - y0)) / l2)) : 0;
+    d = Math.min(d, Math.hypot(px - (x0 + t * (x1 - x0)), py - (y0 + t * (y1 - y0))));
+  }
+  return d;
+}
+
 /** Área con signo (fórmula del cordón): 0 si el polígono está degenerado. */
 function area(points) {
   let a = 0;
@@ -70,6 +92,44 @@ describe("revisión física — modelos de los tres tipos", () => {
           assert.deepEqual(der.shapes, izq.shapes.map(mirrorShape));
           // Una pieza del lado izquierdo está a la izquierda (z > 0).
           for (const s of izq.shapes) assert.ok(shapeBounds(s).max[2] > 0, `${izq.code} no está a la izquierda`);
+        }
+      });
+
+      it("los paneles del costado quedan sobre la cara plana de su carrocería", () => {
+        // El bisel redondea el borde: la cara plana termina `bevel` antes de
+        // la silueta. Un panel que se acerca más flota por fuera (pilar,
+        // techo, capó).
+        assert.ok(model.bodies?.length, "el modelo declara sus carrocerías");
+        for (const z of model.zones) {
+          for (const s of z.shapes) {
+            if (s.type !== "extrude" || s.plane !== "side" || s.depth > 0.02) continue;
+            const cuerpo = model.bodies.find((b) => Math.abs(Math.abs(s.at) - b.half) < 0.03); // paneles y vidrios
+            assert.ok(cuerpo, `${z.code}: panel sin carrocería a ${s.at}`);
+            for (const p of s.points) {
+              assert.ok(dentro(p, cuerpo.outline), `${z.code}: [${p}] fuera de la silueta`);
+              assert.ok(distanciaAlBorde(p, cuerpo.outline) >= cuerpo.bevel * 0.9, `${z.code}: [${p}] a ${distanciaAlBorde(p, cuerpo.outline).toFixed(3)} m del borde (bisel ${cuerpo.bevel})`);
+            }
+          }
+        }
+      });
+
+      it("dos paneles del costado que se tapan no están en el mismo plano (parpadeo)", () => {
+        const paneles = model.zones.flatMap((z) => z.shapes
+          .filter((s) => s.type === "extrude" && s.plane === "side" && s.depth <= 0.02)
+          .map((s) => ({ code: z.code, s, b: shapeBounds(s) })));
+        for (let i = 0; i < paneles.length; i += 1) {
+          for (let j = i + 1; j < paneles.length; j += 1) {
+            const a = paneles[i];
+            const c = paneles[j];
+            if (a.s.at !== c.s.at) continue;
+            const seTapan = a.b.min[0] < c.b.max[0] && c.b.min[0] < a.b.max[0] && a.b.min[1] < c.b.max[1] && c.b.min[1] < a.b.max[1];
+            // Mismo plano y se cruzan en x e y: comparten superficie y parpadean.
+            if (seTapan) {
+              const sx = Math.min(a.b.max[0], c.b.max[0]) - Math.max(a.b.min[0], c.b.min[0]);
+              const sy = Math.min(a.b.max[1], c.b.max[1]) - Math.max(a.b.min[1], c.b.min[1]);
+              assert.ok(sx < 0.05 || sy < 0.05, `${a.code} y ${c.code} comparten plano en ${a.s.at}`);
+            }
+          }
         }
       });
 
