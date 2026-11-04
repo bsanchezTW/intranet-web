@@ -335,11 +335,124 @@ describe("revisión física — vistas", () => {
     assert.match(reparado, /Desabollado en taller/);
 
     const listas = await render("partials/revisiones_listas.ejs", {
-      vehiculo: VEHICULO, mecanicas: [], compacto: false, ...permisos,
+      vehiculo: VEHICULO, mecanicas: [], compacto: true, ...permisos,
       fisicas: [{ id: 2, number: "RF-00002-2026", review_date: TODAY, driver_name: "B", odometer_km: 1, status: "registered", danios: 2 }],
       danios: [...r.damages, ...r.previous],
     });
     assert.match(listas, /2 daños nuevos/);
-    assert.match(listas, /2 abiertos · 1 reparado/);
+    assert.match(listas, /2 daños abiertos/);
+  });
+});
+
+describe("historial del vehículo — una pestaña por tipo", () => {
+  const VIEWS = path.join(__dirname, "..", "src", "views", "logistica", "flota");
+  const r = reviewDePrueba();
+  const mecanica = (id, fecha, result, status = "registered") => ({
+    id, number: C.formatChecklistNumber(Number(fecha.slice(0, 4)), id), inspection_date: fecha, inspection_kind: "salida",
+    driver_name: "B", odometer_km: 40000 + id, result, status, fallas: result === "apto" ? 0 : 1,
+  });
+  const base = {
+    country: "CL", countryConfig: getCountryConfig(), success: null, error: null, ...C, ...P,
+    formatDate: (v) => (v ? String(v).slice(0, 10).split("-").reverse().join("/") : "—"),
+    resultLabel: (x) => x, vehicleLabel: vehicles.vehicleLabel, documentAlerts: vehicles.documentAlerts,
+    documentsFor: vehicles.documentsFor, VEHICLE_FIELDS: vehicles.VEHICLE_FIELDS,
+    FLOTA: "/logistica/flota", MECANICA: "/logistica/flota/mecanica", FISICA: "/logistica/flota/fisica",
+    DANIOS: "/logistica/flota/danios", FOTOS: "/logistica/flota/fotos",
+    vehiculo: { ...VEHICULO, id: 7 }, today: TODAY,
+    mecanicas: [mecanica(3, "2026-11-01", "no_apto"), mecanica(2, "2026-06-01", "apto"), mecanica(1, "2025-12-01", "apto", "voided")],
+    fisicas: [{ id: 2, number: "RF-00002-2026", review_date: TODAY, reason: "periodica", driver_name: "B", odometer_km: 45230, status: "registered", danios: 0 }],
+    danios: [...r.damages, { ...r.damages[0], id: 50, status: "anulado" }],
+    visibles: ["mecanicas", "fisicas", "danios", "kilometraje", "ficha"], puedeVerFicha: true,
+    lecturas: [], resumenKm: null, cambios: [], cambiosTotal: 0,
+    puedeAdministrar: true, puedeRevisar: true, puedeRevisarFisica: true, puedeVerMecanicas: true, puedeVerFisicas: true, puedeVerDanios: true,
+  };
+  const render = (extra) => ejs.renderFile(path.join(VIEWS, "revisiones.ejs"), { ...base, ...extra });
+
+  it("mecánicas: sólo las mecánicas, agrupadas por año, con su resumen", async () => {
+    const html = await render({ ver: "mecanicas" });
+    assert.match(html, /aria-current="page"[^>]*>[\s\S]*?Mecánicas/);
+    assert.match(html, /historial-anio__titulo"><span>2026<\/span>/);
+    assert.match(html, /historial-anio__titulo"><span>2025<\/span>/);
+    assert.doesNotMatch(html, /RF-00002-2026/, "no mezcla las físicas");
+    assert.match(html, /<strong>2<\/strong><span>revisiones<\/span>/, "las anuladas no cuentan");
+  });
+
+  it("físicas y daños van en sus propias pestañas", async () => {
+    const fis = await render({ ver: "fisicas" });
+    assert.match(fis, /RF-00002-2026/);
+    assert.doesNotMatch(fis, /CV-00003-2026/);
+    const dan = await render({ ver: "danios" });
+    assert.match(dan, /<span>Abiertos<\/span>/);
+    assert.match(dan, /<span>Reparados<\/span>/);
+    assert.match(dan, /<span>Anulados<\/span>/);
+  });
+
+  it("kilometraje: resumen, datos del gráfico y tabla", async () => {
+    const lecturas = [
+      { date: "2026-09-01", km: 40000, source: "ficha", ref_id: 1 },
+      { date: "2026-10-01", km: 42000, source: "mecanica", ref_id: 2, year: 2026, seq: 7 },
+      { date: TODAY, km: 44500, source: "fisica", ref_id: 3, year: 2026, seq: 2 },
+    ];
+    const html = await render({ ver: "kilometraje", lecturas, resumenKm: vehicles.kmSummary(lecturas, TODAY) });
+    const datos = JSON.parse(html.match(/id="kmDatos">([^<]*)<\/script>/)[1]);
+    assert.equal(datos.length, 3);
+    assert.equal(datos[1].numero, "CV-00007-2026");
+    assert.equal(datos[2].numero, "RF-00002-2026");
+    assert.match(html, /Corrección en la ficha/);
+  });
+
+  it("ficha: muestra cada cambio con antes y después", async () => {
+    const html = await render({
+      ver: "ficha",
+      cambiosTotal: 1,
+      cambios: [{ id: 1, action: "editado", changed_by_name: "Logística", changed_at: new Date(), changes: [{ field: "insurance_due", from: "2025-11-20", to: "2026-11-20" }, { field: "kind", from: "minivan", to: "pickup" }] }],
+    });
+    assert.match(html, /Editó la ficha/);
+    assert.match(html, /Seguro obligatorio/);
+    assert.match(html, /20\/11\/2025/);
+    assert.match(html, /Camioneta pickup/);
+  });
+
+  it("sin permiso de ver la flota no aparecen kilometraje ni ficha", async () => {
+    const html = await render({ ver: "mecanicas", visibles: ["mecanicas", "fisicas"], puedeVerFicha: false });
+    assert.doesNotMatch(html, /ver=kilometraje/);
+    assert.doesNotMatch(html, /ver=ficha/);
+  });
+});
+
+describe("ficha del vehículo — cambios y kilometraje", () => {
+  it("diffVehicle registra sólo lo que cambió, sin confundir vacío con nulo", () => {
+    const antes = { plate: "ABCD12", kind: "pickup", brand: "Toyota", model: "", model_year: 2022, odometer_km: "45000", insurance_due: "2026-11-20", notes: null };
+    const despues = { plate: "ABCD12", kind: "pickup", brand: "Toyota", model: null, model_year: 2022, odometer_km: 45200, insurance_due: "2027-11-20", notes: "" };
+    assert.deepEqual(vehicles.diffVehicle(antes, despues), [
+      { field: "odometer_km", from: 45000, to: 45200 },
+      { field: "insurance_due", from: "2026-11-20", to: "2027-11-20" },
+    ]);
+    assert.deepEqual(vehicles.diffVehicle(antes, antes), []);
+  });
+
+  it("al crear, los cambios son los valores iniciales", () => {
+    const cambios = vehicles.diffVehicle({}, { plate: "ABCD12", kind: "minivan", brand: "", model_year: null });
+    assert.deepEqual(cambios, [{ field: "plate", from: null, to: "ABCD12" }, { field: "kind", from: null, to: "minivan" }]);
+  });
+
+  it("kmSummary: última lectura, últimos 30 días y promedio mensual", () => {
+    const s = vehicles.kmSummary([
+      { date: "2026-08-06", km: 40000 },
+      { date: "2026-10-01", km: 42000 },
+      { date: "2026-11-04", km: 43000 },
+    ], TODAY);
+    assert.equal(s.last.km, 43000);
+    assert.equal(s.lastMonth, 1000, "desde la lectura anterior a hace 30 días");
+    assert.equal(s.perMonth, Math.round((3000 / 90) * 30));
+    assert.equal(vehicles.kmSummary([], TODAY), null);
+    assert.equal(vehicles.kmSummary([{ date: TODAY, km: 5 }], TODAY).perMonth, null, "con una lectura no hay promedio");
+  });
+
+  it("el schema guarda el historial de la ficha con RLS", () => {
+    const sql = DDL_STATEMENTS.join("\n");
+    assert.match(sql, /CREATE TABLE IF NOT EXISTS logistics_vehicle_changes/);
+    assert.match(sql, /action IN \('creado','editado','baja','reactivado'\)/);
+    assert.match(sql, /ALTER TABLE logistics_vehicle_changes ENABLE ROW LEVEL SECURITY/);
   });
 });

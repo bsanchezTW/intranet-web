@@ -2,7 +2,92 @@
   const x = vehiculo;
   const alertas = documentAlerts(x, today);
   const tipoOk = isVehicleKind(x.kind);
+  const listaDanios = Array.isArray(danios) ? danios : [];
+  const abiertos = listaDanios.filter((d) => d.status === 'abierto');
+  const reparados = listaDanios.filter((d) => d.status === 'reparado');
+  const anulados = listaDanios.filter((d) => d.status === 'anulado');
+  const TABS = {
+    mecanicas: { label: 'Mecánicas', icono: 'clipboard-check', cuenta: mecanicas.length },
+    fisicas: { label: 'Físicas', icono: 'camera', cuenta: fisicas.length },
+    danios: { label: 'Daños', icono: 'alert-triangle', cuenta: abiertos.length, alerta: abiertos.length > 0, titulo: `${abiertos.length} abiertos` },
+    kilometraje: { label: 'Kilometraje', icono: 'chart', cuenta: lecturas.length },
+    ficha: { label: 'Cambios en la ficha', icono: 'edit', cuenta: cambiosTotal },
+  };
+  const urlTab = (tab) => `${FLOTA}/${x.id}/revisiones${tab === 'mecanicas' ? '' : `?ver=${tab}`}`;
+
+  // Agrupa por año (de la fecha de cada fila), del más reciente al más antiguo.
+  function porAnio(lista, fecha) {
+    const grupos = [];
+    lista.forEach((fila) => {
+      const anio = String(fecha(fila) || '').slice(0, 4) || '—';
+      let g = grupos.find((gr) => gr.anio === anio);
+      if (!g) { g = { anio, filas: [] }; grupos.push(g); }
+      g.filas.push(fila);
+    });
+    return grupos;
+  }
+
+  function valorCampo(campo, valor) {
+    const def = VEHICLE_FIELDS.find((f) => f.field === campo) || { type: 'text' };
+    if (valor == null || valor === '') return '—';
+    if (def.type === 'date') return formatDate(valor);
+    if (def.type === 'km') return formatKm(valor);
+    if (def.type === 'kind') return labelFrom(VEHICLE_KINDS, valor);
+    return String(valor);
+  }
+  const etiquetaCampo = (campo) => (VEHICLE_FIELDS.find((f) => f.field === campo) || { label: campo }).label;
+  const fmtHora = (valor) => new Date(valor).toLocaleString(countryConfig.locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: countryConfig.timezone });
+  const ACCIONES = {
+    creado: { texto: 'Agregó el vehículo', icono: 'plus', clase: 'creado' },
+    editado: { texto: 'Editó la ficha', icono: 'edit', clase: 'editado' },
+    baja: { texto: 'Dio de baja el vehículo', icono: 'ban', clase: 'baja' },
+    reactivado: { texto: 'Reactivó el vehículo', icono: 'repeat', clase: 'reactivado' },
+  };
+  const FUENTES = { mecanica: 'Revisión mecánica', fisica: 'Revisión física', ficha: 'Corrección en la ficha', alta: 'Alta del vehículo' };
 %>
+
+<% function filasRevision(lista, tipo) { %>
+  <% porAnio(lista, (c) => tipo === 'mecanica' ? c.inspection_date : c.review_date).forEach((g) => { %>
+    <div class="historial-anio">
+      <h4 class="historial-anio__titulo"><span><%= g.anio %></span> <span class="historial-anio__cuenta"><%= g.filas.length %> <%= g.filas.length === 1 ? 'revisión' : 'revisiones' %></span></h4>
+      <ul class="rev-filas">
+        <% g.filas.forEach((c) => {
+             const anulada = c.status === 'voided';
+             const enlace = tipo === 'mecanica' ? `${MECANICA}/${c.id}` : `${FISICA}/${c.id}`;
+             const fecha = tipo === 'mecanica' ? c.inspection_date : c.review_date;
+             const estado = tipo === 'mecanica'
+               ? { clase: c.result, texto: resultLabel(c.result) }
+               : (c.danios ? { clase: 'no_apto', texto: `${c.danios} ${c.danios === 1 ? 'daño nuevo' : 'daños nuevos'}` } : { clase: 'apto', texto: 'Sin daños nuevos' });
+             const detalle = tipo === 'mecanica'
+               ? `${labelFrom(INSPECTION_KINDS, c.inspection_kind)}${c.fallas ? ` · ${c.fallas} ${c.fallas === 1 ? 'ítem no operativo' : 'ítems no operativos'}` : ''}`
+               : reasonLabel(c.reason);
+        %>
+          <li class="rev-fila<%= anulada ? ' is-anulada' : '' %>">
+            <a class="rev-fila__enlace" href="<%= enlace %>">
+              <span class="rev-fila__fecha"><%= formatDate(fecha) %></span>
+              <span class="rev-fila__numero"><%= c.number %></span>
+              <span class="rev-fila__quien"><%= c.driver_name %> · <%= formatKm(c.odometer_km) %> · <%= detalle %></span>
+            </a>
+            <% if (anulada) { %>
+              <span class="logistica-estado logistica-estado--anulado">Anulada</span>
+            <% } else { %>
+              <span class="logistica-estado logistica-estado--<%= estado.clase %>"><%= estado.texto %></span>
+            <% } %>
+            <a href="<%= enlace %>/pdf" target="_blank" rel="noopener" class="cfg-icono" title="Imprimir <%= c.number %>" aria-label="Imprimir <%= c.number %>"><%- include('../../partials/icon', { name: 'printer' }) %></a>
+          </li>
+        <% }) %>
+      </ul>
+    </div>
+  <% }) %>
+<% } %>
+
+<% function resumen(datos) { %>
+  <ul class="historial-resumen">
+    <% datos.forEach(([etiqueta, valor, clase]) => { %>
+      <li class="historial-resumen__dato<%= clase ? ` is-${clase}` : '' %>"><strong><%= valor %></strong><span><%= etiqueta %></span></li>
+    <% }) %>
+  </ul>
+<% } %>
 
 <div class="contenedor">
 
@@ -14,7 +99,7 @@
         <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
         <span><%= x.plate %></span>
       </nav>
-      <h2 class="page-title">Revisiones de <%= x.plate %></h2>
+      <h2 class="page-title">Historial de <%= x.plate %></h2>
       <p class="page-description"><%= vehicleLabel(x) || 'Sin modelo' %><%= tipoOk ? ` · ${labelFrom(VEHICLE_KINDS, x.kind)}` : '' %><%= x.active ? '' : ' · Dado de baja' %></p>
     </div>
     <div class="page-header-actions">
@@ -30,9 +115,9 @@
     </div>
   </div>
 
-  <section class="logistica-panel historial-ficha" aria-label="Ficha del vehículo" style="padding-bottom: 18px; margin-bottom: 18px;">
+  <section class="logistica-panel historial-ficha" aria-label="Ficha del vehículo">
     <span class="flota-card__silueta"><%- include('../partials/silueta', { tipo: x.kind }) %></span>
-    <dl class="logistica-datos" style="margin: 0;">
+    <dl class="logistica-datos">
       <div><dt>Patente</dt><dd><span class="logistica-patente"><%= x.plate %></span></dd></div>
       <div><dt>Kilometraje</dt><dd><%= formatKm(x.odometer_km) %></dd></div>
       <% documentsFor(country).forEach((d) => { const a = alertas.find((al) => al.label === d.label); %>
@@ -44,8 +129,159 @@
     </dl>
   </section>
 
-  <section class="logistica-panel" aria-labelledby="rev-titulo" style="padding-bottom: 18px;">
-    <h3 class="logistica-panel__titulo" id="rev-titulo"><%- include('../../partials/icon', { name: 'file-text' }) %> Revisiones</h3>
-    <%- include('partials/revisiones_listas', { compacto: false }) %>
+  <nav class="historial-tabs" aria-label="Historial del vehículo">
+    <% visibles.forEach((tab) => { const t = TABS[tab]; %>
+      <a href="<%= urlTab(tab) %>" class="historial-tab<%= t.alerta ? ' is-alerta' : '' %>"<%- ver === tab ? ' aria-current="page"' : '' %><%- t.titulo ? ` title="${t.titulo}"` : '' %>>
+        <%- include('../../partials/icon', { name: t.icono }) %>
+        <span><%= t.label %></span>
+        <span class="historial-tab__cuenta"><%= t.cuenta %></span>
+      </a>
+    <% }) %>
+  </nav>
+
+  <section class="logistica-panel historial-panel" aria-labelledby="historial-titulo">
+
+    <% if (ver === 'mecanicas') { %>
+      <h3 class="logistica-panel__titulo" id="historial-titulo">Revisiones mecánicas</h3>
+      <% if (!mecanicas.length) { %>
+        <div class="historial-vacio">
+          <p>Todavía no tiene revisiones mecánicas<%= puedeVerMecanicas ? '' : ' registradas por ti' %>.</p>
+          <% if (x.active && puedeRevisar) { %><a href="<%= MECANICA %>/nueva?vehiculo=<%= x.id %>" class="page-header-btn"><%- include('../../partials/icon', { name: 'clipboard-check' }) %> Registrar la primera</a><% } %>
+        </div>
+      <% } else { %>
+        <% const validas = mecanicas.filter((c) => c.status !== 'voided');
+           resumen([
+             ['revisiones', validas.length],
+             ['aptas', validas.filter((c) => c.result === 'apto').length, 'apto'],
+             ['con observaciones', validas.filter((c) => c.result === 'observado').length, 'observado'],
+             ['no aptas', validas.filter((c) => c.result === 'no_apto').length, 'no_apto'],
+             ['anuladas', mecanicas.length - validas.length],
+           ]); %>
+        <% filasRevision(mecanicas, 'mecanica') %>
+      <% } %>
+
+    <% } else if (ver === 'fisicas') { %>
+      <h3 class="logistica-panel__titulo" id="historial-titulo">Revisiones físicas</h3>
+      <% if (!fisicas.length) { %>
+        <div class="historial-vacio">
+          <p>Todavía no tiene revisiones físicas<%= puedeVerFisicas ? '' : ' registradas por ti' %>.</p>
+          <% if (x.active && puedeRevisarFisica && tipoOk) { %><a href="<%= FLOTA %>/<%= x.id %>/revision-fisica" class="page-header-btn"><%- include('../../partials/icon', { name: 'camera' }) %> Hacer la primera</a><% } %>
+        </div>
+      <% } else { %>
+        <% const validas = fisicas.filter((c) => c.status !== 'voided');
+           const aviso = x.active && tipoOk ? physicalReviewAlert(validas[0] && validas[0].review_date, today) : null;
+           resumen([
+             ['revisiones', validas.length],
+             ['con daños nuevos', validas.filter((c) => c.danios).length, 'no_apto'],
+             ['sin daños nuevos', validas.filter((c) => !c.danios).length, 'apto'],
+             ['anuladas', fisicas.length - validas.length],
+           ]); %>
+        <% if (aviso) { %>
+          <p class="historial-aviso"><%- include('../../partials/icon', { name: 'clock' }) %> Revisión física pendiente: <%= aviso.detail %>.</p>
+        <% } %>
+        <% filasRevision(fisicas, 'fisica') %>
+      <% } %>
+
+    <% } else if (ver === 'danios') { %>
+      <h3 class="logistica-panel__titulo" id="historial-titulo">Daños</h3>
+      <% if (!listaDanios.length) { %>
+        <div class="historial-vacio"><p>No tiene daños registrados.</p></div>
+      <% } else { %>
+        <% resumen([
+             ['abiertos', abiertos.length, abiertos.length ? 'no_apto' : ''],
+             ['reparados', reparados.length, 'apto'],
+             ['anulados', anulados.length],
+           ]); %>
+        <% [['Abiertos', abiertos, 'Siguen así hasta que Logística los marque reparados.'], ['Reparados', reparados, ''], ['Anulados', anulados, 'Se anularon junto con su revisión: no cuentan como daños del vehículo.']].forEach(([titulo, lista, nota]) => { if (!lista.length) return; %>
+          <div class="historial-anio">
+            <h4 class="historial-anio__titulo"><span><%= titulo %></span> <span class="historial-anio__cuenta"><%= lista.length %></span></h4>
+            <% if (nota) { %><p class="historial-nota"><%= nota %></p><% } %>
+            <%- include('partials/danios_lista', { danios: lista }) %>
+          </div>
+        <% }) %>
+      <% } %>
+
+    <% } else if (ver === 'kilometraje') { %>
+      <h3 class="logistica-panel__titulo" id="historial-titulo">Kilometraje</h3>
+      <% if (!lecturas.length) { %>
+        <div class="historial-vacio"><p>Todavía no hay lecturas: el kilometraje se registra en cada revisión y al corregir la ficha.</p></div>
+      <% } else { const k = resumenKm; %>
+        <% resumen([
+             [`último · ${formatDate(k.last.date)}`, formatKm(k.last.km)],
+             ['últimos 30 días', `+${formatKm(k.lastMonth)}`],
+             ['promedio mensual', k.perMonth == null ? '—' : formatKm(k.perMonth)],
+             ['lecturas', k.count],
+           ]); %>
+        <figure class="km-grafico" aria-labelledby="km-titulo">
+          <figcaption id="km-titulo" class="km-grafico__titulo">Kilometraje en el tiempo</figcaption>
+          <p class="sr-only">Gráfico del kilometraje: de <%= formatKm(k.first.km) %> el <%= formatDate(k.first.date) %> a <%= formatKm(k.last.km) %> el <%= formatDate(k.last.date) %>. Las lecturas están en la tabla de abajo.</p>
+          <div class="km-grafico__lienzo" data-km-grafico>
+            <noscript><p class="historial-nota">El gráfico necesita JavaScript; las lecturas están en la tabla.</p></noscript>
+          </div>
+          <p class="km-grafico__nota"><span class="km-grafico__punto" aria-hidden="true"></span> Revisión · <span class="km-grafico__punto km-grafico__punto--hueco" aria-hidden="true"></span> Alta o corrección en la ficha</p>
+        </figure>
+        <script type="application/json" id="kmDatos"><%- JSON.stringify(lecturas.map((l) => ({
+          fecha: l.date, km: l.km, fuente: l.source, texto: FUENTES[l.source],
+          numero: l.source === 'mecanica' ? formatChecklistNumber(l.year, l.seq) : l.source === 'fisica' ? formatPhysicalNumber(l.year, l.seq) : null,
+          fechaTexto: formatDate(l.date), kmTexto: formatKm(l.km),
+        }))).replace(/</g, '\\u003c') %></script>
+        <div class="logistica-tabla-wrap km-tabla">
+          <table class="logistica-tabla logistica-tabla--tarjetas">
+            <caption class="sr-only">Lecturas de kilometraje</caption>
+            <thead><tr><th scope="col">Fecha</th><th scope="col" class="num">Kilometraje</th><th scope="col" class="num">Diferencia</th><th scope="col">Origen</th></tr></thead>
+            <tbody>
+              <% [...lecturas].reverse().forEach((l, i, arr) => { const previa = arr[i + 1]; const dif = previa ? l.km - previa.km : null; %>
+                <tr>
+                  <td data-label="Fecha"><%= formatDate(l.date) %></td>
+                  <td class="num" data-label="Kilometraje"><%= formatKm(l.km) %></td>
+                  <td data-label="Diferencia" class="num<%= dif != null && dif < 0 ? ' is-negativo' : '' %>"><%= dif == null ? '—' : `${dif >= 0 ? '+' : '−'}${formatKm(Math.abs(dif))}` %></td>
+                  <td data-label="Origen" class="km-tabla__origen">
+                    <% if (l.source === 'mecanica') { %><a href="<%= MECANICA %>/<%= l.ref_id %>"><%= FUENTES.mecanica %> <%= formatChecklistNumber(l.year, l.seq) %></a>
+                    <% } else if (l.source === 'fisica') { %><a href="<%= FISICA %>/<%= l.ref_id %>"><%= FUENTES.fisica %> <%= formatPhysicalNumber(l.year, l.seq) %></a>
+                    <% } else { %><%= FUENTES[l.source] %><% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+
+    <% } else if (ver === 'ficha') { %>
+      <h3 class="logistica-panel__titulo" id="historial-titulo">Cambios en la ficha</h3>
+      <p class="logistica-panel__desc">Quién agregó, editó, dio de baja o reactivó el vehículo y qué cambió. El kilometraje que suben las revisiones está en la pestaña Kilometraje.</p>
+      <ol class="ficha-cambios">
+        <% cambios.forEach((c) => { const a = ACCIONES[c.action] || ACCIONES.editado; const lista = Array.isArray(c.changes) ? c.changes : []; %>
+          <li class="ficha-cambio ficha-cambio--<%= a.clase %>">
+            <span class="ficha-cambio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: a.icono }) %></span>
+            <div class="ficha-cambio__cuerpo">
+              <p class="ficha-cambio__titulo"><strong><%= a.texto %></strong></p>
+              <p class="ficha-cambio__meta"><%= c.changed_by_name %> · <time datetime="<%= new Date(c.changed_at).toISOString() %>"><%= fmtHora(c.changed_at) %></time></p>
+              <% if (c.previous) { %>
+                <p class="historial-nota">Fecha de alta en la flota. Los cambios anteriores a este historial no quedaron registrados.</p>
+              <% } else if (lista.length && c.action === 'creado') { %>
+                <dl class="ficha-cambio__iniciales">
+                  <% lista.forEach((ch) => { %><div><dt><%= etiquetaCampo(ch.field) %></dt><dd><%= valorCampo(ch.field, ch.to) %></dd></div><% }) %>
+                </dl>
+              <% } else if (lista.length) { %>
+                <table class="ficha-cambio__tabla">
+                  <caption class="sr-only">Campos que cambiaron</caption>
+                  <thead><tr><th scope="col">Campo</th><th scope="col">Antes</th><th scope="col">Después</th></tr></thead>
+                  <tbody>
+                    <% lista.forEach((ch) => { %>
+                      <tr>
+                        <th scope="row"><%= etiquetaCampo(ch.field) %></th>
+                        <td class="ficha-cambio__antes"><%= valorCampo(ch.field, ch.from) %></td>
+                        <td class="ficha-cambio__despues"><%= valorCampo(ch.field, ch.to) %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              <% } %>
+            </div>
+          </li>
+        <% }) %>
+      </ol>
+    <% } %>
   </section>
 </div>

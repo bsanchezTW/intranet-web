@@ -2309,3 +2309,351 @@ a.fisica-zona__danio-tipo:hover { color: var(--brand); text-decoration: underlin
   .fisica-capturas li { padding: 6px; }
   .fisica-danio__acciones .page-header-btn { width: 100%; justify-content: center; }
 }
+
+/* ── Historial del vehículo: pestañas por tipo ───────────────────────────── */
+
+.historial-ficha { padding-bottom: 18px; margin-bottom: 18px; }
+.historial-ficha .logistica-datos { margin: 0; }
+
+.historial-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 5px;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  scrollbar-width: none;
+}
+
+.historial-tabs::-webkit-scrollbar { display: none; }
+
+.historial-tab {
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.historial-tab .icon-svg { color: var(--color-text-subtle); }
+.historial-tab:hover { background: var(--color-surface-muted); color: var(--color-heading); }
+.historial-tab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.historial-tab[aria-current="page"] { background: var(--brand); color: #fff; }
+.historial-tab[aria-current="page"] .icon-svg { color: #fff; }
+
+.historial-tab__cuenta {
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  text-align: center;
+}
+
+.historial-tab[aria-current="page"] .historial-tab__cuenta { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.historial-tab.is-alerta .historial-tab__cuenta { background: var(--down); color: #fff; }
+
+.historial-panel { padding-bottom: 20px; }
+
+/* Cifras del tipo elegido. */
+.historial-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+
+.historial-resumen__dato {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface-muted);
+}
+
+.historial-resumen__dato strong {
+  color: var(--color-heading);
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.historial-resumen__dato span { color: var(--color-text-subtle); font-size: 0.76rem; font-weight: 700; }
+
+.historial-resumen__dato.is-apto strong { color: var(--green-ink); }
+.historial-resumen__dato.is-observado strong { color: #8a5a00; }
+.historial-resumen__dato.is-no_apto strong { color: var(--down); }
+
+:root[data-theme="dark"] .historial-resumen__dato.is-observado strong { color: #f2c46b; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .historial-resumen__dato.is-observado strong { color: #f2c46b; }
+}
+
+/* Grupos por año (o por estado, en daños). */
+.historial-anio + .historial-anio { margin-top: 20px; }
+
+.historial-anio__titulo {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  color: var(--color-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.historial-anio__cuenta { color: var(--color-text-subtle); font-size: 0.78rem; font-weight: 700; }
+
+.historial-anio .danios { margin-bottom: 0; }
+
+.historial-nota { margin: 0 0 10px; color: var(--color-text-subtle); font-size: 0.82rem; line-height: 1.45; }
+
+.historial-aviso {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(214, 150, 32, 0.14);
+  color: #8a5a00;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.historial-vacio {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 18px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.historial-vacio p { margin: 0; }
+
+/* Kilometraje: gráfico y tabla. */
+.km-grafico {
+  margin: 0 0 18px;
+  padding: 14px 14px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.km-grafico__titulo { margin: 0 0 6px; color: var(--color-heading); font-size: 0.86rem; font-weight: 800; }
+
+.km-grafico__lienzo { position: relative; min-height: 220px; touch-action: pan-y; }
+
+.km-grafico__svg { display: block; overflow: visible; }
+
+.km-grafico__rejilla line { stroke: var(--color-border); stroke-width: 1; }
+.km-grafico__base { stroke: var(--color-border-strong); stroke-width: 1; }
+.km-grafico__marca { stroke: var(--color-border-strong); }
+
+.km-grafico__eje {
+  fill: var(--color-text-subtle);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.km-grafico__linea {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.km-grafico__dato {
+  fill: var(--brand);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+  transition: r 0.12s ease;
+}
+
+.km-grafico__dato.is-ficha { fill: var(--color-surface); stroke: var(--brand); }
+.km-grafico__dato.is-activo { r: 6; }
+
+.km-grafico__guia { stroke: var(--color-text-subtle); stroke-width: 1; stroke-dasharray: 3 3; }
+
+.km-grafico__area { fill: transparent; cursor: crosshair; outline: none; }
+.km-grafico__area:focus-visible { stroke: var(--brand); stroke-width: 2; }
+
+.km-grafico__tip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 1px;
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+.km-grafico__tip[hidden] { display: none; }
+.km-grafico__tip strong { color: var(--color-heading); font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+.km-grafico__tip-origen { color: var(--color-text-subtle); }
+
+.km-grafico__nota {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  color: var(--color-text-subtle);
+  font-size: 0.76rem;
+}
+
+.km-grafico__punto {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--brand);
+  border-radius: 50%;
+  background: var(--brand);
+}
+
+.km-grafico__punto--hueco { background: var(--color-surface); margin-left: 8px; }
+
+.km-tabla .num { text-align: right; font-variant-numeric: tabular-nums; }
+.km-tabla .is-negativo { color: var(--down); }
+
+@media (max-width: 720px) {
+  .km-tabla .num { text-align: left; }
+  .km-tabla .km-tabla__origen { grid-column: 1 / -1; }
+}
+
+/* Cambios en la ficha: línea de tiempo. */
+.ficha-cambios {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ficha-cambios::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 17px;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.ficha-cambio {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.ficha-cambio__icono {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--color-surface);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.ficha-cambio--creado .ficha-cambio__icono { background: var(--green-soft); color: var(--green-ink); }
+.ficha-cambio--baja .ficha-cambio__icono { background: rgba(208, 92, 92, 0.12); color: var(--down); }
+.ficha-cambio--reactivado .ficha-cambio__icono { background: var(--green-soft); color: var(--green-ink); }
+
+.ficha-cambio__cuerpo {
+  min-width: 0;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.ficha-cambio__titulo { margin: 0; color: var(--color-heading); font-size: 0.9rem; }
+.ficha-cambio__meta { margin: 2px 0 0; color: var(--color-text-subtle); font-size: 0.78rem; }
+
+.ficha-cambio__tabla {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+
+.ficha-cambio__tabla th,
+.ficha-cambio__tabla td {
+  padding: 6px 8px;
+  border-top: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.ficha-cambio__tabla thead th {
+  border-top: 0;
+  color: var(--color-text-subtle);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ficha-cambio__tabla tbody th { width: 34%; color: var(--color-heading); font-weight: 700; }
+.ficha-cambio__antes { color: var(--color-text-subtle); text-decoration: line-through; text-decoration-color: rgba(120, 130, 150, 0.5); }
+.ficha-cambio__despues { color: var(--color-heading); font-weight: 700; }
+
+.ficha-cambio__iniciales {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 14px;
+  margin: 10px 0 0;
+}
+
+.ficha-cambio__iniciales dt { color: var(--color-text-subtle); font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.ficha-cambio__iniciales dd { margin: 2px 0 0; color: var(--color-text); font-size: 0.86rem; }
+
+@media (max-width: 720px) {
+  .historial-tabs { flex-wrap: wrap; overflow: visible; }
+  .historial-tab { flex: 1 1 auto; min-height: 38px; padding: 0 10px; gap: 6px; font-size: 0.82rem; }
+  .ficha-cambio__tabla thead { display: none; }
+  .ficha-cambio__tabla tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-top: 1px solid var(--color-border); padding: 6px 0; }
+  .ficha-cambio__tabla th, .ficha-cambio__tabla td { border-top: 0; padding: 2px 4px; }
+  .ficha-cambio__tabla tbody th { grid-column: 1 / -1; width: auto; color: var(--color-text-subtle); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .historial-resumen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ficha-cambio { grid-template-columns: 30px minmax(0, 1fr); gap: 10px; }
+  .ficha-cambio__icono { width: 30px; height: 30px; }
+  .ficha-cambios::before { left: 14px; }
+  .km-grafico { padding: 12px 8px 8px; }
+}

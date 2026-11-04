@@ -50,7 +50,7 @@
     </div>
     <% if (puedeVerRevisiones) { %>
       <div class="page-header-actions">
-        <a href="<%= FLOTA %>/<%= x.id %>/revisiones" class="page-header-btn page-header-btn--secundario">
+        <a href="<%= FLOTA %>/<%= x.id %>/revisiones?ver=fisicas" class="page-header-btn page-header-btn--secundario">
           <%- include('../../partials/icon', { name: 'file-text' }) %> Revisiones
         </a>
       </div>

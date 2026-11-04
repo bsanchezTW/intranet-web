@@ -25,6 +25,7 @@ const {
   reasonLabel,
   damageStateLabel,
   physicalReviewAlert,
+  formatPhysicalNumber,
 } = require("../constants/vehiclePhysical");
 const { parseId } = require("../services/logistics/inputs");
 const {
@@ -70,7 +71,7 @@ const FISICA = `${FLOTA}/fisica`;
 const DANIOS = `${FLOTA}/danios`;
 const FOTOS = `${FLOTA}/fotos`;
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261104b"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261104c"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -95,6 +96,8 @@ const VIEW_HELPERS = {
   reasonLabel,
   damageStateLabel,
   physicalReviewAlert,
+  formatPhysicalNumber,
+  VEHICLE_FIELDS: vehicles.VEHICLE_FIELDS,
   FLOTA,
   MECANICA,
   ITEMS,
@@ -617,15 +620,19 @@ router.post("/flota/:id", requirePermission(ADMIN_FLOTA), async (req, res) => {
     if (!vehiculo) return;
     const { values, errors, ok } = vehicles.normalizeVehicleInput(req.body);
     if (!ok) return renderVehicleForm(res, { values, errors, vehiculo, status: 422 });
+    let cambios;
     try {
-      await vehicles.updateVehicle(vehiculo.id, values, req.session.user.id);
+      cambios = await vehicles.updateVehicle(vehiculo.id, values, req.session.user.id);
     } catch (err) {
       if (err instanceof vehicles.VehicleInputError) {
         return renderVehicleForm(res, { values, errors: { [err.field]: err.message }, vehiculo, status: 409 });
       }
       throw err;
     }
-    await logChange(req.session.user.id, `editó el vehículo ${values.plate}`, `${FLOTA}/${vehiculo.id}/revisiones`);
+    if (!cambios) return notFound(res);
+    if (!cambios.length) return res.redirect(withFlash(FLOTA, { ok: `${values.plate} no tenía cambios` }));
+    const campos = cambios.map((c) => (vehicles.VEHICLE_FIELDS.find((v) => v.field === c.field) || { label: c.field }).label.toLowerCase());
+    await logChange(req.session.user.id, `editó el vehículo ${values.plate} (${campos.join(", ")})`, `${FLOTA}/${vehiculo.id}/revisiones?ver=ficha`);
     res.redirect(withFlash(FLOTA, { ok: `Vehículo ${values.plate} actualizado` }));
   } catch (err) {
     console.error("[Logística] Error editando vehículo:", err);
@@ -638,12 +645,14 @@ router.post("/flota/:id/estado", requirePermission(ADMIN_FLOTA), async (req, res
   try {
     const vehiculo = await loadVehicle(req, res);
     if (!vehiculo) return;
-    await vehicles.setVehicleActive(vehiculo.id, activar, req.session.user.id);
-    await logChange(
-      req.session.user.id,
-      `${activar ? "reactivó" : "dio de baja"} el vehículo ${vehiculo.plate}`,
-      `${FLOTA}/${vehiculo.id}/revisiones`,
-    );
+    const cambio = await vehicles.setVehicleActive(vehiculo.id, activar, req.session.user.id);
+    if (cambio) {
+      await logChange(
+        req.session.user.id,
+        `${activar ? "reactivó" : "dio de baja"} el vehículo ${vehiculo.plate}`,
+        `${FLOTA}/${vehiculo.id}/revisiones?ver=ficha`,
+      );
+    }
     res.redirect(withFlash(FLOTA, {
       ok: activar ? `${vehiculo.plate} vuelve a la flota` : `${vehiculo.plate} quedó dado de baja`,
     }));
@@ -656,18 +665,35 @@ router.post("/flota/:id/estado", requirePermission(ADMIN_FLOTA), async (req, res
 // --- Revisiones y revisión física de un vehículo ---------------------------------
 
 /**
- * Revisiones de un vehículo. Con ?parcial=1 (lo pide la tarjeta al
- * desplegarse) responde sólo las listas, sin la página.
+ * Historial de un vehículo, con una pestaña por tipo (?ver=):
+ *   mecanicas    revisiones mecánicas            (lo propio o todo)
+ *   fisicas      revisiones físicas              (lo propio o todo)
+ *   danios       registro de daños               (quien ve daños)
+ *   kilometraje  lecturas y gráfico              (quien ve la flota)
+ *   ficha        cambios en la ficha             (quien ve la flota)
+ * Cada pestaña es su propia lista: no se mezclan los tipos. Con ?parcial=1
+ * (lo pide la tarjeta al desplegarse) responde sólo las listas recientes.
  */
+const HISTORIAL_TABS = ["mecanicas", "fisicas", "danios", "kilometraje", "ficha"];
+
 router.get("/flota/:id/revisiones", accesoFlota, async (req, res) => {
   try {
     const vehiculo = await loadVehicle(req, res);
     if (!vehiculo) return;
     const permisos = permisosFlota(req);
-    const [mecanicas, fisicas, danios] = await Promise.all([
+    const puedeVerFicha = decide(req.perms, VER_FLOTA, req.permLegacy) || permisos.puedeAdministrar;
+    const visibles = HISTORIAL_TABS.filter((tab) => (tab === "danios" ? permisos.puedeVerDanios
+      : tab === "kilometraje" || tab === "ficha" ? puedeVerFicha : true));
+    const ver = visibles.includes(req.query.ver) ? req.query.ver : "mecanicas";
+    const parcial = req.query.parcial === "1";
+
+    const [mecanicas, fisicas, danios, lecturas, cambios, cambiosTotal] = await Promise.all([
       checklists.listChecklists({ vehiculo: vehiculo.id, scope: checklistScope(req) }),
       physical.listPhysicalReviews({ vehiculo: vehiculo.id, scope: fisicaScope(req) }),
-      permisos.puedeVerDanios ? physical.listDamages(vehiculo.id) : Promise.resolve([]),
+      permisos.puedeVerDanios ? physical.listDamages(vehiculo.id, { includeVoided: !parcial }) : Promise.resolve([]),
+      puedeVerFicha && !parcial ? vehicles.listKmReadings(vehiculo.id) : Promise.resolve([]),
+      puedeVerFicha && ver === "ficha" && !parcial ? vehicles.listVehicleChanges(vehiculo.id) : Promise.resolve([]),
+      puedeVerFicha && !parcial ? vehicles.countVehicleChanges(vehiculo.id) : Promise.resolve(0),
     ]);
     const datos = {
       vehiculo,
@@ -678,18 +704,31 @@ router.get("/flota/:id/revisiones", accesoFlota, async (req, res) => {
       ...permisos,
       ...VIEW_HELPERS,
     };
-    if (req.query.parcial === "1") {
+    if (parcial) {
       res.set("Cache-Control", "private, no-store");
-      return res.render("logistica/flota/partials/revisiones_listas", { ...datos, compacto: true, layout: false });
+      return res.render("logistica/flota/partials/revisiones_listas", {
+        ...datos,
+        danios: danios.filter((d) => d.status !== "anulado"),
+        compacto: true,
+        layout: false,
+      });
     }
     res.render("logistica/flota/revisiones", {
-      titulo: `Revisiones de ${vehiculo.plate}`,
+      titulo: `Historial de ${vehiculo.plate}`,
       ...datos,
+      ver,
+      visibles,
+      puedeVerFicha,
+      lecturas,
+      resumenKm: vehicles.kmSummary(lecturas, todayInCountry()),
+      cambios,
+      cambiosTotal,
       extraCss: EXTRA_CSS,
+      extraJs: ver === "kilometraje" ? ["/js/flota-kilometraje.js?v=20261104a"] : [],
     });
   } catch (err) {
-    console.error("[Logística] Error cargando las revisiones:", err);
-    res.status(500).send("Error cargando las revisiones");
+    console.error("[Logística] Error cargando el historial:", err);
+    res.status(500).send("Error cargando el historial");
   }
 });
 

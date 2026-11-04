@@ -2,6 +2,7 @@ const db = require("../../db");
 const { isVehicleKind, formatKm } = require("../../constants/vehicleChecklist");
 const { toDateOnly, addDays, formatDisplay } = require("../../utils/vacationDateUtils");
 const { cleanText, parseOptionalInt, parseOptionalDate } = require("./inputs");
+const { getCountryConfig } = require("../../config/country");
 
 /**
  * Flota de Logística: la usan el checklist y las hojas de ruta.
@@ -201,47 +202,236 @@ function rethrowPlateTaken(err, plate) {
   throw err;
 }
 
+// ---------------------------------------------------------------------------
+// Historial de la ficha
+// ---------------------------------------------------------------------------
+
+/**
+ * Campos de la ficha que se registran al cambiar, en el orden en que se
+ * muestran. `type` dice cómo compararlos y mostrarlos.
+ */
+const VEHICLE_FIELDS = Object.freeze([
+  { field: "plate", label: "Patente", type: "text" },
+  { field: "kind", label: "Tipo", type: "kind" },
+  { field: "brand", label: "Marca", type: "text" },
+  { field: "model", label: "Modelo", type: "text" },
+  { field: "model_year", label: "Año", type: "number" },
+  { field: "odometer_km", label: "Kilometraje", type: "km" },
+  ...VEHICLE_DOCUMENTS.map((d) => ({ field: d.field, label: d.label, type: "date" })),
+  { field: "next_maintenance_km", label: "Próx. mantención", type: "km" },
+  { field: "notes", label: "Notas", type: "text" },
+]);
+
+/** Valor comparable: texto vacío y ausente son lo mismo (null). */
+function comparable(type, value) {
+  if (value == null || value === "") return null;
+  if (type === "number" || type === "km") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (type === "date") return toDateOnly(value) || null;
+  return String(value).trim() || null;
+}
+
+/** Campos que cambiaron entre dos fichas: [{ field, from, to }]. Pura. */
+function diffVehicle(before = {}, after = {}) {
+  const changes = [];
+  for (const { field, type } of VEHICLE_FIELDS) {
+    if (!(field in after)) continue;
+    const from = comparable(type, before[field]);
+    const to = comparable(type, after[field]);
+    if (from !== to) changes.push({ field, from, to });
+  }
+  return changes;
+}
+
+async function signerName(queryable, userId) {
+  if (userId == null) return "Usuario de la intranet";
+  const { rows } = await queryable.query(
+    "SELECT NULLIF(TRIM(CONCAT_WS(' ', first_name, last_name)), '') AS name FROM users WHERE id = $1",
+    [userId],
+  );
+  return (rows[0] && rows[0].name) || "Usuario de la intranet";
+}
+
+async function recordChange(client, vehicleId, action, changes, userId) {
+  await client.query(
+    `INSERT INTO logistics_vehicle_changes (vehicle_id, action, changes, changed_by, changed_by_name)
+     VALUES ($1, $2, $3::jsonb, $4, $5)`,
+    [vehicleId, action, JSON.stringify(changes || []), userId ?? null, await signerName(client, userId)],
+  );
+}
+
+/** Corre `work(client)` en una transacción. */
+async function inTransaction(work) {
+  const client = await db.getClient();
+  try {
+    await client.query("BEGIN");
+    const result = await work(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function createVehicle(values, userId) {
   try {
-    const { rows } = await db.query(
-      `INSERT INTO logistics_vehicles (
-         plate, kind, brand, model, model_year, odometer_km,
-         technical_review_due, gas_review_due, circulation_permit_due, insurance_due,
-         next_maintenance_km, notes, created_by, updated_by
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
-       RETURNING id`,
-      [...vehicleParams(values), userId ?? null],
-    );
-    return Number(rows[0].id);
+    return await inTransaction(async (client) => {
+      const { rows } = await client.query(
+        `INSERT INTO logistics_vehicles (
+           plate, kind, brand, model, model_year, odometer_km,
+           technical_review_due, gas_review_due, circulation_permit_due, insurance_due,
+           next_maintenance_km, notes, created_by, updated_by
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$13)
+         RETURNING id`,
+        [...vehicleParams(values), userId ?? null],
+      );
+      const id = Number(rows[0].id);
+      await recordChange(client, id, "creado", diffVehicle({}, values), userId);
+      return id;
+    });
   } catch (err) {
     return rethrowPlateTaken(err, values.plate);
   }
 }
 
+/**
+ * Guarda la ficha y registra lo que cambió. Devuelve los cambios ([] si no
+ * cambió nada) o null si el vehículo no existe.
+ */
 async function updateVehicle(id, values, userId) {
   try {
-    const { rowCount } = await db.query(
-      `UPDATE logistics_vehicles
-          SET plate = $1, kind = $2, brand = $3, model = $4, model_year = $5,
-              odometer_km = $6, technical_review_due = $7, gas_review_due = $8,
-              circulation_permit_due = $9, insurance_due = $10, next_maintenance_km = $11,
-              notes = $12, updated_by = $13, updated_at = NOW()
-        WHERE id = $14`,
-      [...vehicleParams(values), userId ?? null, id],
-    );
-    return rowCount > 0;
+    return await inTransaction(async (client) => {
+      const { rows } = await client.query(`SELECT ${COLUMNS} FROM logistics_vehicles v WHERE v.id = $1 FOR UPDATE`, [id]);
+      if (!rows[0]) return null;
+      const changes = diffVehicle(rows[0], values);
+      if (!changes.length) return changes;
+      await client.query(
+        `UPDATE logistics_vehicles
+            SET plate = $1, kind = $2, brand = $3, model = $4, model_year = $5,
+                odometer_km = $6, technical_review_due = $7, gas_review_due = $8,
+                circulation_permit_due = $9, insurance_due = $10, next_maintenance_km = $11,
+                notes = $12, updated_by = $13, updated_at = NOW()
+          WHERE id = $14`,
+        [...vehicleParams(values), userId ?? null, id],
+      );
+      await recordChange(client, id, "editado", changes, userId);
+      return changes;
+    });
   } catch (err) {
     return rethrowPlateTaken(err, values.plate);
   }
 }
 
-/** Dar de baja no borra: los checklists del vehículo siguen apuntándolo. */
+/** Dar de baja no borra: las revisiones del vehículo siguen apuntándolo. */
 async function setVehicleActive(id, active, userId) {
-  const { rowCount } = await db.query(
-    "UPDATE logistics_vehicles SET active = $2, updated_by = $3, updated_at = NOW() WHERE id = $1",
-    [id, Boolean(active), userId ?? null],
+  return inTransaction(async (client) => {
+    const { rows } = await client.query(
+      `UPDATE logistics_vehicles SET active = $2, updated_by = $3, updated_at = NOW()
+        WHERE id = $1 AND active IS DISTINCT FROM $2
+        RETURNING id`,
+      [id, Boolean(active), userId ?? null],
+    );
+    if (!rows[0]) return false;
+    await recordChange(client, id, active ? "reactivado" : "baja", [], userId);
+    return true;
+  });
+}
+
+/**
+ * Historial de la ficha, del más reciente al más antiguo. Los vehículos que
+ * existían antes del historial no tienen «creado»: se agrega uno con su
+ * fecha de alta para que la lista empiece en algún lado.
+ */
+async function listVehicleChanges(vehicleId) {
+  const { rows } = await db.query(
+    `SELECT id, action, changes, changed_by, changed_by_name, changed_at
+       FROM logistics_vehicle_changes
+      WHERE vehicle_id = $1
+      ORDER BY changed_at DESC, id DESC`,
+    [vehicleId],
   );
-  return rowCount > 0;
+  if (rows.some((r) => r.action === "creado")) return rows;
+  const { rows: alta } = await db.query(
+    `SELECT v.created_at, NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), '') AS name
+       FROM logistics_vehicles v LEFT JOIN users u ON u.id = v.created_by
+      WHERE v.id = $1`,
+    [vehicleId],
+  );
+  if (!alta[0]) return rows;
+  return [...rows, {
+    id: null, action: "creado", changes: [], changed_by: null,
+    changed_by_name: alta[0].name || "—", changed_at: alta[0].created_at, previous: true,
+  }];
+}
+
+async function countVehicleChanges(vehicleId) {
+  const { rows } = await db.query(
+    "SELECT COUNT(*)::int AS n FROM logistics_vehicle_changes WHERE vehicle_id = $1",
+    [vehicleId],
+  );
+  return rows[0].n;
+}
+
+// ---------------------------------------------------------------------------
+// Kilometraje
+// ---------------------------------------------------------------------------
+
+/**
+ * Lecturas de kilometraje del vehículo, de la más antigua a la más nueva: las
+ * de cada revisión registrada (mecánica y física), la del alta y las correcciones hechas
+ * en la ficha. [{ date, km, source, ref_id, year, seq, at }]
+ */
+async function listKmReadings(vehicleId) {
+  const { rows } = await db.query(
+    `SELECT inspection_date::text AS date, odometer_km AS km, 'mecanica' AS source,
+            id AS ref_id, number_year AS year, number_seq AS seq, created_at AS at
+       FROM vehicle_checklists
+      WHERE vehicle_id = $1 AND status = 'registered'
+     UNION ALL
+     SELECT review_date::text, odometer_km, 'fisica', id, number_year, number_seq, created_at
+       FROM vehicle_physical_reviews
+      WHERE vehicle_id = $1 AND status = 'registered'
+     UNION ALL
+     SELECT (c.changed_at AT TIME ZONE $2)::date::text, (ch->>'to')::int, CASE c.action WHEN 'creado' THEN 'alta' ELSE 'ficha' END, c.id, NULL, NULL, c.changed_at
+       FROM logistics_vehicle_changes c
+       CROSS JOIN LATERAL jsonb_array_elements(c.changes) ch
+      WHERE c.vehicle_id = $1 AND ch->>'field' = 'odometer_km' AND ch->>'to' IS NOT NULL
+     ORDER BY date, at`,
+    [vehicleId, getCountryConfig().timezone],
+  );
+  return rows.map((r) => ({ ...r, km: Number(r.km) }));
+}
+
+/**
+ * Resumen de las lecturas (pura): última, recorrido en los últimos 30 días y
+ * promedio mensual entre la primera y la última.
+ */
+function kmSummary(readings, today) {
+  const list = (readings || []).filter((r) => Number.isFinite(r.km));
+  if (!list.length) return null;
+  const first = list[0];
+  const last = list[list.length - 1];
+  const dayMs = 86400000;
+  const toTime = (iso) => Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  const desde = toTime(today) - 30 * dayMs;
+  const antes = [...list].reverse().find((r) => toTime(r.date) <= desde) || first;
+  const dias = Math.max(0, Math.round((toTime(last.date) - toTime(first.date)) / dayMs));
+  const recorrido = last.km - first.km;
+  return {
+    last,
+    first,
+    count: list.length,
+    lastMonth: Math.max(0, last.km - antes.km),
+    lastMonthFrom: antes.date,
+    total: recorrido,
+    days: dias,
+    perMonth: dias >= 28 && recorrido > 0 ? Math.round((recorrido / dias) * 30) : null,
+  };
 }
 
 module.exports = {
@@ -259,4 +449,10 @@ module.exports = {
   createVehicle,
   updateVehicle,
   setVehicleActive,
+  VEHICLE_FIELDS,
+  diffVehicle,
+  listVehicleChanges,
+  countVehicleChanges,
+  listKmReadings,
+  kmSummary,
 };

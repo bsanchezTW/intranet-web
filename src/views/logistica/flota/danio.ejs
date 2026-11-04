@@ -28,7 +28,7 @@
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
         <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
-        <a href="<%= FLOTA %>/<%= d.vehicle_id %>/revisiones">Revisiones de <%= d.vehicle_plate %></a> <span aria-hidden="true">/</span>
+        <a href="<%= FLOTA %>/<%= d.vehicle_id %>/revisiones?ver=danios">Historial de <%= d.vehicle_plate %></a> <span aria-hidden="true">/</span>
         <span>Daño</span>
       </nav>
       <h2 class="page-title"><%= damageTypeLabel(d.damage_type) %> en <%= d.zone_label.charAt(0).toLowerCase() + d.zone_label.slice(1) %></h2>

@@ -2,7 +2,7 @@
   /*
     Revisiones de un vehículo, en dos listas: mecánicas y físicas. La usan la
     tarjeta de Gestión de flota (compacto: las más recientes) y la página de
-    revisiones del vehículo (todas, más el registro de daños).
+    página de historial del vehículo (que tiene una pestaña por tipo).
   */
   const MAX_COMPACTO = 5;
   const esCompacto = typeof compacto !== 'undefined' && compacto;
@@ -62,7 +62,7 @@
           <% }) %>
         </ul>
         <% if (esCompacto && l.todas.length > MAX_COMPACTO) { %>
-          <a class="rev-lista__mas" href="<%= FLOTA %>/<%= x.id %>/revisiones">Ver las <%= l.todas.length %> revisiones <%= l.titulo.toLowerCase() %></a>
+          <a class="rev-lista__mas" href="<%= FLOTA %>/<%= x.id %>/revisiones?ver=<%= l.clave %>">Ver las <%= l.todas.length %> revisiones <%= l.titulo.toLowerCase() %></a>
         <% } %>
       <% } %>
     </section>
@@ -75,17 +75,3 @@
     </a>
   <% } %>
 </div>
-
-<% if (!esCompacto && typeof puedeVerDanios !== 'undefined' && puedeVerDanios) { %>
-  <section class="rev-lista rev-lista--danios" aria-label="Daños del vehículo">
-    <h4 class="rev-lista__titulo">
-      <%- include('../../../partials/icon', { name: 'alert-triangle' }) %> Daños
-      <span class="rev-lista__conteo"><%= abiertos.length %> <%= abiertos.length === 1 ? 'abierto' : 'abiertos' %> · <%= listaDanios.length - abiertos.length %> <%= listaDanios.length - abiertos.length === 1 ? 'reparado' : 'reparados' %></span>
-    </h4>
-    <% if (!listaDanios.length) { %>
-      <p class="rev-lista__vacia">No tiene daños registrados.</p>
-    <% } else { %>
-      <%- include('danios_lista', { danios: listaDanios }) %>
-    <% } %>
-  </section>
-<% } %>
