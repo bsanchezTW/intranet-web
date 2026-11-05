@@ -270,9 +270,10 @@
   }
 
   function altoTopbar() {
-    return parseFloat(
-      window.getComputedStyle(document.documentElement).getPropertyValue("--shell-height"),
-    ) || 64;
+    var estilos = window.getComputedStyle(document.documentElement);
+    // Con «iniciar sesión como» la topbar lleva además el aviso amarillo.
+    var aviso = parseFloat(estilos.getPropertyValue("--suplantacion-alto")) || 0;
+    return (parseFloat(estilos.getPropertyValue("--shell-height")) || 64) + aviso;
   }
 
   /**

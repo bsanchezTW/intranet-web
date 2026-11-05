@@ -215,7 +215,7 @@
    redondeadas, que dejarían ver las tarjetas por los costados. */
 .org-lienzo__barra {
   position: sticky;
-  top: var(--shell-height, 64px);
+  top: calc(var(--shell-height, 64px) + var(--suplantacion-alto, 0px));
   z-index: 3;
   display: flex;
   flex-direction: column;

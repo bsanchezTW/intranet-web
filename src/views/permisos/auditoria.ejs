@@ -10,17 +10,20 @@ const ACCIONES = {
   'asignacion.quitar': 'Quitó una asignación',
   'superadmin.marcar': 'Hizo superadmin',
   'superadmin.quitar': 'Quitó superadmin',
+  'suplantacion.iniciar': 'Inició sesión como otra persona',
+  'suplantacion.accion': 'Actuó como otra persona',
+  'suplantacion.terminar': 'Volvió a su cuenta',
 };
 const cuando = (d) => new Date(d).toLocaleString('es-' + country, { timeZone: countryConfig.timezone, dateStyle: 'short', timeStyle: 'short' });
 const json = (v) => v == null ? null : JSON.stringify(v, null, 2);
-// Color del punto: verde lo que da, rojo lo que quita.
-const tono = (accion) => /conceder|marcar|crear/.test(accion) ? ' perm-accion--ok' : /denegar|quitar|eliminar/.test(accion) ? ' perm-accion--deny' : '';
+// Color del punto: verde lo que da, rojo lo que quita, ámbar «iniciar sesión como».
+const tono = (accion) => /^suplantacion\./.test(accion) ? ' perm-accion--warn' : /conceder|marcar|crear/.test(accion) ? ' perm-accion--ok' : /denegar|quitar|eliminar/.test(accion) ? ' perm-accion--deny' : '';
 const icono = (name) => include('../partials/icon', { name: name });
 %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
     titulo: 'Auditoría de permisos',
-    descripcion: 'Cada cambio hecho en Gestión de permisos, con quién lo hizo y el antes y el después.',
+    descripcion: 'Cada cambio hecho en Gestión de permisos, con quién lo hizo y el antes y el después, y cada vez que alguien inició sesión como otra persona.',
     seccion: 'auditoria',
   }) %>
 

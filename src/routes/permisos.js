@@ -12,6 +12,7 @@ const { loadSnapshot } = require("../services/permissions/permissionService");
 const { computePermissions } = require("../services/permissions/resolver");
 const { orgTree, areaInOrg, managersUp } = require("../services/permissions/orgView");
 const { withQueryParam } = require("../utils/returnTo");
+const impersonation = require("../services/permissions/impersonation");
 
 /**
  * Gestión de Permisos (/permisos). Sólo el superadmin entra: para el resto la
@@ -25,11 +26,12 @@ const { withQueryParam } = require("../utils/returnTo");
  *   /permisos/areas[/:id]     el organigrama y lo asignado a cada área
  *   /permisos/jefes           lo asignado a los jefes de área
  *   /permisos/usuarios[/:id]  ficha: asignaciones y permisos efectivos con su origen
+ *   /permisos/usuarios/:id/ingresar-como  navegar la intranet como esa persona
  *   /permisos/auditoria       quién cambió qué
  */
 
 const BASE = "/permisos";
-const CSS = ["/css/permisos.css?v=20261020a"];
+const CSS = ["/css/permisos.css?v=20261105a"];
 const JS = ["/js/permisos.js?v=20261020a"];
 
 router.use((req, res, next) => {
@@ -414,6 +416,22 @@ router.get("/usuarios/:id", async (req, res, next) => {
     return render(res, "usuario", detail.user.name, "usuarios", { ...ctx, detail });
   } catch (err) {
     return next(err);
+  }
+});
+
+// «Iniciar sesión como»: ver (y usar) la intranet con la identidad de otra
+// persona. Reglas y auditoría en services/permissions/impersonation.
+router.post("/usuarios/:id/ingresar-como", async (req, res) => {
+  const volverA = `${BASE}/usuarios/${encodeURIComponent(req.params.id)}`;
+  try {
+    const persona = await impersonation.startImpersonation(req, req.params.id);
+    return res.redirect(withQueryParam("/", "ok", `Ahora navegas como ${persona.nombre}`));
+  } catch (err) {
+    if (err instanceof impersonation.ImpersonationError) {
+      return res.redirect(withQueryParam(volverA, "error", err.message));
+    }
+    logger.error("suplantacion", err);
+    return res.redirect(withQueryParam(volverA, "error", "No se pudo iniciar sesión como esta persona."));
   }
 });
 

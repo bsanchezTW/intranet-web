@@ -43,6 +43,14 @@ const iniciales = String(u.name || '?').split(/\s+/).slice(0, 2).map(function (p
     </div>
     <% if (!esYo && !deshabilitada) { %>
       <div class="perm-perfil__acciones">
+        <% if (!detail.superadmin) { %>
+          <form class="perm-inline" action="/permisos/usuarios/<%= u.id %>/ingresar-como" method="POST"
+                data-confirm="Verás la intranet tal como la ve <%= u.name %> y podrás actuar a su nombre. Cada acción queda en la auditoría. Para salir usa «Volver a mi cuenta» en la barra superior."
+                data-confirm-title="¿Iniciar sesión como <%= u.name %>?"
+                data-confirm-accept="Iniciar sesión como">
+            <button type="submit" class="perm-btn perm-btn--sm"><%- icono('user') %> Iniciar sesión como</button>
+          </form>
+        <% } %>
         <form class="perm-inline" action="/permisos/superadmin" method="POST"
               data-confirm="<%= detail.superadmin ? u.name + ' dejará de tener todos los permisos.' : u.name + ' tendrá todos los permisos y podrá administrar este módulo.' %>"
               data-confirm-title="<%= detail.superadmin ? '¿Quitar superadmin?' : '¿Hacer superadmin?' %>"

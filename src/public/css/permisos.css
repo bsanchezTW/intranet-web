@@ -1351,6 +1351,10 @@ details[open] > .perm-abrir {
   background: var(--perm-deny);
 }
 
+.perm-accion--warn::before {
+  background: #e0a400;
+}
+
 .perm-paginas {
   display: flex;
   justify-content: space-between;

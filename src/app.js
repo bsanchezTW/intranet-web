@@ -34,6 +34,8 @@ const personasRoutes = require("./routes/RRHH");
 const marketingRoutes = require("./routes/marketing");
 const docsRoutes = require("./routes/docs");
 const permisosRoutes = require("./routes/permisos");
+const impersonation = require("./services/permissions/impersonation");
+const { withQueryParam } = require("./utils/returnTo");
 const noticiasRoutes = require("./routes/noticias");
 const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
@@ -354,6 +356,17 @@ app.use(async (req, res, next) => {
   if (estado.action === "update") user.role = estado.role;
   if (estado.action !== "end") return next();
 
+  // Deshabilitaron a la persona suplantada: el superadmin vuelve a su cuenta.
+  if (impersonation.activeImpersonation(req.session)) {
+    try {
+      const targetId = await impersonation.endImpersonation(req, { reason: "la cuenta quedó sin acceso" });
+      if (wantsJson(req)) return res.status(409).json({ error: "La cuenta suplantada ya no tiene acceso." });
+      return res.redirect(targetId ? `/permisos/usuarios/${targetId}` : "/permisos/usuarios");
+    } catch (err) {
+      return next(err);
+    }
+  }
+
   return req.session.destroy(() => {
     res.clearCookie(countryConfig.sessionCookieName);
     if (wantsJson(req)) {
@@ -362,6 +375,10 @@ app.use(async (req, res, next) => {
     return res.redirect("/login");
   });
 });
+
+// «Iniciar sesión como»: el superadmin navega con la identidad de otra
+// persona; aquí se vigila y se registra (ver services/permissions/impersonation).
+app.use(impersonation.impersonationGuard({ cookieName: countryConfig.sessionCookieName }));
 
 // FIX: Unificado → <root>/public/uploads sirve /uploads/*
 app.use("/uploads", express.static(path.join(__dirname, "..", "public", "uploads"), { maxAge: "7d", etag: true }));
@@ -678,6 +695,17 @@ app.use("/marketing", requireAuth, marketingRoutes);
 app.use("/docs", requireAuth, docsRoutes);
 // Gestión de Permisos: sólo el superadmin (el router responde 404 al resto).
 app.use("/permisos", requireAuth, permisosRoutes);
+// Volver a la cuenta propia tras «iniciar sesión como»: fuera de /permisos
+// porque la persona suplantada no es superadmin.
+app.post(impersonation.END_PATH, requireAuth, async (req, res, next) => {
+  try {
+    const targetId = await impersonation.endImpersonation(req);
+    if (!targetId) return res.redirect("/");
+    return res.redirect(withQueryParam(`/permisos/usuarios/${targetId}`, "ok", "Volviste a tu cuenta"));
+  } catch (err) {
+    return next(err);
+  }
+});
 app.use("/noticias", requireAuth, noticiasRoutes);
 if (claudeRoutes) {
   app.use("/claude", requireAuth, requireFeature("claudeAssistant"), claudeRoutes);

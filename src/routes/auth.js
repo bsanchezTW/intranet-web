@@ -18,7 +18,6 @@ const { validateMobilePhone } = require("../utils/phone");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const {
   ROLES,
-  normalizeRole,
   isDeshabilitado,
   canLogin,
 } = require("../constants/roles");
@@ -34,6 +33,7 @@ const requirePermission = require("../middlewares/requirePermission");
 const throttle = require("../services/access/authThrottle");
 const { publicErrorMessage } = require("../utils/publicError");
 const { hashPassword, verifyPassword } = require("../services/auth/passwords");
+const { buildSessionUser } = require("../services/session/sessionUser");
 
 function getBaseUrl(req) {
   return process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
@@ -360,30 +360,7 @@ function regenerateSession(req) {
 
 async function startUserSession(req, u) {
   await regenerateSession(req);
-  const isFirstLogin = u.last_login_at == null;
-  const showHomeTutorial = isFirstLogin || u.home_tutorial_seen === false;
-
-  req.session.user = {
-    id: u.id,
-    username: u.email,
-    email: u.email,
-    role: normalizeRole(u.role),
-    nombre: u.first_name + (u.last_name ? " " + u.last_name : ""),
-    first_name: u.first_name,
-    last_name: u.last_name,
-    foto: u.photo || null,
-    photo: u.photo || null,
-    work_area_id: u.work_area_id || null,
-    area: u.area_name || null,
-    must_change_password: u.must_change_password,
-    home_tutorial_seen: u.home_tutorial_seen !== false,
-    show_home_tutorial: showHomeTutorial,
-  };
-  // El SELECT de respaldo (esquema viejo) no trae color: dejar `undefined`
-  // para que el middleware hidrate el área en el siguiente request.
-  if ("area_color" in u) {
-    req.session.user.area_color = u.area_color ?? null;
-  }
+  req.session.user = buildSessionUser(u);
 }
 
 // ==========================================

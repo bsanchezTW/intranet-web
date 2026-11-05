@@ -87,6 +87,20 @@ const menuNav = (clave) => clave === 'procesos'
 </nav>
 
 <header class="topbar">
+  <% if (typeof suplantacion !== 'undefined' && suplantacion) { %>
+    <div class="suplantacion-barra" role="status">
+      <div class="suplantacion-barra__inner">
+        <span class="suplantacion-barra__icono" aria-hidden="true"><%- include('icon', { name: 'alert-triangle' }) %></span>
+        <span class="suplantacion-barra__texto">
+          Navegas como <strong><%= suplantacion.persona.nombre %></strong>.
+          <span class="suplantacion-barra__extra">Lo que hagas queda a su nombre y en la auditoría.</span>
+        </span>
+        <form action="/suplantacion/terminar" method="POST" class="suplantacion-barra__form">
+          <button type="submit" class="suplantacion-barra__btn"><%- include('icon', { name: 'arrow-left' }) %> Volver a mi cuenta</button>
+        </form>
+      </div>
+    </div>
+  <% } %>
   <div class="topbar__inner">
     <div class="header-left">
       <button type="button" class="topbar__icon-btn menu-toggle" id="menu-toggle"
