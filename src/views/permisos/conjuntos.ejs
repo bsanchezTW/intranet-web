@@ -1,30 +1,26 @@
 <% const icono = (name) => include('../partials/icon', { name: name }); %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
-    titulo: 'Conjuntos de permisos',
-    descripcion: 'Paquetes con nombre. Cada uno se marca «Para todos» o se asigna a un área, a los jefes o a una persona desde su ficha.',
+    titulo: 'Conjuntos de personas',
+    descripcion: 'Grupos con nombre, como «Aprobadores de rendiciones». Lo que se le da a un conjunto en Permisos lo recibe cada persona del conjunto, como si se le diera a ella.',
     seccion: 'conjuntos',
   }) %>
 
   <div class="panel">
-    <% if (!refs.sets.length) { %>
+    <% if (!refs.groups.length) { %>
       <p class="perm-vacio"><%- icono('inbox') %> Todavía no hay conjuntos.</p>
     <% } else { %>
       <table class="perm-table perm-table--responsive">
-        <thead><tr><th>Conjunto</th><th class="perm-table__num">Permisos</th><th class="perm-table__num">Asignaciones</th><th class="perm-table__accion">Estado</th></tr></thead>
+        <thead><tr><th>Conjunto</th><th class="perm-table__num">Personas</th><th class="perm-table__num">Permisos</th></tr></thead>
         <tbody>
-          <% refs.sets.forEach(function (s) { %>
+          <% refs.groups.forEach(function (g) { %>
             <tr>
               <td>
-                <a href="/permisos/conjuntos/<%= s.id %>"><%= s.name %></a>
-                <% if (s.para_todos) { %><span class="perm-chip perm-chip--brand"><%- icono('grid') %> Para todos</span><% } %>
-                <% if (s.description) { %><br><span class="perm-muted"><%= s.description %></span><% } %>
+                <a href="/permisos/conjuntos/<%= g.id %>"><%= g.name %></a>
+                <% if (g.description) { %><br><span class="perm-muted"><%= g.description %></span><% } %>
               </td>
-              <td class="perm-table__num"><span class="perm-num"><%= s.item_count %></span></td>
-              <td class="perm-table__num"><span class="perm-num<%= s.assignment_count ? ' perm-num--activo' : '' %>"><%= s.assignment_count %></span></td>
-              <td class="perm-table__accion">
-                <% if (s.active) { %><span class="perm-estado perm-estado--si">Activo</span><% } else { %><span class="perm-estado perm-estado--no">Desactivado</span><% } %>
-              </td>
+              <td class="perm-table__num"><span class="perm-num<%= g.member_count ? ' perm-num--activo' : '' %>"><%= g.member_count %></span></td>
+              <td class="perm-table__num"><span class="perm-num<%= g.assignment_count ? ' perm-num--activo' : '' %>"><%= g.assignment_count %></span></td>
             </tr>
           <% }) %>
         </tbody>
@@ -32,43 +28,23 @@
     <% } %>
   </div>
 
-  <% const sueltos = typeof sueltosGlobales !== 'undefined' ? sueltosGlobales : []; %>
-  <% if (sueltos.length) { %>
-    <section class="seccion">
-      <div class="seccion__head">
-        <div class="seccion__heading">
-          <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('grid') %></span> Permisos sueltos para todos <span class="perm-num perm-num--activo"><%= sueltos.length %></span></h3>
-          <p class="seccion__desc">Asignados a toda cuenta activa sin pasar por un conjunto. Conviene moverlos a un conjunto «Para todos»; se quitan aquí o en la pestaña Permisos.</p>
-        </div>
-      </div>
-      <div class="panel">
-        <%- include('partials/tabla_asignaciones', {
-          assignments: sueltos,
-          volver: '/permisos/conjuntos',
-          mostrarQuien: false,
-          vacio: 'Ninguno.',
-        }) %>
-      </div>
-    </section>
-  <% } %>
-
   <section class="seccion">
     <div class="seccion__head">
       <div class="seccion__heading">
         <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('plus') %></span> Nuevo conjunto</h3>
-        <p class="seccion__desc">Primero el nombre; después eliges sus permisos.</p>
+        <p class="seccion__desc">Primero el nombre; después agregas a sus personas. Los permisos se le dan en la pestaña Permisos.</p>
       </div>
     </div>
     <form class="perm-form" action="/permisos/conjuntos" method="POST" style="margin-top:0">
       <div class="campo-form">
         <label for="nuevo-nombre">Nombre</label>
-        <input type="text" id="nuevo-nombre" name="name" maxlength="120" required placeholder="Ej.: Aprobador de rendiciones">
+        <input type="text" id="nuevo-nombre" name="name" maxlength="120" required placeholder="Ej.: Aprobadores de rendiciones">
       </div>
       <div class="campo-form">
         <label for="nuevo-desc">Descripción</label>
         <input type="text" id="nuevo-desc" name="description" maxlength="300" placeholder="Para qué sirve">
       </div>
-      <div class="perm-form__acciones"><button type="submit" class="perm-btn"><%- icono('plus') %> Crear y elegir permisos</button></div>
+      <div class="perm-form__acciones"><button type="submit" class="perm-btn"><%- icono('plus') %> Crear y agregar personas</button></div>
     </form>
   </section>
 </div>

@@ -107,7 +107,7 @@ const iconoDe = { global: 'grid', jefes: 'user-check', area: 'sitemap' }[princip
     <div class="seccion__head">
       <div class="seccion__heading">
         <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono(iconoDe) %></span> Asignado a <%= principal.label %> <span class="perm-num perm-num--activo"><%= assignments.length %></span></h3>
-        <p class="seccion__desc">Cada asignación se puede editar (vigencia, motivo, alcance) o quitar.</p>
+        <p class="seccion__desc">Cada asignación se puede editar (vigencia, motivo, alcance) o quitar. Para dar un permiso nuevo, ve a <a href="/permisos/modulos">Permisos</a>.</p>
       </div>
     </div>
     <div class="panel">
@@ -119,21 +119,6 @@ const iconoDe = { global: 'grid', jefes: 'user-check', area: 'sitemap' }[princip
         vacio: 'Nada asignado todavía.',
       }) %>
     </div>
-  </section>
-
-  <section class="seccion">
-    <div class="seccion__head">
-      <div class="seccion__heading">
-        <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('plus') %></span> Agregar</h3>
-        <p class="seccion__desc">Un conjunto o un permiso suelto. Denegar quita el permiso aunque llegue por otro lado (salvo que se conceda más específicamente, a la persona).</p>
-      </div>
-    </div>
-    <%- include('partials/form_asignacion', {
-      uid: 'd',
-      volver: volverA,
-      principal: { type: principal.type, areaId: principal.areaId },
-      fixedKey: null,
-    }) %>
   </section>
 
   <% if (gente) { %>

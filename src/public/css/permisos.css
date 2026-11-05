@@ -1992,63 +1992,120 @@ details[open] > .perm-abrir {
   }
 }
 
-/* ── «Para todos» en la ficha de un conjunto (antes, la pestaña Global) ── */
-.perm-todos {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 14px;
-  margin-bottom: 18px;
-  padding: 14px 18px;
+/* ── Conjuntos de personas ────────────────────────────────────────────── */
+.perm-miembros {
+  margin-bottom: 12px;
+}
+
+/* Sin columna de origen: nombre a la izquierda, «Sacar» a la derecha. */
+.perm-miembros .perm-holder {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+@media (max-width: 600px) {
+  .perm-miembros .perm-holder {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+.perm-agregar-personas {
+  margin-top: 4px;
+}
+
+.perm-agregar-personas__form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.perm-candidatos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 4px 16px;
+  max-height: 320px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+  list-style: none;
   border: 1px solid var(--color-border);
-  border-radius: var(--glass-radius-sm);
+  border-radius: 10px;
   background: var(--color-surface);
 }
 
-.perm-todos--si {
-  border-color: color-mix(in srgb, var(--perm-ok) 35%, var(--color-border));
-  background: var(--perm-ok-soft);
+.perm-candidatos li {
+  min-width: 0;
+  padding: 4px 0;
 }
 
-.perm-todos__icono {
+.perm-candidatos .perm-check {
+  align-items: flex-start;
+}
+
+.perm-conjuntos-persona {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.perm-conjunto-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--brand-soft);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.perm-conjunto-chip a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.perm-conjunto-chip__quitar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--brand-soft);
-  color: var(--brand);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
 }
 
-.perm-todos--si .perm-todos__icono {
-  background: var(--color-surface);
-  color: var(--perm-ok);
+.perm-conjunto-chip__quitar:hover {
+  background: var(--perm-deny-soft);
+  color: var(--perm-deny);
 }
 
-.perm-todos__icono svg {
-  width: 18px;
-  height: 18px;
+.perm-conjunto-chip__quitar svg {
+  width: 14px;
+  height: 14px;
 }
 
-.perm-todos__texto {
-  display: grid;
-  gap: 2px;
-  flex: 1 1 220px;
-  min-width: 0;
-}
-
-.perm-todos__texto strong {
+.perm-conjuntos-persona__agregar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: 8px;
-  color: var(--color-heading);
+  align-items: center;
 }
 
-.perm-asignar-conjunto {
-  margin-top: 12px;
+.perm-conjuntos-persona__agregar select {
+  min-height: 34px;
+  max-width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.86rem;
 }
 
 .perm-linea__acciones {

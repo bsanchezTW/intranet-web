@@ -8,7 +8,8 @@ const { canLogin, normalizeRole } = require("../../constants/roles");
  * precedencia completa con datos en memoria.
  *
  * Precedencia, por cada permiso: se recorren los niveles de lo más
- * específico a lo más general, Usuario → Área / Jefes → Global. Se juntan las
+ * específico a lo más general, Usuario (o un conjunto de personas al que
+ * pertenece) → Área / Jefes → Global. Se juntan las
  * concesiones de cada nivel y el recorrido se detiene en el primer nivel que
  * tenga una denegación: esa denegación anula las concesiones de su nivel y
  * las de abajo. Lo juntado hasta ahí es el permiso, y los alcances se suman.
@@ -35,7 +36,10 @@ function toTime(value) {
   return Number.isFinite(t) ? t : null;
 }
 
-/** Contexto organizacional de la persona: su área y las que tiene a cargo. */
+/**
+ * Contexto de la persona: su área, las que tiene a cargo y los conjuntos de
+ * personas a los que pertenece (`snapshot.groupMembers`: userId → Set).
+ */
 function membershipFor(snapshot, userId, workAreaId) {
   const areas = snapshot.areas || [];
   const ownAreaId = toId(workAreaId);
@@ -47,7 +51,9 @@ function membershipFor(snapshot, userId, workAreaId) {
   for (const id of managedAreaIds) {
     for (const d of descendantIds(areas, id)) managedSubtree.add(d);
   }
-  return { ownAreaId, ownChain, managedAreaIds, managedSubtree };
+  const groups = snapshot.groupMembers && snapshot.groupMembers.get(userId);
+  const groupIds = new Set(groups ? [...groups].map(toId) : []);
+  return { ownAreaId, ownChain, managedAreaIds, managedSubtree, groupIds };
 }
 
 /** ¿La asignación alcanza a esta persona? Devuelve su nivel o null. */
@@ -55,6 +61,9 @@ function levelFor(assignment, userId, member, areas) {
   switch (assignment.principal_type) {
     case "user":
       return toId(assignment.user_id) === userId ? LEVEL.USER : null;
+    // Un conjunto de personas es una lista de nombres: vale como lo individual.
+    case "grupo":
+      return member.groupIds && member.groupIds.has(toId(assignment.group_id)) ? LEVEL.USER : null;
     case "area": {
       const areaId = toId(assignment.area_id);
       if (member.ownAreaId == null || areaId == null) return null;
@@ -93,8 +102,11 @@ function entriesOf(assignment, level, snapshot) {
     level: LEVEL_NAMES[level],
     principal: assignment.principal_type,
     areaId: toId(assignment.area_id),
+    groupId: toId(assignment.group_id),
     effect: assignment.effect,
   };
+  // Antiguos conjuntos de permisos: sólo los ve la conversión
+  // (setConversion.js) y su prueba de que nadie gana ni pierde nada.
   if (assignment.set_id != null) {
     const set = snapshot.sets && snapshot.sets.get(toId(assignment.set_id));
     if (!set || set.active === false) return [];
@@ -249,7 +261,7 @@ function emptyPermissions(catalog, userId = null) {
 
 /**
  * Permisos efectivos de `user` ({ id, role?, work_area_id? }) con la foto
- * `snapshot` ({ users: Map, areas, sets: Map, assignments }) y el catálogo
+ * `snapshot` ({ users: Map, areas, groupMembers: Map, assignments }) y el catálogo
  * del país. `now` en ms (para las vigencias).
  */
 function computePermissions(snapshot, user, { catalog, now = Date.now() } = {}) {

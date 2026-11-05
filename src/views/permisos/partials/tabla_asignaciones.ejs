@@ -28,7 +28,7 @@ const opcionesArea = [];
   <div class="perm-asigs">
     <% assignments.forEach(function (a) { %>
       <% const def = a.permission_key && typeof catalog !== 'undefined' ? catalog.byKey.get(a.permission_key) : null; %>
-      <% const conAlcance = def && def.scopes && !a.set_id && a.effect !== 'deniega'; %>
+      <% const conAlcance = def && def.scopes && a.effect !== 'deniega'; %>
       <% const elegidas = (a.scope_area_ids || []).map(Number); %>
       <div class="perm-asig<%= a.effect === 'deniega' ? ' perm-asig--deny' : '' %><%= a.expired ? ' perm-asig--vencida' : '' %>">
         <div class="perm-asig__main">
@@ -39,13 +39,9 @@ const opcionesArea = [];
               <span class="perm-chip">Concede</span>
             <% } %>
             <% if (conQue) { %>
-              <% if (a.isSet) { %>
-                <a href="/permisos/conjuntos/<%= a.set_id %>"><%= a.targetLabel %></a>
-              <% } else { %>
-                <strong><%= a.targetLabel %></strong>
-              <% } %>
+              <strong><%= a.targetLabel %></strong>
             <% } %>
-            <% if (conQuien) { %><span class="perm-asig__quien"><%= conQue ? 'a ' : '' %><%= a.principalLabel %></span><% } %>
+            <% if (conQuien) { %><span class="perm-asig__quien"><%= conQue ? 'a ' : '' %><% if (a.principal_type === 'grupo') { %><a href="/permisos/conjuntos/<%= a.group_id %>"><%= a.principalLabel %></a><% } else { %><%= a.principalLabel %><% } %></span><% } %>
           </div>
           <div class="perm-asig__meta">
             <% if (a.scopeLabel) { %><span>Sobre: <%= a.scopeLabel %></span><% } %>

@@ -7,7 +7,7 @@ const personasDe = (key) => (typeof holders !== 'undefined' && holders && holder
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
     titulo: 'Permisos',
-    descripcion: 'Cada permiso de la intranet: a quién está asignado, qué personas lo tienen hoy y por qué. Desde aquí se asigna y se quita.',
+    descripcion: 'Cada permiso de la intranet: a quién está asignado, qué personas lo tienen hoy y por qué. Es el único lugar donde se asigna: a todos, a un área, a los jefes, a un conjunto de personas o a alguien.',
     seccion: 'modulos',
   }) %>
 
@@ -67,31 +67,17 @@ const personasDe = (key) => (typeof holders !== 'undefined' && holders && holder
                   <li class="perm-linea<%= a.effect === 'deniega' ? ' perm-linea--deny' : '' %><%= a.expired ? ' perm-linea--vencida' : '' %>">
                     <span class="perm-linea__texto">
                       <span class="perm-chip<%= a.effect === 'deniega' ? ' perm-chip--deny' : '' %>"><%= a.effect === 'deniega' ? 'Deniega' : 'Concede' %></span>
-                      <strong><%= a.principalLabel %></strong><%= q.scopeLabel ? ' · ' + q.scopeLabel : '' %>
-                      <% if (q.viaSet) { %><span class="perm-muted">· por el conjunto <a href="/permisos/conjuntos/<%= q.setId || a.set_id %>"><%= q.viaSet %></a></span><% } %>
+                      <% if (a.principal_type === 'grupo') { %><a href="/permisos/conjuntos/<%= a.group_id %>"><strong><%= a.principalLabel %></strong></a><% } else { %><strong><%= a.principalLabel %></strong><% } %><%= q.scopeLabel ? ' · ' + q.scopeLabel : '' %>
                       <% if (a.expired) { %><span class="perm-chip perm-chip--muted">vencida</span><% } %>
                       <% if (a.note) { %><span class="perm-muted">· «<%= a.note %>»</span><% } %>
                     </span>
                     <span class="perm-linea__acciones">
-                      <% if (q.viaSet) { %>
-                        <% const setRef = refs.setById.get(Number(q.setId || a.set_id)); %>
-                        <% const nSet = setRef ? Number(setRef.item_count) : null; %>
-                        <a class="perm-btn perm-btn--sec perm-btn--sm" href="/permisos/conjuntos/<%= q.setId || a.set_id %>" title="Sacar este permiso del conjunto lo quita a todos los que tienen el conjunto"><%- icono('edit') %> Editar conjunto</a>
-                        <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
-                              data-confirm="<%= (a.principal_type === 'global' ? 'Toda cuenta activa deja' : a.principalLabel + ' deja') + ' de recibir el conjunto completo «' + q.viaSet + '»' + (nSet ? ' (' + nSet + (nSet === 1 ? ' permiso' : ' permisos') + ')' : '') + ', no sólo «' + p.label + '». El conjunto sigue existiendo y conserva sus otras asignaciones.' %>"
-                              data-confirm-title="¿Quitar el conjunto «<%= q.viaSet %>» a <%= a.principal_type === 'global' ? 'todos' : a.principalLabel %>?"
-                              data-confirm-accept="Quitar conjunto" data-confirm-tone="peligro">
-                          <input type="hidden" name="volver" value="<%= volverA %>#p-<%= p.key %>">
-                          <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm"><%- icono('trash') %> Quitar conjunto</button>
-                        </form>
-                      <% } else { %>
                         <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
                               data-confirm="<%= a.principalLabel %> deja de tener «<%= p.label %>» por esta asignación."
                               data-confirm-title="¿Quitar la asignación?" data-confirm-accept="Quitar" data-confirm-tone="peligro">
                           <input type="hidden" name="volver" value="<%= volverA %>">
                           <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm"><%- icono('trash') %> Quitar</button>
                         </form>
-                      <% } %>
                     </span>
                   </li>
                 <% }) %>

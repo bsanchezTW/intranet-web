@@ -1,16 +1,14 @@
 <%
-/* Formulario para conceder o denegar un conjunto o un permiso suelto, por pasos.
+/* Formulario para conceder o denegar un permiso, por pasos.
    Parámetros:
      uid         prefijo único para los id de los campos
      volver      ruta a la que vuelve tras guardar
      principal   { type, areaId } fijo, o null para elegir a quién
-     fixedKey    clave de permiso fija, o null para elegir conjunto o permiso
-     fixedSetId  conjunto fijo (desde la ficha del conjunto), opcional
+     fixedKey    clave de permiso fija, o null para elegir el permiso
      catalog, refs, areaTree, activeUsers, scopeLabels, actorId  (de baseContext) */
 const fijo = typeof principal !== 'undefined' && principal ? principal : null;
 const clave = typeof fixedKey !== 'undefined' && fixedKey ? fixedKey : null;
 const defClave = clave ? catalog.byKey.get(clave) : null;
-const conjuntoFijo = !clave && typeof fixedSetId !== 'undefined' && fixedSetId ? fixedSetId : null;
 const opcionesArea = [];
 (function aplanar(nodos, nivel) {
   nodos.forEach(function (n) {
@@ -42,9 +40,19 @@ let n = 0;
             <label for="<%= id('principal') %>">Destinatario</label>
             <select id="<%= id('principal') %>" name="principal_type" data-perm-principal required>
               <option value="user">Una persona</option>
+              <% if (refs.groups && refs.groups.length) { %><option value="grupo">Un conjunto de personas</option><% } %>
               <option value="area">Un área</option>
               <option value="jefes">Jefes de área</option>
-              <% if (!conjuntoFijo) { %><option value="global">Todos</option><% } %>
+              <option value="global">Todos</option>
+            </select>
+          </div>
+          <div class="campo-form" data-perm-show="grupo">
+            <label for="<%= id('grupo') %>">Conjunto</label>
+            <select id="<%= id('grupo') %>" name="group_id">
+              <option value="">Elige…</option>
+              <% (refs.groups || []).forEach(function (g) { %>
+                <option value="<%= g.id %>"><%= g.name %> (<%= g.member_count %>)</option>
+              <% }) %>
             </select>
           </div>
           <div class="campo-form" data-perm-show="user">
@@ -80,33 +88,13 @@ let n = 0;
     </div>
   <% } %>
 
-  <% if (conjuntoFijo) { %>
-    <input type="hidden" name="target" value="set">
-    <input type="hidden" name="set_id" value="<%= conjuntoFijo %>">
-  <% } else if (clave) { %>
-    <input type="hidden" name="target" value="key">
+  <% if (clave) { %>
     <input type="hidden" name="permission_key" value="<%= clave %>" data-perm-scopes="<%= defClave && defClave.scopes ? defClave.scopes.join(',') : '' %>">
   <% } else { %>
     <div class="perm-paso">
-      <p class="perm-paso__titulo"><span class="perm-paso__n"><%= ++n %></span><span>Qué<small>Un conjunto con nombre o un permiso suelto.</small></span></p>
+      <p class="perm-paso__titulo"><span class="perm-paso__n"><%= ++n %></span><span>Qué<small>El permiso que se concede o deniega.</small></span></p>
       <div class="perm-paso__campos">
-        <div class="campo-form">
-          <label for="<%= id('target') %>">Tipo</label>
-          <select id="<%= id('target') %>" name="target" data-perm-target>
-            <option value="set">Un conjunto</option>
-            <option value="key">Un permiso suelto</option>
-          </select>
-        </div>
-        <div class="campo-form" data-perm-show-target="set">
-          <label for="<%= id('set') %>">Conjunto</label>
-          <select id="<%= id('set') %>" name="set_id">
-            <option value="">Elige…</option>
-            <% refs.sets.forEach(function (s) { %>
-              <option value="<%= s.id %>"><%= s.name %><%= s.active ? '' : ' (desactivado)' %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="campo-form perm-form__ancho" data-perm-show-target="key">
+        <div class="campo-form perm-form__ancho">
           <label for="<%= id('key') %>">Permiso</label>
           <select id="<%= id('key') %>" name="permission_key" data-perm-key>
             <option value="" data-perm-scopes="">Elige…</option>

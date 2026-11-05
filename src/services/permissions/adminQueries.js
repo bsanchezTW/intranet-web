@@ -15,9 +15,9 @@ function fullName(u) {
   return [u.first_name, u.last_name].filter(Boolean).join(" ").trim() || u.email || `Usuario ${u.id}`;
 }
 
-/** Áreas, personas y conjuntos, indexados para armar etiquetas. */
+/** Áreas, personas y conjuntos de personas, indexados para armar etiquetas. */
 async function loadReferences() {
-  const [areas, users, sets] = await Promise.all([
+  const [areas, users, groups] = await Promise.all([
     db.query(
       `SELECT w.id, w.area_name, w.parent_area_id, w.manager_user_id, w.sort_order, w.color
          FROM work_areas w ORDER BY w.area_name`,
@@ -29,12 +29,10 @@ async function loadReferences() {
         ORDER BY u.first_name NULLS LAST, u.last_name NULLS LAST`,
     ),
     db.query(
-      `SELECT s.id, s.code, s.name, s.description, s.active, s.updated_at,
-              (SELECT count(*)::int FROM perm_set_items i WHERE i.set_id = s.id) AS item_count,
-              (SELECT count(*)::int FROM perm_assignments a WHERE a.set_id = s.id) AS assignment_count,
-              EXISTS (SELECT 1 FROM perm_assignments a
-                       WHERE a.set_id = s.id AND a.principal_type = 'global' AND a.effect = 'concede') AS para_todos
-         FROM perm_sets s ORDER BY s.name`,
+      `SELECT g.id, g.name, g.description, g.updated_at,
+              (SELECT count(*)::int FROM perm_group_members m WHERE m.group_id = g.id) AS member_count,
+              (SELECT count(*)::int FROM perm_assignments a WHERE a.group_id = g.id) AS assignment_count
+         FROM perm_groups g ORDER BY LOWER(g.name)`,
     ),
   ]);
   const people = users.rows.map((u) => ({ ...u, id: Number(u.id), name: fullName(u) }));
@@ -43,8 +41,8 @@ async function loadReferences() {
     areaById: new Map(areas.rows.map((a) => [Number(a.id), a])),
     users: people,
     userById: new Map(people.map((u) => [u.id, u])),
-    sets: sets.rows.map((s) => ({ ...s, id: Number(s.id) })),
-    setById: new Map(sets.rows.map((s) => [Number(s.id), s])),
+    groups: groups.rows.map((g) => ({ ...g, id: Number(g.id) })),
+    groupById: new Map(groups.rows.map((g) => [Number(g.id), { ...g, id: Number(g.id) }])),
   };
 }
 
@@ -66,6 +64,10 @@ function principalLabel(a, refs) {
       const u = refs.userById.get(Number(a.user_id));
       return u ? u.name : `Usuario #${a.user_id}`;
     }
+    case "grupo": {
+      const g = refs.groupById && refs.groupById.get(Number(a.group_id));
+      return `Conjunto «${g ? g.name : `#${a.group_id}`}»`;
+    }
     default:
       return a.principal_type;
   }
@@ -85,27 +87,25 @@ function permissionLabel(key, catalog) {
 
 /** Fila de asignación con etiquetas para la pantalla. */
 function describeAssignment(a, refs, catalog) {
-  const set = a.set_id != null ? refs.setById.get(Number(a.set_id)) : null;
   const granter = a.granted_by != null ? refs.userById.get(Number(a.granted_by)) : null;
   return {
     ...a,
     id: Number(a.id),
     principalLabel: principalLabel(a, refs),
-    targetLabel: set ? `Conjunto: ${set.name}` : permissionLabel(a.permission_key, catalog),
-    isSet: Boolean(set),
-    scopeLabel: a.set_id != null || a.effect === "deniega" ? null : scopeLabel(a, refs),
+    targetLabel: permissionLabel(a.permission_key, catalog),
+    scopeLabel: a.effect === "deniega" ? null : scopeLabel(a, refs),
     grantedByName: granter ? granter.name : null,
     expired: a.valid_until != null && new Date(a.valid_until) <= new Date(),
     pending: a.valid_from != null && new Date(a.valid_from) > new Date(),
   };
 }
 
-const ASSIGNMENT_COLUMNS = `id, principal_type, area_id, user_id, include_subareas, set_id, permission_key,
+const ASSIGNMENT_COLUMNS = `id, principal_type, area_id, user_id, group_id, include_subareas, permission_key,
   scope, scope_area_ids, scope_include_subareas, effect, valid_from, valid_until, note, granted_by, created_at`;
 
-/** Asignaciones filtradas por destinatario o conjunto. */
+/** Asignaciones filtradas por destinatario (las de antiguos conjuntos de permisos, no). */
 async function listAssignments(filter = {}, refs, catalog = getCatalog()) {
-  const where = [];
+  const where = ["set_id IS NULL"];
   const params = [];
   for (const [column, value] of Object.entries(filter)) {
     if (value === undefined) continue;
@@ -118,61 +118,50 @@ async function listAssignments(filter = {}, refs, catalog = getCatalog()) {
   }
   const { rows } = await db.query(
     `SELECT ${ASSIGNMENT_COLUMNS} FROM perm_assignments
-      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      WHERE ${where.join(" AND ")}
       ORDER BY effect DESC, created_at DESC`,
     params,
   );
   return rows.map((a) => describeAssignment(a, refs, catalog));
 }
 
-/**
- * Quién tiene cada permiso: clave → [{ assignment, viaSet, scopeLabel }].
- * Incluye lo que llega por conjuntos, para la pantalla "Por módulo".
- */
+/** Quién tiene cada permiso asignado: clave → [{ assignment, scopeLabel }]. */
 async function whoHasByKey(refs, catalog = getCatalog()) {
-  const [{ rows: assignments }, { rows: items }] = await Promise.all([
-    db.query(`SELECT ${ASSIGNMENT_COLUMNS} FROM perm_assignments ORDER BY created_at`),
-    db.query("SELECT set_id, permission_key, scope, scope_area_ids, scope_include_subareas FROM perm_set_items"),
-  ]);
-  const itemsBySet = new Map();
-  for (const i of items) {
-    const id = Number(i.set_id);
-    if (!itemsBySet.has(id)) itemsBySet.set(id, []);
-    itemsBySet.get(id).push(i);
-  }
+  const { rows } = await db.query(
+    `SELECT ${ASSIGNMENT_COLUMNS} FROM perm_assignments WHERE set_id IS NULL ORDER BY effect DESC, created_at`,
+  );
   const byKey = new Map();
-  const push = (key, entry) => {
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key).push(entry);
-  };
-  for (const raw of assignments) {
+  for (const raw of rows) {
     const a = describeAssignment(raw, refs, catalog);
-    if (a.set_id != null) {
-      const set = refs.setById.get(Number(a.set_id));
-      for (const i of itemsBySet.get(Number(a.set_id)) || []) {
-        push(i.permission_key, {
-          assignment: a,
-          viaSet: set ? set.name : null,
-          setId: set ? Number(set.id) : null,
-          scopeLabel: a.effect === "deniega" ? null : scopeLabel(i, refs),
-        });
-      }
-    } else {
-      push(a.permission_key, { assignment: a, viaSet: null, scopeLabel: a.scopeLabel });
-    }
+    if (!byKey.has(a.permission_key)) byKey.set(a.permission_key, []);
+    byKey.get(a.permission_key).push({ assignment: a, scopeLabel: a.scopeLabel });
   }
   return byKey;
 }
 
-async function getSet(setId, refs) {
-  const set = refs.setById.get(Number(setId));
-  if (!set) return null;
-  const { rows: items } = await db.query(
-    `SELECT permission_key, scope, scope_area_ids, scope_include_subareas
-       FROM perm_set_items WHERE set_id = $1 ORDER BY permission_key, scope`,
-    [setId],
+/** Un conjunto de personas: sus miembros y los permisos que tiene asignados. */
+async function getGroup(groupId, refs, catalog = getCatalog()) {
+  const group = refs.groupById.get(Number(groupId));
+  if (!group) return null;
+  const { rows } = await db.query(
+    "SELECT user_id, added_at FROM perm_group_members WHERE group_id = $1",
+    [group.id],
   );
-  return { ...set, items };
+  const members = rows
+    .map((r) => refs.userById.get(Number(r.user_id)))
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  const assignments = await listAssignments({ group_id: group.id }, refs, catalog);
+  return { ...group, members, assignments };
+}
+
+/** Conjuntos de personas a los que pertenece alguien. */
+async function groupsOfUser(userId, refs) {
+  const { rows } = await db.query("SELECT group_id FROM perm_group_members WHERE user_id = $1", [Number(userId)]);
+  return rows
+    .map((r) => refs.groupById.get(Number(r.group_id)))
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
 }
 
 async function listAudit({ limit = 100, offset = 0 } = {}, refs) {
@@ -191,14 +180,14 @@ async function listAudit({ limit = 100, offset = 0 } = {}, refs) {
   };
 }
 
-/** "conjunto «Básico» · Todos": de dónde le llega algo a alguien. */
+/** "Todos", "Finanzas", "Conjunto «Aprobadores»", "a la persona": de dónde le llega algo a alguien. */
 function sourceLabeler(snapshot, refs, catalog) {
   const byId = new Map((snapshot.assignments || []).map((a) => [Number(a.id), describeAssignment(a, refs, catalog)]));
   return (s) => {
     if (!s) return null;
+    if (s.principal === "user") return "a la persona";
     const a = byId.get(Number(s.assignmentId));
-    const via = s.setName ? `conjunto «${s.setName}»` : "permiso suelto";
-    return `${via} · ${a ? a.principalLabel : s.principal}`;
+    return a ? a.principalLabel : s.principal;
   };
 }
 
@@ -216,29 +205,18 @@ function alcanceLabel(e, definition, refs) {
  * Cómo se le quita a una persona un permiso que hoy tiene, según de dónde le
  * llega (`sources` de explain):
  *
- *   { mode: "quitar", deleteIds }   sólo por asignaciones suyas que no traen
- *                                   nada más: se borran.
+ *   { mode: "quitar", deleteIds }   sólo por asignaciones suyas: se borran.
  *   { mode: "denegar", deleteIds }  también por su área, los jefes, todos o
- *                                   un conjunto con más permisos: se borran
- *                                   sus asignaciones sueltas de esa clave y se
- *                                   le deniega sólo a ella. El resto del
- *                                   conjunto y del área no se toca.
+ *                                   un conjunto de personas: se borran sus
+ *                                   asignaciones de esa clave y se le
+ *                                   deniega sólo a ella. El resto del área o
+ *                                   del conjunto no se toca.
  */
-function removalPlan(sources, snapshot, key) {
+function removalPlan(sources) {
   const deleteIds = [];
   let needsDeny = false;
   for (const s of sources || []) {
-    if (s.principal !== "user") {
-      needsDeny = true;
-      continue;
-    }
-    if (s.setId == null) {
-      deleteIds.push(Number(s.assignmentId));
-      continue;
-    }
-    const set = snapshot.sets && snapshot.sets.get(Number(s.setId));
-    const keys = new Set(((set && set.items) || []).map((i) => i.permission_key));
-    if (keys.size === 1 && keys.has(key)) deleteIds.push(Number(s.assignmentId));
+    if (s.principal === "user") deleteIds.push(Number(s.assignmentId));
     else needsDeny = true;
   }
   return { mode: needsDeny ? "denegar" : "quitar", deleteIds: [...new Set(deleteIds)] };
@@ -265,7 +243,7 @@ async function holdersByKey(keys, refs, catalog = getCatalog(), snapshot = null)
           areaName: area ? area.area_name : null,
           alcance: alcanceLabel(e, catalog.byKey.get(key), refs),
           origins: e.sources.map(label),
-          removal: removalPlan(e.sources, snap, key),
+          removal: removalPlan(e.sources),
         });
       } else if (e.deniedBy) {
         const d = e.deniedBy;
@@ -275,7 +253,7 @@ async function holdersByKey(keys, refs, catalog = getCatalog(), snapshot = null)
           deniedBy: label(d),
           // Una denegación hecha a la persona se quita aquí; la de un área o de
           // todos, en su página.
-          assignmentId: d.principal === "user" && d.setId == null ? Number(d.assignmentId) : null,
+          assignmentId: d.principal === "user" ? Number(d.assignmentId) : null,
         });
       }
     }
@@ -310,8 +288,8 @@ async function userDetail(userId, refs, catalog = getCatalog()) {
         alcance,
         origins: e.superadmin ? ["superadmin"] : e.sources.map(sourceLabel),
         deniedBy: e.deniedBy ? sourceLabel(e.deniedBy) : null,
-        removal: e.granted && !e.superadmin ? removalPlan(e.sources, snapshot, p.key) : null,
-        denialId: e.deniedBy && e.deniedBy.principal === "user" && e.deniedBy.setId == null ? Number(e.deniedBy.assignmentId) : null,
+        removal: e.granted && !e.superadmin ? removalPlan(e.sources) : null,
+        denialId: e.deniedBy && e.deniedBy.principal === "user" ? Number(e.deniedBy.assignmentId) : null,
       };
     }),
   }));
@@ -326,6 +304,7 @@ async function userDetail(userId, refs, catalog = getCatalog()) {
     user,
     area,
     managed,
+    groups: await groupsOfUser(user.id, refs),
     superadmin: perms.superadmin,
     direct,
     modules,
@@ -340,7 +319,8 @@ module.exports = {
   whoHasByKey,
   holdersByKey,
   removalPlan,
-  getSet,
+  getGroup,
+  groupsOfUser,
   listAudit,
   userDetail,
   principalLabel,

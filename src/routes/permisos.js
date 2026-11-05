@@ -18,10 +18,9 @@ const impersonation = require("../services/permissions/impersonation");
  * página no existe (404), igual que un módulo apagado.
  *
  *   /permisos                 resumen y superadmins
- *   /permisos/modulos         cada permiso del catálogo, quién lo tiene y quitárselo
+ *   /permisos/modulos         cada permiso del catálogo: el único lugar donde se asigna
  *   /permisos/quitar          quitarle un permiso a una persona
- *   /permisos/conjuntos       conjuntos con nombre, sus permisos y a quién se asignan
- *                             («Para todos» reemplaza a la antigua pestaña Global)
+ *   /permisos/conjuntos[/:id] conjuntos de personas: miembros y lo que tienen
  *   /permisos/areas[/:id]     el organigrama y lo asignado a cada área
  *   /permisos/jefes           lo asignado a los jefes de área
  *   /permisos/usuarios[/:id]  ficha: asignaciones y permisos efectivos con su origen
@@ -30,8 +29,8 @@ const impersonation = require("../services/permissions/impersonation");
  */
 
 const BASE = "/permisos";
-const CSS = ["/css/permisos.css?v=20261105b"];
-const JS = ["/js/permisos.js?v=20261020a"];
+const CSS = ["/css/permisos.css?v=20261105d"];
+const JS = ["/js/permisos.js?v=20261105a"];
 
 router.use((req, res, next) => {
   if (req.perms && req.perms.superadmin) return next();
@@ -153,7 +152,7 @@ router.post("/quitar", async (req, res) => {
     }
     const e = perms.explain(key);
     if (!e.granted) return ok(res, to, "Esa persona ya no tenía el permiso");
-    const plan = queries.removalPlan(e.sources, snapshot, key);
+    const plan = queries.removalPlan(e.sources);
     await store.revokeFromUser(
       {
         userId,
@@ -171,28 +170,24 @@ router.post("/quitar", async (req, res) => {
   }
 });
 
-// --- Conjuntos -----------------------------------------------------------
+// --- Conjuntos de personas ---------------------------------------------------
 
 router.get("/conjuntos", async (req, res, next) => {
   try {
     const ctx = await baseContext(req);
-    // Lo global que no es «conjunto para todos» (permisos sueltos y
-    // denegaciones a todos): se muestra aquí para que no quede escondido.
-    const globales = await queries.listAssignments({ principal_type: "global" }, ctx.refs, ctx.catalog);
-    const sueltosGlobales = globales.filter((a) => a.set_id == null || a.effect === "deniega");
-    render(res, "conjuntos", "Conjuntos de permisos", "conjuntos", { ...ctx, sueltosGlobales });
+    render(res, "conjuntos", "Conjuntos de personas", "conjuntos", ctx);
   } catch (err) {
     next(err);
   }
 });
 
-/** La antigua pestaña Global: ahora cada conjunto se marca «Para todos». */
-router.get("/global", (req, res) => res.redirect(301, `${BASE}/conjuntos`));
+/** La antigua pestaña Global: lo de todos se ve y se asigna en Permisos. */
+router.get("/global", (req, res) => res.redirect(301, `${BASE}/modulos`));
 
 router.post("/conjuntos", async (req, res) => {
   try {
-    const set = await store.createSet(req.body, actorId(req));
-    return ok(res, `${BASE}/conjuntos/${set.id}`, "Conjunto creado: elige sus permisos");
+    const group = await store.createGroup(req.body, actorId(req));
+    return ok(res, `${BASE}/conjuntos/${group.id}`, "Conjunto creado: agrega a sus personas");
   } catch (err) {
     return fail(res, `${BASE}/conjuntos`, err);
   }
@@ -201,67 +196,46 @@ router.post("/conjuntos", async (req, res) => {
 router.get("/conjuntos/:id", async (req, res, next) => {
   try {
     const ctx = await baseContext(req);
-    const set = await queries.getSet(req.params.id, ctx.refs);
-    if (!set) return res.redirect(withQueryParam(`${BASE}/conjuntos`, "error", "El conjunto ya no existe"));
-    const assignments = await queries.listAssignments({ set_id: set.id }, ctx.refs, ctx.catalog);
-    return render(res, "conjunto", set.name, "conjuntos", { ...ctx, set, assignments });
+    const group = await queries.getGroup(req.params.id, ctx.refs, ctx.catalog);
+    if (!group) return res.redirect(withQueryParam(`${BASE}/conjuntos`, "error", "El conjunto ya no existe"));
+    return render(res, "conjunto", group.name, "conjuntos", { ...ctx, group });
   } catch (err) {
     return next(err);
   }
 });
 
 router.post("/conjuntos/:id", async (req, res) => {
-  const to = `${BASE}/conjuntos/${req.params.id}`;
+  const to = `${BASE}/conjuntos/${encodeURIComponent(req.params.id)}`;
   try {
-    await store.updateSet(req.params.id, { ...req.body, active: req.body.active === "1" }, actorId(req));
+    await store.updateGroup(req.params.id, req.body, actorId(req));
     return ok(res, to, "Conjunto actualizado");
   } catch (err) {
     return fail(res, to, err);
   }
 });
 
-/**
- * Los permisos del conjunto llegan como campos sueltos por clave:
- *   perm=<clave>                      permiso sin alcance marcado
- *   scope:<clave>=<alcance> (varios)  permiso con alcance, uno por alcance
- *   areas:<clave>=<id> (varios)       áreas del alcance "areas"
- *   subareas:<clave>=1                incluir sus subáreas
- */
-function itemsFromBody(body) {
-  const list = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
-  const items = list(body.perm).map((key) => ({ permission_key: key, scope: null }));
-  for (const [field, value] of Object.entries(body)) {
-    if (!field.startsWith("scope:")) continue;
-    const key = field.slice("scope:".length);
-    for (const scope of list(value)) {
-      items.push({
-        permission_key: key,
-        scope,
-        scope_area_ids: scope === "areas" ? list(body[`areas:${key}`]) : [],
-        scope_include_subareas: scope === "areas" && body[`subareas:${key}`] === "1",
-      });
-    }
-  }
-  return items;
-}
-
-router.post("/conjuntos/:id/permisos", async (req, res) => {
-  const to = `${BASE}/conjuntos/${req.params.id}`;
+/** Agregar personas (una o varias) a un conjunto. */
+router.post("/conjuntos/:id/miembros", async (req, res) => {
+  const to = volver(req, `${BASE}/conjuntos/${encodeURIComponent(req.params.id)}`);
+  const ids = [].concat(req.body.user_id || []).filter(Boolean);
+  if (!ids.length) return fail(res, to, new store.PermissionInputError("Elige al menos una persona."));
   try {
-    const items = await store.replaceSetItems(req.params.id, itemsFromBody(req.body), actorId(req));
-    return ok(res, to, `Permisos guardados (${items.length})`);
+    let agregadas = 0;
+    for (const userId of ids) {
+      const { changed } = await store.setGroupMember(req.params.id, userId, true, actorId(req));
+      if (changed) agregadas += 1;
+    }
+    return ok(res, to, agregadas === 1 ? "Persona agregada" : `${agregadas} personas agregadas`);
   } catch (err) {
     return fail(res, to, err);
   }
 });
 
-router.post("/conjuntos/:id/todos", async (req, res) => {
-  const to = volver(req, `${BASE}/conjuntos/${req.params.id}`);
-  const on = req.body.valor === "1";
+router.post("/conjuntos/:id/miembros/:userId/quitar", async (req, res) => {
+  const to = volver(req, `${BASE}/conjuntos/${encodeURIComponent(req.params.id)}`);
   try {
-    const { changed } = await store.setSetForEveryone(req.params.id, on, actorId(req));
-    if (!changed) return ok(res, to, on ? "Ya lo tenían todos" : "Ya no era para todos");
-    return ok(res, to, on ? "Ahora lo tienen todos" : "Ya no lo tienen todos");
+    await store.setGroupMember(req.params.id, req.params.userId, false, actorId(req));
+    return ok(res, to, "Persona quitada del conjunto");
   } catch (err) {
     return fail(res, to, err);
   }
@@ -269,10 +243,10 @@ router.post("/conjuntos/:id/todos", async (req, res) => {
 
 router.post("/conjuntos/:id/eliminar", async (req, res) => {
   try {
-    await store.deleteSet(req.params.id, actorId(req));
+    await store.deleteGroup(req.params.id, actorId(req));
     return ok(res, `${BASE}/conjuntos`, "Conjunto eliminado");
   } catch (err) {
-    return fail(res, `${BASE}/conjuntos/${req.params.id}`, err);
+    return fail(res, `${BASE}/conjuntos/${encodeURIComponent(req.params.id)}`, err);
   }
 });
 
@@ -360,12 +334,8 @@ router.get("/areas/:id", async (req, res, next) => {
 router.post("/asignaciones", async (req, res) => {
   const to = volver(req, BASE);
   try {
-    const body = { ...req.body };
-    // El selector "conjunto o permiso suelto" manda uno de los dos.
-    if (body.target === "set") body.permission_key = null;
-    else body.set_id = null;
-    await store.createAssignment(body, actorId(req));
-    return ok(res, to, body.effect === "deniega" ? "Denegación guardada" : "Permiso asignado");
+    await store.createAssignment(req.body, actorId(req));
+    return ok(res, to, req.body.effect === "deniega" ? "Denegación guardada" : "Permiso asignado");
   } catch (err) {
     return fail(res, to, err);
   }
@@ -418,6 +388,17 @@ router.get("/usuarios/:id", async (req, res, next) => {
   }
 });
 
+/** Desde la ficha de una persona: agregarla a un conjunto. */
+router.post("/usuarios/:id/conjuntos", async (req, res) => {
+  const to = `${BASE}/usuarios/${encodeURIComponent(req.params.id)}`;
+  try {
+    const { changed } = await store.setGroupMember(req.body.group_id, req.params.id, true, actorId(req));
+    return ok(res, to, changed ? "Agregada al conjunto" : "Ya estaba en ese conjunto");
+  } catch (err) {
+    return fail(res, to, err);
+  }
+});
+
 // «Iniciar sesión como»: ver (y usar) la intranet con la identidad de otra
 // persona. Reglas y auditoría en services/permissions/impersonation.
 router.post("/usuarios/:id/ingresar-como", async (req, res) => {
@@ -448,4 +429,3 @@ router.get("/auditoria", async (req, res, next) => {
 });
 
 module.exports = router;
-module.exports.itemsFromBody = itemsFromBody;

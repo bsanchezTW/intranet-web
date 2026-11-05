@@ -8,6 +8,12 @@ const ACCIONES = {
   'asignacion.conceder': 'Concedió',
   'asignacion.denegar': 'Denegó',
   'asignacion.quitar': 'Quitó una asignación',
+  'grupo.crear': 'Creó un conjunto de personas',
+  'grupo.editar': 'Editó un conjunto de personas',
+  'grupo.eliminar': 'Eliminó un conjunto de personas',
+  'grupo.miembro.agregar': 'Agregó a alguien a un conjunto',
+  'grupo.miembro.quitar': 'Quitó a alguien de un conjunto',
+  'conjunto.convertir': 'Convirtió los conjuntos de permisos',
   'superadmin.marcar': 'Hizo superadmin',
   'superadmin.quitar': 'Quitó superadmin',
   'suplantacion.iniciar': 'Inició sesión como otra persona',
@@ -17,7 +23,7 @@ const ACCIONES = {
 const cuando = (d) => new Date(d).toLocaleString('es-' + country, { timeZone: countryConfig.timezone, dateStyle: 'short', timeStyle: 'short' });
 const json = (v) => v == null ? null : JSON.stringify(v, null, 2);
 // Color del punto: verde lo que da, rojo lo que quita, ámbar «iniciar sesión como».
-const tono = (accion) => /^suplantacion\./.test(accion) ? ' perm-accion--warn' : /conceder|marcar|crear/.test(accion) ? ' perm-accion--ok' : /denegar|quitar|eliminar/.test(accion) ? ' perm-accion--deny' : '';
+const tono = (accion) => /^suplantacion\./.test(accion) ? ' perm-accion--warn' : /conceder|marcar|crear|agregar/.test(accion) ? ' perm-accion--ok' : /denegar|quitar|eliminar/.test(accion) ? ' perm-accion--deny' : '';
 const icono = (name) => include('../partials/icon', { name: name });
 %>
 <div class="perm-wrap">

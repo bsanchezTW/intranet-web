@@ -1,0 +1,49 @@
+<%
+/* Ficha de persona: los conjuntos de personas a los que pertenece.
+   Parámetros: u, grupos, esYo, superadmin, volverA; refs (de baseContext). */
+const icono = (name) => include('../../partials/icon', { name: name });
+const suyos = new Set(grupos.map(function (g) { return g.id; }));
+const otros = (refs.groups || []).filter(function (g) { return !suyos.has(g.id); });
+const puedeCambiar = !esYo && !superadmin;
+%>
+<section class="seccion">
+  <div class="seccion__head">
+    <div class="seccion__heading">
+      <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('users') %></span> Conjuntos <span class="perm-num<%= grupos.length ? ' perm-num--activo' : '' %>"><%= grupos.length %></span></h3>
+      <p class="seccion__desc">Recibe lo que cada conjunto tiene en Permisos, como si se le diera a ella.</p>
+    </div>
+  </div>
+  <div class="panel">
+    <% if (!grupos.length) { %>
+      <p class="perm-muted"><%= superadmin ? 'Un superadmin tiene todo: no necesita conjuntos.' : 'No está en ningún conjunto.' %></p>
+    <% } else { %>
+      <div class="perm-conjuntos-persona">
+        <% grupos.forEach(function (g) { %>
+          <span class="perm-conjunto-chip">
+            <a href="/permisos/conjuntos/<%= g.id %>"><%= g.name %></a>
+            <% if (puedeCambiar) { %>
+              <form class="perm-inline" action="/permisos/conjuntos/<%= g.id %>/miembros/<%= u.id %>/quitar" method="POST"
+                    data-confirm="<%= u.name %> deja de recibir lo que tiene «<%= g.name %>»."
+                    data-confirm-title="¿Sacarla del conjunto?" data-confirm-accept="Sacar" data-confirm-tone="peligro">
+                <input type="hidden" name="volver" value="<%= volverA %>">
+                <button type="submit" class="perm-conjunto-chip__quitar" aria-label="Sacar de <%= g.name %>" title="Sacar de <%= g.name %>"><%- icono('x') %></button>
+              </form>
+            <% } %>
+          </span>
+        <% }) %>
+      </div>
+    <% } %>
+    <% if (puedeCambiar && otros.length) { %>
+      <form class="perm-inline perm-conjuntos-persona__agregar" action="/permisos/usuarios/<%= u.id %>/conjuntos" method="POST">
+        <label class="sr-only" for="agregar-conjunto">Agregar a un conjunto</label>
+        <select id="agregar-conjunto" name="group_id" required>
+          <option value="">Agregar a un conjunto…</option>
+          <% otros.forEach(function (g) { %>
+            <option value="<%= g.id %>"><%= g.name %></option>
+          <% }) %>
+        </select>
+        <button type="submit" class="perm-btn perm-btn--sec perm-btn--sm"><%- icono('plus') %> Agregar</button>
+      </form>
+    <% } %>
+  </div>
+</section>

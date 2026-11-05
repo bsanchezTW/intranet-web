@@ -6,8 +6,8 @@ const { computePermissions, emptyPermissions } = require("./resolver");
 /**
  * Permisos efectivos por request, con dos cachés:
  *
- *   - La foto de la configuración (asignaciones, conjuntos, áreas y
- *     personas): todas las tablas son chicas y se leen juntas. Se recarga
+ *   - La foto de la configuración (asignaciones, conjuntos de personas,
+ *     áreas y personas): todas las tablas son chicas y se leen juntas. Se recarga
  *     cuando cambia `perm_meta.version`, que se consulta en cada petición:
  *     un cambio hecho en otro proceso vale en el siguiente clic. Como
  *     respaldo, también al minuto.
@@ -21,7 +21,7 @@ const { computePermissions, emptyPermissions } = require("./resolver");
 const SNAPSHOT_TTL_MS = 60 * 1000;
 const RESULT_TTL_MS = 60 * 1000;
 
-let snapshot = null; // { version, loadedAt, users, areas, sets, assignments }
+let snapshot = null; // { version, loadedAt, users, areas, groupMembers, assignments }
 let loading = null;
 const results = new Map(); // userId → { snapshot, expiresAt, perms }
 
@@ -53,27 +53,26 @@ async function fetchUsers() {
 
 async function fetchConfiguration() {
   try {
-    const [sets, items, assignments] = await Promise.all([
-      db.query("SELECT id, code, name, active FROM perm_sets"),
+    const [members, assignments] = await Promise.all([
+      db.query("SELECT group_id, user_id FROM perm_group_members"),
       db.query(
-        `SELECT set_id, permission_key, scope, scope_area_ids, scope_include_subareas
-           FROM perm_set_items`,
-      ),
-      db.query(
-        `SELECT id, principal_type, area_id, user_id, include_subareas, set_id,
+        `SELECT id, principal_type, area_id, user_id, group_id, include_subareas,
                 permission_key, scope, scope_area_ids, scope_include_subareas,
                 effect, valid_from, valid_until
-           FROM perm_assignments`,
+           FROM perm_assignments
+          WHERE set_id IS NULL`,
       ),
     ]);
-    const byId = new Map(sets.rows.map((s) => [Number(s.id), { ...s, id: Number(s.id), items: [] }]));
-    for (const item of items.rows) {
-      const set = byId.get(Number(item.set_id));
-      if (set) set.items.push(item);
+    // userId → Set(groupId)
+    const groupMembers = new Map();
+    for (const m of members.rows) {
+      const userId = Number(m.user_id);
+      if (!groupMembers.has(userId)) groupMembers.set(userId, new Set());
+      groupMembers.get(userId).add(Number(m.group_id));
     }
-    return { sets: byId, assignments: assignments.rows };
+    return { groupMembers, assignments: assignments.rows };
   } catch (err) {
-    if (isMissingRelation(err)) return { sets: new Map(), assignments: [] };
+    if (isMissingRelation(err)) return { groupMembers: new Map(), assignments: [] };
     throw err;
   }
 }
@@ -91,7 +90,7 @@ async function loadSnapshot() {
     loadedAt: Date.now(),
     users: new Map(users.map((u) => [Number(u.id), u])),
     areas,
-    sets: config.sets,
+    groupMembers: config.groupMembers,
     assignments: config.assignments,
   };
 }

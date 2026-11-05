@@ -45,6 +45,7 @@ const { getCatalog } = require("../src/services/permissions/catalog");
 const { planBootstrap } = require("../src/services/permissions/bootstrap");
 const { ensurePermissionSchema } = require("../src/services/permissions/permissionSchema");
 const { applyBootstrap } = require("../src/services/permissions/autoBootstrap");
+const { convertSetsIfNeeded } = require("../src/services/permissions/setConversion");
 const { SCOPE_LABELS } = require("../src/services/permissions/scopes");
 
 const LINEA = "─".repeat(72);
@@ -140,6 +141,8 @@ async function main() {
   await ensurePermissionSchema();
   const { applied } = await applyBootstrap(db, plan, { note: "Copia de los permisos vigentes (scripts/permisos-arranque.js)" });
   if (!applied) throw new Error("El arranque ya se aplicó en este país.");
+  // Los conjuntos del plan pasan a permisos de a uno y conjuntos de personas.
+  await convertSetsIfNeeded({ db, catalog, logger });
   logger.info("permisos", `Arranque aplicado en ${PAIS}: ${plan.sets.length} conjuntos y ${plan.assignments.length} asignaciones.`);
 }
 

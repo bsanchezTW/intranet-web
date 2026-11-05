@@ -18,8 +18,7 @@
     });
   }
 
-  function alcancesDe(form, objetivo) {
-    if (objetivo !== "key") return [];
+  function alcancesDe(form) {
     var selector = form.querySelector("[data-perm-key]");
     var fuente = selector
       ? selector.options[selector.selectedIndex]
@@ -31,7 +30,6 @@
   function prepararAsignacion(form) {
     var principal = form.querySelector("[data-perm-principal]");
     var principalFijo = form.querySelector("input[type='hidden'][name='principal_type']");
-    var objetivo = form.querySelector("[data-perm-target]");
     var campoAlcance = form.querySelector("[data-perm-scope-field]");
     var alcance = form.querySelector("[data-perm-scope]");
     var campoAreas = form.querySelector("[data-perm-areas-field]");
@@ -55,12 +53,7 @@
         }
       }
 
-      var que = objetivo ? objetivo.value : "key";
-      form.querySelectorAll("[data-perm-show-target]").forEach(function (el) {
-        ocultar(el, el.getAttribute("data-perm-show-target") !== que);
-      });
-
-      var permitidos = alcancesDe(form, que);
+      var permitidos = alcancesDe(form);
       // Conceder / Denegar son radios; antes era un select.
       var efecto = form.querySelector("[data-perm-effect]:checked") || form.querySelector("select[data-perm-effect]");
       var deniega = efecto && efecto.value === "deniega";

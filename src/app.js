@@ -94,6 +94,7 @@ const { ensureVacationSchema } = require("./services/vacations/vacationSchema");
 const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
 const { ensurePermissionSchema } = require("./services/permissions/permissionSchema");
 const { ensureBootstrapped } = require("./services/permissions/autoBootstrap");
+const { convertSetsIfNeeded } = require("./services/permissions/setConversion");
 const permissions = require("./services/permissions/permissionService");
 const { emptyPermissions } = require("./services/permissions/resolver");
 const { getCatalog } = require("./services/permissions/catalog");
@@ -854,6 +855,13 @@ async function asegurarSchemaPermisos() {
     await ensureBootstrapped({ db, country: countryConfig.code, catalog: getCatalog(), logger });
   } catch (err) {
     logger.error("permisos.arranque", err);
+  }
+  // Los conjuntos de permisos (también los del arranque) pasan a permisos de
+  // a uno y conjuntos de personas. Una sola vez; después no hace nada.
+  try {
+    await convertSetsIfNeeded({ db, catalog: getCatalog(), logger });
+  } catch (err) {
+    logger.error("permisos.conversion", err);
   }
 }
 

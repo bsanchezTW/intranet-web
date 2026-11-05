@@ -121,11 +121,13 @@ const iniciales = String(u.name || '?').split(/\s+/).slice(0, 2).map(function (p
   </section>
   <% } %>
 
+<%- include('partials/conjuntos_persona', { u: u, grupos: detail.groups, esYo: esYo, superadmin: detail.superadmin, volverA: volverA }) %>
+
   <section class="seccion">
     <div class="seccion__head">
       <div class="seccion__heading">
         <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('user-check') %></span> Asignado directamente</h3>
-        <p class="seccion__desc">Lo que se le dio o negó a esta persona. Lo que recibe por Global, su área o por ser jefe se ve abajo, en cada permiso.</p>
+        <p class="seccion__desc">Lo que se le dio o negó a esta persona. Lo que recibe por todos, su área, ser jefe o sus conjuntos se ve abajo, en cada permiso.</p>
       </div>
     </div>
     <div class="panel">
@@ -138,15 +140,7 @@ const iniciales = String(u.name || '?').split(/\s+/).slice(0, 2).map(function (p
       <% if (esYo) { %>
         <p class="perm-muted">No puedes cambiar tus propias asignaciones.</p>
       <% } else if (!detail.superadmin) { %>
-        <details>
-          <summary class="perm-btn perm-btn--sec perm-btn--sm perm-abrir" style="margin-top:12px"><%- icono('plus') %> Asignar o denegar a <%= u.first_name || u.name %></summary>
-          <%- include('partials/form_asignacion', {
-            uid: 'u',
-            volver: volverA,
-            principal: { type: 'user', userId: u.id },
-            fixedKey: null,
-          }) %>
-        </details>
+        <p class="perm-muted" style="margin-top:10px">Para darle o negarle un permiso, ve a <a href="/permisos/modulos">Permisos</a> y elige a <%= u.first_name || u.name %> como destinatario.</p>
       <% } %>
     </div>
   </section>

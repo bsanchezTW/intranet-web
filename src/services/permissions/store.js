@@ -7,7 +7,7 @@ const { forgetLocalCache } = require("./permissionService");
 /**
  * Escrituras de Gestión de Permisos. Cada una va en su transacción con su
  * fila en perm_audit (antes y después) y sube la versión, así el cambio vale
- * en todos los procesos en segundos.
+ * en todos los procesos en la siguiente petición.
  *
  * La validación es pura (validateGrant, validateAssignment) para poder
  * probarla sin base: un permiso que el país no tiene, un alcance que el
@@ -17,7 +17,7 @@ const { forgetLocalCache } = require("./permissionService");
 
 class PermissionInputError extends Error {}
 
-const PRINCIPALS = ["global", "area", "jefes", "user"];
+const PRINCIPALS = ["global", "area", "jefes", "user", "grupo"];
 
 function toId(value) {
   if (value == null || value === "") return null;
@@ -106,7 +106,7 @@ function validateGrant(input, { catalog, areaIds }) {
 }
 
 /** Asignación lista para guardar. Ver perm_assignments. */
-function validateAssignment(input, { catalog, areaIds, userIds, setIds, actorId, now = new Date(), timeZone }) {
+function validateAssignment(input, { catalog, areaIds, userIds, groupIds = new Set(), actorId, now = new Date(), timeZone }) {
   const principal = String(input.principal_type || "");
   if (!PRINCIPALS.includes(principal)) throw new PermissionInputError("Elige a quién se asigna.");
 
@@ -114,8 +114,8 @@ function validateAssignment(input, { catalog, areaIds, userIds, setIds, actorId,
     principal_type: principal,
     area_id: null,
     user_id: null,
+    group_id: null,
     include_subareas: false,
-    set_id: null,
     permission_key: null,
     scope: null,
     scope_area_ids: [],
@@ -141,12 +141,13 @@ function validateAssignment(input, { catalog, areaIds, userIds, setIds, actorId,
     }
     value.user_id = userId;
   }
+  if (principal === "grupo") {
+    const groupId = toId(input.group_id);
+    if (groupId == null || !groupIds.has(groupId)) throw new PermissionInputError("Elige el conjunto de personas.");
+    value.group_id = groupId;
+  }
 
-  const setId = toId(input.set_id);
-  if (setId != null) {
-    if (!setIds.has(setId)) throw new PermissionInputError("El conjunto elegido ya no existe.");
-    value.set_id = setId;
-  } else if (value.effect === "deniega") {
+  if (value.effect === "deniega") {
     // Denegar quita el permiso entero: el alcance no aplica.
     const key = String(input.permission_key || "").trim();
     if (!catalog.byKey.has(key)) throw new PermissionInputError("Ese permiso no existe en la intranet de este país.");
@@ -162,30 +163,6 @@ function validateAssignment(input, { catalog, areaIds, userIds, setIds, actorId,
     throw new PermissionInputError("La vigencia ya terminó: elige una fecha futura.");
   }
   return value;
-}
-
-/** Ítems de un conjunto: [{ permission_key, scope, ... }] sin repetidos. */
-function validateSetItems(items, { catalog, areaIds }) {
-  const seen = new Set();
-  const out = [];
-  for (const raw of items || []) {
-    const grant = validateGrant(raw, { catalog, areaIds });
-    const k = `${grant.permission_key}|${grant.scope || ""}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(grant);
-  }
-  return out;
-}
-
-function slugify(text) {
-  return String(text || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 50);
 }
 
 // ---------------------------------------------------------------------------
@@ -228,109 +205,111 @@ async function referenceSets(client) {
   // En serie: un cliente de pg no admite consultas simultáneas (pg@9 lo prohíbe).
   const areas = await client.query("SELECT id FROM work_areas");
   const users = await client.query("SELECT id FROM users");
-  const sets = await client.query("SELECT id FROM perm_sets");
+  const groups = await client.query("SELECT id FROM perm_groups");
   return {
     areaIds: new Set(areas.rows.map((r) => Number(r.id))),
     userIds: new Set(users.rows.map((r) => Number(r.id))),
-    setIds: new Set(sets.rows.map((r) => Number(r.id))),
+    groupIds: new Set(groups.rows.map((r) => Number(r.id))),
   };
 }
 
-// --- Conjuntos ---------------------------------------------------------------
+// --- Conjuntos de personas -------------------------------------------------
 
-async function createSet({ name, description }, actorId) {
+function cleanGroupInput({ name, description } = {}) {
   const cleanName = String(name || "").trim().slice(0, 120);
   if (!cleanName) throw new PermissionInputError("El conjunto necesita un nombre.");
+  return { name: cleanName, description: String(description || "").trim().slice(0, 300) || null };
+}
+
+async function assertGroupNameFree(client, name, exceptId = null) {
+  const { rows } = await client.query(
+    "SELECT id FROM perm_groups WHERE LOWER(name) = LOWER($1) AND ($2::int IS NULL OR id <> $2)",
+    [name, exceptId],
+  );
+  if (rows.length) throw new PermissionInputError(`Ya hay un conjunto llamado «${name}».`);
+}
+
+async function createGroup(input, actorId) {
+  const value = cleanGroupInput(input);
   return inTransaction(async (client) => {
-    const base = slugify(cleanName) || "conjunto";
-    const { rows: existing } = await client.query("SELECT code FROM perm_sets WHERE code LIKE $1", [`${base}%`]);
-    const taken = new Set(existing.map((r) => r.code));
-    let code = base;
-    for (let i = 2; taken.has(code); i += 1) code = `${base}_${i}`;
+    await assertGroupNameFree(client, value.name);
     const { rows } = await client.query(
-      "INSERT INTO perm_sets (code, name, description) VALUES ($1, $2, $3) RETURNING *",
-      [code, cleanName, String(description || "").trim() || null],
+      "INSERT INTO perm_groups (name, description) VALUES ($1, $2) RETURNING *",
+      [value.name, value.description],
     );
-    await audit(client, { actorId, action: "conjunto.crear", entityType: "conjunto", entityId: rows[0].id, newValue: rows[0] });
+    await audit(client, { actorId, action: "grupo.crear", entityType: "grupo", entityId: rows[0].id, newValue: rows[0] });
     return rows[0];
   });
 }
 
-async function updateSet(setId, { name, description, active }, actorId) {
-  const cleanName = String(name || "").trim().slice(0, 120);
-  if (!cleanName) throw new PermissionInputError("El conjunto necesita un nombre.");
+async function updateGroup(groupId, input, actorId) {
+  const id = toId(groupId);
+  const value = cleanGroupInput(input);
   return inTransaction(async (client) => {
-    const { rows: before } = await client.query("SELECT * FROM perm_sets WHERE id = $1 FOR UPDATE", [setId]);
+    const { rows: before } = await client.query("SELECT * FROM perm_groups WHERE id = $1 FOR UPDATE", [id]);
     if (!before.length) throw new PermissionInputError("El conjunto ya no existe.");
+    await assertGroupNameFree(client, value.name, id);
     const { rows } = await client.query(
-      `UPDATE perm_sets SET name = $1, description = $2, active = $3, updated_at = NOW()
-        WHERE id = $4 RETURNING *`,
-      [cleanName, String(description || "").trim() || null, Boolean(active), setId],
+      "UPDATE perm_groups SET name = $1, description = $2, updated_at = NOW() WHERE id = $3 RETURNING *",
+      [value.name, value.description, id],
     );
-    await audit(client, {
-      actorId,
-      action: "conjunto.editar",
-      entityType: "conjunto",
-      entityId: Number(setId),
-      oldValue: before[0],
-      newValue: rows[0],
-    });
+    await audit(client, { actorId, action: "grupo.editar", entityType: "grupo", entityId: id, oldValue: before[0], newValue: rows[0] });
     return rows[0];
   });
 }
 
-async function replaceSetItems(setId, items, actorId, { catalog = getCatalog() } = {}) {
+/** Elimina el conjunto; sus miembros y sus asignaciones se van con él. */
+async function deleteGroup(groupId, actorId) {
+  const id = toId(groupId);
   return inTransaction(async (client) => {
-    const { rows: set } = await client.query("SELECT id FROM perm_sets WHERE id = $1 FOR UPDATE", [setId]);
-    if (!set.length) throw new PermissionInputError("El conjunto ya no existe.");
-    const { areaIds } = await referenceSets(client);
-    const clean = validateSetItems(items, { catalog, areaIds });
-
-    const { rows: before } = await client.query(
-      `SELECT permission_key, scope, scope_area_ids, scope_include_subareas
-         FROM perm_set_items WHERE set_id = $1 ORDER BY permission_key, scope`,
-      [setId],
-    );
-    await client.query("DELETE FROM perm_set_items WHERE set_id = $1", [setId]);
-    for (const i of clean) {
-      await client.query(
-        `INSERT INTO perm_set_items (set_id, permission_key, scope, scope_area_ids, scope_include_subareas)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [setId, i.permission_key, i.scope, i.scope_area_ids, i.scope_include_subareas],
-      );
-    }
-    await client.query("UPDATE perm_sets SET updated_at = NOW() WHERE id = $1", [setId]);
-    await audit(client, {
-      actorId,
-      action: "conjunto.permisos",
-      entityType: "conjunto",
-      entityId: Number(setId),
-      oldValue: before,
-      newValue: clean,
-    });
-    return clean;
-  });
-}
-
-async function deleteSet(setId, actorId) {
-  return inTransaction(async (client) => {
-    const { rows } = await client.query("SELECT * FROM perm_sets WHERE id = $1 FOR UPDATE", [setId]);
+    const { rows } = await client.query("SELECT * FROM perm_groups WHERE id = $1 FOR UPDATE", [id]);
     if (!rows.length) throw new PermissionInputError("El conjunto ya no existe.");
-    const { rows: items } = await client.query(
-      "SELECT permission_key, scope, scope_area_ids, scope_include_subareas FROM perm_set_items WHERE set_id = $1",
-      [setId],
-    );
-    const { rows: assignments } = await client.query("SELECT * FROM perm_assignments WHERE set_id = $1", [setId]);
-    // Las asignaciones del conjunto se van con él (ON DELETE CASCADE).
-    await client.query("DELETE FROM perm_sets WHERE id = $1", [setId]);
+    const { rows: members } = await client.query("SELECT user_id FROM perm_group_members WHERE group_id = $1", [id]);
+    const { rows: assignments } = await client.query("SELECT * FROM perm_assignments WHERE group_id = $1", [id]);
+    await client.query("DELETE FROM perm_groups WHERE id = $1", [id]);
     await audit(client, {
       actorId,
-      action: "conjunto.eliminar",
-      entityType: "conjunto",
-      entityId: Number(setId),
-      oldValue: { ...rows[0], items, assignments },
+      action: "grupo.eliminar",
+      entityType: "grupo",
+      entityId: id,
+      oldValue: { ...rows[0], members: members.map((m) => Number(m.user_id)), assignments },
     });
     return rows[0];
+  });
+}
+
+/**
+ * Agrega o quita a una persona de un conjunto. Nadie se cambia a sí mismo
+ * (sería darse permisos) y un superadmin no necesita conjuntos.
+ */
+async function setGroupMember(groupId, userId, member, actorId) {
+  const gid = toId(groupId);
+  const uid = toId(userId);
+  if (uid == null) throw new PermissionInputError("Elige a la persona.");
+  if (actorId != null && uid === Number(actorId)) throw new PermissionInputError("No puedes cambiar tus propios conjuntos.");
+  return inTransaction(async (client) => {
+    const { rows: group } = await client.query("SELECT id, name FROM perm_groups WHERE id = $1 FOR UPDATE", [gid]);
+    if (!group.length) throw new PermissionInputError("El conjunto ya no existe.");
+    const { rows: user } = await client.query("SELECT id, is_superadmin FROM users WHERE id = $1", [uid]);
+    if (!user.length) throw new PermissionInputError("La persona ya no existe.");
+    if (member) {
+      if (user[0].is_superadmin) throw new PermissionInputError("Un superadmin ya tiene todos los permisos.");
+      const { rows } = await client.query(
+        `INSERT INTO perm_group_members (group_id, user_id, added_by) VALUES ($1, $2, $3)
+         ON CONFLICT DO NOTHING RETURNING *`,
+        [gid, uid, actorId || null],
+      );
+      if (!rows.length) return { changed: false };
+      await audit(client, { actorId, action: "grupo.miembro.agregar", entityType: "grupo", entityId: gid, newValue: { user_id: uid } });
+      return { changed: true };
+    }
+    const { rows } = await client.query(
+      "DELETE FROM perm_group_members WHERE group_id = $1 AND user_id = $2 RETURNING *",
+      [gid, uid],
+    );
+    if (!rows.length) return { changed: false };
+    await audit(client, { actorId, action: "grupo.miembro.quitar", entityType: "grupo", entityId: gid, oldValue: { user_id: uid } });
+    return { changed: true };
   });
 }
 
@@ -342,7 +321,7 @@ async function createAssignment(input, actorId, { catalog = getCatalog() } = {})
     const value = validateAssignment(input, { catalog, ...refs, actorId, timeZone: getTimezone() });
     const { rows } = await client.query(
       `INSERT INTO perm_assignments
-         (principal_type, area_id, user_id, include_subareas, set_id, permission_key, scope,
+         (principal_type, area_id, user_id, include_subareas, group_id, permission_key, scope,
           scope_area_ids, scope_include_subareas, effect, valid_from, valid_until, note, granted_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
@@ -351,7 +330,7 @@ async function createAssignment(input, actorId, { catalog = getCatalog() } = {})
         value.area_id,
         value.user_id,
         value.include_subareas,
-        value.set_id,
+        value.group_id,
         value.permission_key,
         value.scope,
         value.scope_area_ids,
@@ -394,57 +373,6 @@ async function deleteAssignment(assignmentId, actorId) {
 }
 
 /**
- * «Para todos»: da o quita un conjunto a toda cuenta activa (una asignación
- * global que concede). Reemplaza a la antigua pestaña Global. Devuelve si
- * cambió algo; repetir la misma orden no duplica ni falla.
- */
-async function setSetForEveryone(setId, on, actorId) {
-  const id = toId(setId);
-  if (id == null) throw new PermissionInputError("El conjunto ya no existe.");
-  return inTransaction(async (client) => {
-    const { rows: sets } = await client.query("SELECT id FROM perm_sets WHERE id = $1 FOR UPDATE", [id]);
-    if (!sets.length) throw new PermissionInputError("El conjunto ya no existe.");
-    const { rows: current } = await client.query(
-      `SELECT * FROM perm_assignments
-        WHERE set_id = $1 AND principal_type = 'global' AND effect = 'concede'
-        FOR UPDATE`,
-      [id],
-    );
-    if (on) {
-      if (current.length) return { changed: false };
-      const { rows } = await client.query(
-        `INSERT INTO perm_assignments
-           (principal_type, area_id, user_id, include_subareas, set_id, permission_key, scope,
-            scope_area_ids, scope_include_subareas, effect, valid_from, valid_until, note, granted_by)
-         VALUES ('global', NULL, NULL, FALSE, $1, NULL, NULL, '{}', FALSE, 'concede', NULL, NULL, NULL, $2)
-         RETURNING *`,
-        [id, actorId || null],
-      );
-      await audit(client, {
-        actorId,
-        action: "asignacion.conceder",
-        entityType: "asignacion",
-        entityId: rows[0].id,
-        newValue: rows[0],
-      });
-      return { changed: true };
-    }
-    if (!current.length) return { changed: false };
-    for (const row of current) {
-      await client.query("DELETE FROM perm_assignments WHERE id = $1", [row.id]);
-      await audit(client, {
-        actorId,
-        action: "asignacion.quitar",
-        entityType: "asignacion",
-        entityId: Number(row.id),
-        oldValue: row,
-      });
-    }
-    return { changed: true };
-  });
-}
-
-/**
  * Cambia la vigencia, el motivo, el alcance o si alcanza a las subáreas de
  * una asignación. A quién se asigna, qué y si concede o deniega no cambian:
  * eso es otra asignación (se quita y se agrega).
@@ -461,7 +389,7 @@ async function updateAssignment(assignmentId, input, actorId, { catalog = getCat
         principal_type: before.principal_type,
         area_id: before.area_id,
         user_id: before.user_id,
-        set_id: before.set_id,
+        group_id: before.group_id,
         permission_key: before.permission_key,
         effect: before.effect,
       },
@@ -513,7 +441,7 @@ async function revokeFromUser({ userId, permissionKey, deleteIds = [], deny = fa
       // se borra nada de otros aunque llegara mal.
       const { rows } = await client.query(
         `DELETE FROM perm_assignments
-          WHERE id = ANY($1::int[]) AND principal_type = user AND user_id = $2
+          WHERE id = ANY($1::int[]) AND principal_type = 'user' AND user_id = $2
           RETURNING *`,
         [ids, id],
       );
@@ -536,7 +464,7 @@ async function revokeFromUser({ userId, permissionKey, deleteIds = [], deny = fa
     );
     const { rows } = await client.query(
       `INSERT INTO perm_assignments (principal_type, user_id, permission_key, effect, note, granted_by)
-       VALUES (user, $1, $2, deniega, $3, $4)
+       VALUES ('user', $1, $2, 'deniega', $3, $4)
        RETURNING *`,
       [value.user_id, value.permission_key, value.note, actorId || null],
     );
@@ -598,15 +526,12 @@ module.exports = {
   PermissionInputError,
   validateGrant,
   validateAssignment,
-  validateSetItems,
-  slugify,
-  createSet,
-  updateSet,
-  replaceSetItems,
-  deleteSet,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  setGroupMember,
   createAssignment,
   deleteAssignment,
-  setSetForEveryone,
   updateAssignment,
   revokeFromUser,
   setSuperadmin,

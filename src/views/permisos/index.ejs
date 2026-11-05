@@ -5,14 +5,14 @@ const TARJETAS = [
   ['/permisos/usuarios', 'users', 'Personas', 'Ficha de cada persona: qué tiene, de dónde le viene y quitarle algo.'],
   ['/permisos/areas', 'sitemap', 'Organigrama', 'Quién trabaja en cada área, sus jefes y los de arriba.'],
   ['/permisos/jefes', 'user-check', 'Jefes', 'Quiénes son jefes y lo que reciben por serlo.'],
-  ['/permisos/conjuntos', 'briefcase', 'Conjuntos', 'Paquetes con nombre, como «Aprobador de rendiciones». Se marcan «Para todos» o se asignan a quien corresponda.'],
+  ['/permisos/conjuntos', 'users', 'Conjuntos', 'Grupos de personas con nombre, como «Aprobadores de rendiciones». Los permisos se les dan en Permisos.'],
   ['/permisos/auditoria', 'clock', 'Auditoría', 'Quién cambió qué, con el antes y el después.'],
 ];
 %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
     titulo: 'Gestión de permisos',
-    descripcion: 'Qué ve y qué puede hacer cada persona en la intranet de ' + countryConfig.name + '. Los permisos se asignan a todos, a un área, a los jefes o a una persona, y se pueden denegar.',
+    descripcion: 'Qué ve y qué puede hacer cada persona en la intranet de ' + countryConfig.name + '. Los permisos se asignan de a uno en la pestaña Permisos: a todos, a un área, a los jefes, a un conjunto de personas o a alguien, y se pueden denegar.',
     seccion: 'inicio',
   }) %>
 
@@ -31,8 +31,8 @@ const TARJETAS = [
       <div><span class="perm-kpi__valor"><%= permissionCount %></span><span class="perm-kpi__label">permisos en el catálogo</span></div>
     </div>
     <div class="perm-kpi">
-      <span class="perm-kpi__icono" aria-hidden="true"><%- icono('briefcase') %></span>
-      <div><span class="perm-kpi__valor"><%= refs.sets.length %></span><span class="perm-kpi__label">conjuntos</span></div>
+      <span class="perm-kpi__icono" aria-hidden="true"><%- icono('users') %></span>
+      <div><span class="perm-kpi__valor"><%= refs.groups.length %></span><span class="perm-kpi__label">conjuntos de personas</span></div>
     </div>
     <div class="perm-kpi">
       <span class="perm-kpi__icono perm-kpi__icono--ok" aria-hidden="true"><%- icono('check-circle') %></span>
