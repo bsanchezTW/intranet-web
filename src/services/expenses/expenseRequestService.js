@@ -5,11 +5,10 @@ const {
   EXPENSE_STAGE,
   isExpenseKind,
 } = require("../../constants/expenseStatuses");
-const { isAdministrador, normalizeRole } = require("../../constants/roles");
+const policy = require("./expensePolicy");
 const { isIdPrimaryKeyCollision } = require("../../utils/idCollision");
 const { currentCurrencyCode } = require("./expenseSchema");
 const areaManager = require("./areaManager");
-const financeTeam = require("./financeTeam");
 const costCenters = require("../costCenters/costCenterService");
 const { formatNationalId } = require("../../utils/nationalId");
 const { getCurrency, getDocumentConfig } = require("../../config/country");
@@ -720,8 +719,14 @@ async function prepareSubmission({
     };
   }
 
-  const approver = await areaManager.resolveApprover(user.id, context.area.id);
-  if (!approver.ok) return approver;
+  // El jefe que da el organigrama queda en la solicitud como dato: quién
+  // aprueba se decide en el momento con los permisos (expensePolicy). Si no
+  // hay jefe disponible no se bloquea: aprueba quien tenga el permiso o, si
+  // nadie, el superadmin.
+  const resuelto = await areaManager.resolveApprover(user.id, context.area.id);
+  const approver = resuelto.ok
+    ? resuelto
+    : { ok: true, managerId: null, requiresAdmin: false, manager: null };
 
   // El documento identifica al beneficiario del reembolso: sin él la rendición
   // no sirve para contabilidad, así que se exige aquí y no al crear la ficha.
@@ -1259,37 +1264,13 @@ async function getDraftForEdit(requestId, user) {
 
 /**
  * ¿Puede este usuario resolver la solicitud en su etapa actual?
- * Devuelve la etapa ('manager' | 'finance') o null.
+ * Devuelve la etapa ('manager' | 'finance') o null. Ver expensePolicy.
  */
-async function reviewerStageFor(request, user) {
-  // Nadie resuelve lo propio, en ninguna etapa: ni el jefe sin superior que
-  // además es administrador, ni quien aprueba en Finanzas.
-  if (request.user_id != null && Number(request.user_id) === Number(user.id)) {
-    return null;
-  }
-  const isAdmin = isAdministrador(normalizeRole(user.role));
-
-  if (request.status === EXPENSE_STATUS.PENDING) {
-    // Solicitud del propio jefe del área: sólo un administrador la destraba.
-    if (request.manager_user_id == null) {
-      return isAdmin ? EXPENSE_STAGE.MANAGER : null;
-    }
-    if (Number(request.manager_user_id) === Number(user.id)) {
-      return EXPENSE_STAGE.MANAGER;
-    }
-    return isAdmin ? EXPENSE_STAGE.MANAGER : null;
-  }
-
-  if (request.status === EXPENSE_STATUS.APPROVED_MANAGER) {
-    return (await financeTeam.isFinanceApprover(user))
-      ? EXPENSE_STAGE.FINANCE
-      : null;
-  }
-
-  return null;
+async function reviewerStageFor(request, user, perms) {
+  return policy.reviewerStage(request, user && user.id, perms);
 }
 
-async function transition(requestId, user, { approve, notes }) {
+async function transition(requestId, user, { approve, notes, perms }) {
   const id = Number(requestId);
   if (!Number.isInteger(id)) {
     return { ok: false, error: "Solicitud inválida." };
@@ -1309,7 +1290,7 @@ async function transition(requestId, user, { approve, notes }) {
       return { ok: false, error: "La solicitud no existe." };
     }
 
-    const stage = await reviewerStageFor(request, user);
+    const stage = await reviewerStageFor(request, user, perms);
     if (!stage) {
       await client.query("ROLLBACK");
       return {
@@ -1362,12 +1343,12 @@ async function transition(requestId, user, { approve, notes }) {
   }
 }
 
-function approveRequest({ requestId, reviewer, notes }) {
-  return transition(requestId, reviewer, { approve: true, notes });
+function approveRequest({ requestId, reviewer, notes, perms }) {
+  return transition(requestId, reviewer, { approve: true, notes, perms });
 }
 
-function rejectRequest({ requestId, reviewer, notes }) {
-  return transition(requestId, reviewer, { approve: false, notes });
+function rejectRequest({ requestId, reviewer, notes, perms }) {
+  return transition(requestId, reviewer, { approve: false, notes, perms });
 }
 
 /** Anular: sólo el dueño y sólo mientras nadie la ha resuelto. Queda en el historial. */
@@ -1397,12 +1378,9 @@ async function cancelRequest({ requestId, user }) {
  * Liquidar: Finanzas confirma que el saldo de una rendición aprobada ya se
  * devolvió o se pagó. Una rendición sin saldo se liquida sola al aprobarse.
  */
-async function settleRequest({ requestId, reviewer, notes }) {
+async function settleRequest({ requestId, reviewer, notes, perms }) {
   const id = Number(requestId);
   if (!Number.isInteger(id)) return { ok: false, error: "Solicitud inválida." };
-  if (!(await financeTeam.isFinanceApprover(reviewer))) {
-    return { ok: false, error: "Sólo Finanzas puede liquidar una rendición." };
-  }
 
   const client = await db.getClient();
   try {
@@ -1427,6 +1405,10 @@ async function settleRequest({ requestId, reviewer, notes }) {
     if (request.settled_at) {
       await client.query("ROLLBACK");
       return { ok: false, error: "Esta rendición ya está liquidada." };
+    }
+    if (!policy.puedeLiquidar(request, reviewer.id, perms)) {
+      await client.query("ROLLBACK");
+      return { ok: false, error: "No tienes permiso para liquidar esta rendición." };
     }
 
     const { rows: updated } = await client.query(
@@ -1486,71 +1468,42 @@ async function listForUser(userId) {
   return rows;
 }
 
-/**
- * Lo que este revisor debe resolver ahora.
- * Un administrador de Finanzas ve además las solicitudes de los propios jefes
- * (las que nacen sin manager_user_id), que si no quedarían sin destino.
- */
-async function listPendingForReviewer(user) {
-  const isAdmin = isAdministrador(normalizeRole(user.role));
-  const isFinance = await financeTeam.isFinanceApprover(user);
-
+/** Lo que este revisor puede resolver ahora (expensePolicy.pendingFilter). */
+async function listPendingForReviewer(user, perms) {
+  const filtro = policy.pendingFilter(perms, user.id, 1);
   const { rows } = await db.query(
     `${LIST_SELECT}
-      WHERE (r.status = $1 AND r.manager_user_id = $2)
-         OR (r.status = $1 AND r.manager_user_id IS NULL AND $3)
-         OR (r.status = $4 AND $5)
+      WHERE ${filtro.clause}
       ORDER BY r.created_at ASC`,
-    [
-      EXPENSE_STATUS.PENDING,
-      user.id,
-      isAdmin,
-      EXPENSE_STATUS.APPROVED_MANAGER,
-      isFinance,
-    ],
+    filtro.params,
   );
   return rows;
 }
 
 /**
- * Todo lo que ya pasó por este revisor, más lo que gestiona su área. Los
- * borradores quedan fuera siempre: nadie más que su dueño debe verlos.
+ * Lo que ya firmó y lo que alcanza con «Ver solicitudes», sin lo propio (está
+ * en Mis solicitudes). Los borradores quedan fuera siempre.
  */
-async function listHistoryForReviewer(user) {
-  const isAdmin = isAdministrador(normalizeRole(user.role));
-  const isFinance = await financeTeam.isFinanceApprover(user);
-  const managedAreaIds = await areaManager.listManagedAreaIds(user.id);
-
+async function listHistoryForReviewer(user, perms) {
+  const filtro = policy.historyFilter(perms, user.id, 2);
   const { rows } = await db.query(
     `${LIST_SELECT}
-      WHERE r.status <> $6
-        AND (r.manager_reviewed_by = $1
-          OR r.finance_reviewed_by = $1
-          OR r.manager_user_id = $1
-          OR r.work_area_id = ANY($2::int[])
-          OR $3
-          OR ($4 AND r.status <> $5))
+      WHERE r.status <> $1 AND ${filtro.clause}
       ORDER BY r.created_at DESC
       LIMIT 500`,
-    [
-      user.id,
-      managedAreaIds,
-      isAdmin,
-      isFinance,
-      EXPENSE_STATUS.PENDING,
-      EXPENSE_STATUS.DRAFT,
-    ],
+    [EXPENSE_STATUS.DRAFT, ...filtro.params],
   );
   return rows;
 }
 
-/** Rendiciones aprobadas con saldo que Finanzas aún no liquida. */
-async function listPendingSettlements() {
+/** Rendiciones aprobadas con saldo que esta persona puede liquidar. */
+async function listPendingSettlements(user, perms) {
+  const filtro = policy.settleFilter(perms, user.id, 3);
   const { rows } = await db.query(
     `${LIST_SELECT}
-      WHERE r.kind = $1 AND r.status = $2 AND r.settled_at IS NULL
+      WHERE r.kind = $1 AND r.status = $2 AND r.settled_at IS NULL AND ${filtro.clause}
       ORDER BY r.finance_reviewed_at ASC NULLS LAST`,
-    [EXPENSE_KIND.RENDICION, EXPENSE_STATUS.APPROVED_FINANCE],
+    [EXPENSE_KIND.RENDICION, EXPENSE_STATUS.APPROVED_FINANCE, ...filtro.params],
   );
   return rows;
 }
@@ -1611,22 +1564,19 @@ async function getRequestDetail(requestId) {
   };
 }
 
-/** ¿Puede este usuario ver el detalle de esta solicitud? */
-async function canViewRequest(request, user) {
-  const isOwner = Number(request.user_id) === Number(user.id);
-  if (request.status === EXPENSE_STATUS.DRAFT) return isOwner;
-  if (isOwner) return true;
-  if (isAdministrador(normalizeRole(user.role))) return true;
-  if (Number(request.manager_user_id) === Number(user.id)) return true;
-  if (await financeTeam.isFinanceApprover(user)) return true;
-  const managedAreaIds = await areaManager.listManagedAreaIds(user.id);
-  return managedAreaIds.includes(Number(request.work_area_id));
+/**
+ * ¿Puede este usuario ver el detalle? Sin `perms` (p. ej. /content, que corre
+ * antes del middleware de permisos) se resuelven aquí.
+ */
+async function canViewRequest(request, user, perms = null) {
+  const efectivos = perms || (await require("../permissions/permissionService").resolve(user));
+  return policy.puedeVer(request, user && user.id, efectivos);
 }
 
 /** Contador para el badge de "Gestión de solicitudes". */
-async function countPendingForReviewer(user) {
+async function countPendingForReviewer(user, perms) {
   try {
-    return (await listPendingForReviewer(user)).length;
+    return (await listPendingForReviewer(user, perms)).length;
   } catch {
     return 0;
   }

@@ -2,7 +2,7 @@
   const admin = (typeof veListadoCarpetas !== 'undefined' && veListadoCarpetas);
   const ctx = (typeof areaContext !== 'undefined' && areaContext) ? areaContext : { area: null, manager: null, isManager: false, requiresAdmin: false };
   const conteos = (typeof conteosArea !== 'undefined' && conteosArea) ? conteosArea : { procedimiento: 0, protocolo: 0 };
-  const hayGastos = (typeof gastosActivos !== 'undefined') ? gastosActivos : false;
+  const hayGastos = ((typeof gastosActivos !== 'undefined') ? gastosActivos : false) && can('gastos.acceso');
   const revisor = (typeof esRevisor !== 'undefined' && esRevisor);
   const porAprobar = (typeof pendientes !== 'undefined' && pendientes) ? pendientes : 0;
   // Letras de cambio: sólo el personal de Finanzas, en las instancias que las emiten.
@@ -13,9 +13,9 @@
   const veFlota = features.logistics && can('logistica.acceso')
     && (can('logistica.vehiculo.ver') || can('logistica.checklist.ver') || can('logistica.checklist.crear'));
 
-  // Sin área no hay jefe, y sin jefe en todo el organigrama no hay a quién
-  // enviarle la solicitud.
-  const puedeSolicitar = !!(ctx.area && (ctx.manager || ctx.requiresAdmin));
+  // Pide quien tiene el permiso y un área (la solicitud se imputa a ella).
+  // Quién aprueba lo deciden los permisos; el jefe del organigrama es el primero.
+  const puedeSolicitar = !!(ctx.area && can('gastos.solicitud.crear'));
   const flashError = (typeof error !== 'undefined' && error) ? error : null;
 
   function plural(n, singular, pluralWord) { return n === 1 ? singular : pluralWord; }
@@ -56,7 +56,7 @@
           <% if (!hayGastos) { %>
             Herramientas del área de Finanzas.
           <% } else if (puedeSolicitar) { %>
-            Tus solicitudes pasan primero por <strong><%= ctx.manager ? ctx.manager.name : 'un administrador' %></strong> y luego por Finanzas.
+            Tus solicitudes pasan primero por la jefatura<% if (ctx.manager) { %> (<strong><%= ctx.manager.name %></strong>)<% } %> y luego por Finanzas.
           <% } else { %>
             Rinde gastos ya realizados o pide fondos por adelantado.
           <% } %>
@@ -71,15 +71,10 @@
         <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
         <span>Todavía no tienes un área asignada, así que no es posible determinar quién aprueba tus solicitudes. Pídele a RRHH que te asigne una.</span>
       </div>
-    <% } else if (ctx.unavailableManager) { %>
-      <div class="procesos-aviso" style="margin-bottom: 18px;">
-        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
-        <span><strong><%= ctx.unavailableManager.name %></strong>, quien debe aprobar tus solicitudes, no está disponible para atenderlas. Pídele a RRHH que habilite su cuenta o designe otro jefe.</span>
-      </div>
     <% } else if (!puedeSolicitar) { %>
       <div class="procesos-aviso" style="margin-bottom: 18px;">
         <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'info' }) %></span>
-        <span>Ni el área <strong><%= ctx.area.area_name %></strong> ni sus áreas superiores tienen un jefe asignado, y la aprobación de la jefatura es un requisito. Pídele a RRHH que designe uno.</span>
+        <span>No tienes permiso para pedir fondos ni rendir gastos. Pídeselo a quien administra los permisos.</span>
       </div>
     <% } %>
 

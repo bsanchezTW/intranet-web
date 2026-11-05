@@ -100,7 +100,8 @@ async function canOpenExpenseAttachment(user, { ownerId, requestId }) {
   if (requestId == null) return false;
 
   const { rows } = await db.query(
-    `SELECT id, user_id, status, manager_user_id, work_area_id
+    `SELECT id, user_id, status, manager_user_id, work_area_id, kind,
+            manager_reviewed_by, finance_reviewed_by, settled_by, settled_at
        FROM expense_requests WHERE id = $1`,
     [requestId],
   );

@@ -6,7 +6,9 @@ const {
   expenseKindLabel,
   expenseStageLabel,
 } = require("../../constants/expenseStatuses");
-const financeTeam = require("./financeTeam");
+const db = require("../../db");
+const permissions = require("../permissions/permissionService");
+const policy = require("./expensePolicy");
 const { fundBalance } = require("./expenseFundService");
 
 /**
@@ -15,6 +17,26 @@ const { fundBalance } = require("./expenseFundService");
  * vacationNotificationService. Una aprobación no puede fallar porque Brevo esté
  * caído o porque falten credenciales en el entorno local.
  */
+
+/**
+ * Correos de quienes pueden resolver esta etapa de la solicitud (con su
+ * alcance), sin el solicitante ni quien ya firmó. Los superadmins sólo si no
+ * hay nadie más: si no, la solicitud quedaría sin que nadie se entere.
+ */
+async function aprobadoresDe(key, request, excluir = []) {
+  const record = policy.recordOf(request);
+  const fuera = new Set(excluir.filter((x) => x != null).map(Number));
+  let ids = (await permissions.usersWhoCan(key, record)).filter((id) => !fuera.has(id));
+  if (!ids.length) {
+    ids = (await permissions.usersWhoCan(key, record, { includeSuperadmins: true })).filter((id) => !fuera.has(id));
+  }
+  if (!ids.length) return [];
+  const { rows } = await db.query(
+    "SELECT email FROM users WHERE id = ANY($1::int[]) AND email IS NOT NULL",
+    [ids],
+  );
+  return [...new Set(rows.map((r) => String(r.email).trim().toLowerCase()).filter(Boolean))];
+}
 
 function fullName(user) {
   return (
@@ -62,48 +84,27 @@ function summary(request) {
   return parts.join("\n");
 }
 
-/**
- * Solicitud recién enviada.
- * Si el solicitante es el jefe del área, la solicitud nace sin aprobador y la
- * resuelve un administrador: en ese caso se avisa a Finanzas, que es quien
- * tiene la bandeja a la vista.
- */
-async function notifyNewRequest({ request, user, manager }) {
-  if (manager && manager.email) {
-    return safeSend({
-      to: manager.email,
-      subject: `Nueva ${expenseKindLabel(request.kind).toLowerCase()} por aprobar`,
-      senderName: MAIL_SENDERS.finance,
-      heading: `Nueva ${expenseKindLabel(request.kind).toLowerCase()} por aprobar`,
-      cta: { href: detailUrl(request), label: "Revisar solicitud" },
-      html: `
-        <p style="margin:0 0 16px 0;">Hola ${escapeHtml(manager.name)},</p>
-        <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> envió una solicitud que espera tu aprobación.</p>
-        ${summary(request)}
-      `,
-      text: `${fullName(user)} envió una solicitud por ${formatMoney(request.total_amount)} que espera tu aprobación.`,
-    });
-  }
-
-  const emails = await financeTeam.financeApproverEmails();
+/** Solicitud recién enviada → quienes pueden aprobar la etapa de jefatura. */
+async function notifyNewRequest({ request, user }) {
+  const emails = await aprobadoresDe(policy.KEYS.JEFATURA, request, [request.user_id]);
+  const tipo = expenseKindLabel(request.kind).toLowerCase();
   return safeSend({
     to: emails,
-    subject: "Solicitud de gastos de una jefatura por aprobar",
+    subject: `Nueva ${tipo} por aprobar`,
     senderName: MAIL_SENDERS.finance,
-    heading: "Solicitud de jefatura por aprobar",
-    cta: { href: "/gastos/gestion", label: "Ir a gestión de gastos" },
+    heading: `Nueva ${tipo} por aprobar`,
+    cta: { href: detailUrl(request), label: "Revisar solicitud" },
     html: `
-      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> es jefe de su área, así que su solicitud
-         no puede autoaprobarse y requiere que la resuelva un administrador.</p>
+      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> envió una solicitud que espera aprobación de jefatura.</p>
       ${summary(request)}
     `,
-    text: `${fullName(user)} (jefe de área) envió una solicitud por ${formatMoney(request.total_amount)}.`,
+    text: `${fullName(user)} envió una solicitud por ${formatMoney(request.total_amount)} que espera aprobación de jefatura.`,
   });
 }
 
-/** Aprobada por la jefatura: pasa a la bandeja de Finanzas. */
+/** Aprobada por la jefatura → quienes pueden aprobar la etapa de Finanzas. */
 async function notifyManagerApproved({ request }) {
-  const emails = await financeTeam.financeApproverEmails();
+  const emails = await aprobadoresDe(policy.KEYS.FINANZAS, request, [request.user_id, request.manager_reviewed_by]);
   return safeSend({
     to: emails,
     subject: "Solicitud aprobada por jefatura, pendiente de revisión",

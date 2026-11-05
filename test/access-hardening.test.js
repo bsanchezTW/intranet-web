@@ -94,24 +94,28 @@ describe("/content — carpetas de Procesos", () => {
 
 describe("gastos — nadie resuelve lo propio", () => {
   const admin = { id: 7, role: "Administrador" };
+  // Permisos que aprueban todo (como un superadmin) y ninguno.
+  const todo = { can: () => true, canOnRecord: () => true };
+  const nada = { can: () => false, canOnRecord: () => false };
 
-  it("un administrador no aprueba su propia solicitud sin jefe", async () => {
+  it("ni con permiso sobre todo se aprueba la propia solicitud sin jefe", async () => {
     const propia = { user_id: 7, status: EXPENSE_STATUS.PENDING, manager_user_id: null };
-    assert.equal(await reviewerStageFor(propia, admin), null);
+    assert.equal(await reviewerStageFor(propia, admin, todo), null);
   });
 
   it("el jefe asignado no aprueba la suya aunque figure como aprobador", async () => {
     const propia = { user_id: 7, status: EXPENSE_STATUS.PENDING, manager_user_id: 7 };
-    assert.equal(await reviewerStageFor(propia, admin), null);
+    assert.equal(await reviewerStageFor(propia, admin, todo), null);
   });
 
   it("tampoco en la etapa de Finanzas", async () => {
     const propia = { user_id: 7, status: EXPENSE_STATUS.APPROVED_MANAGER, manager_user_id: 9 };
-    assert.equal(await reviewerStageFor(propia, admin), null);
+    assert.equal(await reviewerStageFor(propia, admin, todo), null);
   });
 
-  it("sí resuelve la de otro como antes", async () => {
+  it("resuelve la de otro con el permiso, no por ser Administrador", async () => {
     const ajena = { user_id: 8, status: EXPENSE_STATUS.PENDING, manager_user_id: null };
-    assert.equal(await reviewerStageFor(ajena, admin), "manager");
+    assert.equal(await reviewerStageFor(ajena, admin, todo), "manager");
+    assert.equal(await reviewerStageFor(ajena, admin, nada), null);
   });
 });

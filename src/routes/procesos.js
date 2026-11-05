@@ -22,7 +22,7 @@ const {
   SLUG_SIN_AREA,
 } = require("../services/documents/processDocumentStorage");
 const areaManager = require("../services/expenses/areaManager");
-const financeTeam = require("../services/expenses/financeTeam");
+const expensePolicy = require("../services/expenses/expensePolicy");
 const expenses = require("../services/expenses/expenseRequestService");
 const funds = require("../services/expenses/expenseFundService");
 const requirePermission = require("../middlewares/requirePermission");
@@ -118,11 +118,11 @@ router.get("/", async (req, res) => {
     let sinRendir = 0;
 
     if (gastosActivos) {
-      const esFinanzas = admin || (await financeTeam.isFinanceApprover(user));
-      esRevisor = esFinanzas || (await areaManager.isAreaManager(user));
+      const esFinanzas = expensePolicy.esFinanzas(req.perms);
+      esRevisor = expensePolicy.esRevisor(req.perms);
       const [resumenFondos, pendientesCount, vencidosFinanzas] = await Promise.all([
         funds.getFundSummary(user.id),
-        esRevisor ? expenses.countPendingForReviewer(user) : Promise.resolve(0),
+        esRevisor ? expenses.countPendingForReviewer(user, req.perms) : Promise.resolve(0),
         esFinanzas ? funds.countOverdueFunds() : Promise.resolve(0),
       ]);
       pendientes = pendientesCount;

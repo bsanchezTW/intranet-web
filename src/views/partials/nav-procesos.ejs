@@ -13,12 +13,15 @@
   const labelArea = adminNav ? 'Áreas' : 'Mi área';
 %>
 <% const letrasNav = features.billsOfExchange && typeof canIssueBills !== 'undefined' && canIssueBills; %>
-<% if (features.expenseRequests || letrasNav) { %>
+<% const gastosNav = features.expenseRequests && can('gastos.acceso'); %>
+<% if (gastosNav || letrasNav) { %>
 <div class="nav-menu-group">
   <span class="nav-menu-group__label">Finanzas</span>
-  <% if (features.expenseRequests) { %>
+  <% if (gastosNav) { %>
+  <% if (can('gastos.solicitud.crear')) { %>
   <a href="/gastos/nueva/rendicion">Rendir gastos</a>
   <a href="/gastos/nueva/fondos">Solicitar fondos</a>
+  <% } %>
   <a href="/gastos">Mis solicitudes</a>
   <% } %>
   <% if (letrasNav) { %>

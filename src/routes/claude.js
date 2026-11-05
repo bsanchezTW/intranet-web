@@ -26,8 +26,8 @@ const {
 } = require("../services/assistant/assistantConversation");
 const assistantTickets = require("../services/assistant/assistantTickets");
 const { createSupportTicket, listOpenTicketsForUser } = require("../services/tickets/ticketService");
-const { isAreaManager } = require("../services/expenses/areaManager");
-const { isFinanceApprover } = require("../services/expenses/financeTeam");
+const expensePolicy = require("../services/expenses/expensePolicy");
+
 const { canManageRrhh } = require("../services/access/staffAccess");
 const { listAppsByCatalog } = require("../services/appCatalogService");
 const { ticketModalUrl } = require("../utils/ticketRedirect");
@@ -52,16 +52,9 @@ router.use((req, res, next) => {
   next();
 });
 
-/** Mismo criterio que requireExpenseReviewer; un fallo de BD cuenta como "no revisa". */
-async function resolveExpenseReviewer(user, { isAdmin, features }) {
-  if (!features.expenseRequests) return false;
-  if (isAdmin) return true;
-  try {
-    return (await isFinanceApprover(user)) || (await isAreaManager(user));
-  } catch (err) {
-    console.error("[Asistente] Error resolviendo revisor de gastos:", err.message);
-    return false;
-  }
+/** Mismo criterio que la gestión de Fondos y rendiciones (expensePolicy). */
+function resolveExpenseReviewer(perms, { features }) {
+  return Boolean(features.expenseRequests) && expensePolicy.esRevisor(perms);
 }
 
 // GET /claude - Abre el asistente sobre el inicio
@@ -170,7 +163,7 @@ router.post("/api/chat", async (req, res) => {
     const features = res.locals.features || getFeatures();
     const supportTickets = Boolean(features.supportTickets) && decide(req.perms, "soporte.ticket.crear");
     const isAdmin = isAdministrador(sessionUser.role);
-    const isExpenseReviewer = await resolveExpenseReviewer(sessionUser, { isAdmin, features });
+    const isExpenseReviewer = resolveExpenseReviewer(req.perms, { features });
     const guide = guideForUser({
       features,
       isAdmin,

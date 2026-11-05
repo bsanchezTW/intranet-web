@@ -4,9 +4,10 @@ const multer = require("multer");
 const router = express.Router();
 const db = require("../db");
 const fileStorage = require("../services/fileStorage");
-const requireExpenseReviewer = require("../middlewares/requireExpenseReviewer");
+const requirePermission = require("../middlewares/requirePermission");
+const { denyForbidden } = require("../utils/httpResponses");
+const policy = require("../services/expenses/expensePolicy");
 const { UPLOAD_LIMITS_BYTES, UPLOAD_LIMITS_MB } = require("../config/uploadLimits");
-const { isAdministrador, normalizeRole } = require("../constants/roles");
 const {
   EXPENSE_STAGE,
   EXPENSE_STATUS,
@@ -22,7 +23,6 @@ const { formatNationalId } = require("../utils/nationalId");
 const costCenters = require("../services/costCenters/costCenterService");
 const expenses = require("../services/expenses/expenseRequestService");
 const areaManager = require("../services/expenses/areaManager");
-const financeTeam = require("../services/expenses/financeTeam");
 const notifications = require("../services/expenses/expenseNotificationService");
 const bankAccounts = require("../services/expenses/bankAccountService");
 const {
@@ -52,6 +52,16 @@ const { publicErrorMessage } = require("../utils/publicError");
  * El formulario no tiene página propia: es un modal de /gastos que sirve para
  * crear, guardar como borrador y retomar borradores.
  */
+
+// Entrar a Fondos y rendiciones (Gestión de Permisos). Quién aprueba,
+// liquida o ve qué lo decide expensePolicy con los permisos de la persona.
+router.use(requirePermission(policy.KEYS.ACCESO));
+
+/** «Gestión de solicitudes»: quien aprueba, liquida o ve más que lo propio. */
+function requireRevisor(req, res, next) {
+  if (policy.esRevisor(req.perms)) return next();
+  return denyForbidden(req, res, "No tienes permiso para gestionar solicitudes.");
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -127,10 +137,11 @@ async function fetchRequester(userId) {
 router.get("/", async (req, res) => {
   try {
     const user = req.session.user;
-    const [solicitudes, requisitos, esRevisor, fondos] = await Promise.all([
+    const esRevisor = policy.esRevisor(req.perms);
+    const puedeCrear = Boolean(req.perms && req.perms.can(policy.KEYS.CREAR));
+    const [solicitudes, requisitos, fondos] = await Promise.all([
       expenses.listForUser(user.id),
-      requisitosParaRendir(user),
-      puedeRevisar(user),
+      puedeCrear ? requisitosParaRendir(user) : Promise.resolve(sinPermisoParaCrear()),
       funds.getFundSummary(user.id),
     ]);
 
@@ -171,6 +182,19 @@ router.get("/", async (req, res) => {
  *
  * @returns {{ ok: boolean, motivo: string|null, area, manager, centros }}
  */
+/** Sin «Pedir fondos y rendir gastos»: el formulario no se ofrece. */
+function sinPermisoParaCrear() {
+  return {
+    ok: false,
+    motivo: "No tienes permiso para pedir fondos ni rendir gastos. Pídeselo a quien administra los permisos.",
+    area: null,
+    manager: null,
+    centros: [],
+    documento: null,
+    documentoLabel: getDocumentConfig().label,
+  };
+}
+
 async function requisitosParaRendir(user) {
   const [context, centros, ficha] = await Promise.all([
     areaManager.getUserAreaContext(user.id),
@@ -192,16 +216,6 @@ async function requisitosParaRendir(user) {
       ...base,
       ok: false,
       motivo: "No tienes un área asignada. Pídele a RRHH que te asigne una.",
-    };
-  }
-  if (context.unavailableManager) {
-    return { ...base, ok: false, motivo: context.blockedReason };
-  }
-  if (!context.manager && !context.requiresAdmin) {
-    return {
-      ...base,
-      ok: false,
-      motivo: `Ni el área ${context.area.area_name} ni sus áreas superiores tienen un jefe asignado, y su aprobación es un requisito. Pídele a RRHH que designe uno.`,
     };
   }
   if (!documento) {
@@ -245,12 +259,6 @@ async function datosFormulario(user, requisitos, fondos) {
   };
 }
 
-async function puedeRevisar(user) {
-  if (isAdministrador(normalizeRole(user.role))) return true;
-  if (await financeTeam.isFinanceApprover(user)) return true;
-  return areaManager.isAreaManager(user);
-}
-
 // ---------------------------------------------------------------------------
 // Formulario
 // ---------------------------------------------------------------------------
@@ -267,7 +275,7 @@ router.get("/nueva/:kind", (req, res) => {
  * hasta guardar el borrador o enviar; entonces los manda aquí y el POST de
  * /guardar los asocia y les pone el nombre definitivo.
  */
-router.post("/adjuntos/upload", upload.single("archivo"), async (req, res) => {
+router.post("/adjuntos/upload", requirePermission(policy.KEYS.CREAR), upload.single("archivo"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No se subió archivo" });
 
@@ -343,7 +351,7 @@ router.post("/cuentas/eliminar", async (req, res) => {
  * path del GET de la lista puede redirigir por la barra final, y Firefox
  * aborta ese fetch con "NetworkError when attempting to fetch resource".
  */
-router.post("/guardar", async (req, res) => {
+router.post("/guardar", requirePermission(policy.KEYS.CREAR), async (req, res) => {
   const body = req.body || {};
   const asDraft = body.draft === true || body.draft === "true";
 
@@ -386,7 +394,6 @@ router.post("/guardar", async (req, res) => {
     notifications.notifyNewRequest({
       request,
       user: requester || req.session.user,
-      manager: result.manager,
     });
     logChange(
       req.session.user.id,
@@ -405,28 +412,31 @@ router.post("/guardar", async (req, res) => {
 // Gestión (el tercer módulo) — antes de /:id para que no lo capture
 // ---------------------------------------------------------------------------
 
-router.get("/gestion", requireExpenseReviewer(), async (req, res) => {
+router.get("/gestion", requireRevisor, async (req, res) => {
   try {
     const user = req.session.user;
-    const [pendientes, historial, areasACargo, esFinanzas] = await Promise.all([
-      expenses.listPendingForReviewer(user),
-      expenses.listHistoryForReviewer(user),
+    const perms = req.perms;
+    const esFinanzas = policy.esFinanzas(perms);
+    const [pendientes, historial, areasACargo] = await Promise.all([
+      expenses.listPendingForReviewer(user, perms),
+      expenses.listHistoryForReviewer(user, perms),
       areaManager.listManagedAreas(user.id),
-      financeTeam.isFinanceApprover(user),
     ]);
     const [porLiquidar, sinRendir] = esFinanzas
-      ? await Promise.all([expenses.listPendingSettlements(), funds.listOverdueFunds()])
+      ? await Promise.all([expenses.listPendingSettlements(user, perms), funds.listOverdueFunds()])
       : [[], []];
+    // El RUT sólo para quien puede aprobar o rechazar esa solicitud.
+    const sinSensibles = (lista) => lista.map((s) => policy.ocultarSensibles(s, user.id, perms));
 
     res.render("gastos/gestion", {
       titulo: "Gestión de solicitudes",
-      pendientes,
-      historial,
+      pendientes: sinSensibles(pendientes),
+      historial: sinSensibles(historial),
       areasACargo,
       esFinanzas,
-      porLiquidar,
+      porLiquidar: sinSensibles(porLiquidar),
       sinRendir,
-      esAdmin: isAdministrador(normalizeRole(user.role)),
+      esAdmin: false,
       ...flashFrom(req),
       user,
       ...VIEW_HELPERS,
@@ -489,26 +499,21 @@ router.get("/:id", async (req, res) => {
         : res.redirect("/gastos");
     }
 
-    if (!(await expenses.canViewRequest(request, user))) {
+    if (!(await expenses.canViewRequest(request, user, req.perms))) {
       return res
         .status(403)
         .render("acceso_no_permitido", { titulo: "Acceso no permitido" });
     }
 
-    const stage = await expenses.reviewerStageFor(request, user);
-    // Liquidar es de Finanzas, sólo sobre rendiciones aprobadas con saldo
-    // pendiente (las sin saldo se liquidan solas al aprobarse), y nunca la
-    // propia.
-    const puedeLiquidar =
-      request.kind === "rendicion" &&
-      request.status === EXPENSE_STATUS.APPROVED_FINANCE &&
-      !request.settled_at &&
-      Number(request.user_id) !== Number(user.id) &&
-      (await financeTeam.isFinanceApprover(user));
+    const stage = await expenses.reviewerStageFor(request, user, req.perms);
+    // Liquidar: sólo rendiciones aprobadas con saldo pendiente (las sin saldo
+    // se liquidan solas al aprobarse), con el permiso y nunca la propia.
+    const puedeLiquidar = policy.puedeLiquidar(request, user.id, req.perms);
 
     res.render("gastos/detalle", {
       titulo: `Solicitud #${request.id}`,
-      solicitud: request,
+      // El RUT y la cuenta, sólo para quien corresponde (expensePolicy).
+      solicitud: policy.ocultarSensibles(request, user.id, req.perms),
       etapaRevisor: stage,
       puedeLiquidar,
       esDueno: Number(request.user_id) === Number(user.id),
@@ -537,11 +542,13 @@ function resolver(approve) {
             requestId: req.params.id,
             reviewer: user,
             notes: req.body.notes,
+            perms: req.perms,
           })
         : await expenses.rejectRequest({
             requestId: req.params.id,
             reviewer: user,
             notes: req.body.notes,
+            perms: req.perms,
           });
 
       if (!result.ok) return redirectError(res, volver, result.error);
@@ -579,11 +586,12 @@ function resolver(approve) {
   };
 }
 
-router.post("/:id/aprobar", requireExpenseReviewer(), resolver(true));
-router.post("/:id/rechazar", requireExpenseReviewer(), resolver(false));
+// La etapa y el alcance los revisa el servicio con expensePolicy.
+router.post("/:id/aprobar", requireRevisor, resolver(true));
+router.post("/:id/rechazar", requireRevisor, resolver(false));
 
 /** Finanzas marca la rendición como liquidada (saldo devuelto o pagado). */
-router.post("/:id/liquidar", requireExpenseReviewer(), async (req, res) => {
+router.post("/:id/liquidar", requireRevisor, async (req, res) => {
   const volver =
     req.body.volver === "gestion" ? "/gastos/gestion" : `/gastos/${req.params.id}`;
   try {
@@ -591,6 +599,7 @@ router.post("/:id/liquidar", requireExpenseReviewer(), async (req, res) => {
       requestId: req.params.id,
       reviewer: req.session.user,
       notes: req.body.notes,
+      perms: req.perms,
     });
     if (!result.ok) return redirectError(res, volver, result.error);
 
