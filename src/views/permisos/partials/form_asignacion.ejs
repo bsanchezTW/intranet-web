@@ -107,7 +107,7 @@ let n = 0;
               <li class="perm-varios__item">
                 <label class="perm-check">
                   <input type="checkbox" name="keys" value="<%= p.key %>" data-perm-varios-key>
-                  <span><%= p.label %></span>
+                  <span><%= p.label %><% if (p.sinEfecto) { %> <span class="perm-chip perm-chip--muted" title="<%= p.sinEfecto %>">Aún sin efecto</span><% } %></span>
                 </label>
                 <% if (p.scopes) { %>
                   <select name="scope:<%= p.key %>" aria-label="Sobre qué registros vale «<%= p.label %>»" data-perm-scope-varios>

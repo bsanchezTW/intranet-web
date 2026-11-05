@@ -39,6 +39,9 @@ function esUrlDescargaValida(url) {
   }
 }
 
+// Entrar a Apps.
+router.use("/apps", requirePermission("apps.acceso"));
+
 router.get("/apps/qr", requirePermission("apps.app.ver"), async (req, res) => {
   const targetUrl = String(req.query.url || "").trim();
 

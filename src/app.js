@@ -44,6 +44,7 @@ const { pageSkeletonFor } = require("./utils/pageSkeleton");
 const { phoneClientConfig } = require("./utils/phone");
 const { getMonogram, applyIdentityToSession } = require("./utils/monogram");
 const requireFeature = require("./middlewares/requireFeature");
+const requirePermission = require("./middlewares/requirePermission");
 const { crossOriginProtection } = require("./middlewares/crossOriginProtection");
 const { securityHeaders, cspReportRouter } = require("./middlewares/securityHeaders");
 const { saveSessionBeforeRedirect } = require("./middlewares/saveSessionBeforeRedirect");
@@ -700,7 +701,8 @@ app.post(impersonation.END_PATH, requireAuth, async (req, res, next) => {
 });
 app.use("/noticias", requireAuth, noticiasRoutes);
 if (claudeRoutes) {
-  app.use("/claude", requireAuth, requireFeature("claudeAssistant"), claudeRoutes);
+  // Sin «Usar el asistente de la intranet» no se ve el botón ni responde la API.
+  app.use("/claude", requireAuth, requireFeature("claudeAssistant"), requirePermission("asistente.acceso"), claudeRoutes);
 }
 
 // Multer corta el body antes de entrar al handler cuando supera el límite.

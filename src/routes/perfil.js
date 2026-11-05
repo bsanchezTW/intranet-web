@@ -12,6 +12,7 @@ const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { normalizeRole } = require("../constants/roles");
 const { toTitleCase } = require("../utils/formatName");
 const { applyIdentityToSession } = require("../utils/monogram");
+const requirePermission = require("../middlewares/requirePermission");
 const {
   toTelHref,
   formatPhoneForDisplay,
@@ -36,7 +37,7 @@ const uploadProfilePhoto = multer({
 // ==========================================
 // RUTAS DE PERFIL
 // ==========================================
-router.get("/perfil", async (req, res) => {
+router.get("/perfil", requirePermission("perfil.acceso"), async (req, res) => {
   if (!req.session.user) return res.redirect("/login");
   const id = req.session.user.id;
   const { rows } = await db.query(
@@ -76,7 +77,7 @@ router.get("/perfil", async (req, res) => {
   });
 });
 
-router.post("/perfil", async (req, res) => {
+router.post("/perfil", requirePermission("perfil.propio.editar"), async (req, res) => {
   if (!req.session.user) return res.redirect("/login");
 
   const userId = req.session.user.id;
@@ -147,7 +148,7 @@ router.post("/perfil", async (req, res) => {
   }
 });
 
-router.post("/perfil/foto", uploadProfilePhoto.single("foto_perfil"), async (req, res) => {
+router.post("/perfil/foto", requirePermission("perfil.propio.editar"), uploadProfilePhoto.single("foto_perfil"), async (req, res) => {
   if (!req.session.user || !req.file) return res.redirect("/perfil");
   try {
     const userId = req.session.user.id;
@@ -173,7 +174,7 @@ router.post("/perfil/foto", uploadProfilePhoto.single("foto_perfil"), async (req
   }
 });
 
-router.post("/perfil/foto/eliminar", async (req, res) => {
+router.post("/perfil/foto/eliminar", requirePermission("perfil.propio.editar"), async (req, res) => {
   if (!req.session.user) return res.redirect("/login");
   try {
     const userId = req.session.user.id;

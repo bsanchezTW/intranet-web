@@ -25,6 +25,16 @@ const personasDe = (key) => (typeof holders !== 'undefined' && holders && holder
         <h3><%= current.label %></h3>
         <span class="perm-muted"><%= current.permissions.length %> permisos</span>
       </div>
+      <% const sinEfecto = current.permissions.filter(function (p) { return p.sinEfecto; }); %>
+      <% if (sinEfecto.length) { %>
+        <div class="perm-banner perm-banner--warn">
+          <span class="perm-banner__icono" aria-hidden="true"><%- icono('alert-triangle') %></span>
+          <div>
+            <strong><%= sinEfecto.length === current.permissions.length ? 'Ningún permiso de este módulo tiene efecto todavía.' : (sinEfecto.length === 1 ? '1 permiso' : sinEfecto.length + ' permisos') + ' de este módulo aún no tienen efecto.' %></strong>
+            <%= sinEfecto[0].sinEfecto.replace(/: este permiso.*$/, '.') %> Se pueden asignar, pero hoy no cambian lo que nadie puede hacer.
+          </div>
+        </div>
+      <% } %>
       <details class="perm-varios-abrir">
         <summary class="perm-btn perm-btn--sm perm-abrir"><%- icono('layers') %> Asignar varios de <%= current.label %></summary>
         <%- include('partials/form_asignacion', {
@@ -45,6 +55,7 @@ const personasDe = (key) => (typeof holders !== 'undefined' && holders && holder
                 <%= p.label %>
                 <% if (p.isModuleAccess) { %><span class="perm-chip perm-chip--brand">Acceso al módulo</span><% } %>
                 <% if (p.isField) { %><span class="perm-chip perm-chip--warn">Dato sensible</span><% } %>
+                <% if (p.sinEfecto) { %><span class="perm-chip perm-chip--muted" title="<%= p.sinEfecto %>">Aún sin efecto</span><% } %>
               </div>
               <span class="perm-key"><%= p.key %></span>
               <% if (p.scopes) { %>

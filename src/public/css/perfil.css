@@ -341,3 +341,11 @@
     flex: 1 1 100%;
   }
 }
+
+/* Agrupa los campos: sin «Editar sus datos y su foto» se deshabilita entero. */
+.perfil-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

@@ -10,6 +10,10 @@ const { isScope } = require("../scopes");
  * Claves: `módulo.objeto.acción`, más `módulo.acceso` (entrar al módulo y
  * verlo en el menú) y `módulo.objeto.campo.dato` (un dato sensible).
  *
+ * `sinEfecto` (texto): el permiso existe pero ningún código lo revisa todavía
+ * (módulos que aún deciden con sus reglas de antes). Se muestra así en
+ * Gestión de Permisos para que nadie crea que asignarlo cambia algo.
+ *
  * Un módulo o permiso con `feature` sólo existe en los países que la tienen
  * (config/features.js): fuera de ellos no aparece en Gestión de Permisos y
  * `can()` responde que no aunque quede una asignación vieja en la base.
@@ -63,6 +67,9 @@ function validateCatalog(modules = MODULES) {
       if (keys.has(perm.key)) errors.push(`Clave repetida: ${perm.key}`);
       keys.add(perm.key);
       if (!perm.label) errors.push(`${perm.key}: sin etiqueta`);
+      if (perm.sinEfecto != null && (typeof perm.sinEfecto !== "string" || !perm.sinEfecto.trim())) {
+        errors.push(`${perm.key}: sinEfecto tiene que ser un texto`);
+      }
       if (perm.feature && !FEATURE_KEYS.includes(perm.feature)) {
         errors.push(`${perm.key}: feature desconocida "${perm.feature}"`);
       }
@@ -92,6 +99,7 @@ function describe(mod, perm) {
     scopes: perm.scopes ? Object.freeze([...perm.scopes]) : null,
     isField: isFieldKey(perm.key),
     isModuleAccess: perm.key === `${mod.module}.acceso`,
+    sinEfecto: perm.sinEfecto || null,
   });
 }
 

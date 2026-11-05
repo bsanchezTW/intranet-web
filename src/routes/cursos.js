@@ -45,6 +45,8 @@ const COURSE_PROGRESS_COLUMNS = `
 // RUTA: CURSOS Y CAPACITACIONES
 // ==========================================
 const verCursos = requirePermission("cursos.curso.ver");
+// Entrar a Cursos (también el KPI y el material de quienes los editan).
+router.use(["/cursos", "/kpi-cursos"], requirePermission("cursos.acceso"));
 router.use("/cursos", (req, res, next) =>
   /^\/(material|editar-subseccion)(\/|$)/.test(req.path) ? next() : verCursos(req, res, next),
 );

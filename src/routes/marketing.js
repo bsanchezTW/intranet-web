@@ -102,6 +102,9 @@ function parseDirectUploadedImages(body) {
 // RUTAS
 // ==========================================
 
+// Galería de eventos: sin «eventos.acceso» no se entra.
+router.use('/eventos', requirePermission('eventos.acceso'));
+
 router.get('/', (req, res) => res.redirect('/marketing/eventos'));
 
 router.get('/eventos', requirePermission('eventos.evento.ver'), async (req, res) => {

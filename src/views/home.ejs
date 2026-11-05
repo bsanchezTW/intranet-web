@@ -294,7 +294,7 @@
     <div class="home-dash__side">
 
       <!-- Menú semanal (protagonista) -->
-      <% if (features.lunchMenu && can('casino.menu.ver')) { %>
+      <% if (features.lunchMenu && can('casino.acceso') && can('casino.menu.ver')) { %>
       <section class="home-section">
         <div class="home-card home-menu">
           <div class="home-menu__head">
@@ -512,7 +512,7 @@
           <p>Haz clic en tu foto para actualizar tus datos, teléfono y foto de perfil.</p>
         </div>
       </li>
-      <% if (features.claudeAssistant) { %>
+      <% if (features.claudeAssistant && typeof can === 'function' && can('asistente.acceso')) { %>
       <li class="home-tutorial__step">
         <span class="home-tutorial__icon" aria-hidden="true"><%- include('partials/icon', { name: 'sparkles' }) %></span>
         <div>

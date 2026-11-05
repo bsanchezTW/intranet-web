@@ -1,13 +1,16 @@
 <%
 /* Barra superior y menú lateral móvil. Estilos en /css/shell.css.
    Parámetros: currentUser, displayName, monogram. */
+// Cada enlace sólo si se puede abrir (su permiso de acceso).
+const puede = (clave) => typeof can !== 'function' || can(clave);
 const navLinks = [
-  { href: '/noticias', label: 'Noticias', icon: 'news' },
-  { href: '/procesos', label: 'Procesos y documentos', icon: 'folder', menu: 'procesos' },
-  { href: '/RRHH', label: 'RRHH', icon: 'users', menu: 'rrhh' },
-  { href: '/marketing/eventos', label: 'Galería', icon: 'camera' },
-  { href: '/apps', label: 'Apps', icon: 'grid' },
-];
+  { href: '/noticias', label: 'Noticias', icon: 'news', perm: 'noticias.acceso' },
+  { href: '/procesos', label: 'Procesos y documentos', icon: 'folder', menu: 'procesos', perm: 'procesos.acceso' },
+  { href: '/RRHH', label: 'RRHH', icon: 'users', menu: 'rrhh', perm: 'rrhh.acceso' },
+  { href: '/marketing/eventos', label: 'Galería', icon: 'camera', perm: 'eventos.acceso' },
+  { href: '/apps', label: 'Apps', icon: 'grid', perm: 'apps.acceso' },
+].filter(function (l) { return puede(l.perm); });
+const verPerfil = puede('perfil.acceso');
 if (features.supportTickets) {
   navLinks.push({ href: '/soporte', label: 'Soporte', icon: 'headset', notif: true });
 }
@@ -68,7 +71,7 @@ const menuNav = (clave) => clave === 'procesos'
 
   <% if (currentUser) { %>
     <div class="mobile-sidebar__footer">
-      <a href="/perfil" class="mobile-sidebar__profile">
+      <a href="<%= verPerfil ? '/perfil' : '#' %>" class="mobile-sidebar__profile"<% if (!verPerfil) { %> aria-disabled="true" tabindex="-1"<% } %>>
         <% if (fotoUsuario) { %>
           <img src="<%= fotoUsuario %>" alt="" class="nav-user-photo">
         <% } else { %>
@@ -158,7 +161,7 @@ const menuNav = (clave) => clave === 'procesos'
               <strong><%= displayName %></strong>
               <% if (correoUsuario) { %><span><%= correoUsuario %></span><% } %>
             </div>
-            <a href="/perfil" role="menuitem"><%- include('icon', { name: 'user' }) %> Mi perfil</a>
+            <% if (verPerfil) { %><a href="/perfil" role="menuitem"><%- include('icon', { name: 'user' }) %> Mi perfil</a><% } %>
             <% if (esSuperadmin) { %>
               <a href="/permisos" role="menuitem"><%- include('icon', { name: 'shield' }) %> Gestión de permisos</a>
             <% } %>

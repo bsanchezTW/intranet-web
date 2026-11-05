@@ -9,11 +9,13 @@
   const abrirModalPassword = typeof openPasswordModal !== 'undefined' ? openPasswordModal : false;
   const nombreCompleto = [usuario.first_name, usuario.last_name].filter(Boolean).join(' ') || sinDato;
   const monogram = getMonogram(usuario);
+  // Sin «Editar sus datos y su foto» la ficha se ve pero no se cambia.
+  const puedeEditar = typeof can !== 'function' || can('perfil.propio.editar');
 %>
 <link rel="stylesheet" href="/css/phone.css">
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
 <link rel="stylesheet" href="/css/change-password-modal.css?v=20260916m">
-<link rel="stylesheet" href="/css/perfil.css?v=20260917a">
+<link rel="stylesheet" href="/css/perfil.css?v=20261105a">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
 <div class="contenedor perfil-page">
@@ -67,10 +69,10 @@
         </span>
 
         <div class="profile-photo-actions perfil-ficha__foto-acciones">
-          <button type="button" class="btn-photo-select btn-photo-select--light" id="btn-select-photo">
+          <button type="button" class="btn-photo-select btn-photo-select--light" id="btn-select-photo"<% if (!puedeEditar) { %> hidden disabled<% } %>>
             <%= tieneFoto ? 'Cambiar foto' : 'Seleccionar foto' %>
           </button>
-          <button type="button" class="btn-photo-remove" id="btn-remove-photo" <%= tieneFoto ? '' : 'hidden' %>>Quitar foto</button>
+          <button type="button" class="btn-photo-remove" id="btn-remove-photo" <%= tieneFoto && puedeEditar ? '' : 'hidden' %><% if (!puedeEditar) { %> disabled<% } %>>Quitar foto</button>
         </div>
       </div>
 
@@ -83,6 +85,7 @@
     <!-- ═══════════ Datos de la persona ═══════════ -->
     <div class="panel perfil-datos">
       <form action="/perfil" method="POST" id="formPerfil">
+        <fieldset class="perfil-fieldset"<% if (!puedeEditar) { %> disabled<% } %>>
         <div class="perfil-datos__head">
           <span class="perfil-datos__icono" aria-hidden="true"><%- include('partials/icon', { name: 'user' }) %></span>
           <div>
@@ -134,8 +137,13 @@
           <% } %>
         </div>
 
+        </fieldset>
         <div class="perfil-guardar">
-          <button type="submit" class="btn-perfil btn-perfil--primary">Guardar cambios</button>
+          <% if (puedeEditar) { %>
+            <button type="submit" class="btn-perfil btn-perfil--primary">Guardar cambios</button>
+          <% } else { %>
+            <p class="perfil-datos__desc">Tus datos sólo se pueden cambiar con un permiso que hoy no tienes. Pídeselo a RRHH o a Informática.</p>
+          <% } %>
         </div>
       </form>
 

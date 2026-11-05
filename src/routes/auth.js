@@ -1339,7 +1339,7 @@ router.get(
 // ==========================================
 // VER MIS CURSOS REALIZADOS
 // ==========================================
-router.get("/perfil/cursos", async (req, res) => {
+router.get("/perfil/cursos", requirePermission("perfil.cursos.ver"), async (req, res) => {
   const user = req.session.user;
   if (!user) return res.redirect("/login");
 

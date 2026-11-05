@@ -128,6 +128,9 @@ function loadNombresAutor(noticias) {
 // ==========================================
 // LISTADO
 // ==========================================
+// Entrar a Noticias: sin «noticias.acceso» el módulo entero responde 403.
+router.use(requirePermission("noticias.acceso"));
+
 router.get("/", requirePermission("noticias.noticia.ver"), async (req, res) => {
   try {
     const noticias = await repository.listAll();

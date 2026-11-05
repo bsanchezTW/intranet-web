@@ -5,7 +5,7 @@ const path = require("node:path");
 
 process.env.COUNTRY = process.env.COUNTRY || "CL";
 
-const { getCatalog, allKeys } = require("../src/services/permissions/catalog");
+const { getCatalog, allKeys, MODULES } = require("../src/services/permissions/catalog");
 const { computePermissions } = require("../src/services/permissions/resolver");
 const { decide, scopeFilter } = require("../src/services/permissions/decide");
 
@@ -92,5 +92,33 @@ describe("claves usadas en rutas y vistas", () => {
       }
     }
     assert.deepEqual([...new Set(desconocidas)], []);
+  });
+});
+
+describe("cada permiso del catálogo hace algo o lo dice", () => {
+  /*
+    Un permiso que ningún código revisa engaña: se asigna en /permisos y no
+    cambia nada (pasó con «Usar el asistente»). O está conectado en alguna
+    ruta o vista, o lleva `sinEfecto` con el motivo, que la pantalla muestra
+    como «Aún sin efecto». Al conectarlo hay que quitarle la marca.
+  */
+  const ROOT = path.join(__dirname, "..", "src");
+  const archivos = (dir) =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) return full.endsWith(path.join("permissions", "catalog")) ? [] : archivos(full);
+      return /\.(js|ejs)$/.test(e.name) && !full.endsWith(path.join("permissions", "bootstrap.js")) ? [full] : [];
+    });
+  const codigo = archivos(ROOT).map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  const permisos = MODULES.flatMap((m) => m.permissions);
+
+  it("los que no están marcados se revisan en alguna parte", () => {
+    const sinUso = permisos.filter((p) => !p.sinEfecto && !codigo.includes(p.key)).map((p) => p.key);
+    assert.deepEqual(sinUso, [], "conéctalos o márcalos con sinEfecto");
+  });
+
+  it("los marcados «sin efecto» de verdad no se usan todavía", () => {
+    const usados = permisos.filter((p) => p.sinEfecto && codigo.includes(p.key)).map((p) => p.key);
+    assert.deepEqual(usados, [], "si ya se conectaron, quítales sinEfecto");
   });
 });

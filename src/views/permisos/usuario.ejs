@@ -178,7 +178,8 @@ const iniciales = String(u.name || '?').split(/\s+/).slice(0, 2).map(function (p
           <div class="perm-tree__body">
             <% m.permissions.forEach(function (p) { %>
               <div class="perm-efectivo" data-perm-fila="<%= p.label %> <%= p.key %>"<% if (p.granted) { %> data-perm-tiene<% } %>>
-                <div><%= p.label %><span class="perm-key"><%= p.key %></span></div>
+                <% const defP = catalog.byKey.get(p.key); %>
+                <div><%= p.label %><% if (defP && defP.sinEfecto) { %> <span class="perm-chip perm-chip--muted" title="<%= defP.sinEfecto %>">Aún sin efecto</span><% } %><span class="perm-key"><%= p.key %></span></div>
                 <div class="perm-efectivo__estado">
                   <% if (p.granted) { %>
                     <span class="perm-estado perm-estado--si">Sí</span>

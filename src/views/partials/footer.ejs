@@ -26,8 +26,9 @@ const anioActual = new Date().getFullYear();
         <div class="footer-col">
           <h2 class="footer-col__title">Empresa</h2>
           <a href="<%= countryConfig.corporateSite %>nosotros/" target="_blank" rel="noopener noreferrer">Nosotros</a>
-          <a href="/noticias">Noticias internas</a>
-          <a href="/marketing/eventos">Galería de eventos</a>
+          <% const puedeAbrir = (clave) => typeof can !== 'function' || can(clave); %>
+          <% if (puedeAbrir('noticias.acceso')) { %><a href="/noticias">Noticias internas</a><% } %>
+          <% if (puedeAbrir('eventos.acceso')) { %><a href="/marketing/eventos">Galería de eventos</a><% } %>
           <a href="/RRHH/organigrama">Organigrama</a>
         </div>
 
@@ -36,8 +37,8 @@ const anioActual = new Date().getFullYear();
           <% if (features.supportTickets) { %>
           <a href="/soporte">Soporte</a>
           <% } %>
-          <a href="/apps">Aplicaciones</a>
-          <% if (currentUser) { %>
+          <% if (puedeAbrir('apps.acceso')) { %><a href="/apps">Aplicaciones</a><% } %>
+          <% if (currentUser && puedeAbrir('perfil.acceso')) { %>
           <a href="/perfil">Mi perfil</a>
           <% } %>
         </div>
