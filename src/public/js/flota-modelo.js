@@ -388,7 +388,8 @@ function crearVisor(THREE, { datos, lienzo, etiqueta, zonas, estados, getSelecci
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       camara.zoom = Math.min(Math.max(pinza.zoom * (pinza.d / Math.max(d, 1)), ZOOM_MIN), ZOOM_MAX);
     } else if (punteros.size === 1) {
-      camara.az -= dx * 0.0085;
+      // El vehículo sigue a la mano: arrastrar a la derecha lo gira a la derecha.
+      camara.az += dx * 0.0085;
       camara.el = Math.min(Math.max(camara.el + dy * 0.006, 0.02), 1.4);
     }
     etiqueta.hidden = true;
