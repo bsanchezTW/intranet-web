@@ -93,10 +93,10 @@
     <div class="vac-panel-head">
       Detalle por colaborador
       <div class="vac-panel-actions">
-        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/resumen/exportar">
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/resumen/exportar"<% if (typeof puede !== 'undefined' && !puede.exportar) { %> hidden<% } %>>
           Exportar a Excel
         </a>
-        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/exportar">
+        <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/exportar"<% if (typeof puede !== 'undefined' && !puede.exportar) { %> hidden<% } %>>
           Exportar historial
         </a>
       </div>
@@ -269,7 +269,7 @@
 
   <div class="vac-panel">
     <div class="vac-panel-head">Fecha de corte del historial</div>
-    <form class="vac-form vac-form-inline" method="POST" action="/RRHH/vacaciones/gestion/corte">
+    <form class="vac-form vac-form-inline" method="POST" action="/RRHH/vacaciones/gestion/corte"<% if (typeof puede !== 'undefined' && !puede.configurar) { %> hidden<% } %>>
       <div class="campo">
         <label for="cutoff_date">Historial hasta el</label>
         <input type="date" id="cutoff_date" name="cutoff_date" value="<%= cutoffDate || '' %>" required>

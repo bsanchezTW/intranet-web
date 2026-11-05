@@ -2,7 +2,7 @@
 const veOrganigrama = typeof can === 'function' && can('organigrama.area.editar');
 const veCentros = typeof can === 'function' && can('centros_costo.acceso');
 const veFeriados = typeof can === 'function' && can('feriados.acceso');
-const veVacacionesGestion = typeof canManageRrhh !== 'undefined' && canManageRrhh;
+const veVacacionesGestion = typeof veGestionVacaciones !== 'undefined' && veGestionVacaciones;
 const vePortales = typeof can === 'function' && can('rrhh.portales.ver');
 const hayVacaciones = Boolean(features && features.vacations);
 const hayCentros = Boolean(features && features.expenseCenter);

@@ -1,4 +1,5 @@
 const db = require("../../db");
+const policy = require("./vacationPolicy");
 const { getStrategy, resolveCountryForUser } = require("./VacationEngine");
 const { getCurrentCountry } = require("../../config/country");
 const balanceService = require("./vacationBalanceService");
@@ -19,8 +20,12 @@ function requestBelongsToInstance(request) {
  */
 
 async function getRequestById(id) {
+  // Con el área actual de la persona: los permisos miden su alcance con ella.
   const { rows } = await db.query(
-    `SELECT * FROM vacation_requests WHERE id = $1`,
+    `SELECT r.*, u.work_area_id
+       FROM vacation_requests r
+       LEFT JOIN users u ON u.id = r.user_id
+      WHERE r.id = $1`,
     [id],
   );
   return rows[0] || null;
@@ -157,12 +162,14 @@ async function createRequest({
     [userId],
   );
 
-  // El aprobador se congela ahora: reordenar el organigrama después no le
-  // quita la solicitud a quien ya la tiene en su bandeja.
+  // El jefe que da el organigrama queda en la solicitud como dato: quién
+  // aprueba lo deciden los permisos en el momento (vacationPolicy). Si no hay
+  // jefe disponible no se bloquea: aprueba quien tenga el permiso o, si
+  // nadie, el superadmin.
   const area = areaRows[0] && areaRows[0].id != null ? areaRows[0] : null;
   if (!area) return { ok: false, errors: [VACATION_MESSAGES.noArea] };
-  const approver = await areaManager.resolveApprover(userId, area.id);
-  if (!approver.ok) return { ok: false, errors: [approver.error] };
+  const resuelto = await areaManager.resolveApprover(userId, area.id);
+  const approver = resuelto.ok ? resuelto : { ok: true, managerId: null, manager: null };
 
   const { rows } = await db.queryRetryIdCollision(
     `INSERT INTO vacation_requests
@@ -456,66 +463,53 @@ async function listForUser(userId) {
   return rows;
 }
 
-/**
- * ¿Puede `reviewerId` aprobar o rechazar esta solicitud? El jefe congelado
- * en approver_user_id, o RRHH como respaldo (y siempre cuando no hay jefe
- * por encima del solicitante). Nadie resuelve su propia solicitud.
- */
-function canReviewRequest(request, reviewerId, { isRrhhManager = false } = {}) {
-  if (!request || reviewerId == null) return false;
-  if (request.user_id != null && Number(request.user_id) === Number(reviewerId)) {
-    return false;
-  }
-  if (isRrhhManager) return true;
-  return (
-    request.approver_user_id != null &&
-    Number(request.approver_user_id) === Number(reviewerId)
-  );
+/** ¿Puede `reviewerId` aprobar o rechazar esta solicitud? (vacationPolicy). */
+function canReviewRequest(request, reviewerId, { perms } = {}) {
+  return policy.puedeRevisar(request, reviewerId, perms);
 }
 
 /**
- * Bandeja del jefe: pendientes que le tocan y lo último que ya resolvió.
- * Ordenadas para que lo pendiente quede arriba.
+ * Bandeja de quien aprueba: las pendientes que sus permisos alcanzan (sin
+ * las propias) y lo último que ya resolvió.
  */
-async function listForApprover(approverId, { historyLimit = 50 } = {}) {
-  const { rows } = await db.query(
-    `(SELECT r.*,
+async function listForApprover(approverId, { perms, historyLimit = 50 } = {}) {
+  const filtro = policy.pendingFilter(perms, approverId, 3);
+  const SELECT = `SELECT r.*,
              COALESCE(u.first_name, r.requester_first_name) AS first_name,
              COALESCE(u.last_name, r.requester_last_name)   AS last_name,
              COALESCE(wa.area_name, r.requester_area_name)  AS area,
+             u.work_area_id,
              (r.user_id IS NULL) AS requester_deleted
         FROM vacation_requests r
         LEFT JOIN users u ON u.id = r.user_id
-        LEFT JOIN work_areas wa ON wa.id = u.work_area_id
-       WHERE r.country_code = $1
-         AND r.status = $3
-         AND r.approver_user_id = $2
-       ORDER BY r.start_date ASC)
-     UNION ALL
-     (SELECT r.*,
-             COALESCE(u.first_name, r.requester_first_name) AS first_name,
-             COALESCE(u.last_name, r.requester_last_name)   AS last_name,
-             COALESCE(wa.area_name, r.requester_area_name)  AS area,
-             (r.user_id IS NULL) AS requester_deleted
-        FROM vacation_requests r
-        LEFT JOIN users u ON u.id = r.user_id
-        LEFT JOIN work_areas wa ON wa.id = u.work_area_id
-       WHERE r.country_code = $1
-         AND r.status <> $3
-         AND r.reviewed_by = $2
+        LEFT JOIN work_areas wa ON wa.id = u.work_area_id`;
+  const [pendientes, historial] = await Promise.all([
+    db.query(
+      `${SELECT}
+       WHERE r.country_code = $1 AND r.status = $2 AND ${filtro.clause}
+       ORDER BY r.start_date ASC`,
+      [getCurrentCountry(), VACATION_STATUS.PENDING, ...filtro.params],
+    ),
+    db.query(
+      `${SELECT}
+       WHERE r.country_code = $1 AND r.status <> $2 AND r.reviewed_by = $3
        ORDER BY r.reviewed_at DESC NULLS LAST
-       LIMIT $4)`,
-    [getCurrentCountry(), approverId, VACATION_STATUS.PENDING, historyLimit],
-  );
-  return {
-    pending: rows.filter((r) => r.status === VACATION_STATUS.PENDING),
-    history: rows.filter((r) => r.status !== VACATION_STATUS.PENDING),
-  };
+       LIMIT $4`,
+      [getCurrentCountry(), VACATION_STATUS.PENDING, approverId, historyLimit],
+    ),
+  ]);
+  return { pending: pendientes.rows, history: historial.rows };
 }
 
-async function listForAdmin({ workAreaId, status } = {}) {
+async function listForAdmin({ workAreaId, status, perms } = {}) {
   const conditions = ["r.country_code = $1"];
   const params = [getCurrentCountry()];
+  // Sólo lo que alcanza «Ver solicitudes».
+  if (perms) {
+    const ver = policy.verFilter(perms, params.length + 1);
+    conditions.push(ver.clause);
+    params.push(...ver.params);
+  }
 
   if (workAreaId) {
     params.push(workAreaId);
@@ -551,7 +545,7 @@ async function listForAdmin({ workAreaId, status } = {}) {
   return rows;
 }
 
-async function listApprovedInRange({ startDate, endDate, userId } = {}) {
+async function listApprovedInRange({ startDate, endDate, userId, perms } = {}) {
   const params = [
     toDateOnly(startDate),
     toDateOnly(endDate),
@@ -569,7 +563,13 @@ async function listApprovedInRange({ startDate, endDate, userId } = {}) {
                AND r.country_code = $4`;
   if (userId) {
     params.push(userId);
-    sql += ` AND r.user_id = $5`;
+    sql += ` AND r.user_id = $${params.length}`;
+  }
+  // Calendario: sólo a quienes alcanza «Ver el calendario de vacaciones».
+  if (perms) {
+    const cal = perms.sqlFilter(policy.KEYS.CALENDARIO, { ownerColumn: "r.user_id", areaColumn: "u.work_area_id", firstParam: params.length + 1 });
+    params.push(...cal.params);
+    sql += ` AND ${cal.clause}`;
   }
   sql += ` ORDER BY r.start_date ASC`;
   const { rows } = await db.query(sql, params);

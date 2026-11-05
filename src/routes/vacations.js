@@ -1,10 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
-const requireRole = require("../middlewares/requireRole");
-const requireRrhhManager = require("../middlewares/requireRrhhManager");
-const { canManageRrhh } = require("../services/access/staffAccess");
-const areaManager = require("../services/expenses/areaManager");
+const requirePermission = require("../middlewares/requirePermission");
+const { denyForbidden } = require("../utils/httpResponses");
+const policy = require("../services/vacations/vacationPolicy");
 const {
   getStrategy,
   resolveCountryForUser,
@@ -42,6 +41,42 @@ const { getTimezone } = require("../config/country");
 // ---------- helpers de redirect con flash ----------
 // La ruta puede traer "#pestaña": la query va antes del hash para que el
 // navegador la lea y la vista abra esa sección.
+// ---------------------------------------------------------------------------
+// Permisos (vacationPolicy). Todo el módulo exige «Entrar a Vacaciones».
+// ---------------------------------------------------------------------------
+router.use(requirePermission(policy.KEYS.ACCESO));
+
+const P = policy.KEYS;
+const exige = (key) => requirePermission(key);
+
+/** La gestión de RRHH: solicitudes o saldos de otros (alcance más allá de lo propio). */
+function requireGestion(req, res, next) {
+  if (policy.veGestion(req.perms)) return next();
+  return denyForbidden(req, res);
+}
+
+/** Área actual de una persona (para medir el alcance de una acción sobre ella). */
+async function personaDe(userId) {
+  const { rows } = await db.query("SELECT id, work_area_id FROM users WHERE id = $1", [userId]);
+  return rows[0] || null;
+}
+
+/**
+ * Acción sobre la ficha de una persona (/gestion/:userId…): `key` tiene que
+ * alcanzarla. Sin eso, 403.
+ */
+function sobrePersona(key) {
+  return async (req, res, next) => {
+    try {
+      const persona = await personaDe(req.params.userId);
+      if (persona && policy.sobrePersona(req.perms, key, persona)) return next();
+      return denyForbidden(req, res);
+    } catch (err) {
+      return next(err);
+    }
+  };
+}
+
 function withQuery(path, query) {
   const [base, hash] = String(path).split("#");
   return `${base}?${query}${hash ? `#${hash}` : ""}`;
@@ -107,7 +142,7 @@ async function getAreas() {
 // ==========================================================
 // INDEX
 // ==========================================================
-router.get("/", requireRole.intranetActivo(), (req, res) => {
+router.get("/", (req, res) => {
   res.render("RRHH/vacaciones/index", {
     titulo: "Vacaciones",
     user: req.session.user,
@@ -118,7 +153,7 @@ router.get("/", requireRole.intranetActivo(), (req, res) => {
 // ==========================================================
 // MIS VACACIONES
 // ==========================================================
-router.get("/mis-vacaciones", requireRole.intranetActivo(), async (req, res) => {
+router.get("/mis-vacaciones", async (req, res) => {
   const userId = req.session.user.id;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
@@ -161,7 +196,7 @@ router.get("/mis-vacaciones", requireRole.intranetActivo(), async (req, res) => 
   }
 });
 
-router.post("/mis-vacaciones/solicitar", requireRole.intranetActivo(), async (req, res) => {
+router.post("/mis-vacaciones/solicitar", exige(P.CREAR), async (req, res) => {
   const userId = req.session.user.id;
   const {
     start_date,
@@ -199,8 +234,7 @@ router.post("/mis-vacaciones/solicitar", requireRole.intranetActivo(), async (re
         }),
         notificationService.notifyApprover({
           request: result.request,
-          user: profile,
-          approver: result.approver,
+          user: { ...profile, work_area_id: (await personaDe(userId) || {}).work_area_id },
         }),
       ]);
     });
@@ -211,7 +245,7 @@ router.post("/mis-vacaciones/solicitar", requireRole.intranetActivo(), async (re
   }
 });
 
-router.post("/mis-vacaciones/cancelar/:id", requireRole.intranetActivo(), async (req, res) => {
+router.post("/mis-vacaciones/cancelar/:id", async (req, res) => {
   const userId = req.session.user.id;
   try {
     const result = await requestService.cancelRequest({
@@ -231,13 +265,14 @@ router.post("/mis-vacaciones/cancelar/:id", requireRole.intranetActivo(), async 
 // ==========================================================
 // GESTIÓN (ADMIN)
 // ==========================================================
-router.get("/gestion", requireRrhhManager(), async (req, res) => {
+router.get("/gestion", requireGestion, async (req, res) => {
   try {
     const { area, status } = req.query;
     const [requests, areas] = await Promise.all([
       requestService.listForAdmin({
         workAreaId: area || null,
         status: status || null,
+        perms: req.perms,
       }),
       getAreas(),
     ]);
@@ -245,8 +280,13 @@ router.get("/gestion", requireRrhhManager(), async (req, res) => {
     res.render("RRHH/vacaciones/gestion", {
       titulo: "Gestión de vacaciones",
       user: req.session.user,
-      requests: requests.map(mapVacationRequestForView),
+      // Aprobar o rechazar en la gestión sólo donde los permisos alcanzan.
+      requests: requests.map((r) => ({
+        ...mapVacationRequestForView(r),
+        puedeRevisar: policy.puedeRevisar(r, req.session.user.id, req.perms),
+      })),
       areas,
+      puedeExportar: Boolean(req.perms && req.perms.can(P.EXPORTAR)),
       filtros: { area: area || "", status: status || "" },
       ...readFlash(req),
     });
@@ -265,11 +305,14 @@ router.get("/gestion", requireRrhhManager(), async (req, res) => {
 
 const RESUMEN_PATH = "/RRHH/vacaciones/gestion/resumen";
 
-router.get("/gestion/resumen", requireRrhhManager(), async (req, res) => {
+router.get("/gestion/resumen", requireGestion, async (req, res) => {
   try {
     const search = req.query.q || "";
     const [report, settings] = await Promise.all([
-      reportService.buildTeamReport({ search }),
+      reportService.buildTeamReport({
+        search,
+        allow: (u) => policy.sobrePersona(req.perms, P.SALDO_VER, u),
+      }),
       settingsService.getSettings(),
     ]);
     const reminders = await historyService.lastRemindersByUser(report.rows.map((r) => r.id));
@@ -285,6 +328,10 @@ router.get("/gestion/resumen", requireRrhhManager(), async (req, res) => {
         ? formatDisplay(settings.historyCutoffDate)
         : null,
       search,
+      puede: {
+        exportar: Boolean(req.perms && req.perms.can(P.EXPORTAR)),
+        configurar: Boolean(req.perms && req.perms.can(P.CONFIGURAR)),
+      },
       ...readFlash(req),
     });
   } catch (err) {
@@ -293,7 +340,7 @@ router.get("/gestion/resumen", requireRrhhManager(), async (req, res) => {
   }
 });
 
-router.get("/gestion/resumen/exportar", requireRrhhManager(), async (req, res) => {
+router.get("/gestion/resumen/exportar", exige(P.EXPORTAR), async (req, res) => {
   try {
     const buffer = await reportService.exportTeamReport();
     await logChange(req, "exportó el resumen de vacaciones", RESUMEN_PATH);
@@ -304,7 +351,7 @@ router.get("/gestion/resumen/exportar", requireRrhhManager(), async (req, res) =
   }
 });
 
-router.get("/gestion/exportar", requireRrhhManager(), async (req, res) => {
+router.get("/gestion/exportar", exige(P.EXPORTAR), async (req, res) => {
   try {
     const buffer = await reportService.exportRequests({
       workAreaId: req.query.area || null,
@@ -318,7 +365,7 @@ router.get("/gestion/exportar", requireRrhhManager(), async (req, res) => {
   }
 });
 
-router.get("/gestion/historial/exportar", requireRrhhManager(), async (req, res) => {
+router.get("/gestion/historial/exportar", exige(P.EXPORTAR), async (req, res) => {
   try {
     const buffer = await reportService.exportHistory();
     await logChange(req, "exportó el historial de vacaciones", RESUMEN_PATH);
@@ -329,7 +376,7 @@ router.get("/gestion/historial/exportar", requireRrhhManager(), async (req, res)
   }
 });
 
-router.post("/gestion/corte", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/corte", exige(P.CONFIGURAR), async (req, res) => {
   const backTo = RESUMEN_PATH;
   try {
     const result = await settingsService.setCutoffDate({
@@ -345,7 +392,7 @@ router.post("/gestion/corte", requireRrhhManager(), async (req, res) => {
   }
 });
 
-router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
+router.get("/gestion/:userId", sobrePersona(P.SALDO_VER), async (req, res) => {
   const { userId } = req.params;
   try {
     const profile = await balanceService.getUserVacationProfile(userId);
@@ -397,9 +444,17 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
       }),
     }));
 
+    const persona = await personaDe(userId);
+    const sobre = (key) => Boolean(persona && policy.sobrePersona(req.perms, key, persona));
     res.render("RRHH/vacaciones/detalle_colaborador", {
       titulo: "Detalle de vacaciones",
       user: req.session.user,
+      puede: {
+        ajustar: sobre(P.SALDO_AJUSTAR),
+        historial: sobre(P.HISTORIAL),
+        recalcular: sobre(P.RECALCULAR),
+        exportar: Boolean(req.perms && req.perms.can(P.EXPORTAR)),
+      },
       profile,
       summary,
       periods: periodViews,
@@ -443,7 +498,7 @@ router.get("/gestion/:userId", requireRrhhManager(), async (req, res) => {
  * Es manual a propósito (así lo pidió RR.HH.): decide a quién y cuándo.
  * `volver=resumen` regresa al resumen en vez de a la ficha.
  */
-router.post("/gestion/:userId/avisar-vencidos", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/:userId/avisar-vencidos", sobrePersona(P.SALDO_VER), async (req, res) => {
   const { userId } = req.params;
   const fichaPath = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
   const backTo = req.body.volver === "resumen" ? RESUMEN_PATH : fichaPath;
@@ -518,7 +573,7 @@ function batchRowsFromBody(body) {
 
 router.post(
   "/gestion/:userId/historial/lote/previsualizar",
-  requireRrhhManager(),
+  sobrePersona(P.HISTORIAL),
   async (req, res) => {
     try {
       const result = await historyService.previewHistoryBatch({
@@ -535,7 +590,7 @@ router.post(
   },
 );
 
-router.post("/gestion/:userId/historial/lote", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/:userId/historial/lote", sobrePersona(P.HISTORIAL), async (req, res) => {
   const { userId } = req.params;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
   try {
@@ -565,7 +620,7 @@ router.post("/gestion/:userId/historial/lote", requireRrhhManager(), async (req,
 
 router.post(
   "/gestion/:userId/historial/:historyId/editar",
-  requireRrhhManager(),
+  sobrePersona(P.HISTORIAL),
   async (req, res) => {
     const { userId, historyId } = req.params;
     const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#historial`;
@@ -592,7 +647,7 @@ router.post(
 
 router.post(
   "/gestion/:userId/historial/:historyId/eliminar",
-  requireRrhhManager(),
+  sobrePersona(P.HISTORIAL),
   async (req, res) => {
     const { userId, historyId } = req.params;
     const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#historial`;
@@ -614,7 +669,7 @@ router.post(
 
 // ---------- datos del cálculo y saldo de referencia ----------
 
-router.post("/gestion/:userId/datos", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/:userId/datos", sobrePersona(P.SALDO_AJUSTAR), async (req, res) => {
   const { userId } = req.params;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}`;
   try {
@@ -638,7 +693,7 @@ router.post("/gestion/:userId/datos", requireRrhhManager(), async (req, res) => 
   }
 });
 
-router.post("/gestion/:userId/referencia", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/:userId/referencia", sobrePersona(P.SALDO_AJUSTAR), async (req, res) => {
   const { userId } = req.params;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#conciliacion`;
   try {
@@ -664,7 +719,7 @@ router.post("/gestion/:userId/referencia", requireRrhhManager(), async (req, res
 
 router.post(
   "/gestion/:userId/referencia/:referenceId/eliminar",
-  requireRrhhManager(),
+  sobrePersona(P.SALDO_AJUSTAR),
   async (req, res) => {
     const { userId, referenceId } = req.params;
     const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#conciliacion`;
@@ -685,7 +740,7 @@ router.post(
 );
 
 /** Rehace períodos e imputación del historial desde cero. */
-router.post("/gestion/:userId/recalcular", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/:userId/recalcular", sobrePersona(P.RECALCULAR), async (req, res) => {
   const { userId } = req.params;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#periodos`;
   try {
@@ -703,7 +758,7 @@ router.post("/gestion/:userId/recalcular", requireRrhhManager(), async (req, res
   }
 });
 
-router.post("/gestion/:userId/ajustar", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/:userId/ajustar", sobrePersona(P.SALDO_AJUSTAR), async (req, res) => {
   const { userId } = req.params;
   const { period_id, days_delta, reason } = req.body;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#periodos`;
@@ -735,7 +790,7 @@ router.post("/gestion/:userId/ajustar", requireRrhhManager(), async (req, res) =
   }
 });
 
-router.post("/gestion/:userId/periodo/:periodId/record", requireRrhhManager(), async (req, res) => {
+router.post("/gestion/:userId/periodo/:periodId/record", sobrePersona(P.SALDO_AJUSTAR), async (req, res) => {
   const { userId, periodId } = req.params;
   const { record_met, record_notes } = req.body;
   const backTo = `/RRHH/vacaciones/gestion/${encodeURIComponent(userId)}#periodos`;
@@ -770,23 +825,13 @@ router.post("/gestion/:userId/periodo/:periodId/record", requireRrhhManager(), a
 
 const APROBACIONES_PATH = "/RRHH/vacaciones/aprobaciones";
 
-router.get("/aprobaciones", requireRole.intranetActivo(), async (req, res) => {
+router.get("/aprobaciones", async (req, res) => {
   const user = req.session.user;
   try {
-    // Quien gestiona RRHH aprueba dentro de la Gestión de vacaciones, que ya
-    // muestra todo lo pendiente. Se conserva la query (?ok=…&msg=…) y el
-    // enlace de los correos sigue sirviendo para ambos perfiles.
-    if (await canManageRrhh(user)) {
-      const query = req.originalUrl.includes("?")
-        ? req.originalUrl.slice(req.originalUrl.indexOf("?"))
-        : "";
-      return res.redirect(`/RRHH/vacaciones/gestion${query}`);
-    }
-    const [inbox, esJefe] = await Promise.all([
-      requestService.listForApprover(user.id),
-      areaManager.isAreaManager(user),
-    ]);
-    if (!esJefe && !inbox.pending.length && !inbox.history.length) {
+    // La bandeja de quien aprueba (con su alcance). Sin el permiso, sólo si
+    // aún tiene historial de lo que resolvió.
+    const inbox = await requestService.listForApprover(user.id, { perms: req.perms });
+    if (!policy.aprueba(req.perms) && !inbox.pending.length && !inbox.history.length) {
       return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
     }
     res.render("RRHH/vacaciones/aprobaciones", {
@@ -804,8 +849,8 @@ router.get("/aprobaciones", requireRole.intranetActivo(), async (req, res) => {
 });
 
 /**
- * Aprobar y rechazar: el jefe asignado por el organigrama o RRHH. El resto de
- * la gestión sigue cerrada con requireRrhhManager.
+ * Aprobar y rechazar: quien tenga «Aprobar» sobre esa solicitud (con
+ * Jefatura, los jefes de la cadena). Nadie resuelve lo propio.
  */
 function requireVacationReviewer() {
   return async (req, res, next) => {
@@ -813,8 +858,7 @@ function requireVacationReviewer() {
     try {
       const request = await requestService.getRequestById(req.params.id);
       if (!request) return redirectErr(res, backTo, VACATION_MESSAGES.requestNotFound);
-      const isRrhhManager = await canManageRrhh(req.session.user);
-      if (!requestService.canReviewRequest(request, req.session.user.id, { isRrhhManager })) {
+      if (!requestService.canReviewRequest(request, req.session.user.id, { perms: req.perms })) {
         return redirectErr(res, backTo, VACATION_MESSAGES.notYourApproval);
       }
       return next();
@@ -830,7 +874,7 @@ function reviewBackTo(req) {
     : "/RRHH/vacaciones/gestion";
 }
 
-const reviewGuards = [requireRole.intranetActivo(), requireVacationReviewer()];
+const reviewGuards = [requireVacationReviewer()];
 
 router.post("/gestion/solicitud/:id/aprobar", ...reviewGuards, async (req, res) => {
   const backTo = reviewBackTo(req);
@@ -965,7 +1009,7 @@ function buildCalendarWeeks({ year, month, today, events }) {
   return weeks;
 }
 
-router.get("/calendario", requireRole.intranetActivo(), async (req, res) => {
+router.get("/calendario", exige(P.CALENDARIO), async (req, res) => {
   try {
     const today = todayInCountry();
     const { year, month } = parseCalendarMonth(req.query.mes, today);
@@ -975,6 +1019,7 @@ router.get("/calendario", requireRole.intranetActivo(), async (req, res) => {
     const events = await requestService.listApprovedInRange({
       startDate: `${monthParam(year, month)}-01`,
       endDate: rangeEnd,
+      perms: req.perms,
     });
 
     const prev = shiftMonth(year, month, -1);
@@ -1002,7 +1047,7 @@ router.get("/calendario", requireRole.intranetActivo(), async (req, res) => {
 // ==========================================================
 // API JSON
 // ==========================================================
-router.get("/api/saldo", requireRole.intranetActivo(), async (req, res) => {
+router.get("/api/saldo", async (req, res) => {
   try {
     const userId = req.session.user.id;
     const summary = await balanceService.getBalanceSummary(userId);
@@ -1013,7 +1058,7 @@ router.get("/api/saldo", requireRole.intranetActivo(), async (req, res) => {
   }
 });
 
-router.get("/api/preview-dias", requireRole.intranetActivo(), async (req, res) => {
+router.get("/api/preview-dias", exige(P.CREAR), async (req, res) => {
   try {
     const { start_date, end_date, fraction_ack } = req.query;
     const start = toDateOnly(start_date);

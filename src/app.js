@@ -37,7 +37,7 @@ const permisosRoutes = require("./routes/permisos");
 const impersonation = require("./services/permissions/impersonation");
 const { withQueryParam } = require("./utils/returnTo");
 const noticiasRoutes = require("./routes/noticias");
-const { ROLES, normalizeRole, isAdministrador } = require("./constants/roles");
+const { normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
 const { publicErrorMessage, isUserFacingError } = require("./utils/publicError");
 const { pageSkeletonFor } = require("./utils/pageSkeleton");
@@ -53,7 +53,7 @@ const { canManageRrhh } = require("./services/access/staffAccess");
 const { checkSessionAccount } = require("./services/access/accountStatus");
 const { canAccessContent, classifyContentPath } = require("./services/access/contentAccess");
 const { veListadoDeCarpetas } = require("./services/documents/processAccess");
-const { isAreaManager } = require("./services/expenses/areaManager");
+const vacationPolicy = require("./services/vacations/vacationPolicy");
 const { TICKET_CATEGORIES, ticketCategoryLabel } = require("./constants/ticketCategories");
 const { migrateTicketCategories, ensureTicketReplyCorrelatives } = require("./services/tickets/ticketSchema");
 const { UPLOAD_LIMITS_MB } = require("./config/uploadLimits");
@@ -599,18 +599,15 @@ app.use(async (req, res, next) => {
     // Administración de RRHH y colaboradores: admins de RRHH o de Informática.
     const gestionaRrhh = await canManageRrhh(user);
     res.locals.canManageRrhh = gestionaRrhh;
-    // Jefes del organigrama: ven su bandeja de aprobación de vacaciones.
-    res.locals.isAreaManager = isFeatureEnabled("vacations")
-      ? await isAreaManager(user).catch(() => false)
-      : false;
+    // Vacaciones (Gestión de Permisos): la bandeja de aprobación y la gestión
+    // de RRHH se calculan más abajo, con req.perms.
     // Personal de Finanzas: ve las letras de cambio en el menú y en Procesos.
     res.locals.canIssueBills = isFeatureEnabled("billsOfExchange")
       ? await isFinanceStaff(user).catch(() => false)
       : false;
 
     // Gestión de Permisos: req.perms para rutas y políticas, can('clave') en
-    // las vistas; los dos pasan por decide(). Las propiedades de abajo
-    // (tickets_reply…) son de los módulos que aún no tienen permisos.
+    // las vistas; los dos pasan por decide().
     try {
       req.perms = await permissions.resolve(user);
     } catch (err) {
@@ -619,19 +616,14 @@ app.use(async (req, res, next) => {
     }
     res.locals.perms = req.perms;
     res.locals.veListadoCarpetas = veListadoDeCarpetas(req.perms);
-    res.locals.can = buildViewCan(
-      req.perms,
-      {
-        tickets_reply: isAdministrador(role),
-        vacaciones_write: gestionaRrhh,
-        vacaciones_request:
-          role === ROLES.USUARIO || isAdministrador(role),
-      },
-    );
+    res.locals.isAreaManager = isFeatureEnabled("vacations") && vacationPolicy.aprueba(req.perms);
+    res.locals.veGestionVacaciones = isFeatureEnabled("vacations") && vacationPolicy.veGestion(req.perms);
+    res.locals.can = buildViewCan(req.perms);
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
     res.locals.canManageRrhh = false;
     res.locals.isAreaManager = false;
+    res.locals.veGestionVacaciones = false;
     res.locals.canIssueBills = false;
     res.locals.veListadoCarpetas = false;
     req.perms = emptyPermissions(getCatalog());

@@ -42,7 +42,7 @@ function serviceTimeLabel(hireDate, referenceDate) {
  * historial se traen agrupados y se reparten en memoria. Con ~20 personas da
  * igual, pero deja el reporte listo para cuando no sean 20.
  */
-async function buildTeamReport({ referenceDate = null, search = null } = {}) {
+async function buildTeamReport({ referenceDate = null, search = null, allow = null } = {}) {
   const today = toDateOnly(referenceDate) || todayInCountry();
   const country = getCurrentCountry();
 
@@ -55,15 +55,17 @@ async function buildTeamReport({ referenceDate = null, search = null } = {}) {
                   OR LOWER(COALESCE(u.national_id, '')) LIKE $1)`;
   }
 
-  const { rows: users } = await db.query(
+  const { rows: todos } = await db.query(
     `SELECT u.id, u.first_name, u.last_name, u.email, u.national_id,
-            u.hire_date, u.role, w.area_name
+            u.hire_date, u.role, w.area_name, u.work_area_id
        FROM users u
        LEFT JOIN work_areas w ON w.id = u.work_area_id
        ${filter}
        ORDER BY u.last_name ASC NULLS LAST, u.first_name ASC`,
     params,
   );
+  // `allow(user)`: a quién puede ver quien pide el reporte (sus permisos).
+  const users = allow ? todos.filter((u) => allow(u)) : todos;
 
   const userIds = users.map((u) => u.id);
   if (userIds.length === 0) return { rows: [], totals: emptyTotals(), referenceDate: today };

@@ -2,7 +2,7 @@ const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-process.env.COUNTRY = process.env.COUNTRY || "CL";
+process.env.COUNTRY = "CL"; // Soporte sólo existe en Chile.
 
 /*
   Soporte con Gestión de Permisos: la mesa de ayuda es quien tiene

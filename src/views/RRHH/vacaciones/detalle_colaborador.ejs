@@ -7,6 +7,8 @@
     ? new Date(profile.hire_date).toISOString().split('T')[0].split('-').reverse().join('-')
     : null;
   const fichaPath = '/RRHH/vacaciones/gestion/' + profile.id;
+  // Qué puede hacer quien mira (Gestión de Permisos); las rutas lo exigen igual.
+  const pv = (typeof puede !== 'undefined' && puede) ? puede : {};
 %>
 
 <div class="vac-wrap">
@@ -157,7 +159,7 @@
     <div class="vac-panel-head">
       Datos para el cálculo
       <div class="vac-panel-actions">
-        <button type="button" class="vac-btn vac-btn-cancel vac-btn-sm" id="btnEditarDatos">Corregir</button>
+        <button type="button" class="vac-btn vac-btn-cancel vac-btn-sm" id="btnEditarDatos"<% if (!pv.ajustar) { %> hidden<% } %>>Corregir</button>
       </div>
     </div>
     <dl class="vac-datos">
@@ -231,10 +233,13 @@
           aria-controls="cargaLote"
           aria-expanded="false"
           <%= profile.hire_date ? '' : 'disabled' %>
+          <% if (!pv.historial) { %>hidden<% } %>
         >Cargar salidas</button>
+        <% if (pv.exportar) { %>
         <a class="vac-btn vac-btn-cancel vac-btn-sm" href="/RRHH/vacaciones/gestion/historial/exportar">
           Exportar
         </a>
+        <% } %>
       </div>
     </div>
 
@@ -278,7 +283,7 @@
                 <br><span class="vac-stat-unit"><%= h.createdAtFmt %> · <%= h.originLabel %></span>
               </td>
               <td data-label="">
-                <span class="vac-row-actions">
+                <span class="vac-row-actions"<% if (!pv.historial) { %> hidden<% } %>>
                   <button
                     type="button"
                     class="vac-btn vac-btn-cancel vac-btn-sm js-editar-historial"
@@ -328,7 +333,7 @@
   <section class="vac-tabpanel" id="conciliacion" role="tabpanel" aria-labelledby="tab-conciliacion" hidden>
   <div class="vac-panel" id="referencia">
     <div class="vac-panel-head">Saldo de referencia</div>
-    <form class="vac-form vac-form-inline" method="POST" action="<%= fichaPath %>/referencia">
+    <form class="vac-form vac-form-inline" method="POST" action="<%= fichaPath %>/referencia"<% if (!pv.ajustar) { %> hidden<% } %>>
       <div class="campo">
         <label for="ref_as_of">Fecha</label>
         <input type="date" id="ref_as_of" name="as_of_date" value="<%= today %>" max="<%= today %>" required>
@@ -370,6 +375,7 @@
                 <form
                   class="vac-inline-form"
                   method="POST"
+                  <% if (!pv.ajustar) { %>hidden<% } %>
                   action="<%= fichaPath %>/referencia/<%= r.id %>/eliminar"
                   data-confirm="Se quitará el saldo de referencia del <%= r.asOfFmt %>. No cambia el saldo del colaborador."
                   data-confirm-title="¿Eliminar la referencia?"
@@ -420,9 +426,11 @@
     <div class="vac-panel-head">
       Períodos de devengo
       <div class="vac-panel-actions">
+        <% if (pv.recalcular) { %>
         <form class="vac-inline-form" method="POST" action="<%= fichaPath %>/recalcular">
           <button type="submit" class="vac-btn vac-btn-ghost vac-btn-sm">Recalcular saldo</button>
         </form>
+        <% } %>
       </div>
     </div>
     <% if (!periods || periods.length === 0) { %>
@@ -486,7 +494,7 @@
         <% } %>
       </p>
 
-      <details class="vac-details">
+      <details class="vac-details"<% if (!pv.ajustar) { %> hidden<% } %>>
         <summary>Ajustes manuales<% if (isPeru) { %> y récord vacacional<% } %></summary>
 
         <% if (isPeru) { %>

@@ -105,25 +105,20 @@ describe("workAreaTree — aprobador escalado", () => {
 });
 
 describe("vacaciones — quién resuelve la solicitud", () => {
+  // Lo decide el permiso «Aprobar» (vacationPolicy), no el jefe congelado ni
+  // ser RRHH. Aquí, permisos que alcanzan o no la solicitud.
   const { canReviewRequest } = require("../src/services/vacations/vacationRequestService");
-  const solicitud = { user_id: 99, approver_user_id: 20 };
+  const solicitud = { user_id: 99, approver_user_id: 20, work_area_id: 3 };
+  const alcanza = { can: () => true, canOnRecord: () => true };
+  const noAlcanza = { can: () => false, canOnRecord: () => false };
 
-  it("el jefe congelado puede resolverla y otro jefe no", () => {
-    assert.equal(canReviewRequest(solicitud, 20), true);
-    assert.equal(canReviewRequest(solicitud, 30), false);
-  });
-
-  it("RRHH la resuelve como respaldo, también sin jefe asignado", () => {
-    assert.equal(canReviewRequest(solicitud, 55, { isRrhhManager: true }), true);
-    assert.equal(
-      canReviewRequest({ user_id: 99, approver_user_id: null }, 55, { isRrhhManager: true }),
-      true,
-    );
-    assert.equal(canReviewRequest({ user_id: 99, approver_user_id: null }, 20), false);
+  it("la resuelve quien tiene el permiso sobre ella, figure o no como jefe", () => {
+    assert.equal(canReviewRequest(solicitud, 30, { perms: alcanza }), true);
+    assert.equal(canReviewRequest(solicitud, 20, { perms: noAlcanza }), false, "el jefe congelado sin permiso, no");
   });
 
   it("nadie resuelve su propia solicitud", () => {
-    assert.equal(canReviewRequest(solicitud, 99, { isRrhhManager: true }), false);
+    assert.equal(canReviewRequest(solicitud, 99, { perms: alcanza }), false);
   });
 });
 

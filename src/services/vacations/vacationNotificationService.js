@@ -62,21 +62,34 @@ function notifyNewRequest({ request, user, accumulationAlert = false }) {
   });
 }
 
-/** Nueva solicitud → jefe que la aprueba según el organigrama. */
-function notifyApprover({ request, user, approver }) {
-  if (!approver || !approver.email) return Promise.resolve();
+/**
+ * Nueva solicitud → quienes pueden aprobarla con sus permisos (sin el
+ * solicitante). Los superadmins sólo si no hay nadie más.
+ */
+async function notifyApprover({ request, user }) {
+  const permissions = require("../permissions/permissionService");
+  const policy = require("./vacationPolicy");
+  const db = require("../../db");
+  const record = { ownerId: request.user_id, areaId: user && user.work_area_id != null ? user.work_area_id : null };
+  const fuera = (ids) => ids.filter((id) => Number(id) !== Number(request.user_id));
+  let ids = fuera(await permissions.usersWhoCan(policy.KEYS.APROBAR, record));
+  if (!ids.length) ids = fuera(await permissions.usersWhoCan(policy.KEYS.APROBAR, record, { includeSuperadmins: true }));
+  if (!ids.length) return undefined;
+  const { rows } = await db.query("SELECT email FROM users WHERE id = ANY($1::int[]) AND email IS NOT NULL", [ids]);
+  const to = [...new Set(rows.map((r) => String(r.email).trim().toLowerCase()).filter(Boolean))];
+  if (!to.length) return undefined;
   return safeSend({
-    to: approver.email,
+    to,
     subject: "Solicitud de vacaciones por aprobar",
     senderName: MAIL_SENDERS.hr,
     heading: "Tienes una solicitud de vacaciones por aprobar",
     cta: { href: "/RRHH/vacaciones/aprobaciones", label: "Revisar solicitud" },
     html: `
-      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> solicitó vacaciones y te toca aprobarlas.</p>
+      <p style="margin:0 0 16px 0;"><strong>${escapeHtml(fullName(user))}</strong> solicitó vacaciones y esperan aprobación.</p>
       <p style="margin:0 0 16px 0;">Período: ${rangeText(request)}</p>
       ${request.requester_notes ? `<p style="margin:0 0 16px 0;">Comentario: ${escapeHtml(request.requester_notes)}</p>` : ""}
     `,
-    text: `${fullName(user)} solicitó vacaciones (${rangeText(request)}) y te toca aprobarlas.`,
+    text: `${fullName(user)} solicitó vacaciones (${rangeText(request)}) y esperan aprobación.`,
   });
 }
 

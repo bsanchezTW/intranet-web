@@ -28,6 +28,7 @@
       <a class="page-header-btn page-header-btn--secundario" href="/RRHH/vacaciones/gestion/resumen">Resumen y días vencidos</a>
       <%# La exportación respeta los filtros aplicados abajo. %>
       <a class="page-header-btn page-header-btn--secundario"
+         <% if (typeof puedeExportar !== 'undefined' && !puedeExportar) { %>hidden<% } %>
          href="/RRHH/vacaciones/gestion/exportar?area=<%= encodeURIComponent(filtros.area || '') %>&status=<%= encodeURIComponent(filtros.status || '') %>">Exportar a Excel</a>
     </div>
   </div>
@@ -102,6 +103,7 @@
                   <small class="vac-nota-propia">Es tu solicitud: la resuelve otra persona.</small>
                 <% } else { %>
                   <div class="vac-acciones">
+                    <% if (r.puedeRevisar !== false) { %>
                     <form action="/RRHH/vacaciones/gestion/solicitud/<%= r.id %>/aprobar" method="POST"
                           data-confirm="Se aprobarán <%= r.days %> días <%= r.dayUnit %> (<%= r.startDateFmt %> → <%= r.endDateFmt %>)."
                           data-confirm-title="¿Aprobar la solicitud?"
@@ -116,6 +118,9 @@
                         <%- include('../../partials/icon', { name: 'x' }) %>Rechazar
                       </button>
                     </form>
+                    <% } else { %>
+                    <span class="vac-stat-unit">Lo aprueba quien tenga el permiso</span>
+                    <% } %>
                   </div>
                 <% } %>
               </td>
