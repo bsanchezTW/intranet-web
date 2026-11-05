@@ -167,13 +167,21 @@ before(async () => {
   app.use((req, res, next) => {
     const user = req.session && req.session.user;
     if (!user) return next();
-    // La ruta ya no pregunta canManageRrhh: en sombra decide la regla antigua,
-    // y este admin de prueba es quien gestiona RRHH.
-    const { legacyContext } = require(path.join(SRC, "services/permissions/legacyRules"));
-    const { emptyPermissions } = require(path.join(SRC, "services/permissions/resolver"));
+    // Decide Gestión de Permisos: este admin de prueba tiene los de RRHH.
+    const { emptyPermissions, computePermissions } = require(path.join(SRC, "services/permissions/resolver"));
     const { getCatalog } = require(path.join(SRC, "services/permissions/catalog"));
-    req.permLegacy = legacyContext(user, { rrhhManager: user.role === "Administrador" });
-    req.perms = emptyPermissions(getCatalog(), user.id);
+    // Todos los permisos del catálogo, sin ser superadmin (gestiona RRHH).
+    const conTodo = (userId) => {
+      const catalog = getCatalog();
+      const assignments = [...catalog.byKey.values()].map((p, i) => ({
+        id: i + 1, principal_type: "user", user_id: userId, permission_key: p.key,
+        scope: p.scopes ? (p.scopes.includes("todo") ? "todo" : p.scopes[0]) : null,
+        scope_area_ids: [], effect: "concede",
+      }));
+      const users = new Map([[userId, { id: userId, role: "Usuario", work_area_id: 3 }]]);
+      return computePermissions({ users, areas: [], sets: new Map(), assignments }, { id: userId }, { catalog });
+    };
+    req.perms = user.role === "Administrador" ? conTodo(user.id) : emptyPermissions(getCatalog(), user.id);
     next();
   });
   app.set("views", path.join(SRC, "views"));

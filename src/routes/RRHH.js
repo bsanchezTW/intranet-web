@@ -284,7 +284,7 @@ function negarPermiso(res) {
 }
 
 function puede(req, key, record = null) {
-  return decide(req.perms, key, req.permLegacy, { record, path: req.originalUrl });
+  return decide(req.perms, key, { record, path: req.originalUrl });
 }
 
 function puedeEditarOrganigrama(req) {
@@ -375,8 +375,7 @@ router.get("/", requirePermission("rrhh.acceso"), (req, res) => {
 // personal enmascarado (parte del correo, últimos 4 dígitos del teléfono). El
 // dato real no llega al navegador; RR.HH. lo ve y corrige en la ficha.
 router.get("/personal", requirePermission("rrhh.directorio.ver"), async (req, res) => {
-  // Correo y teléfono personales: en sombra los ve cualquier sesión (enmascarados).
-  // Si el permiso no está, no se consultan y no llegan al HTML.
+  // Correo y teléfono personales: sólo con su permiso. Si no está, no se consultan y no llegan al HTML.
   const veContactoPersonal = Boolean(
     res.locals.can && typeof res.locals.can.field === "function"
       && res.locals.can.field("rrhh.directorio.campo.contacto_personal"),

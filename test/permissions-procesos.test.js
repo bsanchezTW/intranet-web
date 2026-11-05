@@ -8,7 +8,6 @@ process.env.COUNTRY = process.env.COUNTRY || "CL";
 const { computePermissions } = require("../src/services/permissions/resolver");
 const { getCatalog } = require("../src/services/permissions/catalog");
 const { decide } = require("../src/services/permissions/decide");
-const { legacyContext, hasLegacyRule } = require("../src/services/permissions/legacyRules");
 const { buildViewCan } = require("../src/services/permissions/viewCan");
 const { SYSTEM_SETS, CAMBIOS } = require("../src/services/permissions/bootstrap");
 const { getFeatures } = require("../src/config/features");
@@ -74,61 +73,45 @@ function permisos(userId, assignments) {
   return computePermissions(foto(assignments), { id: userId }, { catalog: CL });
 }
 
-function aplicando(perms) {
-  perms.mode = "aplicar";
-  perms.bootstrapped = true;
-  return perms;
+function conceder(userId, items) {
+  return permisos(userId, items.map((item) => asignacion({
+    principal_type: "user",
+    user_id: userId,
+    permission_key: item.permission_key,
+    scope: item.scope,
+  })));
 }
 
-const USUARIO = (workAreaId) => legacyContext({ role: "Usuario" }, { workAreaId });
-const ADMIN = legacyContext({ role: "Administrador" }, { workAreaId: 1 });
+const itemsDe = (code, prefijo = "procesos.") =>
+  SYSTEM_SETS.find((s) => s.code === code).items.filter((i) => i.permission_key.startsWith(prefijo));
 
-describe("reglas antiguas de Procesos", () => {
-  const vacio = permisos(201, []);
+// Un colaborador con «Básico» y quien administra Procesos (ve sin área y escribe).
+const COLABORADOR = () => conceder(201, itemsDe("basico"));
+const ADMINISTRA = () => conceder(100, [
+  ...itemsDe("editor_procesos"),
+  { permission_key: "procesos.sin_area.ver", scope: null },
+]);
 
-  it("un colaborador ve su carpeta y no la ajena; un admin ve todo", () => {
-    assert.equal(decide(vacio, "procesos.procedimientos.ver", USUARIO(2), { record: { areaId: 2 } }), true);
-    assert.equal(decide(vacio, "procesos.protocolos.ver", USUARIO(2), { record: { areaId: 4 } }), false);
-    assert.equal(decide(vacio, "procesos.procedimientos.ver", USUARIO(2)), true, "entrar a la sección");
-    assert.equal(decide(vacio, "procesos.procedimientos.ver", ADMIN, { record: { areaId: 4 } }), true);
-    assert.equal(decide(vacio, "procesos.reglamento.ver", USUARIO(2)), true);
-    assert.equal(decide(vacio, "procesos.otros.ver", USUARIO(null)), true);
-  });
-
-  it("sin área y escribir en cualquier carpeta es de administrador", () => {
-    assert.equal(decide(vacio, "procesos.sin_area.ver", USUARIO(2)), false);
-    assert.equal(decide(vacio, "procesos.sin_area.ver", ADMIN), true);
-    assert.equal(decide(vacio, "procesos.sin_area.administrar", USUARIO(2)), false);
-    assert.equal(decide(vacio, "procesos.procedimientos.subir", USUARIO(2), { record: { areaId: 2 } }), false);
-    assert.equal(decide(vacio, "procesos.protocolos.eliminar", ADMIN, { record: { areaId: 4 } }), true);
-    assert.equal(decide(vacio, "procesos.reglamento.editar", USUARIO(2)), false);
-  });
-
-  it("una cuenta deshabilitada no entra", () => {
-    const off = legacyContext({ role: "Deshabilitado" }, { workAreaId: 2 });
-    assert.equal(decide(vacio, "procesos.procedimientos.ver", off, { record: { areaId: 2 } }), false);
-    assert.equal(decide(vacio, "procesos.acceso", off), false);
+describe("Procesos sin permisos", () => {
+  it("sin asignaciones no ve ni escribe nada", () => {
+    const vacio = permisos(201, []);
+    assert.equal(decide(vacio, "procesos.procedimientos.ver", { record: { areaId: 2 } }), false);
+    assert.equal(decide(vacio, "procesos.reglamento.ver"), false);
+    assert.equal(puedeSubir(vacio, "procedimientos", 2), false);
+    assert.equal(veListadoDeCarpetas(vacio), false);
   });
 });
 
-describe("Procesos al aplicar los conjuntos", () => {
-  function conceder(userId, items) {
-    return aplicando(permisos(userId, items.map((item) => asignacion({
-      principal_type: "user",
-      user_id: userId,
-      permission_key: item.permission_key,
-      scope: item.scope,
-    }))));
-  }
+describe("Procesos con los permisos de cada perfil", () => {
 
   it("Básico (mi área) da la carpeta propia y no la ajena", () => {
     const items = SYSTEM_SETS.find((s) => s.code === "basico").items
       .filter((i) => i.permission_key.startsWith("procesos."));
     const p = conceder(201, items);
-    assert.equal(puedeVerCarpeta(p, USUARIO(2), "procedimientos", 2), true);
-    assert.equal(puedeVerCarpeta(p, USUARIO(2), "protocolos", 4), false);
-    assert.equal(puedeSubir(p, USUARIO(2), "procedimientos", 2), false);
-    assert.equal(veListadoDeCarpetas(p, USUARIO(2)), false);
+    assert.equal(puedeVerCarpeta(p, "procedimientos", 2), true);
+    assert.equal(puedeVerCarpeta(p, "protocolos", 4), false);
+    assert.equal(puedeSubir(p, "procedimientos", 2), false);
+    assert.equal(veListadoDeCarpetas(p), false);
   });
 
   it("Jefatura da las carpetas a cargo", () => {
@@ -139,53 +122,43 @@ describe("Procesos al aplicar los conjuntos", () => {
       "procesos.protocolos.ver",
     ]);
     const p = conceder(200, items);
-    assert.equal(puedeVerCarpeta(p, USUARIO(2), "procedimientos", 2), true);
-    assert.equal(puedeVerCarpeta(p, USUARIO(2), "protocolos", 3), true, "cuelga de Finanzas");
-    assert.equal(puedeVerCarpeta(p, USUARIO(2), "procedimientos", 4), false);
-    assert.equal(veListadoDeCarpetas(p, USUARIO(2)), true);
+    assert.equal(puedeVerCarpeta(p, "procedimientos", 2), true);
+    assert.equal(puedeVerCarpeta(p, "protocolos", 3), true, "cuelga de Finanzas");
+    assert.equal(puedeVerCarpeta(p, "procedimientos", 4), false);
+    assert.equal(veListadoDeCarpetas(p), true);
     assert.ok(CAMBIOS.some((linea) => /carpetas de procedimientos/.test(linea)));
   });
 
   it("Editor de procesos da todas las carpetas y la escritura", () => {
     const items = SYSTEM_SETS.find((s) => s.code === "editor_procesos").items;
     const p = conceder(401, items);
-    assert.equal(puedeVerCarpeta(p, USUARIO(4), "procedimientos", 2), true);
-    assert.equal(puedeVerCarpeta(p, USUARIO(4), "procedimientos", null), true);
-    assert.equal(puedeSubir(p, USUARIO(4), "protocolos", 1), true);
-    assert.equal(puedeSubir(p, USUARIO(4), "reglamento", null), true);
-    assert.equal(veListadoDeCarpetas(p, USUARIO(4)), true);
+    assert.equal(puedeVerCarpeta(p, "procedimientos", 2), true);
+    assert.equal(puedeVerCarpeta(p, "procedimientos", null), true);
+    assert.equal(puedeSubir(p, "protocolos", 1), true);
+    assert.equal(puedeSubir(p, "reglamento", null), true);
+    assert.equal(veListadoDeCarpetas(p), true);
   });
 
-  it("en sombra el jefe sigue viendo sólo la suya: el listado no cambia", () => {
-    const items = SYSTEM_SETS.find((s) => s.code === "jefatura").items
-      .filter((i) => i.permission_key.startsWith("procesos."));
-    const p = permisos(200, items.map((item) => asignacion({
-      principal_type: "user",
-      user_id: 200,
-      permission_key: item.permission_key,
-      scope: item.scope,
-    })));
-    assert.equal(p.mode, "sombra");
-    assert.equal(puedeVerCarpeta(p, USUARIO(2), "procedimientos", 3), false);
-    assert.equal(veListadoDeCarpetas(p, USUARIO(2)), false);
-    assert.equal(veListadoDeCarpetas(permisos(100, []), ADMIN), true);
+  it("el superadmin ve el listado de carpetas", () => {
+    const sa = computePermissions({ ...foto([]), users: new Map([[100, { id: 100, role: "Usuario", work_area_id: 1, is_superadmin: true }]]) }, { id: 100 }, { catalog: CL });
+    assert.equal(veListadoDeCarpetas(sa), true);
   });
 });
 
 describe("editar y eliminar salen de doc_kind", () => {
-  const editorProcedimientos = aplicando(permisos(201, [
+  const editorProcedimientos = permisos(201, [
     asignacion({
       principal_type: "user",
       user_id: 201,
       permission_key: "procesos.procedimientos.eliminar",
       scope: "todo",
     }),
-  ]));
+  ]);
 
   it("un doc_kind de protocolo no autoriza quien sólo elimina procedimientos", () => {
     const row = { tabla: "documents", doc_kind: "protocolo", work_area_id: 2, type: "protocolo_finanzas" };
     assert.equal(claveAdministrarDocumento(row, "eliminar").key, "procesos.protocolos.eliminar");
-    assert.equal(puedeAdministrarDocumento(editorProcedimientos, USUARIO(2), row, "eliminar"), false);
+    assert.equal(puedeAdministrarDocumento(editorProcedimientos, row, "eliminar"), false);
   });
 
   it("sin área usa administrar, no la clave de la sección que diga el formulario", () => {
@@ -194,7 +167,7 @@ describe("editar y eliminar salen de doc_kind", () => {
       key: "procesos.sin_area.administrar",
       areaId: null,
     });
-    assert.equal(puedeAdministrarDocumento(editorProcedimientos, USUARIO(2), row, "editar"), false);
+    assert.equal(puedeAdministrarDocumento(editorProcedimientos, row, "editar"), false);
   });
 
   it("reglamento con work_area_id null no es la carpeta sin área", () => {
@@ -209,43 +182,42 @@ describe("editar y eliminar salen de doc_kind", () => {
 });
 
 describe("/content de Procesos", () => {
-  const sombra = permisos(201, []);
+  const sombra = COLABORADOR();
 
   it("documento de otra área denegado; el propio permitido", () => {
     const propio = { section: "procedimientos", folder: "2", row: { doc_kind: "procedimiento", work_area_id: 2 } };
     const ajeno = { section: "procedimientos", folder: "4", row: { doc_kind: "procedimiento", work_area_id: 4 } };
-    assert.equal(puedeVerDocumento(sombra, USUARIO(2), propio), true);
-    assert.equal(puedeVerDocumento(sombra, USUARIO(2), ajeno), false);
+    assert.equal(puedeVerDocumento(sombra, propio), true);
+    assert.equal(puedeVerDocumento(sombra, ajeno), false);
   });
 
   it("la fila manda sobre la carpeta de la URL", () => {
     const movido = { section: "procedimientos", folder: "2", row: { doc_kind: "procedimiento", work_area_id: 4 } };
-    assert.equal(puedeVerDocumento(sombra, USUARIO(2), movido), false);
+    assert.equal(puedeVerDocumento(sombra, movido), false);
   });
 
   it("sin área sólo con sin_area.ver; reglamento lo ve cualquiera", () => {
     const huerfano = { section: "protocolos", folder: "sin-area", row: { doc_kind: "protocolo", work_area_id: null } };
-    assert.equal(puedeVerDocumento(sombra, USUARIO(2), huerfano), false);
-    assert.equal(puedeVerDocumento(sombra, ADMIN, huerfano), true);
-    assert.equal(puedeVerDocumento(sombra, USUARIO(2), { section: "reglamento", folder: "general" }), true);
-    assert.equal(puedeVerDocumento(sombra, USUARIO(2), { section: "otros", folder: "general" }), true);
+    assert.equal(puedeVerDocumento(sombra, huerfano), false);
+    assert.equal(puedeVerDocumento(ADMINISTRA(), huerfano), true);
+    assert.equal(puedeVerDocumento(sombra, { section: "reglamento", folder: "general" }), true);
+    assert.equal(puedeVerDocumento(sombra, { section: "otros", folder: "general" }), true);
   });
 });
 
 describe("asistente: documentos de carpetas ajenas", () => {
-  const sombra = permisos(201, []);
+  const sombra = COLABORADOR();
 
   it("no devuelve la carpeta de otra área y sí la propia, el reglamento y otros", () => {
-    const legado = USUARIO(2);
-    assert.equal(puedeVerDocumentoBusqueda(sombra, legado, {
+    assert.equal(puedeVerDocumentoBusqueda(sombra, {
       doc_kind: "procedimiento", work_area_id: 4, area_name: "Comercial", type: "procedimiento_comercial",
     }), false);
-    assert.equal(puedeVerDocumentoBusqueda(sombra, legado, {
+    assert.equal(puedeVerDocumentoBusqueda(sombra, {
       doc_kind: "protocolo", work_area_id: 2, area_name: "Finanzas",
     }), true);
-    assert.equal(puedeVerDocumentoBusqueda(sombra, legado, { type: "reglamento", work_area_id: null }), true);
-    assert.equal(puedeVerDocumentoBusqueda(sombra, legado, { type: "otros", name: "Plantilla" }), true);
-    assert.equal(puedeVerDocumentoBusqueda(sombra, ADMIN, {
+    assert.equal(puedeVerDocumentoBusqueda(sombra, { type: "reglamento", work_area_id: null }), true);
+    assert.equal(puedeVerDocumentoBusqueda(sombra, { type: "otros", name: "Plantilla" }), true);
+    assert.equal(puedeVerDocumentoBusqueda(ADMINISTRA(), {
       doc_kind: "procedimiento", work_area_id: 4,
     }), true);
   });
@@ -254,9 +226,9 @@ describe("asistente: documentos de carpetas ajenas", () => {
 describe("contacto personal del directorio", () => {
   const fila = { personal_email: "ana.perez@gmail.com", phone: "56912345678" };
 
-  it("hoy lo ve una sesión activa, enmascarado y sin el valor", () => {
-    const vacio = permisos(201, []);
-    assert.equal(decide(vacio, "rrhh.directorio.campo.contacto_personal", USUARIO(2)), true);
+  it("con el permiso se ve enmascarado y sin el valor", () => {
+    const con = conceder(201, [{ permission_key: "rrhh.directorio.campo.contacto_personal", scope: null }]);
+    assert.equal(decide(con, "rrhh.directorio.campo.contacto_personal"), true);
     const visible = contactoPersonalDirectorio(fila, true);
     assert.notEqual(visible.correoPersonal, fila.personal_email);
     assert.equal(visible.correoPersonal.includes("ana.perez"), false);
@@ -268,16 +240,7 @@ describe("contacto personal del directorio", () => {
   it("sin el permiso no hay máscara ni valor", () => {
     const oculto = contactoPersonalDirectorio(fila, false);
     assert.deepEqual(oculto, { correoPersonal: null, telefonoPersonal: null });
-    const p = aplicando(permisos(201, []));
-    assert.equal(decide(p, "rrhh.directorio.campo.contacto_personal", USUARIO(2)), false);
-  });
-});
-
-describe("claves de Procesos usadas", () => {
-  it("cada permiso del catálogo de procesos tiene regla antigua", () => {
-    const claves = [...CL.byKey.keys()].filter((key) => key.startsWith("procesos.") || key === "rrhh.directorio.campo.contacto_personal");
-    const sinRegla = claves.filter((key) => !hasLegacyRule(key));
-    assert.deepEqual(sinRegla, []);
+    assert.equal(decide(permisos(201, []), "rrhh.directorio.campo.contacto_personal"), false);
   });
 });
 
@@ -288,9 +251,7 @@ describe("vistas de Procesos y del directorio", () => {
     return ejs.renderFile(path.join(VIEWS, view), data, { async: false });
   }
 
-  function canDe(legacyCtx, perms) {
-    return buildViewCan(perms || permisos(201, []), {}, { legacyCtx });
-  }
+  const canDe = (perms) => buildViewCan(perms);
 
   it("el colaborador no ve botones ni carpetas ajenas; el admin sí", async () => {
     const area = { id: 2, area_name: "Finanzas", color: "#123456" };
@@ -305,7 +266,7 @@ describe("vistas de Procesos y del directorio", () => {
     const deUsuario = await render("procesos/index.ejs", {
       ...base,
       veListadoCarpetas: false,
-      can: canDe(USUARIO(2)),
+      can: canDe(COLABORADOR()),
     });
     assert.match(deUsuario, /Mi área/);
     assert.match(deUsuario, /\/procesos\/procedimientos\/2/);
@@ -315,7 +276,7 @@ describe("vistas de Procesos y del directorio", () => {
     const deAdmin = await render("procesos/index.ejs", {
       ...base,
       veListadoCarpetas: true,
-      can: canDe(ADMIN),
+      can: canDe(ADMINISTRA()),
     });
     assert.match(deAdmin, /Áreas/);
     assert.match(deAdmin, /href="\/procesos\/procedimientos"/);
@@ -332,7 +293,7 @@ describe("vistas de Procesos y del directorio", () => {
     };
     const archivosUsuario = await render("procesos/vista_archivos.ejs", {
       ...carpeta,
-      can: canDe(USUARIO(2)),
+      can: canDe(COLABORADOR()),
     });
     assert.equal(archivosUsuario.includes("Subir documento"), false);
     assert.equal(archivosUsuario.includes("data-eliminar-doc"), false);
@@ -340,7 +301,7 @@ describe("vistas de Procesos y del directorio", () => {
 
     const archivosAdmin = await render("procesos/vista_archivos.ejs", {
       ...carpeta,
-      can: canDe(ADMIN),
+      can: canDe(ADMINISTRA()),
     });
     assert.match(archivosAdmin, /Subir documento/);
     assert.match(archivosAdmin, /data-eliminar-doc/);
@@ -388,7 +349,7 @@ describe("vistas de Procesos y del directorio", () => {
     };
     const oculto = await render("RRHH/personal.ejs", {
       ...datos,
-      can: buildViewCan(aplicando(permisos(201, [])), {}, { legacyCtx: USUARIO(2) }),
+      can: canDe(permisos(201, [])),
     });
     assert.equal(oculto.includes("ana.perez@gmail.com"), false);
     assert.equal(oculto.includes("56912345678"), false);
@@ -397,7 +358,7 @@ describe("vistas de Procesos y del directorio", () => {
     const visible = await render("RRHH/personal.ejs", {
       ...datos,
       personas: [{ ...persona, correoPersonal: "an***@gmail.com", telefonoPersonal: "+56 * **** 5678" }],
-      can: canDe(USUARIO(2)),
+      can: canDe(conceder(201, [{ permission_key: "rrhh.directorio.campo.contacto_personal", scope: null }])),
     });
     assert.match(visible, /an\*\*\*@gmail.com/);
     assert.equal(visible.includes("ana.perez@gmail.com"), false);

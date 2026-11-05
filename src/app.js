@@ -49,7 +49,7 @@ const { securityHeaders, cspReportRouter } = require("./middlewares/securityHead
 const { saveSessionBeforeRedirect } = require("./middlewares/saveSessionBeforeRedirect");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
 const { canManageRrhh } = require("./services/access/staffAccess");
-const { checkSessionAccount, currentWorkAreaId } = require("./services/access/accountStatus");
+const { checkSessionAccount } = require("./services/access/accountStatus");
 const { canAccessContent, classifyContentPath } = require("./services/access/contentAccess");
 const { veListadoDeCarpetas } = require("./services/documents/processAccess");
 const { isAreaManager } = require("./services/expenses/areaManager");
@@ -93,11 +93,11 @@ const signedMedia = require("./services/media/signedMedia");
 const { ensureVacationSchema } = require("./services/vacations/vacationSchema");
 const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
 const { ensurePermissionSchema } = require("./services/permissions/permissionSchema");
+const { ensureBootstrapped } = require("./services/permissions/autoBootstrap");
 const permissions = require("./services/permissions/permissionService");
 const { emptyPermissions } = require("./services/permissions/resolver");
 const { getCatalog } = require("./services/permissions/catalog");
 const { buildViewCan } = require("./services/permissions/viewCan");
-const { legacyContext } = require("./services/permissions/legacyRules");
 const { ensureExpenseSchema } = require("./services/expenses/expenseSchema");
 const {
   ensureCostCenterSchema,
@@ -464,11 +464,7 @@ app.use("/content", async (req, res, next) => {
         logger.error("permisos", err);
         perms = emptyPermissions(getCatalog(), sessionUser.id);
       }
-      let workAreaId = await currentWorkAreaId(sessionUser.id);
-      if (workAreaId === undefined) workAreaId = sessionUser.work_area_id ?? null;
-      const gestionaRrhh = await canManageRrhh(sessionUser);
-      const legacyCtx = legacyContext(sessionUser, { rrhhManager: gestionaRrhh, workAreaId });
-      permitido = await canAccessContent(sessionUser, relativePath, { perms, legacyCtx });
+      permitido = await canAccessContent(sessionUser, relativePath, { perms });
     } else {
       // Gastos, tickets y admin_only: fases 7 y 8. Siguen con su regla actual.
       permitido = await canAccessContent(req.session.user, relativePath);
@@ -611,20 +607,16 @@ app.use(async (req, res, next) => {
       : false;
 
     // Gestión de Permisos: req.perms para rutas y políticas, can('clave') en
-    // las vistas; los dos pasan por decide(), que en modo sombra responde
-    // con la regla antigua (req.permLegacy). Las propiedades *_write de abajo
-    // son de los módulos que aún no se migran.
+    // las vistas; los dos pasan por decide(). Las propiedades de abajo
+    // (tickets_reply…) son de los módulos que aún no tienen permisos.
     try {
       req.perms = await permissions.resolve(user);
     } catch (err) {
       logger.error("permisos", err);
       req.perms = emptyPermissions(getCatalog(), user.id);
     }
-    let workAreaId = await currentWorkAreaId(user.id);
-    if (workAreaId === undefined) workAreaId = user.work_area_id ?? null;
-    req.permLegacy = legacyContext(user, { rrhhManager: gestionaRrhh, workAreaId });
     res.locals.perms = req.perms;
-    res.locals.veListadoCarpetas = veListadoDeCarpetas(req.perms, req.permLegacy);
+    res.locals.veListadoCarpetas = veListadoDeCarpetas(req.perms);
     res.locals.can = buildViewCan(
       req.perms,
       {
@@ -633,7 +625,6 @@ app.use(async (req, res, next) => {
         vacaciones_request:
           role === ROLES.USUARIO || isAdministrador(role),
       },
-      { legacyCtx: req.permLegacy, path: req.originalUrl },
     );
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
@@ -850,11 +841,19 @@ async function asegurarSchemaAreas() {
 }
 
 // Va después de asegurarSchemaAreas: las asignaciones apuntan a work_areas.
+// Sin modo sombra, un país sin arranque dejaría a todos sin permisos: se
+// aplica aquí si falta (ver services/permissions/autoBootstrap).
 async function asegurarSchemaPermisos() {
   try {
     await ensurePermissionSchema();
   } catch (err) {
     logger.error("permisos", err);
+    return;
+  }
+  try {
+    await ensureBootstrapped({ db, country: countryConfig.code, catalog: getCatalog(), logger });
+  } catch (err) {
+    logger.error("permisos.arranque", err);
   }
 }
 

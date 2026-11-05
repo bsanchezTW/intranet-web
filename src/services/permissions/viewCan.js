@@ -7,13 +7,12 @@ const { decide } = require("./decide");
  *   can('vacaciones.solicitud.aprobar', { ownerId, areaId })   ¿sobre este registro?
  *   can.field('gastos.solicitud.campo.cuenta_bancaria')        ¿ve este dato?
  *
- * Pasa por decide(): en modo sombra responde lo de siempre para los permisos
- * ya migrados. Mientras cada módulo se migra, conserva además las
- * propiedades antiguas (`can.cursos_write`…) que aún leen algunas vistas.
+ * Conserva además las propiedades de los módulos que aún no tienen permisos
+ * en el catálogo (`can.tickets_reply`…), que leen algunas vistas.
  */
-function buildViewCan(perms, legacy = {}, { legacyCtx = null, path = null } = {}) {
-  const can = (key, record) => decide(perms, key, legacyCtx, { record: record || null, path });
-  can.field = (key) => decide(perms, key, legacyCtx, { path });
+function buildViewCan(perms, legacy = {}) {
+  const can = (key, record) => decide(perms, key, { record: record || null });
+  can.field = (key) => decide(perms, key);
   return Object.assign(can, legacy);
 }
 

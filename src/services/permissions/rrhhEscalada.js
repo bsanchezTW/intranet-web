@@ -3,7 +3,7 @@ const { isSupportAreaName } = require("../../constants/supportArea");
 const { isRrhhAreaName } = require("../../constants/rrhhArea");
 
 /**
- * Cierra la escalada de RRHH-M (hallazgo A.4.4). Corre también en sombra.
+ * Cierra la escalada de RRHH-M (hallazgo A.4.4).
  * `isSupportAreaName` es temporal: la jefatura de Informática deja de dar
  * acceso total en la fase 11, y este caso se va con ella.
  *

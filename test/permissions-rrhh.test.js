@@ -9,7 +9,6 @@ process.env.COUNTRY = process.env.COUNTRY || "CL";
 const { computePermissions } = require("../src/services/permissions/resolver");
 const { getCatalog } = require("../src/services/permissions/catalog");
 const { decide } = require("../src/services/permissions/decide");
-const { legacyContext, hasLegacyRule } = require("../src/services/permissions/legacyRules");
 const { buildViewCan } = require("../src/services/permissions/viewCan");
 const { SYSTEM_SETS, CAMBIOS } = require("../src/services/permissions/bootstrap");
 const { getCountryConfig } = require("../src/config/country");
@@ -64,13 +63,9 @@ function aplicando(userId, items) {
       scope_area_ids: item.scope_area_ids || [],
     })),
   }, { id: userId }, { catalog: CL });
-  p.mode = "aplicar";
   return p;
 }
 
-const RRHH = legacyContext({ role: "Administrador" }, { rrhhManager: true, workAreaId: 2 });
-const ADMIN = legacyContext({ role: "Administrador" }, { rrhhManager: false, workAreaId: 4 });
-const USUARIO = legacyContext({ role: "Usuario" }, { workAreaId: 4 });
 const vacio = () => computePermissions({
   users: new Map(USERS.map((u) => [u.id, u])),
   areas: AREAS,
@@ -78,38 +73,19 @@ const vacio = () => computePermissions({
   assignments: [],
 }, { id: 31 }, { catalog: CL });
 
-describe("reglas antiguas de RRHH", () => {
-  const claves = [
-    "rrhh.colaborador.editar",
-    "rrhh.colaborador.activar",
-    "organigrama.area.designar_jefe",
-    "feriados.feriado.administrar",
-    "centros_costo.centro.ver",
-  ];
-
-  it("rrhhManager sí; un admin de otra área no; un usuario no", () => {
-    const p = vacio();
-    for (const clave of claves) {
-      assert.equal(decide(p, clave, RRHH, { record: { ownerId: 99, areaId: 9 } }), true, clave);
-      assert.equal(decide(p, clave, ADMIN), false, clave);
-      assert.equal(decide(p, clave, USUARIO), false, clave);
+describe("RRHH sin permisos", () => {
+  it("un rol Administrador ya no basta: sin asignaciones no hay nada", () => {
+    const admin = computePermissions({
+      users: new Map(USERS.map((u) => [u.id, u])), areas: AREAS, sets: new Map(), assignments: [],
+    }, { id: 20 }, { catalog: CL });
+    for (const clave of ["rrhh.colaborador.editar", "feriados.feriado.administrar", "centros_costo.centro.ver"]) {
+      assert.equal(decide(admin, clave, { record: { ownerId: 99, areaId: 9 } }), false, clave);
     }
-    assert.equal(decide(p, "rrhh.directorio.ver", USUARIO), true);
-    assert.equal(decide(p, "rrhh.portales.ver", USUARIO), true);
-    assert.equal(decide(p, "organigrama.acceso", USUARIO), true);
-  });
-
-  it("centros de costo conserva la doble guardia", () => {
-    const p = vacio();
-    const soloRrhh = legacyContext({ role: "Usuario" }, { rrhhManager: true });
-    assert.equal(decide(p, "centros_costo.centro.ver", soloRrhh), true);
-    assert.equal(decide(p, "centros_costo.centro.administrar", soloRrhh), false);
-    assert.equal(decide(p, "centros_costo.miembros.asignar", RRHH), true);
-    assert.equal(decide(p, "centros_costo.centro.administrar", ADMIN), false);
+    assert.equal(decide(vacio(), "rrhh.directorio.ver"), false);
   });
 });
 
-describe("RRHH al aplicar", () => {
+describe("RRHH con permisos", () => {
   it("Gestión de personal da colaboradores, organigrama, feriados y centros", () => {
     const items = SYSTEM_SETS.find((s) => s.code === "gestion_personal").items;
     const p = aplicando(20, items);
@@ -125,8 +101,8 @@ describe("RRHH al aplicar", () => {
       scope: "areas",
       scope_area_ids: [4],
     }]);
-    assert.equal(decide(p, "rrhh.colaborador.editar", USUARIO, { record: { areaId: 4, ownerId: 8 } }), true);
-    assert.equal(decide(p, "rrhh.colaborador.editar", USUARIO, { record: { areaId: 2, ownerId: 8 } }), false);
+    assert.equal(decide(p, "rrhh.colaborador.editar", { record: { areaId: 4, ownerId: 8 } }), true);
+    assert.equal(decide(p, "rrhh.colaborador.editar", { record: { areaId: 2, ownerId: 8 } }), false);
   });
 });
 
@@ -299,7 +275,7 @@ describe("vistas de la ficha", () => {
   }
 
   it("sin can.field el documento y el correo personal no salen", async () => {
-    const html = await render(buildViewCan(aplicando(31, []), {}, { legacyCtx: USUARIO }));
+    const html = await render(buildViewCan(aplicando(31, [])));
     assert.equal(html.includes("12.345.678-5"), false);
     assert.equal(html.includes("12345678-5"), false);
     assert.equal(html.includes("ana.perez@gmail.com"), false);
@@ -309,18 +285,13 @@ describe("vistas de la ficha", () => {
   it("con el permiso el documento se muestra y el rol Administrador queda deshabilitado", async () => {
     const items = ["rrhh.colaborador.campo.documento_identidad", "rrhh.colaborador.campo.datos_personales"]
       .map((permission_key) => ({ permission_key }));
-    const html = await render(buildViewCan(aplicando(31, items), {}, { legacyCtx: USUARIO }));
+    const html = await render(buildViewCan(aplicando(31, items)));
     assert.match(html, /12\.345\.678-5/);
     assert.match(html, /value="Administrador"[^>]*disabled/);
   });
 });
 
-describe("cobertura y caché", () => {
-  it("las claves de esta fase tienen regla antigua", () => {
-    const usadas = [...CL.byKey.keys()].filter((key) => /^(rrhh|organigrama|feriados|centros_costo)\./.test(key));
-    assert.deepEqual(usadas.filter((key) => !hasLegacyRule(key)), []);
-  });
-
+describe("caché", () => {
   it("el alta y las rutas de áreas invalidan los permisos", () => {
     const src = fs.readFileSync(path.join(__dirname, "..", "src", "routes", "RRHH.js"), "utf8");
     const alta = src.slice(src.indexOf('router.post("/crear"'), src.indexOf('router.get("/editar'));

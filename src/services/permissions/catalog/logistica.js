@@ -4,10 +4,8 @@ const { SCOPE_SETS } = require("../scopes");
  * Logística: Gestión de flota (vehículos, revisión mecánica, revisión física
  * e historial) y hojas de ruta.
  *
- * Nace con permisos y sin regla antigua: no hay nada de hoy que conservar,
- * así que también en modo sombra decide Gestión de Permisos (sólo el
- * superadmin lo ve hasta que se asigne). Cada módulo suma aquí sus acciones
- * a medida que se construyen.
+ * Nació con permisos: sólo el superadmin lo ve hasta que se asigne. Cada
+ * parte suma aquí sus acciones a medida que se construye.
  *
  * Las claves `checklist.*` son las de la revisión mecánica (el «Check list
  * diario»): se conservan aunque cambió el nombre, para no perder las

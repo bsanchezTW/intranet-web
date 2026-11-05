@@ -73,9 +73,8 @@ function permisos(snapshot, userId, opts = {}) {
   return computePermissions(snapshot, { id: userId }, { catalog: CL, ...opts });
 }
 
-/** Con el modo 'aplicar': decide Gestión de Permisos, no la regla antigua. */
+/** Antes marcaba el modo 'aplicar'; desde que no hay modo sombra, no hace nada. */
 function aplicando(perms) {
-  perms.mode = "aplicar";
   return perms;
 }
 
@@ -373,14 +372,10 @@ describe("requirePermission", () => {
     assert.deepEqual(await correr(mw, { session: { user: { id: 201 } }, perms: aplicando(permisos(s, 201)) }), { next: true });
   });
 
-  it("en modo sombra decide la regla antigua aunque el permiso nuevo diga otra cosa", async () => {
+  it("un rol Administrador sin el permiso no pasa", async () => {
     const mw = requirePermission("noticias.noticia.crear");
-    // Administrador sin el permiso nuevo: pasa, como siempre.
     const admin = await correr(mw, { session: { user: { id: 401, role: "Administrador" } }, perms: permisos(s, 401) });
-    assert.deepEqual(admin, { next: true });
-    // Usuario: no pasa, como siempre.
-    const usuario = await correr(mw, { session: { user: { id: 402, role: "Usuario" } }, perms: permisos(s, 402) });
-    assert.equal(usuario.status, 403);
+    assert.equal(admin.status, 403);
   });
 
   it("un permiso de un módulo que el país no tiene responde 404", async () => {

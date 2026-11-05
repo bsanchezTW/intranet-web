@@ -2,7 +2,6 @@ const { denyUnauthenticated, denyForbidden, respondNotFound } = require("../util
 const { allKeys, getPermission } = require("../services/permissions/catalog");
 const permissions = require("../services/permissions/permissionService");
 const { decide } = require("../services/permissions/decide");
-const { legacyContext } = require("../services/permissions/legacyRules");
 
 /**
  * Corta la petición si quien la hace no tiene el permiso (Gestión de
@@ -49,10 +48,7 @@ function requireAnyPermission(...keys) {
     } catch (err) {
       return next(err);
     }
-    // En modo sombra decide la regla antigua del permiso (decide.js).
-    const legacyCtx = req.permLegacy || legacyContext(user);
-    const path = req.originalUrl;
-    if (keys.some((key) => decide(req.perms, key, legacyCtx, { path }))) return next();
+    if (keys.some((key) => decide(req.perms, key))) return next();
 
     return denyForbidden(req, res);
   };

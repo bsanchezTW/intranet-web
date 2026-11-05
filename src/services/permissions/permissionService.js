@@ -8,9 +8,9 @@ const { computePermissions, emptyPermissions } = require("./resolver");
  *
  *   - La foto de la configuración (asignaciones, conjuntos, áreas y
  *     personas): todas las tablas son chicas y se leen juntas. Se recarga
- *     cuando cambia `perm_meta.version` (que se consulta cada pocos segundos,
- *     así un cambio hecho en otro proceso vale en todos) o, como respaldo,
- *     al minuto.
+ *     cuando cambia `perm_meta.version`, que se consulta en cada petición:
+ *     un cambio hecho en otro proceso vale en el siguiente clic. Como
+ *     respaldo, también al minuto.
  *   - El resultado por persona, hasta que cambie la foto o empiece/termine
  *     una vigencia que la afecta.
  *
@@ -18,34 +18,16 @@ const { computePermissions, emptyPermissions } = require("./resolver");
  * tiene permisos.
  */
 
-const VERSION_POLL_MS = 5 * 1000;
 const SNAPSHOT_TTL_MS = 60 * 1000;
 const RESULT_TTL_MS = 60 * 1000;
 
 let snapshot = null; // { version, loadedAt, users, areas, sets, assignments }
-let versionCheckedAt = 0;
 let loading = null;
 const results = new Map(); // userId → { snapshot, expiresAt, perms }
 
 function isMissingRelation(err) {
   // 42P01: tabla inexistente (el schema aún no corre); 42703: columna.
   return err && (err.code === "42P01" || err.code === "42703");
-}
-
-/** Versión, modo y arranque: si las páginas ya deciden con estos permisos. */
-async function fetchMeta() {
-  try {
-    const { rows } = await db.query("SELECT version, mode, bootstrapped_at FROM perm_meta WHERE id = 1");
-    if (!rows.length) return { version: 0, mode: "sombra", bootstrapped: false };
-    return {
-      version: Number(rows[0].version),
-      mode: rows[0].mode === "aplicar" ? "aplicar" : "sombra",
-      bootstrapped: rows[0].bootstrapped_at != null,
-    };
-  } catch (err) {
-    if (isMissingRelation(err)) return { version: 0, mode: "sombra", bootstrapped: false };
-    throw err;
-  }
 }
 
 async function fetchVersion() {
@@ -98,16 +80,14 @@ async function fetchConfiguration() {
 
 /** Lee toda la configuración de permisos del país en una foto. */
 async function loadSnapshot() {
-  const [meta, users, areas, config] = await Promise.all([
-    fetchMeta(),
+  const [version, users, areas, config] = await Promise.all([
+    fetchVersion(),
     fetchUsers(),
     db.query("SELECT id, parent_area_id, manager_user_id FROM work_areas").then((r) => r.rows),
     fetchConfiguration(),
   ]);
   return {
-    version: meta.version,
-    mode: meta.mode,
-    bootstrapped: meta.bootstrapped,
+    version,
     loadedAt: Date.now(),
     users: new Map(users.map((u) => [Number(u.id), u])),
     areas,
@@ -121,7 +101,6 @@ async function refreshSnapshot() {
     loading = loadSnapshot()
       .then((fresh) => {
         snapshot = fresh;
-        versionCheckedAt = Date.now();
         return fresh;
       })
       .catch((err) => {
@@ -135,17 +114,16 @@ async function refreshSnapshot() {
   return loading;
 }
 
-/** Foto vigente, recargándola si otro proceso cambió la versión. */
+/**
+ * Foto vigente. En cada petición se compara la versión (una consulta mínima)
+ * para que un cambio hecho en otro proceso valga al instante.
+ */
 async function getSnapshot() {
-  const now = Date.now();
-  if (!snapshot || now - snapshot.loadedAt > SNAPSHOT_TTL_MS) return refreshSnapshot();
-  if (now - versionCheckedAt > VERSION_POLL_MS) {
-    versionCheckedAt = now;
-    try {
-      if ((await fetchVersion()) !== snapshot.version) return refreshSnapshot();
-    } catch (err) {
-      logger.error("permisos", err);
-    }
+  if (!snapshot || Date.now() - snapshot.loadedAt > SNAPSHOT_TTL_MS) return refreshSnapshot();
+  try {
+    if ((await fetchVersion()) !== snapshot.version) return refreshSnapshot();
+  } catch (err) {
+    logger.error("permisos", err);
   }
   return snapshot;
 }
@@ -164,8 +142,6 @@ async function resolve(user) {
   if (cached && cached.snapshot === current && cached.expiresAt > now) return cached.perms;
 
   const perms = computePermissions(current, user, { catalog, now });
-  perms.mode = current.mode;
-  perms.bootstrapped = current.bootstrapped;
   const expiresAt = Math.min(now + RESULT_TTL_MS, perms.expiresAt || Infinity);
   results.set(id, { snapshot: current, expiresAt, perms });
   return perms;

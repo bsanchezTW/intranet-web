@@ -12,8 +12,8 @@
  * permisos se administran en la intranet. Si ya se aplicó, se detiene sin
  * tocar nada. Todo queda en perm_audit.
  *
- * Mientras perm_meta.mode sea 'sombra' las rutas siguen decidiendo con las
- * reglas antiguas: aplicar esto no cambia lo que nadie puede hacer.
+ * La intranet lo aplica sola al iniciar si falta (autoBootstrap.js); este
+ * script sirve para ver el plan antes o aplicarlo con otro superadmin.
  */
 
 const path = require("path");
@@ -44,6 +44,7 @@ const logger = require("../src/utils/logger");
 const { getCatalog } = require("../src/services/permissions/catalog");
 const { planBootstrap } = require("../src/services/permissions/bootstrap");
 const { ensurePermissionSchema } = require("../src/services/permissions/permissionSchema");
+const { applyBootstrap } = require("../src/services/permissions/autoBootstrap");
 const { SCOPE_LABELS } = require("../src/services/permissions/scopes");
 
 const LINEA = "─".repeat(72);
@@ -112,77 +113,6 @@ function imprimir(plan, catalog) {
   }
 }
 
-async function aplicar(plan) {
-  const client = await db.getClient();
-  try {
-    await client.query("BEGIN");
-    // Una segunda corrida en paralelo espera aquí y luego ve bootstrapped_at.
-    const { rows: meta } = await client.query("SELECT bootstrapped_at FROM perm_meta WHERE id = 1 FOR UPDATE");
-    if (meta[0] && meta[0].bootstrapped_at) throw new Error("El arranque ya se aplicó en este país.");
-
-    const idPorCodigo = new Map();
-    for (const set of plan.sets) {
-      const { rows } = await client.query(
-        `INSERT INTO perm_sets (code, name, description)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (code) DO UPDATE
-           SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = NOW()
-         RETURNING id`,
-        [set.code, set.name, set.description],
-      );
-      const setId = rows[0].id;
-      idPorCodigo.set(set.code, setId);
-      await client.query("DELETE FROM perm_set_items WHERE set_id = $1", [setId]);
-      for (const i of set.items) {
-        await client.query(
-          `INSERT INTO perm_set_items (set_id, permission_key, scope, scope_area_ids, scope_include_subareas)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [setId, i.permission_key, i.scope, i.scope_area_ids, i.scope_include_subareas],
-        );
-      }
-    }
-
-    for (const a of plan.assignments) {
-      await client.query(
-        `INSERT INTO perm_assignments (principal_type, area_id, user_id, include_subareas, set_id, effect, note)
-         VALUES ($1, $2, $3, $4, $5, 'concede', $6)`,
-        [a.principal_type, a.area_id, a.user_id, a.include_subareas, idPorCodigo.get(a.set_code), `Arranque: ${a.why}`],
-      );
-    }
-
-    const superIds = plan.superadmins.map((u) => Number(u.id));
-    await client.query("UPDATE users SET is_superadmin = TRUE WHERE id = ANY($1::int[])", [superIds]);
-
-    await client.query(
-      `INSERT INTO perm_audit (actor_user_id, action, entity_type, new_value, note)
-       VALUES (NULL, 'arranque', 'sistema', $1::jsonb, $2)`,
-      [
-        JSON.stringify({
-          sets: plan.sets.map((s) => ({ code: s.code, items: s.items.length })),
-          assignments: plan.assignments.map((a) => ({
-            set: a.set_code,
-            principal: a.principal_type,
-            area_id: a.area_id,
-            user_id: a.user_id,
-          })),
-          superadmins: superIds,
-        }),
-        "Copia de los permisos vigentes (scripts/permisos-arranque.js)",
-      ],
-    );
-    await client.query(
-      "UPDATE perm_meta SET bootstrapped_at = NOW(), version = version + 1, updated_at = NOW() WHERE id = 1",
-    );
-
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
 async function main() {
   const aplicado = await yaAplicado();
   if (aplicado) {
@@ -208,7 +138,8 @@ async function main() {
   }
 
   await ensurePermissionSchema();
-  await aplicar(plan);
+  const { applied } = await applyBootstrap(db, plan, { note: "Copia de los permisos vigentes (scripts/permisos-arranque.js)" });
+  if (!applied) throw new Error("El arranque ya se aplicó en este país.");
   logger.info("permisos", `Arranque aplicado en ${PAIS}: ${plan.sets.length} conjuntos y ${plan.assignments.length} asignaciones.`);
 }
 

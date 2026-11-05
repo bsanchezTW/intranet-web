@@ -2,31 +2,30 @@ const { decide } = require("../permissions/decide");
 const { seccionForDocumentRow } = require("./processDocumentStorage");
 
 /**
- * Decisiones de Procesos (carpetas y documentos) vía decide().
- * En modo sombra responde la regla antigua; las claves van literales para
- * que el test de cobertura las vea.
+ * Decisiones de Procesos (carpetas y documentos) vía decide(). Las claves
+ * van literales para que se vean al buscar quién usa cada permiso.
  */
 
-function puedeVerCarpeta(perms, legacyCtx, seccion, areaId, path = null) {
-  if (seccion === "reglamento") return decide(perms, "procesos.reglamento.ver", legacyCtx, { path });
-  if (seccion === "otros") return decide(perms, "procesos.otros.ver", legacyCtx, { path });
-  if (areaId == null) return decide(perms, "procesos.sin_area.ver", legacyCtx, { path });
+function puedeVerCarpeta(perms, seccion, areaId, path = null) {
+  if (seccion === "reglamento") return decide(perms, "procesos.reglamento.ver", { path });
+  if (seccion === "otros") return decide(perms, "procesos.otros.ver", { path });
+  if (areaId == null) return decide(perms, "procesos.sin_area.ver", { path });
   const record = { areaId };
   if (seccion === "protocolos") {
-    return decide(perms, "procesos.protocolos.ver", legacyCtx, { record, path });
+    return decide(perms, "procesos.protocolos.ver", { record, path });
   }
-  return decide(perms, "procesos.procedimientos.ver", legacyCtx, { record, path });
+  return decide(perms, "procesos.procedimientos.ver", { record, path });
 }
 
-function puedeSubir(perms, legacyCtx, seccion, areaId, path = null) {
+function puedeSubir(perms, seccion, areaId, path = null) {
   const record = areaId == null ? null : { areaId };
-  if (seccion === "reglamento") return decide(perms, "procesos.reglamento.subir", legacyCtx, { path });
-  if (seccion === "otros") return decide(perms, "procesos.otros.subir", legacyCtx, { path });
+  if (seccion === "reglamento") return decide(perms, "procesos.reglamento.subir", { path });
+  if (seccion === "otros") return decide(perms, "procesos.otros.subir", { path });
   if (seccion === "protocolos") {
-    return decide(perms, "procesos.protocolos.subir", legacyCtx, { record, path });
+    return decide(perms, "procesos.protocolos.subir", { record, path });
   }
   if (seccion === "procedimientos") {
-    return decide(perms, "procesos.procedimientos.subir", legacyCtx, { record, path });
+    return decide(perms, "procesos.procedimientos.subir", { record, path });
   }
   return false;
 }
@@ -55,35 +54,35 @@ function claveAdministrarDocumento(row, accion) {
   return { key: editar ? "procesos.otros.editar" : "procesos.otros.eliminar", areaId: null };
 }
 
-function puedeAdministrarDocumento(perms, legacyCtx, row, accion, path = null) {
+function puedeAdministrarDocumento(perms, row, accion, path = null) {
   const { key, areaId } = claveAdministrarDocumento(row, accion);
   const record = areaId == null ? null : { areaId };
   if (key === "procesos.sin_area.administrar") {
-    return decide(perms, "procesos.sin_area.administrar", legacyCtx, { path });
+    return decide(perms, "procesos.sin_area.administrar", { path });
   }
-  if (key === "procesos.protocolos.editar") return decide(perms, "procesos.protocolos.editar", legacyCtx, { record, path });
-  if (key === "procesos.protocolos.eliminar") return decide(perms, "procesos.protocolos.eliminar", legacyCtx, { record, path });
-  if (key === "procesos.procedimientos.editar") return decide(perms, "procesos.procedimientos.editar", legacyCtx, { record, path });
-  if (key === "procesos.procedimientos.eliminar") return decide(perms, "procesos.procedimientos.eliminar", legacyCtx, { record, path });
-  if (key === "procesos.reglamento.editar") return decide(perms, "procesos.reglamento.editar", legacyCtx, { path });
-  if (key === "procesos.reglamento.eliminar") return decide(perms, "procesos.reglamento.eliminar", legacyCtx, { path });
-  if (key === "procesos.otros.editar") return decide(perms, "procesos.otros.editar", legacyCtx, { path });
-  return decide(perms, "procesos.otros.eliminar", legacyCtx, { path });
+  if (key === "procesos.protocolos.editar") return decide(perms, "procesos.protocolos.editar", { record, path });
+  if (key === "procesos.protocolos.eliminar") return decide(perms, "procesos.protocolos.eliminar", { record, path });
+  if (key === "procesos.procedimientos.editar") return decide(perms, "procesos.procedimientos.editar", { record, path });
+  if (key === "procesos.procedimientos.eliminar") return decide(perms, "procesos.procedimientos.eliminar", { record, path });
+  if (key === "procesos.reglamento.editar") return decide(perms, "procesos.reglamento.editar", { path });
+  if (key === "procesos.reglamento.eliminar") return decide(perms, "procesos.reglamento.eliminar", { path });
+  if (key === "procesos.otros.editar") return decide(perms, "procesos.otros.editar", { path });
+  return decide(perms, "procesos.otros.eliminar", { path });
 }
 
 /**
  * ¿Ve el listado de carpetas, o entra directo a la suya?
- * En sombra es lo de hoy: sólo el administrador ve el listado. Al aplicar,
- * también quien alcanza carpetas que no son la suya (un jefe, el editor).
+ * Lo ve quien ve las carpetas sin área o alcanza carpetas que no son la
+ * suya (un jefe, el editor de procedimientos).
  */
-function veListadoDeCarpetas(perms, legacyCtx) {
+function veListadoDeCarpetas(perms) {
   if (!perms) return false;
-  if (decide(perms, "procesos.sin_area.ver", legacyCtx)) return true;
-  if (perms.mode !== "aplicar" || typeof perms.coverage !== "function") return false;
+  if (decide(perms, "procesos.sin_area.ver")) return true;
+  if (typeof perms.coverage !== "function") return false;
   const cob = perms.coverage("procesos.procedimientos.ver");
   if (!cob) return false;
   if (cob.all) return true;
-  const propia = legacyCtx && legacyCtx.workAreaId != null ? Number(legacyCtx.workAreaId) : null;
+  const propia = perms.ownAreaId != null ? Number(perms.ownAreaId) : null;
   return cob.areaIds.some((id) => Number(id) !== propia);
 }
 
@@ -91,35 +90,35 @@ function veListadoDeCarpetas(perms, legacyCtx) {
  * Documento que el asistente o /content ya resolvió a una fila (o a la
  * carpeta de la URL, si no hay fila). `section` es la de la ruta.
  */
-function puedeVerDocumento(perms, legacyCtx, { section, folder, row } = {}, path = null) {
+function puedeVerDocumento(perms, { section, folder, row } = {}, path = null) {
   if (section === "reglamento" || section === "otros") {
     return section === "otros"
-      ? decide(perms, "procesos.otros.ver", legacyCtx, { path })
-      : decide(perms, "procesos.reglamento.ver", legacyCtx, { path });
+      ? decide(perms, "procesos.otros.ver", { path })
+      : decide(perms, "procesos.reglamento.ver", { path });
   }
   const fuente = row || {};
   // Sin doc_kind ni type se respeta la carpeta de la URL: no abrir el archivo
   // a todos por caer en "otros".
   const seccion = row && (row.doc_kind || row.type) ? seccionForDocumentRow(row) : section;
-  if (seccion === "reglamento") return decide(perms, "procesos.reglamento.ver", legacyCtx, { path });
-  if (seccion === "otros") return decide(perms, "procesos.otros.ver", legacyCtx, { path });
+  if (seccion === "reglamento") return decide(perms, "procesos.reglamento.ver", { path });
+  if (seccion === "otros") return decide(perms, "procesos.otros.ver", { path });
   const areaId = row ? fuente.work_area_id : folder;
   if (areaId == null || areaId === "" || String(areaId) === "sin-area") {
-    return decide(perms, "procesos.sin_area.ver", legacyCtx, { path });
+    return decide(perms, "procesos.sin_area.ver", { path });
   }
   if (String(areaId) === "general") {
     return seccion === "protocolos"
-      ? decide(perms, "procesos.protocolos.ver", legacyCtx, { path })
-      : decide(perms, "procesos.procedimientos.ver", legacyCtx, { path });
+      ? decide(perms, "procesos.protocolos.ver", { path })
+      : decide(perms, "procesos.procedimientos.ver", { path });
   }
-  return puedeVerCarpeta(perms, legacyCtx, seccion === "protocolos" ? "protocolos" : "procedimientos", areaId, path);
+  return puedeVerCarpeta(perms, seccion === "protocolos" ? "protocolos" : "procedimientos", areaId, path);
 }
 
 /** Fila del buscador del asistente (documents u other_documents). */
-function puedeVerDocumentoBusqueda(perms, legacyCtx, row, path = null) {
+function puedeVerDocumentoBusqueda(perms, row, path = null) {
   if (!row) return false;
-  if (row.type === "otros") return decide(perms, "procesos.otros.ver", legacyCtx, { path });
-  return puedeVerDocumento(perms, legacyCtx, { section: null, row }, path);
+  if (row.type === "otros") return decide(perms, "procesos.otros.ver", { path });
+  return puedeVerDocumento(perms, { section: null, row }, path);
 }
 
 module.exports = {

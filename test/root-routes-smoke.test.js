@@ -51,7 +51,6 @@ before(async () => {
   router = require(path.join(SRC, "routes/index"));
   const { EffectivePermissions } = require(path.join(SRC, "services/permissions/resolver"));
   const { getCatalog } = require(path.join(SRC, "services/permissions/catalog"));
-  const { legacyContext } = require(path.join(SRC, "services/permissions/legacyRules"));
 
   const app = express();
   app.use(express.urlencoded({ extended: true }));
@@ -59,7 +58,6 @@ before(async () => {
   app.use((req, res, next) => {
     req.session = { user: { id: 1, role: "Administrador", email: "a@transworld.cl", nombre: "A" }, save: (cb) => cb && cb() };
     req.perms = new EffectivePermissions({ userId: 1, superadmin: true, catalog: getCatalog() });
-    req.permLegacy = legacyContext(req.session.user, { rrhhManager: true, workAreaId: 1 });
     res.locals.can = Object.assign(() => true, { field: () => true });
     // Las vistas necesitan más locals de los que hay aquí: no se renderiza.
     res.render = (_view, _locals, cb) => (typeof cb === "function" ? cb(null, "") : res.status(200).end("vista"));

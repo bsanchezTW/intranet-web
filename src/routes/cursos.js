@@ -611,9 +611,8 @@ function buildKpiPorCursoFromRows(rows) {
 }
 
 /**
- * Alcance del KPI de cursos (decide.js): en modo sombra se ve a todos, como
- * siempre; al aplicar, a quienes cubre «Ver el avance de otros». El correo
- * sólo con «Ver el correo de cada persona en el KPI».
+ * Alcance del KPI de cursos: se ve a quienes cubre «Ver el avance de otros».
+ * El correo, sólo con «Ver el correo de cada persona en el KPI».
  */
 function kpiScope(req, firstParam) {
   return scopeFilter(req.perms, "cursos.avance.ver", {

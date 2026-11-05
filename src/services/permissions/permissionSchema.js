@@ -11,7 +11,7 @@ const db = require("../../db");
  *                      o deniega un conjunto o un permiso suelto, con vigencia
  *   perm_audit         quién cambió qué, con el antes y el después
  *   perm_meta          versión de la configuración (invalida los cachés de
- *                      todos los procesos) y modo sombra / aplicar
+ *                      todos los procesos). `mode` ya no se usa: el modo sombra se quitó
  *
  * El superadmin es una marca en `users`, no un permiso: pasa todas las
  * comprobaciones y es el único que administra este módulo.

@@ -184,7 +184,7 @@ router.post("/api/chat", async (req, res) => {
       entries: guide,
       currentPath: page.path,
       searchPeople,
-      searchDocuments: (query) => searchDocuments(query, { perms: req.perms, legacyCtx: req.permLegacy }),
+      searchDocuments: (query) => searchDocuments(query, { perms: req.perms }),
       searchEvents,
       selfHelp: supportTickets ? () => listAppsByCatalog("support") : null,
       tickets: supportTickets

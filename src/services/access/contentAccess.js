@@ -128,11 +128,11 @@ async function canOpenTicketAttachment(user, { ticketId }, isAdmin) {
 
 /**
  * ¿Puede `user` (de sesión) descargar `relativePath`?
- * `perms` y `legacyCtx` los arma /content, que corre antes del middleware
- * de sesión. Sin ellos, la carpeta de Procesos sigue la regla anterior
+ * `perms` lo arma /content, que corre antes del middleware de permisos.
+ * Sin él, la carpeta de Procesos sigue la regla anterior
  * (canOpenAreaFolder) para no dejar la descarga abierta.
  */
-async function canAccessContent(user, relativePath, { perms = null, legacyCtx = null } = {}) {
+async function canAccessContent(user, relativePath, { perms = null } = {}) {
   if (!user) return false;
   const rule = classifyContentPath(relativePath);
   if (rule.kind === "open") return true;
@@ -140,15 +140,15 @@ async function canAccessContent(user, relativePath, { perms = null, legacyCtx = 
   const isAdmin = isAdministrador(normalizeRole(user.role));
   switch (rule.kind) {
     case "area_document": {
-      if (perms && legacyCtx) {
+      if (perms) {
         if (rule.section === "reglamento" || rule.section === "otros" || rule.folder === GENERAL_AREA) {
-          return puedeVerDocumento(perms, legacyCtx, { section: rule.section, folder: rule.folder });
+          return puedeVerDocumento(perms, { section: rule.section, folder: rule.folder });
         }
         const row = await documentRow(relativePath);
         const folder = row
           ? (row.work_area_id == null ? SLUG_SIN_AREA : String(row.work_area_id))
           : rule.folder;
-        return puedeVerDocumento(perms, legacyCtx, { section: rule.section, folder, row });
+        return puedeVerDocumento(perms, { section: rule.section, folder, row });
       }
       if (rule.folder === GENERAL_AREA || isAdmin) return true;
       return canOpenAreaFolder({

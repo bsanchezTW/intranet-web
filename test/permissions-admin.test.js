@@ -255,25 +255,25 @@ describe("las vistas renderizan con datos de prueba", () => {
   it("resumen", async () => {
     const html = await render("index", {
       seccion: "inicio",
-      meta: { version: 3, mode: "sombra", bootstrapped_at: null },
+      meta: { version: 3, bootstrapped_at: null },
       totals: { concede: 5, deniega: 1 },
       superadmins: [users[3]],
       permissionCount: catalog.byKey.size,
     });
-    assert.match(html, /Modo sombra/);
-    assert.match(html, /permisos-arranque\.js --pais/);
+    assert.match(html, /Falta el arranque/);
     assert.match(html, /Bastián Sánchez/);
+    assert.doesNotMatch(html, /Modo sombra/);
 
     const conArranque = await render("index", {
       seccion: "inicio",
-      meta: { version: 3, mode: "sombra", bootstrapped_at: new Date() },
+      meta: { version: 3, bootstrapped_at: new Date() },
       totals: { concede: 5, deniega: 1 },
       superadmins: [users[3]],
       permissionCount: catalog.byKey.size,
-      diferencias: [{ userId: 31, userName: "Astrid Ortiz", key: anyKey, label: "Ver", legacy: true, next: false }],
     });
-    assert.match(conArranque, /Diferencias del modo sombra/);
-    assert.match(conArranque, /Astrid Ortiz/);
+    assert.doesNotMatch(conArranque, /Falta el arranque/);
+    assert.doesNotMatch(conArranque, /Diferencias del modo sombra/);
+    assert.match(conArranque, /Arranque aplicado el/);
   });
 
   it("por módulo, con quién tiene cada permiso y cómo quitárselo", async () => {

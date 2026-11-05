@@ -83,10 +83,9 @@ function documentLabel(row) {
 
 /**
  * Busca por nombre de archivo, no por contenido: el texto de los PDF no está indexado.
- * Con `perms` y `legacyCtx` sólo devuelve carpetas que la persona puede ver
- * (en sombra: la suya o todas, si es administrador).
+ * Con `perms` sólo devuelve documentos que la persona puede ver.
  */
-async function searchDocuments(query, { perms = null, legacyCtx = null } = {}) {
+async function searchDocuments(query, { perms = null } = {}) {
   const terms = searchTerms(query);
   if (!terms.length) return [];
 
@@ -114,7 +113,7 @@ async function searchDocuments(query, { perms = null, legacyCtx = null } = {}) {
   ]);
 
   return [...documents.rows, ...others.rows]
-    .filter((row) => !perms || puedeVerDocumentoBusqueda(perms, legacyCtx, row))
+    .filter((row) => !perms || puedeVerDocumentoBusqueda(perms, row))
     .map((row) => ({
       nombre: row.name,
       url: row.url,

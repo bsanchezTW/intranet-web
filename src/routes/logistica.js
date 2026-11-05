@@ -197,7 +197,7 @@ const REPARAR = "logistica.danio.reparar";
 const accesoFlota = requireAnyPermission(VER_FLOTA, VER, CREAR, VER_FISICA, CREAR_FISICA, REPARAR);
 
 function permisosFlota(req) {
-  const can = (key) => decide(req.perms, key, req.permLegacy);
+  const can = (key) => decide(req.perms, key);
   return {
     puedeAdministrar: can(ADMIN_FLOTA),
     puedeRevisar: can(CREAR),
@@ -219,8 +219,8 @@ function fisicaScope(req) {
 }
 
 function puedeVerFisica(req, row) {
-  if (decide(req.perms, VER_FISICA, req.permLegacy, { record: { ownerId: row.created_by } })) return true;
-  return Number(row.created_by) === Number(req.session.user.id) && decide(req.perms, CREAR_FISICA, req.permLegacy);
+  if (decide(req.perms, VER_FISICA, { record: { ownerId: row.created_by } })) return true;
+  return Number(row.created_by) === Number(req.session.user.id) && decide(req.perms, CREAR_FISICA);
 }
 
 /**
@@ -230,8 +230,8 @@ function puedeVerFisica(req, row) {
  */
 function puedeVerDanio(req, damage) {
   if (puedeVerFisica(req, { created_by: damage.review_created_by })) return true;
-  if (decide(req.perms, REPARAR, req.permLegacy)) return true;
-  return damage.status === "abierto" && decide(req.perms, CREAR_FISICA, req.permLegacy);
+  if (decide(req.perms, REPARAR)) return true;
+  return damage.status === "abierto" && decide(req.perms, CREAR_FISICA);
 }
 
 /**
@@ -246,8 +246,8 @@ function checklistScope(req) {
 }
 
 function puedeVerChecklist(req, row) {
-  if (decide(req.perms, VER, req.permLegacy, { record: { ownerId: row.created_by } })) return true;
-  return Number(row.created_by) === Number(req.session.user.id) && decide(req.perms, CREAR, req.permLegacy);
+  if (decide(req.perms, VER, { record: { ownerId: row.created_by } })) return true;
+  return Number(row.created_by) === Number(req.session.user.id) && decide(req.perms, CREAR);
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ async function renderChecklistForm(req, res, { values, errors = {}, status = 200
     driverOther: checklists.DRIVER_OTHER,
     answerKey: checklists.answerKey,
     commentKey: checklists.commentKey,
-    puedeFlota: decide(req.perms, ADMIN_FLOTA, req.permLegacy),
+    puedeFlota: decide(req.perms, ADMIN_FLOTA),
     ...VIEW_HELPERS,
     extraCss: EXTRA_CSS,
     extraJs: ["/js/checklist-form.js?v=20261104a"],
@@ -500,7 +500,7 @@ router.get("/flota/mecanica/:id", requireAnyPermission(VER, CREAR), async (req, 
     res.render("logistica/flota/mecanica/detalle", {
       titulo: `Revisión mecánica ${registro.number}`,
       registro,
-      puedeAnular: decide(req.perms, "logistica.checklist.anular", req.permLegacy),
+      puedeAnular: decide(req.perms, "logistica.checklist.anular"),
       ...flashFrom(req),
       ...VIEW_HELPERS,
       extraCss: EXTRA_CSS,
@@ -681,7 +681,7 @@ router.get("/flota/:id/revisiones", accesoFlota, async (req, res) => {
     const vehiculo = await loadVehicle(req, res);
     if (!vehiculo) return;
     const permisos = permisosFlota(req);
-    const puedeVerFicha = decide(req.perms, VER_FLOTA, req.permLegacy) || permisos.puedeAdministrar;
+    const puedeVerFicha = decide(req.perms, VER_FLOTA) || permisos.puedeAdministrar;
     const visibles = HISTORIAL_TABS.filter((tab) => (tab === "danios" ? permisos.puedeVerDanios
       : tab === "kilometraje" || tab === "ficha" ? puedeVerFicha : true));
     const ver = visibles.includes(req.query.ver) ? req.query.ver : "mecanicas";
@@ -921,8 +921,8 @@ router.get("/flota/fisica/:id", requireAnyPermission(VER_FISICA, CREAR_FISICA), 
       titulo: `Revisión física ${review.number}`,
       review,
       captureViews: CAPTURE_VIEWS,
-      puedeAnular: decide(req.perms, ANULAR_FISICA, req.permLegacy),
-      puedeReparar: decide(req.perms, REPARAR, req.permLegacy),
+      puedeAnular: decide(req.perms, ANULAR_FISICA),
+      puedeReparar: decide(req.perms, REPARAR),
       ...flashFrom(req),
       ...VIEW_HELPERS,
       extraCss: EXTRA_CSS,
@@ -1031,7 +1031,7 @@ function renderDanio(req, res, { damage, values = {}, errors = {}, status = 200 
     values: { repaired_on: todayInCountry(), ...values },
     errors,
     today: todayInCountry(),
-    puedeReparar: decide(req.perms, REPARAR, req.permLegacy),
+    puedeReparar: decide(req.perms, REPARAR),
     puedeVerSuRevision: puedeVerFisica(req, { created_by: damage.review_created_by }),
     ...flashFrom(req),
     ...VIEW_HELPERS,

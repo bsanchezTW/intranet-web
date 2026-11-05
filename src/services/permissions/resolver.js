@@ -142,15 +142,13 @@ function coverageOf(definition, grants, member, areas) {
 }
 
 class EffectivePermissions {
-  constructor({ userId, superadmin = false, catalog, granted = new Map(), stopped = new Map(), expiresAt = null }) {
+  constructor({ userId, superadmin = false, catalog, granted = new Map(), stopped = new Map(), expiresAt = null, ownAreaId = null }) {
     this.userId = userId;
     this.superadmin = superadmin;
     this.catalog = catalog;
     this.expiresAt = expiresAt;
-    // Los pone permissionService con la foto: 'sombra' mientras manden las
-    // reglas antiguas (ver decide.js), y si ya se aplicó el arranque.
-    this.mode = "sombra";
-    this.bootstrapped = false;
+    // Área donde trabaja (para «¿alcanza carpetas que no son la suya?»).
+    this.ownAreaId = ownAreaId;
     // key → { plain: true } | { coverage }, más sus orígenes.
     this.granted = granted;
     this.stopped = stopped;
@@ -260,7 +258,9 @@ function computePermissions(snapshot, user, { catalog, now = Date.now() } = {}) 
 
   const row = snapshot.users && snapshot.users.get(userId);
   if (!row || !canLogin(normalizeRole(row.role))) return emptyPermissions(catalog, userId);
-  if (row.is_superadmin) return new EffectivePermissions({ userId, superadmin: true, catalog });
+  if (row.is_superadmin) {
+    return new EffectivePermissions({ userId, superadmin: true, catalog, ownAreaId: toId(row.work_area_id) });
+  }
 
   const areas = snapshot.areas || [];
   const member = membershipFor(snapshot, userId, row.work_area_id);
@@ -316,7 +316,7 @@ function computePermissions(snapshot, user, { catalog, now = Date.now() } = {}) 
     );
   }
 
-  return new EffectivePermissions({ userId, catalog, granted, stopped, expiresAt });
+  return new EffectivePermissions({ userId, catalog, granted, stopped, expiresAt, ownAreaId: member.ownAreaId });
 }
 
 module.exports = {
