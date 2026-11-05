@@ -109,7 +109,13 @@ describe("cada permiso del catálogo hace algo o lo dice", () => {
       if (e.isDirectory()) return full.endsWith(path.join("permissions", "catalog")) ? [] : archivos(full);
       return /\.(js|ejs)$/.test(e.name) && !full.endsWith(path.join("permissions", "bootstrap.js")) ? [full] : [];
     });
-  const codigo = archivos(ROOT).map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  // Sin comentarios: una clave citada en un ejemplo no cuenta como usada.
+  const sinComentarios = (texto) =>
+    texto
+      .replace(/<%#[\s\S]*?%>/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+  const codigo = archivos(ROOT).map((file) => sinComentarios(fs.readFileSync(file, "utf8"))).join("\n");
   const permisos = MODULES.flatMap((m) => m.permissions);
 
   it("los que no están marcados se revisan en alguna parte", () => {
@@ -120,5 +126,13 @@ describe("cada permiso del catálogo hace algo o lo dice", () => {
   it("los marcados «sin efecto» de verdad no se usan todavía", () => {
     const usados = permisos.filter((p) => p.sinEfecto && codigo.includes(p.key)).map((p) => p.key);
     assert.deepEqual(usados, [], "si ya se conectaron, quítales sinEfecto");
+  });
+});
+
+describe("permisos retirados", () => {
+  const { RETIRED_KEYS } = require("../src/services/permissions/retiredKeys");
+  it("ya no están en el catálogo de ningún país", () => {
+    const todas = new Set(allKeys());
+    for (const key of RETIRED_KEYS) assert.ok(!todas.has(key), key);
   });
 });

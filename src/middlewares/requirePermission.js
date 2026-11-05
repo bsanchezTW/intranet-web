@@ -5,12 +5,11 @@ const { decide } = require("../services/permissions/decide");
 
 /**
  * Corta la petición si quien la hace no tiene el permiso (Gestión de
- * Permisos). Reemplaza a requireRole, requireRrhhManager, requireSupportAgent,
- * requireExpenseReviewer y requireFinanceStaff a medida que cada módulo se
- * migra.
+ * Permisos). Reemplazó a requireRrhhManager, requireSupportAgent,
+ * requireExpenseReviewer y requireFinanceStaff.
  *
  *   requirePermission("noticias.noticia.crear")
- *   requireAnyPermission("vacaciones.solicitud.ver", "vacaciones.solicitud.aprobar")
+ *   requireAnyPermission("letras.letra.ver", "letras.letra.crear")
  *
  * Un permiso de un módulo que no existe en el país responde 404, como
  * requireFeature. Una clave que no está en el catálogo es un error de

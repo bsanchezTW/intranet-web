@@ -1,10 +1,6 @@
 const { SCOPE_SETS } = require("../scopes");
 
 /** Fondos por rendir y rendiciones de gastos: el mismo flujo de dos etapas. */
-// Permisos que ningún código revisa todavía: se muestran como «Aún sin efecto»
-// en Gestión de Permisos. Al conectar uno, se le quita la marca (lo exige un test).
-const SIN_EFECTO = "Fondos y rendiciones todavía decide con las reglas de antes (jefes del organigrama y Finanzas): este permiso aún no cambia nada.";
-
 module.exports = {
   module: "gastos",
   label: "Fondos y rendiciones",
@@ -24,8 +20,6 @@ module.exports = {
       scopes: SCOPE_SETS.EQUIPO,
     },
     { key: "gastos.solicitud.liquidar", label: "Liquidar rendiciones", scopes: SCOPE_SETS.EQUIPO },
-    { key: "gastos.solicitud.exportar", sinEfecto: SIN_EFECTO, label: "Exportar solicitudes" },
     { key: "gastos.solicitud.campo.cuenta_bancaria", label: "Ver la cuenta bancaria de destino" },
-    { key: "gastos.solicitud.campo.documento_identidad", sinEfecto: SIN_EFECTO, label: "Ver el RUT del solicitante" },
   ],
 };

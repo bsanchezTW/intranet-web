@@ -90,10 +90,12 @@
               <td data-label="Período"><%= r.startDateFmt %> → <%= r.endDateFmt %></td>
               <td data-label="Días"><%= r.days %> <%= r.dayUnit %></td>
               <td data-label="Aprueba">
-                <% if (r.approver_user_id != null && Number(r.approver_user_id) === yo) { %>
+                <%# Aprueba quien tenga el permiso sobre la solicitud; el jefe del
+                    organigrama se muestra como referencia. %>
+                <% if (r.puedeRevisar) { %>
                   <span class="vac-badge vac-badge-pending">Tú</span>
                 <% } else { %>
-                  <%= r.approver_name || 'RRHH' %>
+                  <%= r.approver_name || 'Quien tenga el permiso' %>
                 <% } %>
               </td>
               <td data-label="Comentario"><%= r.requester_notes || '-' %></td>

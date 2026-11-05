@@ -94,6 +94,7 @@ const { ensureWorkAreaSchema } = require("./services/workAreaSchema");
 const { ensurePermissionSchema } = require("./services/permissions/permissionSchema");
 const { ensureBootstrapped } = require("./services/permissions/autoBootstrap");
 const { convertSetsIfNeeded } = require("./services/permissions/setConversion");
+const { removeRetiredAssignments } = require("./services/permissions/retiredKeys");
 const permissions = require("./services/permissions/permissionService");
 const { emptyPermissions } = require("./services/permissions/resolver");
 const { getCatalog } = require("./services/permissions/catalog");
@@ -852,6 +853,12 @@ async function asegurarSchemaPermisos() {
     await convertSetsIfNeeded({ db, catalog: getCatalog(), logger });
   } catch (err) {
     logger.error("permisos.conversion", err);
+  }
+  // Permisos que salieron del catálogo: sus asignaciones se borran una vez.
+  try {
+    await removeRetiredAssignments({ db, logger });
+  } catch (err) {
+    logger.error("permisos", err);
   }
 }
 

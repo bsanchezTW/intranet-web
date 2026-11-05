@@ -14,7 +14,7 @@
 const ACCESS = Object.freeze({
   ALL: "all",
   ADMIN: "admin",
-  // Jefes de área, aprobadores de Finanzas y administradores (requireExpenseReviewer).
+  // Jefes de área, aprobadores de Finanzas y administradores (expensePolicy.esRevisor).
   EXPENSE_REVIEWER: "expenseReviewer",
   // Administradores de RRHH o de Informática (services/access/staffAccess).
   RRHH_MANAGER: "rrhhManager",

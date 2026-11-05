@@ -156,7 +156,6 @@ const SYSTEM_SETS = [
       item("centros_costo.centro.ver"),
       item("centros_costo.centro.administrar"),
       item("centros_costo.miembros.asignar"),
-      item("centros_costo.centro.campo.documento_identidad"),
     ],
   },
   {
@@ -195,9 +194,7 @@ const SYSTEM_SETS = [
       item("gastos.solicitud.ver", TODO),
       item("gastos.solicitud.aprobar_finanzas", TODO),
       item("gastos.solicitud.liquidar", TODO),
-      item("gastos.solicitud.exportar"),
       item("gastos.solicitud.campo.cuenta_bancaria"),
-      item("gastos.solicitud.campo.documento_identidad"),
     ],
   },
   {

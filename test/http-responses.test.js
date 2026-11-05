@@ -94,31 +94,23 @@ describe("respuestas", () => {
 });
 
 describe("los middlewares responden igual", () => {
-  it("un fetch a /upload recibe JSON de requireRole y de requireRrhhManager (antes no)", async () => {
+  it("un fetch a /upload recibe JSON de requireRole y de requirePermission", async () => {
     const requireRole = require(path.join(__dirname, "../src/middlewares/requireRole"));
-    const staffId = require.resolve(path.join(__dirname, "../src/services/access/staffAccess"));
-    const prev = require.cache[staffId];
-    require.cache[staffId] = { id: staffId, filename: staffId, loaded: true, exports: { canManageRrhh: async () => false } };
-    const rrhhId = require.resolve(path.join(__dirname, "../src/middlewares/requireRrhhManager"));
-    delete require.cache[rrhhId];
-    try {
-      const requireRrhhManager = require(rrhhId);
-      const fetchUpload = () => {
-        const r = req({ url: "/RRHH/vacaciones/gestion/5/historial/upload", method: "POST" });
-        r.session.user = { id: 5, role: "Usuario" };
-        return r;
-      };
-      const a = res();
-      requireRole("admin")(fetchUpload(), a, () => {});
-      const b = res();
-      await requireRrhhManager()(fetchUpload(), b, () => {});
-      assert.equal(a.statusCode, 403);
-      assert.equal(b.statusCode, 403);
-      assert.ok(a.body && b.body, "los dos respondieron JSON");
-    } finally {
-      if (prev) require.cache[staffId] = prev;
-      else delete require.cache[staffId];
-      delete require.cache[rrhhId];
-    }
+    const requirePermission = require(path.join(__dirname, "../src/middlewares/requirePermission"));
+    const { emptyPermissions } = require(path.join(__dirname, "../src/services/permissions/resolver"));
+    const { getCatalog } = require(path.join(__dirname, "../src/services/permissions/catalog"));
+    const fetchUpload = () => {
+      const r = req({ url: "/RRHH/vacaciones/gestion/5/historial/upload", method: "POST" });
+      r.session.user = { id: 5, role: "Usuario" };
+      r.perms = emptyPermissions(getCatalog(), 5);
+      return r;
+    };
+    const a = res();
+    requireRole("admin")(fetchUpload(), a, () => {});
+    const b = res();
+    await requirePermission("noticias.noticia.crear")(fetchUpload(), b, () => {});
+    assert.equal(a.statusCode, 403);
+    assert.equal(b.statusCode, 403);
+    assert.ok(a.body && b.body, "los dos respondieron JSON");
   });
 });
