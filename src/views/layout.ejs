@@ -74,7 +74,7 @@
     </div>
 </main>
 
-<% if (currentUser && features.supportTickets) { %>
+<% if (currentUser && features.supportTickets && typeof can === 'function' && can('soporte.acceso') && can('soporte.ticket.crear')) { %>
   <%- include('partials/modal', {
     id: 'modalNuevoTicketNavbar',
     titleId: 'ticket-modal-title',

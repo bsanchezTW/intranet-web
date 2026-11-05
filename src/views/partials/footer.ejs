@@ -34,7 +34,7 @@ const anioActual = new Date().getFullYear();
 
         <div class="footer-col">
           <h2 class="footer-col__title">Ayuda</h2>
-          <% if (features.supportTickets) { %>
+          <% if (features.supportTickets && puedeAbrir('soporte.acceso')) { %>
           <a href="/soporte">Soporte</a>
           <% } %>
           <% if (puedeAbrir('apps.acceso')) { %><a href="/apps">Aplicaciones</a><% } %>

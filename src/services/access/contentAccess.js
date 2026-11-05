@@ -114,16 +114,18 @@ async function canOpenExpenseAttachment(user, { ownerId, requestId }) {
   return canViewRequest(request, user);
 }
 
-async function canOpenTicketAttachment(user, { ticketId }, isAdmin) {
-  if (isAdmin) return true;
+/** Adjunto de ticket: quien puede ver ese ticket (soporte.ticket.ver, lo propio o todo). */
+async function canOpenTicketAttachment(user, { ticketId }) {
+  const permissions = require("../permissions/permissionService");
+  const perms = await permissions.resolve(user);
+  const c = perms.coverage("soporte.ticket.ver");
+  if (!c) return false;
+  if (c.all) return true;
   const { rows } = await db.query(
     "SELECT requester_email FROM support_tickets WHERE id = $1",
     [ticketId],
   );
-  if (!rows.length) return false;
-  if (sameEmail(rows[0].requester_email, user.email)) return true;
-  const { isSupportAgent } = require("../tickets/supportTeam");
-  return isSupportAgent(user);
+  return rows.length > 0 && c.own && sameEmail(rows[0].requester_email, user.email);
 }
 
 /**
@@ -161,8 +163,7 @@ async function canAccessContent(user, relativePath, { perms = null } = {}) {
       // Fases 7 y 8: comprobantes de gastos, con la regla de hoy.
       return canOpenExpenseAttachment(user, rule);
     case "ticket_attachment":
-      // Fases 7 y 8: adjuntos de tickets, con la regla de hoy.
-      return canOpenTicketAttachment(user, rule, isAdmin);
+      return canOpenTicketAttachment(user, rule);
     case "module_only":
       // Lo sirve su módulo (con su permiso), nunca /content.
       return false;

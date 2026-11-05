@@ -146,6 +146,26 @@ async function resolve(user) {
   return perms;
 }
 
+/**
+ * Ids de quienes pueden hacer `key` (sobre `record` = { ownerId, areaId }, si
+ * se da) con la configuración vigente. Para avisos por correo y listas de
+ * equipo. Los superadmins pueden todo pero no reciben avisos sólo por serlo:
+ * se excluyen salvo que se pidan.
+ */
+async function usersWhoCan(key, record = null, { includeSuperadmins = false } = {}) {
+  const catalog = getCatalog();
+  const current = await getSnapshot();
+  if (!current) return [];
+  const now = Date.now();
+  const ids = [];
+  for (const id of current.users.keys()) {
+    const perms = computePermissions(current, { id }, { catalog, now });
+    if (perms.superadmin && !includeSuperadmins) continue;
+    if (record ? perms.canOnRecord(key, record) : perms.can(key)) ids.push(id);
+  }
+  return ids;
+}
+
 /** Sólo este proceso: para quien ya subió la versión en su transacción. */
 function forgetLocalCache() {
   snapshot = null;
@@ -168,6 +188,7 @@ async function invalidatePermissions(client = db) {
 
 module.exports = {
   resolve,
+  usersWhoCan,
   invalidatePermissions,
   forgetLocalCache,
   loadSnapshot,

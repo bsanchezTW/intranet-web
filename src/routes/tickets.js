@@ -3,7 +3,6 @@ const router = express.Router();
 const db = require("../db");
 const { sendMail } = require("../services/mailer");
 const { MAIL_SENDERS } = require("../constants/mailSenders");
-const { isAdministrador } = require("../constants/roles");
 const multer = require('multer');
 const {
   ticketStatusFromDb,
@@ -20,7 +19,8 @@ const { getCurrentCountry } = require("../config/country");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
 const { APP_CATALOGS } = require("../constants/appCatalogs");
 const { listAppsByCatalog } = require("../services/appCatalogService");
-const requireSupportAgent = require("../middlewares/requireSupportAgent");
+const requirePermission = require("../middlewares/requirePermission");
+const { decide } = require("../services/permissions/decide");
 const receiveTicketAttachments = require("../middlewares/receiveTicketAttachments");
 const {
   createSupportTicket,
@@ -44,11 +44,32 @@ const { withQueryParam } = require("../utils/returnTo");
 // Cada acción vuelve con ?ok= o ?error=, que el layout muestra como aviso.
 const conAviso = (url, mensaje) => withQueryParam(url, "ok", mensaje);
 const conError = (url, mensaje) => withQueryParam(url, "error", mensaje);
-const {
-  listSupportAgents,
-  isSupportAgent,
-  getAgentById,
-} = require("../services/tickets/supportTeam");
+const { listSupportAgents, getAgentById } = require("../services/tickets/supportTeam");
+
+/*
+ * Permisos de Soporte (Gestión de Permisos):
+ *   soporte.acceso             entrar
+ *   soporte.ticket.crear       abrir tickets
+ *   soporte.ticket.ver         lo propio (tickets que pidió) o todo
+ *   soporte.ticket.responder   ídem; con «todo» responde como Soporte
+ *   soporte.ticket.gestionar   asignar, priorizar y cerrar (la mesa de ayuda)
+ */
+const ACCESO = "soporte.acceso";
+const CREAR = "soporte.ticket.crear";
+const VER = "soporte.ticket.ver";
+const RESPONDER = "soporte.ticket.responder";
+const GESTIONAR = "soporte.ticket.gestionar";
+
+/** ¿Alcanza a todos los tickets, no sólo los propios? */
+function sobreTodos(perms, key) {
+  const c = perms && typeof perms.coverage === "function" ? perms.coverage(key) : null;
+  return Boolean(c && c.all);
+}
+
+/** ¿Puede ver o responder este ticket? Los propios con «lo propio», el resto con «todo». */
+function alcanza(perms, key, esDueno) {
+  return sobreTodos(perms, key) || (esDueno && decide(perms, key));
+}
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -145,6 +166,12 @@ async function resolveAssignment(req) {
 // RUTAS DEL MÓDULO
 // ==========================================
 
+// El contador de la barra lo pide cualquier página: sin acceso responde 0.
+const soporteAcceso = requirePermission(ACCESO);
+router.use((req, res, next) =>
+  req.path === "/tickets/notificaciones/count" ? next() : soporteAcceso(req, res, next),
+);
+
 router.get("/", renderSupportHome);
 
 // El listado vive en /soporte. /soporte/tickets queda para enlaces anteriores
@@ -169,14 +196,11 @@ router.get("/tickets/notificaciones/count", async (req, res) => {
   res.set("Cache-Control", "no-store");
   const userEmail = user.email || user.username;
 
-  // El contador de la mesa de ayuda es para quien la atiende (Informática);
+  if (!decide(req.perms, ACCESO)) return res.json({ count: 0 });
+
+  // El contador de la mesa de ayuda es para quien la atiende (gestiona);
   // el resto sólo cuenta sus propios tickets sin leer.
-  let esAgente = false;
-  try {
-    esAgente = await isSupportAgent(user);
-  } catch (err) {
-    console.error("Error resolviendo equipo de soporte:", err);
-  }
+  const esAgente = decide(req.perms, GESTIONAR);
 
   const cacheKey = getNotificationCacheKey(user, esAgente);
   const cached = req.session.ticketNotifications;
@@ -224,8 +248,8 @@ async function renderSupportHome(req, res) {
   let sql = "";
   let params = [];
 
-  // La mesa de ayuda ve todos los tickets aunque su rol sea Usuario.
-  if (isAdministrador(user.role) || (await isSupportAgent(user))) {
+  // Con «Ver tickets» sobre todo, la lista completa; si no, los suyos.
+  if (sobreTodos(req.perms, VER)) {
     sql = `${ticketListSql()} ORDER BY t.created_at DESC`;
   } else {
     sql = `${ticketListSql()}
@@ -237,13 +261,13 @@ async function renderSupportHome(req, res) {
   try {
     // La autoayuda encabeza la página, así que se pide en paralelo con los
     // tickets: si el catálogo falla, la ticketera sigue cargando.
-    const [{ rows: results }, supportApps, puedeGestionar] = await Promise.all([
+    const puedeGestionar = decide(req.perms, GESTIONAR);
+    const [{ rows: results }, supportApps] = await Promise.all([
       db.query(sql, params),
       listAppsByCatalog(APP_CATALOGS.SUPPORT).catch((err) => {
         console.error("Error al cargar apps de autoayuda:", err);
         return [];
       }),
-      isSupportAgent(user).catch(() => false),
     ]);
 
     let holidaySet = new Set();
@@ -306,7 +330,7 @@ router.get("/tickets/nuevo", (req, res) => {
   res.status(404).render("404", { titulo: "Página no encontrada" });
 });
 
-router.post("/tickets/crear", receiveTicketAttachments(), async (req, res) => {
+router.post("/tickets/crear", requirePermission(CREAR), receiveTicketAttachments(), async (req, res) => {
   if (!req.session.user) return res.redirect("/login");
 
   try {
@@ -378,7 +402,7 @@ router.post('/tickets/upload', upload.single('file'), async (req, res) => {
  */
 router.post(
   "/tickets/:id/actualizar",
-  requireSupportAgent(),
+  requirePermission(GESTIONAR),
   async (req, res) => {
     const { id } = req.params;
     const category =
@@ -542,11 +566,11 @@ router.post("/tickets/:id/responder", async (req, res) => {
       return res.status(404).send("Ticket no encontrado");
     const ticket = results[0];
 
-    // Quien firma como "Soporte" es el área de Informática, no cualquier
-    // administrador: un admin de otra área que comente lo hace como usuario.
-    const isAgent = await isSupportAgent(user);
+    // Responde como "Soporte" quien puede responder cualquier ticket; el dueño
+    // (con «lo propio») responde como sí mismo.
     const isOwner = sameEmail(user.email, ticket.requester_email);
-    if (!isAgent && !isOwner) return res.status(403).send("Sin permiso.");
+    const isAgent = sobreTodos(req.perms, RESPONDER);
+    if (!alcanza(req.perms, RESPONDER, isOwner)) return res.status(403).send("Sin permiso.");
 
     let remitenteNombre = isAgent
       ? "Soporte"
@@ -635,16 +659,14 @@ router.get("/tickets/:id", async (req, res) => {
     if (ticketResults.length === 0)
       return res.status(404).render("404", { titulo: "No encontrado" });
 
-    // Gestionar es del área, no del rol: el panel de TI sólo aparece para
-    // Informática. Un administrador de otra área ve el ticket, no lo opera.
-    // Un agente con rol Usuario sí lo ve: antes recibía 403 en el detalle
-    // aunque podía gestionarlo.
-    const puedeGestionar = await isSupportAgent(user);
+    // Verlo: el propio con «lo propio», cualquiera con «todo». El panel de
+    // gestión, sólo con «Asignar, priorizar y cerrar tickets».
+    const puedeGestionar = decide(req.perms, GESTIONAR);
     const esDueno = sameEmail(ticketResults[0].requester_email, user.email);
-    if (!isAdministrador(user.role) && !puedeGestionar && !esDueno)
+    if (!puedeGestionar && !alcanza(req.perms, VER, esDueno))
       return res.status(403).send("No tienes permisos.");
 
-    const agentes = puedeGestionar ? await listSupportAgents() : [];
+    const agentes = puedeGestionar ? await listSupportAgents({ includeSuperadmins: true }) : [];
 
     const { rows: respuestasResults } = await db.query(sqlRespuestas, [id]);
 

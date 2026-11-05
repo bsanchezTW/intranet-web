@@ -11,9 +11,10 @@ const navLinks = [
   { href: '/apps', label: 'Apps', icon: 'grid', perm: 'apps.acceso' },
 ].filter(function (l) { return puede(l.perm); });
 const verPerfil = puede('perfil.acceso');
-if (features.supportTickets) {
+if (features.supportTickets && puede('soporte.acceso')) {
   navLinks.push({ href: '/soporte', label: 'Soporte', icon: 'headset', notif: true });
 }
+const abreTickets = features.supportTickets && puede('soporte.acceso') && puede('soporte.ticket.crear');
 const correoUsuario = currentUser && currentUser.email ? currentUser.email : '';
 // Gestión de Permisos sólo existe para el superadmin.
 const esSuperadmin = typeof perms !== 'undefined' && perms && perms.superadmin;
@@ -135,7 +136,7 @@ const menuNav = (clave) => clave === 'procesos'
     </nav>
 
     <div class="header-right">
-      <% if (features.supportTickets) { %>
+      <% if (abreTickets) { %>
       <a href="#" role="button" class="btn-ticket-nav js-open-ticket-modal" title="Abrir un ticket de soporte">
         <%- include('icon', { name: 'plus' }) %><span>Abrir ticket</span>
       </a>

@@ -1,7 +1,9 @@
 const express = require("express");
 const logger = require("../utils/logger");
 const claudeService = require("../services/claudeService");
-const requireFeature = require("../middlewares/requireFeature");
+const requireFeature = require("../middlewares/requireFeature");
+const requirePermission = require("../middlewares/requirePermission");
+const { decide } = require("../services/permissions/decide");
 const receiveTicketAttachments = require("../middlewares/receiveTicketAttachments");
 const { isAdministrador } = require("../constants/roles");
 const { getFeatures } = require("../config/features");
@@ -87,6 +89,7 @@ router.delete("/api/conversation", (req, res) => {
 router.post(
   "/api/ticket-draft/:id/confirm",
   requireFeature("supportTickets"),
+  requirePermission("soporte.ticket.crear"),
   receiveTicketAttachments({ maxFiles: assistantTickets.MAX_CHAT_ATTACHMENTS, json: true }),
   async (req, res) => {
     const draft = assistantTickets.getTicketDraft(req.session, req.params.id);
@@ -165,7 +168,7 @@ router.post("/api/chat", async (req, res) => {
     // el system prompt, no en el mensaje guardado.
     const sessionUser = req.session.user;
     const features = res.locals.features || getFeatures();
-    const supportTickets = Boolean(features.supportTickets);
+    const supportTickets = Boolean(features.supportTickets) && decide(req.perms, "soporte.ticket.crear");
     const isAdmin = isAdministrador(sessionUser.role);
     const isExpenseReviewer = await resolveExpenseReviewer(sessionUser, { isAdmin, features });
     const guide = guideForUser({

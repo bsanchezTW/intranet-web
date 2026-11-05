@@ -162,9 +162,32 @@ describe("tickets: agentes con rol Usuario y dueños en otras mayúsculas", () =
       req.session.user = [AGENTE, DUENA, OTRO].find((u) => String(u.id) === req.params.id);
       res.end();
     });
+    // Permisos como los deja el arranque: la mesa de ayuda ve y gestiona
+    // todo; el resto (Básico) ve y responde lo propio.
+    const { computePermissions } = require(path.join(SRC, "services/permissions/resolver"));
+    const { getCatalog } = require(path.join(SRC, "services/permissions/catalog"));
+    const asig = (id, userId, key, scope = null) => ({
+      id, principal_type: "user", user_id: userId, permission_key: key, scope, scope_area_ids: [], effect: "concede",
+    });
+    let n = 0;
+    const assignments = [];
+    for (const u of [AGENTE, DUENA, OTRO]) {
+      assignments.push(asig(++n, u.id, "soporte.acceso"), asig(++n, u.id, "soporte.ticket.crear"));
+      if (u === AGENTE) {
+        assignments.push(asig(++n, u.id, "soporte.ticket.ver", "todo"), asig(++n, u.id, "soporte.ticket.responder", "todo"), asig(++n, u.id, "soporte.ticket.gestionar"));
+      } else {
+        assignments.push(asig(++n, u.id, "soporte.ticket.ver", "propio"), asig(++n, u.id, "soporte.ticket.responder", "propio"));
+      }
+    }
+    const snapshot = {
+      users: new Map([AGENTE, DUENA, OTRO].map((u) => [u.id, { id: u.id, role: "Usuario", work_area_id: null }])),
+      areas: [],
+      assignments,
+    };
     app.use((req, res, next) => {
       res.locals.countryConfig = require(path.join(SRC, "config/country")).getCountryConfig();
       res.locals.usuario = req.session.user || null;
+      if (req.session.user) req.perms = computePermissions(snapshot, req.session.user, { catalog: getCatalog() });
       next();
     });
     app.use("/soporte", ticketsRoutes);
@@ -188,7 +211,7 @@ describe("tickets: agentes con rol Usuario y dueños en otras mayúsculas", () =
     return (url) => fetch(base + url, { headers: { cookie }, redirect: "manual" });
   }
 
-  it("el agente con rol Usuario abre el detalle de un ticket ajeno", async () => {
+  it("la mesa de ayuda (rol Usuario) abre el detalle de un ticket ajeno", async () => {
     const get = await as(AGENTE);
     const res = await get("/soporte/tickets/9?modal=true");
     assert.equal(res.status, 200);
