@@ -31,7 +31,9 @@ async function loadReferences() {
     db.query(
       `SELECT s.id, s.code, s.name, s.description, s.active, s.updated_at,
               (SELECT count(*)::int FROM perm_set_items i WHERE i.set_id = s.id) AS item_count,
-              (SELECT count(*)::int FROM perm_assignments a WHERE a.set_id = s.id) AS assignment_count
+              (SELECT count(*)::int FROM perm_assignments a WHERE a.set_id = s.id) AS assignment_count,
+              EXISTS (SELECT 1 FROM perm_assignments a
+                       WHERE a.set_id = s.id AND a.principal_type = 'global' AND a.effect = 'concede') AS para_todos
          FROM perm_sets s ORDER BY s.name`,
     ),
   ]);

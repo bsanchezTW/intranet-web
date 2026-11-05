@@ -1991,3 +1991,67 @@ details[open] > .perm-abrir {
     display: none;
   }
 }
+
+/* ── «Para todos» en la ficha de un conjunto (antes, la pestaña Global) ── */
+.perm-todos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--glass-radius-sm);
+  background: var(--color-surface);
+}
+
+.perm-todos--si {
+  border-color: color-mix(in srgb, var(--perm-ok) 35%, var(--color-border));
+  background: var(--perm-ok-soft);
+}
+
+.perm-todos__icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.perm-todos--si .perm-todos__icono {
+  background: var(--color-surface);
+  color: var(--perm-ok);
+}
+
+.perm-todos__icono svg {
+  width: 18px;
+  height: 18px;
+}
+
+.perm-todos__texto {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.perm-todos__texto strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-heading);
+}
+
+.perm-asignar-conjunto {
+  margin-top: 12px;
+}
+
+.perm-linea__acciones {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

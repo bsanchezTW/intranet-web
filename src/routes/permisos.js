@@ -21,8 +21,8 @@ const impersonation = require("../services/permissions/impersonation");
  *   /permisos                 resumen y superadmins
  *   /permisos/modulos         cada permiso del catálogo, quién lo tiene y quitárselo
  *   /permisos/quitar          quitarle un permiso a una persona
- *   /permisos/conjuntos       conjuntos con nombre y sus permisos
- *   /permisos/global          lo asignado a todos
+ *   /permisos/conjuntos       conjuntos con nombre, sus permisos y a quién se asignan
+ *                             («Para todos» reemplaza a la antigua pestaña Global)
  *   /permisos/areas[/:id]     el organigrama y lo asignado a cada área
  *   /permisos/jefes           lo asignado a los jefes de área
  *   /permisos/usuarios[/:id]  ficha: asignaciones y permisos efectivos con su origen
@@ -31,7 +31,7 @@ const impersonation = require("../services/permissions/impersonation");
  */
 
 const BASE = "/permisos";
-const CSS = ["/css/permisos.css?v=20261105a"];
+const CSS = ["/css/permisos.css?v=20261105b"];
 const JS = ["/js/permisos.js?v=20261020a"];
 
 router.use((req, res, next) => {
@@ -182,11 +182,18 @@ router.post("/quitar", async (req, res) => {
 router.get("/conjuntos", async (req, res, next) => {
   try {
     const ctx = await baseContext(req);
-    render(res, "conjuntos", "Conjuntos de permisos", "conjuntos", ctx);
+    // Lo global que no es «conjunto para todos» (permisos sueltos y
+    // denegaciones a todos): se muestra aquí para que no quede escondido.
+    const globales = await queries.listAssignments({ principal_type: "global" }, ctx.refs, ctx.catalog);
+    const sueltosGlobales = globales.filter((a) => a.set_id == null || a.effect === "deniega");
+    render(res, "conjuntos", "Conjuntos de permisos", "conjuntos", { ...ctx, sueltosGlobales });
   } catch (err) {
     next(err);
   }
 });
+
+/** La antigua pestaña Global: ahora cada conjunto se marca «Para todos». */
+router.get("/global", (req, res) => res.redirect(301, `${BASE}/conjuntos`));
 
 router.post("/conjuntos", async (req, res) => {
   try {
@@ -254,6 +261,18 @@ router.post("/conjuntos/:id/permisos", async (req, res) => {
   }
 });
 
+router.post("/conjuntos/:id/todos", async (req, res) => {
+  const to = volver(req, `${BASE}/conjuntos/${req.params.id}`);
+  const on = req.body.valor === "1";
+  try {
+    const { changed } = await store.setSetForEveryone(req.params.id, on, actorId(req));
+    if (!changed) return ok(res, to, on ? "Ya lo tenían todos" : "Ya no era para todos");
+    return ok(res, to, on ? "Ahora lo tienen todos" : "Ya no lo tienen todos");
+  } catch (err) {
+    return fail(res, to, err);
+  }
+});
+
 router.post("/conjuntos/:id/eliminar", async (req, res) => {
   try {
     await store.deleteSet(req.params.id, actorId(req));
@@ -263,21 +282,7 @@ router.post("/conjuntos/:id/eliminar", async (req, res) => {
   }
 });
 
-// --- Destinatarios: Global, Áreas, Jefes ------------------------------------
-
-router.get("/global", async (req, res, next) => {
-  try {
-    const ctx = await baseContext(req);
-    const assignments = await queries.listAssignments({ principal_type: "global" }, ctx.refs, ctx.catalog);
-    render(res, "destinatario", "Permisos globales", "global", {
-      ...ctx,
-      assignments,
-      principal: { type: "global", label: "Todos", desc: "Toda cuenta activa de la intranet." },
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+// --- Destinatarios: Áreas y Jefes -----------------------------------------
 
 router.get("/jefes", async (req, res, next) => {
   try {

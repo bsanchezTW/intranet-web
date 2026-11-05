@@ -2,7 +2,7 @@
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
     titulo: 'Conjuntos de permisos',
-    descripcion: 'Paquetes con nombre que se asignan de una vez a todos, a un área, a los jefes o a una persona.',
+    descripcion: 'Paquetes con nombre. Cada uno se marca «Para todos» o se asigna a un área, a los jefes o a una persona desde su ficha.',
     seccion: 'conjuntos',
   }) %>
 
@@ -17,6 +17,7 @@
             <tr>
               <td>
                 <a href="/permisos/conjuntos/<%= s.id %>"><%= s.name %></a>
+                <% if (s.para_todos) { %><span class="perm-chip perm-chip--brand"><%- icono('grid') %> Para todos</span><% } %>
                 <% if (s.description) { %><br><span class="perm-muted"><%= s.description %></span><% } %>
               </td>
               <td class="perm-table__num"><span class="perm-num"><%= s.item_count %></span></td>
@@ -30,6 +31,26 @@
       </table>
     <% } %>
   </div>
+
+  <% const sueltos = typeof sueltosGlobales !== 'undefined' ? sueltosGlobales : []; %>
+  <% if (sueltos.length) { %>
+    <section class="seccion">
+      <div class="seccion__head">
+        <div class="seccion__heading">
+          <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('grid') %></span> Permisos sueltos para todos <span class="perm-num perm-num--activo"><%= sueltos.length %></span></h3>
+          <p class="seccion__desc">Asignados a toda cuenta activa sin pasar por un conjunto. Conviene moverlos a un conjunto «Para todos»; se quitan aquí o en la pestaña Permisos.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <%- include('partials/tabla_asignaciones', {
+          assignments: sueltos,
+          volver: '/permisos/conjuntos',
+          mostrarQuien: false,
+          vacio: 'Ninguno.',
+        }) %>
+      </div>
+    </section>
+  <% } %>
 
   <section class="seccion">
     <div class="seccion__head">

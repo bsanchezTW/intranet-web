@@ -74,7 +74,16 @@ const personasDe = (key) => (typeof holders !== 'undefined' && holders && holder
                     </span>
                     <span class="perm-linea__acciones">
                       <% if (q.viaSet) { %>
+                        <% const setRef = refs.setById.get(Number(q.setId || a.set_id)); %>
+                        <% const nSet = setRef ? Number(setRef.item_count) : null; %>
                         <a class="perm-btn perm-btn--sec perm-btn--sm" href="/permisos/conjuntos/<%= q.setId || a.set_id %>" title="Sacar este permiso del conjunto lo quita a todos los que tienen el conjunto"><%- icono('edit') %> Editar conjunto</a>
+                        <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
+                              data-confirm="<%= (a.principal_type === 'global' ? 'Toda cuenta activa deja' : a.principalLabel + ' deja') + ' de recibir el conjunto completo «' + q.viaSet + '»' + (nSet ? ' (' + nSet + (nSet === 1 ? ' permiso' : ' permisos') + ')' : '') + ', no sólo «' + p.label + '». El conjunto sigue existiendo y conserva sus otras asignaciones.' %>"
+                              data-confirm-title="¿Quitar el conjunto «<%= q.viaSet %>» a <%= a.principal_type === 'global' ? 'todos' : a.principalLabel %>?"
+                              data-confirm-accept="Quitar conjunto" data-confirm-tone="peligro">
+                          <input type="hidden" name="volver" value="<%= volverA %>#p-<%= p.key %>">
+                          <button type="submit" class="perm-btn perm-btn--peligro perm-btn--sm"><%- icono('trash') %> Quitar conjunto</button>
+                        </form>
                       <% } else { %>
                         <form class="perm-inline" action="/permisos/asignaciones/<%= a.id %>/eliminar" method="POST"
                               data-confirm="<%= a.principalLabel %> deja de tener «<%= p.label %>» por esta asignación."

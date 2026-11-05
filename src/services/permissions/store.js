@@ -394,6 +394,57 @@ async function deleteAssignment(assignmentId, actorId) {
 }
 
 /**
+ * «Para todos»: da o quita un conjunto a toda cuenta activa (una asignación
+ * global que concede). Reemplaza a la antigua pestaña Global. Devuelve si
+ * cambió algo; repetir la misma orden no duplica ni falla.
+ */
+async function setSetForEveryone(setId, on, actorId) {
+  const id = toId(setId);
+  if (id == null) throw new PermissionInputError("El conjunto ya no existe.");
+  return inTransaction(async (client) => {
+    const { rows: sets } = await client.query("SELECT id FROM perm_sets WHERE id = $1 FOR UPDATE", [id]);
+    if (!sets.length) throw new PermissionInputError("El conjunto ya no existe.");
+    const { rows: current } = await client.query(
+      `SELECT * FROM perm_assignments
+        WHERE set_id = $1 AND principal_type = 'global' AND effect = 'concede'
+        FOR UPDATE`,
+      [id],
+    );
+    if (on) {
+      if (current.length) return { changed: false };
+      const { rows } = await client.query(
+        `INSERT INTO perm_assignments
+           (principal_type, area_id, user_id, include_subareas, set_id, permission_key, scope,
+            scope_area_ids, scope_include_subareas, effect, valid_from, valid_until, note, granted_by)
+         VALUES ('global', NULL, NULL, FALSE, $1, NULL, NULL, '{}', FALSE, 'concede', NULL, NULL, NULL, $2)
+         RETURNING *`,
+        [id, actorId || null],
+      );
+      await audit(client, {
+        actorId,
+        action: "asignacion.conceder",
+        entityType: "asignacion",
+        entityId: rows[0].id,
+        newValue: rows[0],
+      });
+      return { changed: true };
+    }
+    if (!current.length) return { changed: false };
+    for (const row of current) {
+      await client.query("DELETE FROM perm_assignments WHERE id = $1", [row.id]);
+      await audit(client, {
+        actorId,
+        action: "asignacion.quitar",
+        entityType: "asignacion",
+        entityId: Number(row.id),
+        oldValue: row,
+      });
+    }
+    return { changed: true };
+  });
+}
+
+/**
  * Cambia la vigencia, el motivo, el alcance o si alcanza a las subáreas de
  * una asignación. A quién se asigna, qué y si concede o deniega no cambian:
  * eso es otra asignación (se quita y se agrega).
@@ -555,6 +606,7 @@ module.exports = {
   deleteSet,
   createAssignment,
   deleteAssignment,
+  setSetForEveryone,
   updateAssignment,
   revokeFromUser,
   setSuperadmin,

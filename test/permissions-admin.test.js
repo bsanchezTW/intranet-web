@@ -217,7 +217,7 @@ describe("las vistas renderizan con datos de prueba", () => {
     { id: 40, name: "Bastián Sánchez", first_name: "Bastián", email: "b@x.cl", role: "Administrador", work_area_id: 3, is_superadmin: true },
   ];
   const sets = [
-    { id: 1, code: "basico", name: "Básico", description: "Todos", active: true, item_count: 3, assignment_count: 1 },
+    { id: 1, code: "basico", name: "Básico", description: "Todos", active: true, item_count: 3, assignment_count: 1, para_todos: true },
     { id: 2, code: "aprobador", name: "Aprobador", description: null, active: false, item_count: 1, assignment_count: 0 },
   ];
   const refs = {
@@ -285,6 +285,10 @@ describe("las vistas renderizan con datos de prueba", () => {
     const html = await render("modulos", { seccion: "modulos", modules: catalog.modules, current: catalog.modules[0], whoHas, holders });
     assert.ok(html.includes("por el conjunto <a href=\"/permisos/conjuntos/1\">Básico</a>"));
     assert.match(html, /Editar conjunto/);
+    // Quitar el conjunto completo a quien lo recibe, desde la misma línea.
+    assert.ok(html.includes("action=\"/permisos/asignaciones/1/eliminar\""));
+    assert.match(html, /Quitar conjunto/);
+    assert.ok(html.includes("Toda cuenta activa deja de recibir el conjunto completo «Básico» (3 permisos)"));
     assert.match(html, /A nadie: sólo lo tienen los superadmins/);
     assert.match(html, /data-perm-form/);
     // Quitar a una persona: el aviso dice que se le deniega sólo a ella.
@@ -295,7 +299,14 @@ describe("las vistas renderizan con datos de prueba", () => {
   });
 
   it("conjuntos y editor de conjunto", async () => {
-    assert.match(await render("conjuntos", { seccion: "conjuntos" }), /Desactivado/);
+    const lista = await render("conjuntos", { seccion: "conjuntos", sueltosGlobales: [] });
+    assert.match(lista, /Desactivado/);
+    assert.ok(lista.includes("Para todos</span>"));
+    assert.doesNotMatch(lista, /Permisos sueltos para todos/);
+    const suelto = describeAssignment({ id: 7, principal_type: "global", permission_key: anyKey, effect: "concede", scope_area_ids: [] }, refs, catalog);
+    assert.match(await render("conjuntos", { seccion: "conjuntos", sueltosGlobales: [suelto] }), /Permisos sueltos para todos/);
+    // Sin la pestaña Global.
+    assert.ok(!lista.includes('href="/permisos/global"'));
     const html = await render("conjunto", {
       seccion: "conjuntos",
       set: { ...sets[0], items: [{ permission_key: scopedKey, scope: "areas", scope_area_ids: [2], scope_include_subareas: false }, { permission_key: "clave.vieja", scope: null, scope_area_ids: [] }] },
@@ -303,6 +314,18 @@ describe("las vistas renderizan con datos de prueba", () => {
     });
     assert.match(html, new RegExp(`name="scope:${scopedKey.replace(/\./g, "\\.")}" value="areas" checked`));
     assert.match(html, /no existen en la intranet de este país/);
+    // «Para todos» activo: botón para quitarlo; el resto de asignaciones aparte.
+    assert.ok(html.includes("action=\"/permisos/conjuntos/1/todos\""));
+    assert.match(html, /name="valor" value="0"/);
+    assert.match(html, /Quitar a todos/);
+    assert.match(html, /Nadie más: ya lo tienen todos/);
+    // Se asigna desde el propio conjunto, sin elegir «Todos» (eso es el interruptor).
+    assert.ok(html.includes("name=\"set_id\" value=\"1\""));
+    assert.doesNotMatch(html, /<option value="global">/);
+
+    const sinTodos = await render("conjunto", { seccion: "conjuntos", set: { ...sets[1], items: [] }, assignments: [] });
+    assert.match(sinTodos, /name="valor" value="1"/);
+    assert.match(sinTodos, /Dar a todos/);
   });
 
   it("destinatarios: global, jefes y un área", async () => {

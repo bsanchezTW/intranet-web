@@ -14,6 +14,12 @@ const opcionesArea = [];
 })(areaTree, 0);
 const huerfanos = set.items.filter(function (i) { return !catalog.byKey.has(i.permission_key); });
 const icono = (name) => include('../partials/icon', { name: name });
+// «Para todos» = una asignación global que concede (la antigua pestaña Global).
+const esParaTodos = (a) => a.principal_type === 'global' && a.effect === 'concede';
+const paraTodos = assignments.some(esParaTodos);
+const otras = assignments.filter(function (a) { return !esParaTodos(a); });
+const volverA = '/permisos/conjuntos/' + set.id;
+const nPermisos = set.items.length;
 %>
 <div class="perm-wrap">
   <%- include('partials/cabecera', {
@@ -22,6 +28,24 @@ const icono = (name) => include('../partials/icon', { name: name });
     seccion: 'conjuntos',
     migas: [{ href: '/permisos/conjuntos', label: 'Conjuntos' }, { label: set.name }],
   }) %>
+
+  <form class="perm-todos<%= paraTodos ? ' perm-todos--si' : '' %>" action="/permisos/conjuntos/<%= set.id %>/todos" method="POST"
+        data-confirm="<%= paraTodos
+          ? 'Toda cuenta activa deja de recibir los ' + nPermisos + ' permiso(s) de «' + set.name + '». Quienes lo tengan por su área, por ser jefes o en persona lo conservan.'
+          : 'Toda cuenta activa de la intranet recibe los ' + nPermisos + ' permiso(s) de «' + set.name + '».' %>"
+        data-confirm-title="<%= paraTodos ? '¿Quitárselo a todos?' : '¿Dárselo a todos?' %>"
+        data-confirm-accept="<%= paraTodos ? 'Quitar a todos' : 'Dar a todos' %>"
+        <% if (paraTodos) { %>data-confirm-tone="peligro"<% } %>>
+    <input type="hidden" name="valor" value="<%= paraTodos ? '0' : '1' %>">
+    <span class="perm-todos__icono" aria-hidden="true"><%- icono('grid') %></span>
+    <div class="perm-todos__texto">
+      <strong>Para todos <% if (paraTodos) { %><span class="perm-estado perm-estado--si">Activo</span><% } %></strong>
+      <span class="perm-muted"><%= paraTodos
+        ? 'Toda cuenta activa recibe este conjunto.'
+        : 'Actívalo para que toda cuenta activa reciba este conjunto.' %></span>
+    </div>
+    <button type="submit" class="perm-btn<%= paraTodos ? ' perm-btn--peligro' : '' %> perm-btn--sm"><%- icono(paraTodos ? 'x' : 'check') %> <%= paraTodos ? 'Quitar a todos' : 'Dar a todos' %></button>
+  </form>
 
   <section class="seccion">
     <form class="perm-form" action="/permisos/conjuntos/<%= set.id %>" method="POST" style="margin-top:0">
@@ -123,17 +147,27 @@ const icono = (name) => include('../partials/icon', { name: name });
   <section class="seccion">
     <div class="seccion__head">
       <div class="seccion__heading">
-        <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('users') %></span> Asignado a</h3>
-        <p class="seccion__desc">Para asignarlo, ve a Global, Áreas, Jefes o la ficha de una persona.</p>
+        <h3 class="seccion__title"><span class="seccion__icon" aria-hidden="true"><%- icono('users') %></span> <%= paraTodos ? 'Además, asignado a' : 'Asignado a' %> <span class="perm-num<%= otras.length ? ' perm-num--activo' : '' %>"><%= otras.length %></span></h3>
+        <p class="seccion__desc">Áreas, jefes o personas que reciben el conjunto completo. Quitar una asignación le saca el conjunto entero a ese destinatario.</p>
       </div>
     </div>
     <div class="panel">
       <%- include('partials/tabla_asignaciones', {
-        assignments: assignments,
-        volver: '/permisos/conjuntos/' + set.id,
+        assignments: otras,
+        volver: volverA,
         mostrarQue: false,
-        vacio: 'Este conjunto no está asignado a nadie.',
+        vacio: paraTodos ? 'Nadie más: ya lo tienen todos.' : 'Este conjunto no está asignado a nadie.',
       }) %>
+      <details class="perm-asignar-conjunto">
+        <summary class="perm-btn perm-btn--sec perm-btn--sm perm-abrir"><%- icono('plus') %> Asignar a un área, a los jefes o a una persona</summary>
+        <%- include('partials/form_asignacion', {
+          uid: 'c',
+          volver: volverA,
+          principal: null,
+          fixedKey: null,
+          fixedSetId: set.id,
+        }) %>
+      </details>
     </div>
   </section>
 

@@ -5,10 +5,12 @@
      volver      ruta a la que vuelve tras guardar
      principal   { type, areaId } fijo, o null para elegir a quién
      fixedKey    clave de permiso fija, o null para elegir conjunto o permiso
+     fixedSetId  conjunto fijo (desde la ficha del conjunto), opcional
      catalog, refs, areaTree, activeUsers, scopeLabels, actorId  (de baseContext) */
 const fijo = typeof principal !== 'undefined' && principal ? principal : null;
 const clave = typeof fixedKey !== 'undefined' && fixedKey ? fixedKey : null;
 const defClave = clave ? catalog.byKey.get(clave) : null;
+const conjuntoFijo = !clave && typeof fixedSetId !== 'undefined' && fixedSetId ? fixedSetId : null;
 const opcionesArea = [];
 (function aplanar(nodos, nivel) {
   nodos.forEach(function (n) {
@@ -42,7 +44,7 @@ let n = 0;
               <option value="user">Una persona</option>
               <option value="area">Un área</option>
               <option value="jefes">Jefes de área</option>
-              <option value="global">Todos</option>
+              <% if (!conjuntoFijo) { %><option value="global">Todos</option><% } %>
             </select>
           </div>
           <div class="campo-form" data-perm-show="user">
@@ -78,7 +80,10 @@ let n = 0;
     </div>
   <% } %>
 
-  <% if (clave) { %>
+  <% if (conjuntoFijo) { %>
+    <input type="hidden" name="target" value="set">
+    <input type="hidden" name="set_id" value="<%= conjuntoFijo %>">
+  <% } else if (clave) { %>
     <input type="hidden" name="target" value="key">
     <input type="hidden" name="permission_key" value="<%= clave %>" data-perm-scopes="<%= defClave && defClave.scopes ? defClave.scopes.join(',') : '' %>">
   <% } else { %>
