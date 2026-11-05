@@ -25,6 +25,16 @@ const personasDe = (key) => (typeof holders !== 'undefined' && holders && holder
         <h3><%= current.label %></h3>
         <span class="perm-muted"><%= current.permissions.length %> permisos</span>
       </div>
+      <details class="perm-varios-abrir">
+        <summary class="perm-btn perm-btn--sm perm-abrir"><%- icono('layers') %> Asignar varios de <%= current.label %></summary>
+        <%- include('partials/form_asignacion', {
+          uid: 'varios',
+          volver: volverA,
+          principal: null,
+          fixedKey: null,
+          modulo: current,
+        }) %>
+      </details>
       <% current.permissions.forEach(function (p, i) { %>
         <% const quienes = whoHas.get(p.key) || []; %>
         <% const personas = personasDe(p.key); %>

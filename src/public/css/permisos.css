@@ -2112,3 +2112,61 @@ details[open] > .perm-abrir {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* ── «Asignar varios» de un módulo (pestaña Permisos) ─────────────────── */
+.perm-varios-abrir {
+  margin: 12px 0 4px;
+}
+
+.perm-varios {
+  display: grid;
+  gap: 8px;
+}
+
+.perm-varios__todos {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.perm-varios__lista {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.perm-varios__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.perm-varios__item:hover {
+  background: var(--color-surface-muted);
+}
+
+.perm-varios__item .perm-check {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.perm-varios__item select {
+  min-height: 32px;
+  max-width: 100%;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.perm-varios__item select:disabled {
+  opacity: 0.55;
+}

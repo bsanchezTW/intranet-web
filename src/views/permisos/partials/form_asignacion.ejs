@@ -5,10 +5,15 @@
      volver      ruta a la que vuelve tras guardar
      principal   { type, areaId } fijo, o null para elegir a quién
      fixedKey    clave de permiso fija, o null para elegir el permiso
+     modulo      módulo del catálogo: «Asignar varios», con una casilla por permiso
      catalog, refs, areaTree, activeUsers, scopeLabels, actorId  (de baseContext) */
 const fijo = typeof principal !== 'undefined' && principal ? principal : null;
 const clave = typeof fixedKey !== 'undefined' && fixedKey ? fixedKey : null;
 const defClave = clave ? catalog.byKey.get(clave) : null;
+const varios = !clave && typeof modulo !== 'undefined' && modulo ? modulo : null;
+// En «varios» cada permiso con alcance elige el suyo; «Áreas elegidas» se da
+// de a uno (necesita elegir áreas). Por defecto, toda la empresa si existe.
+const alcancesVarios = (p) => (p.scopes || []).filter(function (s) { return s !== 'areas'; });
 const opcionesArea = [];
 (function aplanar(nodos, nivel) {
   nodos.forEach(function (n) {
@@ -23,7 +28,7 @@ const icono = (name) => include('../../partials/icon', { name: name });
 const pasoQuien = !fijo || fijo.type === 'area' || fijo.type === 'jefes';
 let n = 0;
 %>
-<form class="perm-asignar" action="/permisos/asignaciones" method="POST" data-perm-form>
+<form class="perm-asignar<%= varios ? ' perm-asignar--varios' : '' %>" action="<%= varios ? '/permisos/asignaciones/varias' : '/permisos/asignaciones' %>" method="POST" data-perm-form>
   <input type="hidden" name="volver" value="<%= volver %>">
   <% if (fijo) { %>
     <input type="hidden" name="principal_type" value="<%= fijo.type %>">
@@ -88,7 +93,36 @@ let n = 0;
     </div>
   <% } %>
 
-  <% if (clave) { %>
+  <% if (varios) { %>
+    <div class="perm-paso">
+      <p class="perm-paso__titulo"><span class="perm-paso__n"><%= ++n %></span><span>Qué<small>Marca los permisos de <%= varios.label %>. Los que tienen alcance dicen sobre qué registros valen.</small></span></p>
+      <div class="perm-paso__campos">
+        <div class="perm-form__ancho perm-varios">
+          <label class="perm-check perm-varios__todos">
+            <input type="checkbox" data-perm-marcar-todos> <strong>Marcar todos</strong>
+          </label>
+          <ul class="perm-varios__lista">
+            <% varios.permissions.forEach(function (p) { %>
+              <% const opciones = alcancesVarios(p); %>
+              <li class="perm-varios__item">
+                <label class="perm-check">
+                  <input type="checkbox" name="keys" value="<%= p.key %>" data-perm-varios-key>
+                  <span><%= p.label %></span>
+                </label>
+                <% if (p.scopes) { %>
+                  <select name="scope:<%= p.key %>" aria-label="Sobre qué registros vale «<%= p.label %>»" data-perm-scope-varios>
+                    <% opciones.forEach(function (s) { %>
+                      <option value="<%= s %>"<% if (s === 'todo') { %> selected<% } %>><%= scopeLabels[s] %></option>
+                    <% }) %>
+                  </select>
+                <% } %>
+              </li>
+            <% }) %>
+          </ul>
+        </div>
+      </div>
+    </div>
+  <% } else if (clave) { %>
     <input type="hidden" name="permission_key" value="<%= clave %>" data-perm-scopes="<%= defClave && defClave.scopes ? defClave.scopes.join(',') : '' %>">
   <% } else { %>
     <div class="perm-paso">
@@ -162,6 +196,7 @@ let n = 0;
 
   <div class="perm-asignar__pie">
     <% if (defClave) { %><span class="perm-muted"><%= defClave.label %> · <code><%= clave %></code></span><% } %>
-    <button type="submit" class="perm-btn"><%- icono('check') %> Guardar asignación</button>
+    <% if (varios) { %><span class="perm-muted" data-perm-varios-cuenta>Ningún permiso marcado</span><% } %>
+    <button type="submit" class="perm-btn"><%- icono('check') %> <%= varios ? 'Guardar los marcados' : 'Guardar asignación' %></button>
   </div>
 </form>

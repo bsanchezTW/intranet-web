@@ -150,6 +150,48 @@
     actualizar();
   }
 
+  /* «Asignar varios» de un módulo: marcar todos, cuántos van marcados y el
+     alcance de cada uno sólo si se marcó y se concede (denegar quita entero). */
+  function prepararVarios(form) {
+    var todos = form.querySelector("[data-perm-marcar-todos]");
+    var casillas = Array.prototype.slice.call(form.querySelectorAll("[data-perm-varios-key]"));
+    var cuenta = form.querySelector("[data-perm-varios-cuenta]");
+    if (!casillas.length) return;
+    function actualizar() {
+      var marcadas = casillas.filter(function (c) { return c.checked; }).length;
+      var efecto = form.querySelector("[data-perm-effect]:checked");
+      var deniega = efecto && efecto.value === "deniega";
+      if (todos) {
+        todos.checked = marcadas === casillas.length;
+        todos.indeterminate = marcadas > 0 && marcadas < casillas.length;
+      }
+      if (cuenta) {
+        cuenta.textContent = marcadas === 0 ? "Ningún permiso marcado"
+          : marcadas === 1 ? "1 permiso marcado" : marcadas + " permisos marcados";
+      }
+      casillas.forEach(function (c) {
+        var alcance = c.closest(".perm-varios__item").querySelector("[data-perm-scope-varios]");
+        if (!alcance) return;
+        alcance.hidden = deniega;
+        alcance.disabled = deniega || !c.checked;
+      });
+    }
+    if (todos) {
+      todos.addEventListener("change", function () {
+        casillas.forEach(function (c) { c.checked = todos.checked; });
+        actualizar();
+      });
+    }
+    form.addEventListener("change", actualizar);
+    form.addEventListener("submit", function (ev) {
+      if (!casillas.some(function (c) { return c.checked; })) {
+        ev.preventDefault();
+        if (cuenta) cuenta.textContent = "Marca al menos un permiso";
+      }
+    });
+    actualizar();
+  }
+
   function normalizarTexto(s) {
     return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   }
@@ -194,5 +236,6 @@
   document.querySelectorAll("[data-perm-filtro]").forEach(prepararFiltro);
   document.querySelectorAll("form[data-perm-edit]").forEach(prepararEdicion);
   document.querySelectorAll("[data-perm-buscar-lista]").forEach(prepararBuscarLista);
+  document.querySelectorAll("form.perm-asignar--varios").forEach(prepararVarios);
   document.querySelectorAll("[data-perm-buscar-org]").forEach(prepararBuscarOrg);
 })();

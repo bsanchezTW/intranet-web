@@ -29,8 +29,8 @@ const impersonation = require("../services/permissions/impersonation");
  */
 
 const BASE = "/permisos";
-const CSS = ["/css/permisos.css?v=20261105d"];
-const JS = ["/js/permisos.js?v=20261105a"];
+const CSS = ["/css/permisos.css?v=20261105e"];
+const JS = ["/js/permisos.js?v=20261105b"];
 
 router.use((req, res, next) => {
   if (req.perms && req.perms.superadmin) return next();
@@ -341,6 +341,28 @@ router.post("/asignaciones", async (req, res) => {
   }
 });
 
+/**
+ * «Asignar varios» de un módulo: campos keys (varios) y scope:<clave> para
+ * los permisos con alcance. El resto (destinatario, efecto, vigencia,
+ * motivo) es común a todos.
+ */
+function itemsFromBulkBody(body) {
+  const keys = [].concat((body && body.keys) || []).map(String).filter(Boolean);
+  return [...new Set(keys)].map((key) => ({ permission_key: key, scope: body[`scope:${key}`] || null }));
+}
+
+router.post("/asignaciones/varias", async (req, res) => {
+  const to = volver(req, `${BASE}/modulos`);
+  try {
+    const { created, skipped } = await store.createAssignments(req.body, itemsFromBulkBody(req.body), actorId(req));
+    const verbo = req.body.effect === "deniega" ? "denegados" : "asignados";
+    const msg = created === 1 ? `1 permiso ${verbo}` : `${created} permisos ${verbo}`;
+    return ok(res, to, skipped ? `${msg} (${skipped} ya estaban)` : msg);
+  } catch (err) {
+    return fail(res, to, err);
+  }
+});
+
 router.post("/asignaciones/:id", async (req, res) => {
   const to = volver(req, BASE);
   try {
@@ -429,3 +451,4 @@ router.get("/auditoria", async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.itemsFromBulkBody = itemsFromBulkBody;

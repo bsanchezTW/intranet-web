@@ -315,41 +315,86 @@ async function setGroupMember(groupId, userId, member, actorId) {
 
 // --- Asignaciones --------------------------------------------------------------
 
+async function insertAssignment(client, value, actorId) {
+  const { rows } = await client.query(
+    `INSERT INTO perm_assignments
+       (principal_type, area_id, user_id, include_subareas, group_id, permission_key, scope,
+        scope_area_ids, scope_include_subareas, effect, valid_from, valid_until, note, granted_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     RETURNING *`,
+    [
+      value.principal_type,
+      value.area_id,
+      value.user_id,
+      value.include_subareas,
+      value.group_id,
+      value.permission_key,
+      value.scope,
+      value.scope_area_ids,
+      value.scope_include_subareas,
+      value.effect,
+      value.valid_from,
+      value.valid_until,
+      value.note,
+      actorId || null,
+    ],
+  );
+  await audit(client, {
+    actorId,
+    action: value.effect === "deniega" ? "asignacion.denegar" : "asignacion.conceder",
+    entityType: "asignacion",
+    entityId: rows[0].id,
+    newValue: rows[0],
+  });
+  return rows[0];
+}
+
 async function createAssignment(input, actorId, { catalog = getCatalog() } = {}) {
   return inTransaction(async (client) => {
     const refs = await referenceSets(client);
     const value = validateAssignment(input, { catalog, ...refs, actorId, timeZone: getTimezone() });
-    const { rows } = await client.query(
-      `INSERT INTO perm_assignments
-         (principal_type, area_id, user_id, include_subareas, group_id, permission_key, scope,
-          scope_area_ids, scope_include_subareas, effect, valid_from, valid_until, note, granted_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-       RETURNING *`,
-      [
-        value.principal_type,
-        value.area_id,
-        value.user_id,
-        value.include_subareas,
-        value.group_id,
-        value.permission_key,
-        value.scope,
-        value.scope_area_ids,
-        value.scope_include_subareas,
-        value.effect,
-        value.valid_from,
-        value.valid_until,
-        value.note,
-        actorId || null,
-      ],
+    return insertAssignment(client, value, actorId);
+  });
+}
+
+/**
+ * Varios permisos al mismo destinatario («Asignar varios» de un módulo).
+ * `base`: destinatario, efecto, vigencia y motivo; `items`: [{ permission_key, scope }].
+ * Una transacción: si uno no es válido no se guarda ninguno. Lo que ya está
+ * igual (mismo destinatario, permiso, alcance, efecto y vigencia) no se repite.
+ */
+async function createAssignments(base, items, actorId, { catalog = getCatalog() } = {}) {
+  const list = (items || []).filter((i) => i && i.permission_key);
+  if (!list.length) throw new PermissionInputError("Marca al menos un permiso.");
+  return inTransaction(async (client) => {
+    const refs = await referenceSets(client);
+    const values = list.map((i) =>
+      validateAssignment(
+        { ...base, permission_key: i.permission_key, scope: i.scope, scope_area_ids: [], scope_include_subareas: false },
+        { catalog, ...refs, actorId, timeZone: getTimezone() },
+      ),
     );
-    await audit(client, {
-      actorId,
-      action: value.effect === "deniega" ? "asignacion.denegar" : "asignacion.conceder",
-      entityType: "asignacion",
-      entityId: rows[0].id,
-      newValue: rows[0],
-    });
-    return rows[0];
+    let created = 0;
+    let skipped = 0;
+    for (const v of values) {
+      const { rows: dup } = await client.query(
+        `SELECT 1 FROM perm_assignments
+          WHERE set_id IS NULL AND principal_type = $1
+            AND area_id IS NOT DISTINCT FROM $2 AND user_id IS NOT DISTINCT FROM $3
+            AND group_id IS NOT DISTINCT FROM $4 AND include_subareas = $5
+            AND permission_key = $6 AND scope IS NOT DISTINCT FROM $7 AND effect = $8
+            AND valid_from IS NOT DISTINCT FROM $9 AND valid_until IS NOT DISTINCT FROM $10
+          LIMIT 1`,
+        [v.principal_type, v.area_id, v.user_id, v.group_id, v.include_subareas, v.permission_key, v.scope, v.effect, v.valid_from, v.valid_until],
+      );
+      if (dup.length) {
+        skipped += 1;
+        continue;
+      }
+      await insertAssignment(client, v, actorId);
+      created += 1;
+    }
+    return { created, skipped };
   });
 }
 
@@ -531,6 +576,7 @@ module.exports = {
   deleteGroup,
   setGroupMember,
   createAssignment,
+  createAssignments,
   deleteAssignment,
   updateAssignment,
   revokeFromUser,
