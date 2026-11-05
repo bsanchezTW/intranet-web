@@ -1,6 +1,32 @@
 const express = require("express");
+const requirePermission = require("../middlewares/requirePermission");
+const { denyForbidden } = require("../utils/httpResponses");
 
 const router = express.Router();
+
+/*
+ * Permisos (Gestión de Permisos). Entrar exige letras.acceso (en app.js) y
+ * cada acción su permiso:
+ *   letras.letra.ver           listado y lotes
+ *   letras.letra.crear         emitir
+ *   letras.letra.editar        editar un lote
+ *   letras.letra.eliminar      eliminar letras y lotes
+ *   letras.letra.marcar_pagada marcar pagada y revertir el pago
+ *   letras.letra.anular        anular
+ *   letras.letra.exportar_pdf  imprimir (PDF)
+ */
+const L = Object.freeze({
+  VER: "letras.letra.ver",
+  CREAR: "letras.letra.crear",
+  EDITAR: "letras.letra.editar",
+  ELIMINAR: "letras.letra.eliminar",
+  PAGADA: "letras.letra.marcar_pagada",
+  ANULAR: "letras.letra.anular",
+  PDF: "letras.letra.exportar_pdf",
+});
+const exige = (key) => requirePermission(key);
+/** Qué permiso pide cada cambio de estado. */
+const PERMISO_DE_ACCION = { pagar: L.PAGADA, reactivar: L.PAGADA, anular: L.ANULAR };
 const db = require("../db");
 const bills = require("../services/billsOfExchange/billOfExchangeService");
 const { renderBillsPdf } = require("../services/billsOfExchange/billOfExchangePdf");
@@ -22,7 +48,7 @@ const { todayInCountry, formatDisplay, addDays } = require("../utils/vacationDat
  *
  * Se monta en /letras y no bajo /procesos por la misma razón que /gastos: el
  * router de procesos termina en un catch-all que se tragaría las rutas hijas.
- * El acceso (personal de Finanzas) lo resuelve requireFinanceStaff en app.js.
+ * El acceso lo exige letras.acceso en app.js; cada acción, su permiso.
  */
 
 const VIEW_HELPERS = {
@@ -71,7 +97,7 @@ function sendPdf(res, buffer, filename) {
 // Listado
 // ---------------------------------------------------------------------------
 
-router.get("/", async (req, res) => {
+router.get("/", exige(L.VER), async (req, res) => {
   try {
     const today = todayInCountry();
     const q = String(req.query.q || "").trim().slice(0, 80);
@@ -155,7 +181,7 @@ function batchFormValues(lote) {
   return values;
 }
 
-router.get("/nueva", async (req, res) => {
+router.get("/nueva", exige(L.CREAR), async (req, res) => {
   try {
     await renderForm(res, { values: defaultFormValues(todayInCountry()) });
   } catch (err) {
@@ -164,7 +190,7 @@ router.get("/nueva", async (req, res) => {
   }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", exige(L.CREAR), async (req, res) => {
   const user = req.session.user;
   const { values, errors, ok } = bills.normalizeBatchInput(req.body);
   try {
@@ -189,7 +215,7 @@ router.post("/", async (req, res) => {
 // ---------------------------------------------------------------------------
 
 /** Datos del último lote de ese RUC/DNI para autocompletar. */
-router.get("/api/aceptante", async (req, res) => {
+router.get("/api/aceptante", exige(L.CREAR), async (req, res) => {
   try {
     const data = await bills.findAcceptor(req.query.doc);
     if (!data) return res.status(404).json({ error: "Sin registros previos" });
@@ -201,7 +227,7 @@ router.get("/api/aceptante", async (req, res) => {
 });
 
 /** Próximo número libre de un año, para la vista previa de las cuotas. */
-router.get("/api/siguiente", async (req, res) => {
+router.get("/api/siguiente", exige(L.CREAR), async (req, res) => {
   const year = Number(req.query.anio);
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     return res.status(400).json({ error: "Año inválido" });
@@ -219,7 +245,7 @@ router.get("/api/siguiente", async (req, res) => {
 // Edición y eliminación
 // ---------------------------------------------------------------------------
 
-router.get("/lote/:id/editar", async (req, res) => {
+router.get("/lote/:id/editar", exige(L.EDITAR), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(404).render("404", { titulo: "Página no encontrada" });
   try {
@@ -232,7 +258,7 @@ router.get("/lote/:id/editar", async (req, res) => {
   }
 });
 
-router.post("/lote/:id", async (req, res) => {
+router.post("/lote/:id", exige(L.EDITAR), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(404).render("404", { titulo: "Página no encontrada" });
   const user = req.session.user;
@@ -256,7 +282,7 @@ router.post("/lote/:id", async (req, res) => {
   }
 });
 
-router.post("/lote/:id/eliminar", async (req, res) => {
+router.post("/lote/:id/eliminar", exige(L.ELIMINAR), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).send("Solicitud inválida");
   try {
@@ -274,7 +300,7 @@ router.post("/lote/:id/eliminar", async (req, res) => {
 });
 
 /** Elimina una letra. `volver=lista` regresa al listado en vez de al lote. */
-router.post("/:id/eliminar", async (req, res) => {
+router.post("/:id/eliminar", exige(L.ELIMINAR), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).send("Solicitud inválida");
   try {
@@ -294,7 +320,7 @@ router.post("/:id/eliminar", async (req, res) => {
 // Lote: detalle, impresión y estados
 // ---------------------------------------------------------------------------
 
-router.get("/lote/:id", async (req, res) => {
+router.get("/lote/:id", exige(L.VER), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(404).render("404", { titulo: "Página no encontrada" });
   try {
@@ -316,7 +342,7 @@ router.get("/lote/:id", async (req, res) => {
 });
 
 /** Todas las letras del lote que no están anuladas, una por hoja. */
-router.get("/lote/:id/pdf", async (req, res) => {
+router.get("/lote/:id/pdf", exige(L.PDF), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(404).send("No encontrado");
   try {
@@ -340,7 +366,7 @@ router.get("/lote/:id/pdf", async (req, res) => {
 });
 
 /** Una letra suelta. Si está anulada sale con la marca ANULADA. */
-router.get("/:id/pdf", async (req, res) => {
+router.get("/:id/pdf", exige(L.PDF), async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(404).send("No encontrado");
   try {
@@ -371,6 +397,7 @@ router.post("/:id/estado", async (req, res) => {
   const id = parseId(req.params.id);
   const accion = String(req.body.accion || "");
   if (!id || !ACTION_MESSAGES[accion]) return res.status(400).send("Solicitud inválida");
+  if (!req.perms || !req.perms.can(PERMISO_DE_ACCION[accion])) return denyForbidden(req, res);
   try {
     const found = await bills.getBill(id);
     if (!found) return res.status(404).send("No encontrado");

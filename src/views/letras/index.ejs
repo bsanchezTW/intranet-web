@@ -29,7 +29,7 @@
       </p>
     </div>
     <div class="page-header-actions">
-      <a href="/letras/nueva" class="page-header-btn"><%- include('../partials/icon', { name: 'plus' }) %> Emitir letras</a>
+      <a href="/letras/nueva" class="page-header-btn"<% if (!can('letras.letra.crear')) { %> hidden<% } %>><%- include('../partials/icon', { name: 'plus' }) %> Emitir letras</a>
     </div>
   </div>
 
@@ -74,7 +74,7 @@
         <a href="/letras">Ver todas</a>
       <% } else { %>
         <p>Todavía no se ha emitido ninguna letra de cambio.</p>
-        <a href="/letras/nueva" class="page-header-btn"><%- include('../partials/icon', { name: 'plus' }) %> Emitir la primera</a>
+        <a href="/letras/nueva" class="page-header-btn"<% if (!can('letras.letra.crear')) { %> hidden<% } %>><%- include('../partials/icon', { name: 'plus' }) %> Emitir la primera</a>
       <% } %>
     </div>
   <% } else { %>
@@ -109,9 +109,9 @@
               <td data-label="Importe" class="num"><%= formatBillMoney(l.amount) %></td>
               <td data-label="Estado"><span class="letra-estado letra-estado--<%= estado.key %>"><%= estado.label %></span></td>
               <td class="letras-tabla__acciones">
-                <a href="/letras/<%= l.id %>/pdf" target="_blank" rel="noopener" class="letras-icono-btn" title="Imprimir <%= l.number %>" aria-label="Imprimir <%= l.number %>"><%- include('../partials/icon', { name: 'printer' }) %></a>
-                <a href="/letras/lote/<%= l.batch_id %>/editar" class="letras-icono-btn" title="Editar <%= l.number %>" aria-label="Editar <%= l.number %>"><%- include('../partials/icon', { name: 'edit' }) %></a>
-                <form method="post" action="/letras/<%= l.id %>/eliminar"
+                <a href="/letras/<%= l.id %>/pdf" target="_blank" rel="noopener"<% if (!can('letras.letra.exportar_pdf')) { %> hidden<% } %> class="letras-icono-btn" title="Imprimir <%= l.number %>" aria-label="Imprimir <%= l.number %>"><%- include('../partials/icon', { name: 'printer' }) %></a>
+                <a href="/letras/lote/<%= l.batch_id %>/editar"<% if (!can('letras.letra.editar')) { %> hidden<% } %> class="letras-icono-btn" title="Editar <%= l.number %>" aria-label="Editar <%= l.number %>"><%- include('../partials/icon', { name: 'edit' }) %></a>
+                <form method="post" action="/letras/<%= l.id %>/eliminar"<% if (!can('letras.letra.eliminar')) { %> hidden<% } %>
                       data-confirm="La letra <%= l.number %> se borrará del registro. Esta acción no se puede deshacer."
                       data-confirm-title="¿Eliminar la letra?" data-confirm-accept="Eliminar" data-confirm-tone="peligro">
                   <input type="hidden" name="volver" value="lista">

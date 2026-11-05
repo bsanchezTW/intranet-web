@@ -73,8 +73,6 @@ const logisticaRoutes = isFeatureEnabled("logistics")
   ? require("./routes/logistica")
   : null;
 const { ensureLogisticsSchema } = require("./services/logistics/logisticsSchema");
-const requireFinanceStaff = require("./middlewares/requireFinanceStaff");
-const { isFinanceStaff } = require("./services/expenses/financeTeam");
 const {
   ensureBillOfExchangeSchema,
 } = require("./services/billsOfExchange/billOfExchangeSchema");
@@ -601,10 +599,6 @@ app.use(async (req, res, next) => {
     res.locals.canManageRrhh = gestionaRrhh;
     // Vacaciones (Gestión de Permisos): la bandeja de aprobación y la gestión
     // de RRHH se calculan más abajo, con req.perms.
-    // Personal de Finanzas: ve las letras de cambio en el menú y en Procesos.
-    res.locals.canIssueBills = isFeatureEnabled("billsOfExchange")
-      ? await isFinanceStaff(user).catch(() => false)
-      : false;
 
     // Gestión de Permisos: req.perms para rutas y políticas, can('clave') en
     // las vistas; los dos pasan por decide().
@@ -618,6 +612,8 @@ app.use(async (req, res, next) => {
     res.locals.veListadoCarpetas = veListadoDeCarpetas(req.perms);
     res.locals.isAreaManager = isFeatureEnabled("vacations") && vacationPolicy.aprueba(req.perms);
     res.locals.veGestionVacaciones = isFeatureEnabled("vacations") && vacationPolicy.veGestion(req.perms);
+    // Letras de cambio en el menú y en Procesos: con «Entrar a Letras».
+    res.locals.canIssueBills = isFeatureEnabled("billsOfExchange") && Boolean(req.perms && req.perms.can("letras.acceso"));
     res.locals.can = buildViewCan(req.perms);
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
@@ -660,7 +656,7 @@ if (letrasRoutes) {
     "/letras",
     requireAuth,
     requireFeature("billsOfExchange"),
-    requireFinanceStaff(),
+    requirePermission("letras.acceso"),
     letrasRoutes,
   );
 }
