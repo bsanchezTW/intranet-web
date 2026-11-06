@@ -22,7 +22,9 @@ const { formatDisplay } = require("../../utils/vacationDateUtils");
  * encabezado de la categoría repetido.
  */
 
-const LOGO_PATH = path.join(__dirname, "..", "..", "public", "img", "logotw_blue.png");
+// El de 4000 px lo decodifica pdfkit entero (png-js) y en cPanel el proceso
+// muere por falta de memoria. Esta copia mide 800 px.
+const LOGO_PATH = path.join(__dirname, "..", "billsOfExchange", "logotw_blue_print.png");
 
 const BLUE = "#26388f";
 const INK = "#111111";

@@ -87,10 +87,20 @@ async function logChange(userId, action, batchId) {
 }
 
 function sendPdf(res, buffer, filename) {
+  const body = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
   res.set("Content-Type", "application/pdf");
   res.set("Content-Disposition", `inline; filename="${filename}"`);
   res.set("Cache-Control", "private, no-store");
-  res.send(buffer);
+  res.set("Content-Length", String(body.length));
+  // Si Passenger corta el socket, el 'error' sin listener mata el proceso.
+  res.on("error", (err) => {
+    console.error("[Letras] Respuesta PDF interrumpida:", err.message);
+  });
+  // express-session, con Content-Length, retiene el último byte hasta que
+  // Postgres guarda la sesión. Passenger lo toma por una respuesta cortada
+  // y tumba la app. El cuerpo sale entero en write; end sólo la cierra.
+  res.write(body);
+  res.end();
 }
 
 // ---------------------------------------------------------------------------

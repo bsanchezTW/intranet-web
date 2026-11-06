@@ -1,5 +1,7 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("fs");
+const path = require("path");
 
 process.env.COUNTRY = process.env.COUNTRY || "PE";
 
@@ -241,6 +243,17 @@ describe("billOfExchangePdf — impresión", () => {
     const raw = pdf.toString("latin1");
     assert.match(raw, /\/MediaBox \[0 0 792 612\]/);
     assert.match(raw, /\/PrintScaling \/None/);
+  });
+
+  it("incrusta un logo chico: el PNG de 4000 px agota la memoria al imprimir", () => {
+    const png = fs.readFileSync(
+      path.join(__dirname, "../src/services/billsOfExchange/logotw_blue_print.png"),
+    );
+    assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+    const width = png.readUInt32BE(16);
+    const height = png.readUInt32BE(20);
+    assert.ok(width >= 400 && width <= 800, `ancho ${width}`);
+    assert.ok(height >= 100 && height <= 300, `alto ${height}`);
   });
 
   it("deja en blanco los datos del representante legal", () => {

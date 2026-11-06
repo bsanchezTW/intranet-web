@@ -32,7 +32,10 @@ const { formatDisplay } = require("../../utils/vacationDateUtils");
  * deforman.
  */
 
-const LOGO_PATH = path.join(__dirname, "..", "..", "public", "img", "logotw_blue.png");
+// Copia a 800 px de public/img/logotw_blue.png (4000 × 1098), mismas
+// proporciones. pdfkit decodifica el PNG completo en memoria: el original
+// suma unos 80 MB y en cPanel el proceso muere al imprimir.
+const LOGO_PATH = path.join(__dirname, "logotw_blue_print.png");
 
 const BLUE = "#26388f";
 const INK = "#111111";
