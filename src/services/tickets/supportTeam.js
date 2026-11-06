@@ -64,8 +64,6 @@ async function getAgentById(userId) {
 }
 
 /** Ya no hay caché propio: se conserva para quien lo llama tras cambiar áreas. */
-function invalidateSupportTeam() {}
-
 /** Correos del personal de Informática (Chile y Perú: el equipo de esta instancia). */
 async function supportAgentEmails() {
   const agents = await listSupportAgents();
@@ -83,5 +81,4 @@ module.exports = {
   isSupportAgent,
   getAgentById,
   supportAgentEmails,
-  invalidateSupportTeam,
 };

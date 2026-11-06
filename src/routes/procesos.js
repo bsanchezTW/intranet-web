@@ -4,7 +4,6 @@ const router = express.Router();
 const db = require("../db");
 const multer = require("multer");
 const fileStorage = require("../services/fileStorage");
-const { isAdministrador, normalizeRole } = require("../constants/roles");
 const {
   puedeVerCarpeta,
   puedeSubir,
@@ -79,10 +78,6 @@ function mapDocumentoRow(row) {
   };
 }
 
-function esAdmin(user) {
-  return !!user && isAdministrador(normalizeRole(user.role));
-}
-
 function negarAccion(req, res) {
   const accept = req.headers.accept || "";
   const json = req.xhr || accept.includes("application/json") || /\/(upload|subir)(\/|$)/.test(req.path)
@@ -104,7 +99,6 @@ async function areaDeSubida(seccion, area) {
 
 router.get("/", async (req, res) => {
   const user = req.session.user;
-  const admin = esAdmin(user);
 
   try {
     const context = await areaManager.getUserAreaContext(user.id);

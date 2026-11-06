@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 process.env.COUNTRY = process.env.COUNTRY || "CL";
 
 const { sessionAccountState } = require("../src/services/access/accountStatus");
-const { classifyContentPath, canOpenAreaFolder } = require("../src/services/access/contentAccess");
+const { classifyContentPath, canAccessContent } = require("../src/services/access/contentAccess");
 const { reviewerStageFor } = require("../src/services/expenses/expenseRequestService");
 const { EXPENSE_STATUS } = require("../src/constants/expenseStatuses");
 
@@ -55,7 +55,7 @@ describe("/content — qué regla le toca a cada archivo", () => {
       ownerId: 614793,
       requestId: null,
     });
-    assert.equal(classifyContentPath("gastos/raro.pdf").kind, "admin_only");
+    assert.equal(classifyContentPath("gastos/raro.pdf").kind, "unmatched");
   });
 
   it("adjuntos de tickets por número de ticket", () => {
@@ -78,17 +78,13 @@ describe("/content — qué regla le toca a cada archivo", () => {
   });
 });
 
-describe("/content — carpetas de Procesos", () => {
-  it("un colaborador abre sólo la carpeta de su área", () => {
-    assert.equal(canOpenAreaFolder({ folder: "12", isAdmin: false, userAreaId: 12 }), true);
-    assert.equal(canOpenAreaFolder({ folder: "13", isAdmin: false, userAreaId: 12 }), false);
-    assert.equal(canOpenAreaFolder({ folder: "12", isAdmin: false, userAreaId: null }), false);
-  });
-
-  it("sin área sólo para administradores; general para todos", () => {
-    assert.equal(canOpenAreaFolder({ folder: "sin-area", isAdmin: false, userAreaId: 12 }), false);
-    assert.equal(canOpenAreaFolder({ folder: "sin-area", isAdmin: true, userAreaId: null }), true);
-    assert.equal(canOpenAreaFolder({ folder: "general", isAdmin: false, userAreaId: null }), true);
+describe("/content — lo que no calza con ningún registro", () => {
+  // Antes lo abría el rol Administrador; ahora nadie (las carpetas de Procesos
+  // se prueban con sus permisos en permissions-procesos).
+  it("no se sirve a nadie, tampoco a quien antes era Administrador", async () => {
+    const exAdmin = { id: 7, role: "Administrador", is_superadmin: true };
+    assert.equal(await canAccessContent(exAdmin, "gastos/raro.pdf"), false);
+    assert.equal(await canAccessContent(exAdmin, "tickets_adjuntos/raro.pdf"), false);
   });
 });
 

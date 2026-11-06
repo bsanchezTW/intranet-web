@@ -11,18 +11,26 @@
  * features y permisos. Los portales externos sólo se enlazan.
  */
 
-const ACCESS = Object.freeze({
-  ALL: "all",
-  ADMIN: "admin",
-  // Jefes de área, aprobadores de Finanzas y administradores (expensePolicy.esRevisor).
-  EXPENSE_REVIEWER: "expenseReviewer",
-  // Administradores de RRHH o de Informática (services/access/staffAccess).
-  RRHH_MANAGER: "rrhhManager",
-});
+const { decide } = require("../services/permissions/decide");
+const expensePolicy = require("../services/expenses/expensePolicy");
+const vacationPolicy = require("../services/vacations/vacationPolicy");
+const { veListadoDeCarpetas } = require("../services/documents/processAccess");
 
+/*
+  Cada página interna lleva `allowed(perms)`: los mismos permisos que exige su
+  ruta en Gestión de Permisos. Así el asistente no ofrece lo que daría 403.
+  Los portales externos no llevan permiso (sólo se enlazan).
+*/
+
+/** Todas las claves concedidas. */
+function puede(...keys) {
+  return (perms) => keys.every((key) => decide(perms, key));
+}
+
+/** Quien no ve el listado de carpetas entra directo a la de su área, como en Procesos. */
 function areaFolderHref(section) {
   return (ctx) =>
-    !ctx.isAdmin && ctx.workAreaId
+    !veListadoDeCarpetas(ctx.perms) && ctx.workAreaId
       ? `/procesos/${section}/${ctx.workAreaId}`
       : `/procesos/${section}`;
 }
@@ -30,6 +38,7 @@ function areaFolderHref(section) {
 const GUIDE_ENTRIES = Object.freeze([
   {
     id: "inicio",
+    allowed: puede("inicio.acceso"),
     title: "Inicio",
     href: "/",
     paths: [/^\/$/],
@@ -42,6 +51,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "noticias",
+    allowed: puede("noticias.acceso", "noticias.noticia.ver"),
     title: "Noticias y comunicados",
     href: "/noticias",
     paths: [/^\/noticias(\/|$)/],
@@ -49,6 +59,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "procesos",
+    allowed: puede("procesos.acceso"),
     title: "Procesos y Documentos",
     href: "/procesos",
     paths: [/^\/procesos\/?$/],
@@ -61,6 +72,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "reglamento",
+    allowed: puede("procesos.acceso", "procesos.reglamento.ver"),
     title: "Reglamento interno",
     href: "/procesos/reglamento",
     paths: [/^\/procesos\/reglamento(\/|$)/],
@@ -68,6 +80,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "otros-documentos",
+    allowed: puede("procesos.acceso", "procesos.otros.ver"),
     title: "Otros documentos",
     href: "/procesos/otros",
     paths: [/^\/procesos\/otros(\/|$)/],
@@ -75,6 +88,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "procedimientos",
+    allowed: puede("procesos.acceso", "procesos.procedimientos.ver"),
     title: "Procedimientos",
     href: "/procesos/procedimientos",
     hrefFor: areaFolderHref("procedimientos"),
@@ -83,6 +97,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "protocolos",
+    allowed: puede("procesos.acceso", "procesos.protocolos.ver"),
     title: "Protocolos",
     href: "/procesos/protocolos",
     hrefFor: areaFolderHref("protocolos"),
@@ -91,6 +106,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "gastos-rendicion",
+    allowed: puede("gastos.acceso", "gastos.solicitud.crear"),
     title: "Rendir gastos",
     href: "/gastos/nueva/rendicion",
     feature: "expenseRequests",
@@ -110,6 +126,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "gastos-fondos",
+    allowed: puede("gastos.acceso", "gastos.solicitud.crear"),
     title: "Solicitar fondos",
     href: "/gastos/nueva/fondos",
     feature: "expenseRequests",
@@ -122,6 +139,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "gastos-mis-solicitudes",
+    allowed: puede("gastos.acceso"),
     title: "Mis solicitudes de gastos",
     href: "/gastos",
     feature: "expenseRequests",
@@ -130,15 +148,16 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "gastos-gestion",
+    allowed: (perms) => puede("gastos.acceso")(perms) && expensePolicy.esRevisor(perms),
     title: "Gestión de solicitudes de gastos",
     href: "/gastos/gestion",
     feature: "expenseRequests",
-    access: ACCESS.EXPENSE_REVIEWER,
     paths: [/^\/gastos\/gestion(\/|$)/],
     summary: "Aprobar, rechazar y consultar el historial de las solicitudes que te corresponden revisar.",
   },
   {
     id: "rrhh",
+    allowed: puede("rrhh.acceso"),
     title: "Recursos Humanos",
     href: "/RRHH",
     paths: [/^\/RRHH\/?$/],
@@ -146,6 +165,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "personal",
+    allowed: puede("rrhh.directorio.ver"),
     title: "Personal (directorio)",
     href: "/RRHH/personal",
     paths: [/^\/RRHH\/personal(\/|$)/],
@@ -153,6 +173,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "organigrama",
+    allowed: puede("organigrama.acceso"),
     title: "Organigrama",
     href: "/RRHH/organigrama",
     paths: [/^\/RRHH\/organigrama(\/|$)/],
@@ -164,15 +185,16 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "centros-costo",
+    allowed: puede("centros_costo.acceso"),
     title: "Centros de costo",
     href: "/RRHH/centros-costo",
     feature: "expenseCenter",
-    access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/centros-costo(\/|$)/],
     summary: "Centros de costo de la empresa.",
   },
   {
     id: "vacaciones",
+    allowed: puede("vacaciones.acceso"),
     title: "Vacaciones",
     href: "/RRHH/vacaciones",
     feature: "vacations",
@@ -181,6 +203,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "mis-vacaciones",
+    allowed: puede("vacaciones.acceso"),
     title: "Mis vacaciones",
     href: "/RRHH/vacaciones/mis-vacaciones",
     feature: "vacations",
@@ -195,6 +218,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "vacaciones-calendario",
+    allowed: puede("vacaciones.acceso", "vacaciones.calendario.ver"),
     title: "Calendario de vacaciones",
     href: "/RRHH/vacaciones/calendario",
     feature: "vacations",
@@ -203,19 +227,19 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "vacaciones-gestion",
+    allowed: (perms) => puede("vacaciones.acceso")(perms) && vacationPolicy.veGestion(perms),
     title: "Gestión de vacaciones",
     href: "/RRHH/vacaciones/gestion",
     feature: "vacations",
-    access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/vacaciones\/gestion(\/|$)/],
     summary: "Aprobar o rechazar solicitudes de vacaciones y revisar los saldos del equipo.",
   },
   {
     id: "vacaciones-resumen",
+    allowed: (perms) => puede("vacaciones.acceso")(perms) && vacationPolicy.veGestion(perms),
     title: "Resumen de vacaciones",
     href: "/RRHH/vacaciones/gestion/resumen",
     feature: "vacations",
-    access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/vacaciones\/gestion\/resumen(\/|$)/],
     summary:
       "Días vencidos que cada colaborador debe tomar, plazo legal, trunco, liquidación y exportación a Excel. " +
@@ -223,14 +247,15 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "feriados",
+    allowed: puede("feriados.acceso", "feriados.feriado.ver"),
     title: "Feriados",
     href: "/RRHH/feriados",
-    access: ACCESS.RRHH_MANAGER,
     paths: [/^\/RRHH\/feriados(\/|$)/],
     summary: "Administración de los feriados del país: se usan para el horario hábil de Soporte y para las vacaciones.",
   },
   {
     id: "academy",
+    allowed: puede("cursos.acceso"),
     title: "Academy (cursos)",
     href: "/cursos",
     paths: [/^\/cursos(\/|$)/],
@@ -238,6 +263,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "kpi-cursos",
+    allowed: puede("cursos.acceso", "cursos.avance.ver"),
     title: "Dashboard de capacitaciones",
     href: "/kpi-cursos",
     paths: [/^\/kpi-cursos(\/|$)/],
@@ -245,6 +271,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "apps",
+    allowed: puede("apps.acceso", "apps.app.ver"),
     title: "Aplicaciones",
     href: "/apps",
     paths: [/^\/apps(\/|$)/],
@@ -252,6 +279,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "galeria",
+    allowed: puede("eventos.acceso", "eventos.evento.ver"),
     title: "Galería de eventos",
     href: "/marketing/eventos",
     paths: [/^\/marketing(\/|$)/],
@@ -259,6 +287,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "soporte",
+    allowed: puede("soporte.acceso"),
     title: "Soporte",
     href: "/soporte",
     feature: "supportTickets",
@@ -273,6 +302,7 @@ const GUIDE_ENTRIES = Object.freeze([
   },
   {
     id: "perfil",
+    allowed: puede("perfil.acceso"),
     title: "Mi perfil",
     href: "/perfil",
     paths: [/^\/perfil(\/|$)/],
@@ -317,17 +347,14 @@ const GUIDE_ENTRIES = Object.freeze([
 
 function isEntryVisible(entry, ctx) {
   if (entry.feature && !(ctx.features && ctx.features[entry.feature])) return false;
-  if (entry.access === ACCESS.ADMIN) return Boolean(ctx.isAdmin);
-  if (entry.access === ACCESS.RRHH_MANAGER) return Boolean(ctx.canManageRrhh);
-  if (entry.access === ACCESS.EXPENSE_REVIEWER) {
-    return Boolean(ctx.isAdmin || ctx.isExpenseReviewer);
-  }
+  if (entry.allowed) return Boolean(entry.allowed(ctx.perms || null));
   return true;
 }
 
 /**
  * Catálogo que corresponde a este usuario, con el href ya resuelto.
- * @param ctx { features, isAdmin, isExpenseReviewer, canManageRrhh, workAreaId }
+ * Sin `perms` sólo quedan los portales externos.
+ * @param ctx { features, perms, workAreaId }
  */
 function guideForUser(ctx = {}) {
   return GUIDE_ENTRIES.filter((entry) => isEntryVisible(entry, ctx)).map((entry) => {
@@ -404,7 +431,6 @@ function formatGuideForPrompt(entries) {
 }
 
 module.exports = {
-  ACCESS,
   GUIDE_ENTRIES,
   guideForUser,
   findEntryForPath,

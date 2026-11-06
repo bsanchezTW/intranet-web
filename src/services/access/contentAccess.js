@@ -1,7 +1,5 @@
 const db = require("../../db");
-const { isAdministrador, normalizeRole } = require("../../constants/roles");
 const { SLUG_SIN_AREA, GENERAL_AREA } = require("../documents/processDocumentStorage");
-const { currentWorkAreaId } = require("./accountStatus");
 const { puedeVerDocumento } = require("../documents/processAccess");
 const { sameEmail } = require("../../utils/email");
 
@@ -13,12 +11,13 @@ const { sameEmail } = require("../../utils/email");
  * que la página donde se publica el archivo:
  *
  *   documentos/<procedimientos|protocolos>/<id de área>/…
- *       → la carpeta de Procesos: su área o un administrador. `sin-area`, sólo
- *         administradores. `general` (reglamento, otros), todos.
+ *       → quien puede ver esa carpeta en Gestión de Permisos (puedeVerDocumento).
  *   gastos/<año>/<id de usuario>/<id de solicitud>_<n>…
  *       → el dueño o quien puede ver la rendición.
  *   tickets_adjuntos/<id de ticket>_…
- *       → quien abrió el ticket, un administrador o la mesa de ayuda.
+ *       → quien puede ver ese ticket (soporte.ticket.ver).
+ *   otra forma bajo gastos/ o tickets_adjuntos/
+ *       → nadie: no corresponde a ningún registro.
  *   logistica/…
  *       → nadie por /content: las fotos de daños y las capturas de la
  *         revisión física las entrega /logistica, que revisa su permiso.
@@ -46,39 +45,17 @@ function classifyContentPath(relativePath) {
       requestId: expense[2] ? Number(expense[2].slice(0, -1)) : null,
     };
   }
-  // Cualquier otra forma bajo gastos/ no es de nadie conocido: nadie más que
-  // un administrador la necesita.
-  if (path.startsWith("gastos/")) return { kind: "admin_only" };
+  // Cualquier otra forma bajo gastos/ o tickets_adjuntos/ no es de ningún
+  // registro conocido: no se sirve.
+  if (path.startsWith("gastos/")) return { kind: "unmatched" };
 
   const ticket = TICKET_ATTACHMENT.exec(path);
   if (ticket) return { kind: "ticket_attachment", ticketId: Number(ticket[1]) };
-  if (path.startsWith("tickets_adjuntos/")) return { kind: "admin_only" };
+  if (path.startsWith("tickets_adjuntos/")) return { kind: "unmatched" };
 
   if (path.startsWith("logistica/")) return { kind: "module_only" };
 
   return { kind: "open" };
-}
-
-/**
- * Regla de la carpeta de Procesos (la misma de GET /procesos/:seccion/:area).
- * `userAreaId` es el área vigente del usuario.
- */
-function canOpenAreaFolder({ folder, isAdmin, userAreaId }) {
-  if (folder === GENERAL_AREA) return true;
-  if (isAdmin) return true;
-  if (folder === SLUG_SIN_AREA) return false;
-  return userAreaId != null && String(userAreaId) === folder;
-}
-
-/**
- * Carpeta que vale para el documento: la de su fila, si la tiene. Un archivo
- * migrado a `sin-area` puede pertenecer hoy a un área (se reasignó después) y
- * el archivo no se movió.
- */
-async function documentFolder(relativePath, folder) {
-  const row = await documentRow(relativePath);
-  if (!row) return folder;
-  return row.work_area_id == null ? SLUG_SIN_AREA : String(row.work_area_id);
 }
 
 /** Fila de documents, si el archivo está registrado. */
@@ -88,11 +65,6 @@ async function documentRow(relativePath) {
     [relativePath],
   );
   return rows[0] || null;
-}
-
-async function userAreaIdFor(user) {
-  const current = await currentWorkAreaId(user.id);
-  return current === undefined ? user.work_area_id ?? null : current;
 }
 
 async function canOpenExpenseAttachment(user, { ownerId, requestId }) {
@@ -131,54 +103,43 @@ async function canOpenTicketAttachment(user, { ticketId }) {
 
 /**
  * ¿Puede `user` (de sesión) descargar `relativePath`?
- * `perms` lo arma /content, que corre antes del middleware de permisos.
- * Sin él, la carpeta de Procesos sigue la regla anterior
- * (canOpenAreaFolder) para no dejar la descarga abierta.
+ * `perms` lo arma /content, que corre antes del middleware de permisos; sin
+ * él se resuelven aquí.
  */
 async function canAccessContent(user, relativePath, { perms = null } = {}) {
   if (!user) return false;
   const rule = classifyContentPath(relativePath);
   if (rule.kind === "open") return true;
 
-  const isAdmin = isAdministrador(normalizeRole(user.role));
   switch (rule.kind) {
     case "area_document": {
-      if (perms) {
-        if (rule.section === "reglamento" || rule.section === "otros" || rule.folder === GENERAL_AREA) {
-          return puedeVerDocumento(perms, { section: rule.section, folder: rule.folder });
-        }
-        const row = await documentRow(relativePath);
-        const folder = row
-          ? (row.work_area_id == null ? SLUG_SIN_AREA : String(row.work_area_id))
-          : rule.folder;
-        return puedeVerDocumento(perms, { section: rule.section, folder, row });
+      const efectivos = perms || (await require("../permissions/permissionService").resolve(user));
+      if (rule.section === "reglamento" || rule.section === "otros" || rule.folder === GENERAL_AREA) {
+        return puedeVerDocumento(efectivos, { section: rule.section, folder: rule.folder });
       }
-      if (rule.folder === GENERAL_AREA || isAdmin) return true;
-      return canOpenAreaFolder({
-        folder: await documentFolder(relativePath, rule.folder),
-        isAdmin,
-        userAreaId: await userAreaIdFor(user),
-      });
+      // Vale la carpeta de su fila: un archivo migrado a `sin-area` puede
+      // pertenecer hoy a un área (se reasignó después) y no se movió.
+      const row = await documentRow(relativePath);
+      const folder = row
+        ? (row.work_area_id == null ? SLUG_SIN_AREA : String(row.work_area_id))
+        : rule.folder;
+      return puedeVerDocumento(efectivos, { section: rule.section, folder, row });
     }
     case "expense_attachment":
-      // Fases 7 y 8: comprobantes de gastos, con la regla de hoy.
       return canOpenExpenseAttachment(user, rule);
     case "ticket_attachment":
       return canOpenTicketAttachment(user, rule);
     case "module_only":
       // Lo sirve su módulo (con su permiso), nunca /content.
       return false;
-    case "admin_only":
-      // Fases 7 y 8: lo que no calza en una carpeta conocida sigue en el administrador.
-      return isAdmin;
     default:
+      // unmatched y cualquier forma desconocida.
       return false;
   }
 }
 
 module.exports = {
   classifyContentPath,
-  canOpenAreaFolder,
   canAccessContent,
   puedeVerDocumento,
 };

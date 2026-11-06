@@ -315,7 +315,7 @@ function sanitizePage(raw) {
 const yesNo = (value) => (value ? "sí" : "no");
 
 /** Bloque de sistema del turno: página actual y usuario. Cambia en cada turno, va fuera del caché. */
-function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReviewer, features = {}, attachments = null }) {
+function buildContextPrompt({ entries, page, user = {}, isExpenseReviewer, features = {}, attachments = null }) {
   const current = findEntryForPath(page.path, entries);
   const pageLine = current
     ? `${current.title} (\`${current.id}\`)`
@@ -331,7 +331,7 @@ function buildContextPrompt({ entries, page, user = {}, isAdmin, isExpenseReview
   return `## CONTEXTO DE ESTE TURNO
 - Página actual: ${page.title || "sin título"} — ruta ${page.path} — ${pageLine}
 - Usuario: ${name}; área: ${user.area || "sin área asignada"}
-- Administrador: ${yesNo(isAdmin)}; revisor de gastos: ${yesNo(isExpenseReviewer)}
+- Revisor de gastos: ${yesNo(isExpenseReviewer)}
 - En esta intranet: Soporte ${yesNo(features.supportTickets)}; rendiciones y fondos ${yesNo(features.expenseRequests)}; portales RRHH de Chile ${yesNo(features.chileHrPortals)}; vacaciones en la intranet ${yesNo(features.vacations)} (si no, se solicitan en Rex+)${attachmentsLine}`;
 }
 

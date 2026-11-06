@@ -23,13 +23,57 @@ const {
   toPublicEvent,
 } = require("../src/services/assistant/directorySearch");
 
+process.env.COUNTRY = process.env.COUNTRY || "CL";
+const { getCatalog } = require("../src/services/permissions/catalog");
+const { computePermissions } = require("../src/services/permissions/resolver");
+
 const CL_FEATURES = { supportTickets: true, expenseCenter: true, expenseRequests: true, vacations: true, chileHrPortals: true, lunchMenu: true };
 const PE_FEATURES = { supportTickets: false, expenseCenter: false, expenseRequests: true, vacations: true, chileHrPortals: false, lunchMenu: false };
 const ids = (entries) => entries.map((entry) => entry.id);
 
+// Catálogo con los módulos de los dos países (Vacaciones sólo existe en Perú,
+// Soporte sólo en Chile): la guía se prueba con ambos a la vez.
+const CL = getCatalog("CL");
+const AMBOS = { ...CL, byKey: new Map([...getCatalog("PE").byKey, ...CL.byKey]) };
+
+/**
+ * Permisos de una persona (id 8, área 7). Cada clave va con el alcance más
+ * corto que admite (propio, si no mi área); las de `todo`, a toda la empresa.
+ */
+function permisos(keys, { todo = [] } = {}) {
+  const lista = [...keys, ...todo];
+  const alcance = (key) => {
+    const scopes = (AMBOS.byKey.get(key) || {}).scopes || [];
+    if (todo.includes(key)) return scopes.includes("todo") ? "todo" : null;
+    if (scopes.includes("propio")) return "propio";
+    return scopes.includes("mi_area") ? "mi_area" : null;
+  };
+  const snapshot = {
+    users: new Map([[8, { id: 8, role: "Usuario", work_area_id: 7 }]]),
+    areas: [{ id: 7, parent_area_id: null, manager_user_id: null }],
+    assignments: lista.map((key, i) => ({
+      id: i + 1, principal_type: "user", user_id: 8, permission_key: key,
+      scope: alcance(key), scope_area_ids: [], scope_include_subareas: false, effect: "concede",
+    })),
+  };
+  return computePermissions(snapshot, { id: 8 }, { catalog: AMBOS });
+}
+
+// Lo que tiene cualquier colaborador después del arranque.
+const BASICO = [
+  "inicio.acceso", "noticias.acceso", "noticias.noticia.ver", "procesos.acceso", "procesos.reglamento.ver",
+  "procesos.otros.ver", "procesos.procedimientos.ver", "procesos.protocolos.ver", "gastos.acceso",
+  "gastos.solicitud.crear", "gastos.solicitud.ver", "rrhh.acceso", "rrhh.directorio.ver", "organigrama.acceso",
+  "vacaciones.acceso", "vacaciones.solicitud.crear", "vacaciones.calendario.ver", "cursos.acceso", "apps.acceso",
+  "apps.app.ver", "eventos.acceso", "eventos.evento.ver", "soporte.acceso", "perfil.acceso",
+];
+const RRHH = [...BASICO, "centros_costo.acceso", "feriados.acceso", "feriados.feriado.ver"];
+const colaborador = () => permisos(BASICO);
+const gestorRrhh = () => permisos(RRHH, { todo: ["vacaciones.solicitud.ver", "procesos.sin_area.ver"] });
+
 describe("intranetGuide — catálogo filtrado", () => {
-  it("oculta lo que la instancia no tiene y lo que el rol no ve", () => {
-    const user = guideForUser({ features: PE_FEATURES, isAdmin: false, workAreaId: 7 });
+  it("oculta lo que la instancia no tiene y lo que los permisos no dejan ver", () => {
+    const user = guideForUser({ features: PE_FEATURES, perms: colaborador(), workAreaId: 7 });
     assert.equal(ids(user).includes("soporte"), false);
     assert.equal(ids(user).includes("rex"), false);
     assert.equal(ids(user).includes("vacaciones-gestion"), false);
@@ -37,52 +81,59 @@ describe("intranetGuide — catálogo filtrado", () => {
     assert.equal(ids(user).includes("gastos-rendicion"), true);
   });
 
+  it("sin permisos sólo quedan los portales externos", () => {
+    const nada = guideForUser({ features: CL_FEATURES, perms: permisos([]) });
+    assert.equal(nada.every((entry) => entry.external), true);
+    assert.equal(guideForUser({ features: CL_FEATURES }).every((entry) => entry.external), true);
+  });
+
   it("sin rendiciones no ofrece gastos, pero sí los centros de costo", () => {
-    const entries = ids(guideForUser({ features: { ...CL_FEATURES, expenseRequests: false }, isAdmin: true, canManageRrhh: true }));
+    const entries = ids(guideForUser({ features: { ...CL_FEATURES, expenseRequests: false }, perms: gestorRrhh() }));
     assert.equal(entries.some((id) => id.startsWith("gastos-")), false);
     assert.ok(entries.includes("centros-costo"));
   });
 
-  it("sin Vacaciones ofrece Rex+ y los feriados siguen para quien gestiona RRHH", () => {
+  it("sin Vacaciones ofrece Rex+ y los feriados siguen para quien tiene su permiso", () => {
     const chile = { ...CL_FEATURES, vacations: false };
-    const rrhh = ids(guideForUser({ features: chile, isAdmin: true, canManageRrhh: true }));
+    const rrhh = ids(guideForUser({ features: chile, perms: gestorRrhh() }));
     assert.equal(rrhh.some((id) => id.includes("vacaciones")), false);
     assert.ok(rrhh.includes("feriados"));
     assert.ok(rrhh.includes("rex"));
-    const otroAdmin = ids(guideForUser({ features: chile, isAdmin: true }));
-    assert.equal(otroAdmin.includes("feriados"), false);
+    assert.equal(ids(guideForUser({ features: chile, perms: colaborador() })).includes("feriados"), false);
   });
 
   it("las áreas se administran en el organigrama: no tienen página propia", () => {
-    const rrhh = guideForUser({ features: CL_FEATURES, isAdmin: true, canManageRrhh: true });
+    const rrhh = guideForUser({ features: CL_FEATURES, perms: gestorRrhh() });
     assert.equal(ids(rrhh).includes("areas"), false);
     assert.equal(findEntryForPath("/RRHH/organigrama", rrhh).id, "organigrama");
     assert.equal(findEntryForPath("/RRHH/areas", rrhh), null);
   });
 
-  it("la gestión de gastos es para revisores y administradores", () => {
-    assert.ok(ids(guideForUser({ features: CL_FEATURES, isExpenseReviewer: true })).includes("gastos-gestion"));
-    assert.ok(ids(guideForUser({ features: CL_FEATURES, isAdmin: true, canManageRrhh: true })).includes("vacaciones-gestion"));
+  it("las gestiones de gastos y vacaciones siguen a sus permisos, no a un rol", () => {
+    const jefe = permisos([...BASICO, "gastos.solicitud.aprobar_jefatura"]);
+    assert.ok(ids(guideForUser({ features: CL_FEATURES, perms: jefe })).includes("gastos-gestion"));
+    assert.ok(ids(guideForUser({ features: CL_FEATURES, perms: gestorRrhh() })).includes("vacaciones-gestion"));
+    assert.ok(ids(guideForUser({ features: CL_FEATURES, perms: gestorRrhh() })).includes("vacaciones-resumen"));
   });
 
-  it("procedimientos apunta a la carpeta del área para un usuario normal", () => {
-    const user = guideForUser({ features: CL_FEATURES, isAdmin: false, workAreaId: 7 });
-    const admin = guideForUser({ features: CL_FEATURES, isAdmin: true, workAreaId: 7 });
+  it("procedimientos apunta a la carpeta del área si no ve el listado de carpetas", () => {
+    const user = guideForUser({ features: CL_FEATURES, perms: colaborador(), workAreaId: 7 });
+    const listado = guideForUser({ features: CL_FEATURES, perms: gestorRrhh(), workAreaId: 7 });
     assert.equal(resolvePage("procedimientos", user).href, "/procesos/procedimientos/7");
-    assert.equal(resolvePage("procedimientos", admin).href, "/procesos/procedimientos");
+    assert.equal(resolvePage("procedimientos", listado).href, "/procesos/procedimientos");
   });
 
   it("reconoce la página actual por la ruta más específica", () => {
-    const admin = guideForUser({ features: CL_FEATURES, isAdmin: true, canManageRrhh: true });
-    assert.equal(findEntryForPath("/RRHH/vacaciones/gestion/12", admin).id, "vacaciones-gestion");
-    assert.equal(findEntryForPath("/RRHH/vacaciones", admin).id, "vacaciones");
-    assert.equal(findEntryForPath("/gastos/nueva/rendicion", admin).id, "gastos-rendicion");
-    assert.equal(findEntryForPath("/gastos/42", admin).id, "gastos-mis-solicitudes");
-    assert.equal(findEntryForPath("/no-existe", admin), null);
+    const rrhh = guideForUser({ features: CL_FEATURES, perms: gestorRrhh() });
+    assert.equal(findEntryForPath("/RRHH/vacaciones/gestion/12", rrhh).id, "vacaciones-gestion");
+    assert.equal(findEntryForPath("/RRHH/vacaciones", rrhh).id, "vacaciones");
+    assert.equal(findEntryForPath("/gastos/nueva/rendicion", rrhh).id, "gastos-rendicion");
+    assert.equal(findEntryForPath("/gastos/42", rrhh).id, "gastos-mis-solicitudes");
+    assert.equal(findEntryForPath("/no-existe", rrhh), null);
   });
 
   it("open_page no resuelve portales externos, ids desconocidos ni páginas ocultas", () => {
-    const user = guideForUser({ features: CL_FEATURES, isAdmin: false });
+    const user = guideForUser({ features: CL_FEATURES, perms: colaborador() });
     assert.equal(resolvePage("rex", user), null);
     assert.equal(resolvePage("/gastos", user), null);
     assert.equal(resolvePage("feriados", user), null);
@@ -96,7 +147,7 @@ describe("intranetGuide — catálogo filtrado", () => {
   });
 
   it("el prompt sólo lista lo visible", () => {
-    const text = formatGuideForPrompt(guideForUser({ features: PE_FEATURES, isAdmin: false }));
+    const text = formatGuideForPrompt(guideForUser({ features: PE_FEATURES, perms: colaborador() }));
     assert.match(text, /gastos-rendicion/);
     assert.doesNotMatch(text, /Soporte TI/);
     assert.doesNotMatch(text, /Rex\+/);
@@ -104,7 +155,7 @@ describe("intranetGuide — catálogo filtrado", () => {
 });
 
 describe("assistantTools — ejecución en el servidor", () => {
-  const entries = guideForUser({ features: CL_FEATURES, isAdmin: false });
+  const entries = guideForUser({ features: CL_FEATURES, perms: colaborador() });
 
   it("open_page ofrece sólo ids internos del catálogo del usuario", () => {
     const openPage = buildToolDefinitions(entries).find((tool) => tool.name === "open_page");
@@ -243,7 +294,6 @@ describe("assistantTools — ejecución en el servidor", () => {
       entries,
       page: { path: "/RRHH/vacaciones", title: "Vacaciones | Intranet" },
       user: { nombre: "Ana Pérez", area: "TI" },
-      isAdmin: false,
       isExpenseReviewer: false,
       features: CL_FEATURES,
     });

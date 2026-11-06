@@ -5,7 +5,6 @@ const requireFeature = require("../middlewares/requireFeature");
 const requirePermission = require("../middlewares/requirePermission");
 const { decide } = require("../services/permissions/decide");
 const receiveTicketAttachments = require("../middlewares/receiveTicketAttachments");
-const { isAdministrador } = require("../constants/roles");
 const { getFeatures } = require("../config/features");
 const { guideForUser } = require("../constants/intranetGuide");
 const {
@@ -28,7 +27,6 @@ const assistantTickets = require("../services/assistant/assistantTickets");
 const { createSupportTicket, listOpenTicketsForUser } = require("../services/tickets/ticketService");
 const expensePolicy = require("../services/expenses/expensePolicy");
 
-const { canManageRrhh } = require("../services/access/staffAccess");
 const { listAppsByCatalog } = require("../services/appCatalogService");
 const { ticketModalUrl } = require("../utils/ticketRedirect");
 const db = require("../db");
@@ -162,15 +160,8 @@ router.post("/api/chat", async (req, res) => {
     const sessionUser = req.session.user;
     const features = res.locals.features || getFeatures();
     const supportTickets = Boolean(features.supportTickets) && decide(req.perms, "soporte.ticket.crear");
-    const isAdmin = isAdministrador(sessionUser.role);
     const isExpenseReviewer = resolveExpenseReviewer(req.perms, { features });
-    const guide = guideForUser({
-      features,
-      isAdmin,
-      isExpenseReviewer,
-      canManageRrhh: await canManageRrhh(sessionUser),
-      workAreaId: sessionUser.work_area_id,
-    });
+    const guide = guideForUser({ features, perms: req.perms, workAreaId: sessionUser.work_area_id });
     const page = sanitizePage(req.body.page);
     // Los archivos siguen en el navegador; el modelo sólo conoce sus nombres.
     const chatAttachments = supportTickets
@@ -203,7 +194,6 @@ router.post("/api/chat", async (req, res) => {
           entries: guide,
           page,
           user: sessionUser,
-          isAdmin,
           isExpenseReviewer,
           features,
           attachments: chatAttachments,

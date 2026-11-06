@@ -67,8 +67,6 @@ const {
 } = require("../utils/contactEmails");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const profileService = require("../services/vacations/vacationProfileService");
-const { invalidateFinanceTeam } = require("../services/expenses/financeTeam");
-const { invalidateSupportTeam } = require("../services/tickets/supportTeam");
 const { invalidateStaffAccess } = require("../services/access/staffAccess");
 const { invalidateAccountStatus } = require("../services/access/accountStatus");
 const { invalidatePermissions } = require("../services/permissions/permissionService");
@@ -251,14 +249,10 @@ function isUniqueViolation(err) {
 }
 
 /**
- * Quién forma la mesa de ayuda y quién aprueba en Finanzas se deduce del área,
- * y ambos servicios lo cachean 60 s. Cualquier cambio de área, de membresía,
- * de rol o de personal tiene que invalidarlos o el permiso queda desfasado
- * hasta un minuto.
+ * Cualquier cambio de área, de membresía, de rol o de personal invalida los
+ * cachés que dependen de ellos, o el permiso queda desfasado hasta un minuto.
  */
 function invalidarCachesDeArea() {
-  invalidateFinanceTeam();
-  invalidateSupportTeam();
   invalidateStaffAccess();
   invalidateAccountStatus();
   // Área, jefatura y rol cambian quién recibe qué en Gestión de Permisos.

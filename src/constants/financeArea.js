@@ -7,7 +7,7 @@
  * consulta pero no liquida) y el rol solo tampoco (un administrador de
  * Marketing no debe ver las rendiciones de toda la empresa).
  *
- * El doble requisito se aplica en services/expenses/financeTeam.js; aquí sólo
+ * El doble requisito lo aplicaba services/expenses/financeTeam.js; aquí sólo
  * vive el nombre del área. Para sumar otra área a Finanzas basta agregarla.
  *
  * Las áreas que dependen de Finanzas en el organigrama (Contabilidad,

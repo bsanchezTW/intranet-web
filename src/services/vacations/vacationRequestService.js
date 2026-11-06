@@ -325,7 +325,7 @@ async function rejectRequest({ requestId, reviewerId, reason }) {
   return { ok: true, request: rows[0] };
 }
 
-async function cancelRequest({ requestId, userId, isAdmin = false }) {
+async function cancelRequest({ requestId, userId }) {
   const client = await db.getClient();
   try {
     await client.query("BEGIN");
@@ -338,7 +338,7 @@ async function cancelRequest({ requestId, userId, isAdmin = false }) {
       await client.query("ROLLBACK");
       return { ok: false, error: VACATION_MESSAGES.requestNotFound };
     }
-    if (!isAdmin && String(request.user_id) !== String(userId)) {
+    if (String(request.user_id) !== String(userId)) {
       await client.query("ROLLBACK");
       return { ok: false, error: VACATION_MESSAGES.cancelOthers };
     }

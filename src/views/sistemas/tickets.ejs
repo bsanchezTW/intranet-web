@@ -1,7 +1,10 @@
 <%
-  const esAdmin = (typeof isAdministrador !== 'undefined' && isAdministrador);
-  // Ver todos los tickets sigue siendo de administrador; gestionarlos es del
-  // área de Informática, y el aviso de "no leído" acompaña a quien atiende.
+  // Todo sale de Gestión de Permisos: la lista completa con «Ver tickets» sobre
+  // todos, la autoayuda con los permisos de Aplicaciones (como en /apps).
+  const veTodos = (typeof veTodosTickets !== 'undefined' && veTodosTickets);
+  const puedeCrearApp = can('apps.app.crear');
+  const puedeOrdenarApps = can('apps.app.ordenar');
+  const usaRecorte = puedeCrearApp || can('apps.app.editar');
   const puedeGestionar = (typeof canManageTickets !== 'undefined' && canManageTickets);
   const apps = (typeof supportApps !== 'undefined' && Array.isArray(supportApps)) ? supportApps : [];
   const listaTickets = (typeof tickets !== 'undefined' && Array.isArray(tickets)) ? tickets : [];
@@ -13,12 +16,12 @@
   const cerrados = listaTickets.length - abiertos;
 %>
 
-<% if (esAdmin) { %>
+<% if (usaRecorte) { %>
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <% } %>
 
-<div class="contenedor soporte-page" data-ticket-list-admin="<%= esAdmin ? 'true' : 'false' %>">
+<div class="contenedor soporte-page" data-ticket-list-admin="<%= veTodos ? 'true' : 'false' %>">
 
   <div class="page-header">
     <span class="page-header__icono" aria-hidden="true"><%- include('../partials/icon', { name: 'headset' }) %></span>
@@ -51,27 +54,29 @@
         <p class="soporte-seccion__desc">Herramientas para resolver los problemas más comunes sin esperar a un técnico.</p>
       </div>
 
-      <% if (esAdmin) { %>
+      <% if (puedeCrearApp || (puedeOrdenarApps && apps.length > 1)) { %>
       <div class="soporte-seccion__acciones">
-        <% if (apps.length > 1) { %><%- include('../partials/app-orden-boton') %><% } %>
+        <% if (puedeOrdenarApps && apps.length > 1) { %><%- include('../partials/app-orden-boton') %><% } %>
+        <% if (puedeCrearApp) { %>
         <button type="button" class="apps-add-btn" data-accion="toggleFormulario">
           <span aria-hidden="true">+</span> Agregar herramienta
         </button>
+        <% } %>
       </div>
       <% } %>
     </div>
 
-    <% if (esAdmin && apps.length > 1) { %><%- include('../partials/app-orden-barra') %><% } %>
+    <% if (puedeOrdenarApps && apps.length > 1) { %><%- include('../partials/app-orden-barra') %><% } %>
 
     <% if (apps.length > 0) { %>
       <div class="apps-grid apps-grid--soporte" data-orden-grid data-orden-catalogo="<%= appCatalog %>">
         <% apps.forEach((app, index) => { %>
-          <%- include('../partials/app-card', { app: app, index: index, allowNotify: true, reorderable: esAdmin && apps.length > 1 }) %>
+          <%- include('../partials/app-card', { app: app, index: index, allowNotify: true, reorderable: puedeOrdenarApps && apps.length > 1 }) %>
         <% }) %>
       </div>
     <% } else { %>
       <div class="apps-empty-state">
-        <% if (esAdmin) { %>
+        <% if (puedeCrearApp) { %>
           Aún no hay herramientas de autoayuda. Agrega la primera con el botón de arriba.
         <% } else { %>
           Aún no hay herramientas de autoayuda publicadas.
@@ -88,7 +93,7 @@
           <span class="soporte-seccion__icon" aria-hidden="true">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z"/><path d="M14 5v14" stroke-dasharray="2 3"/></svg>
           </span>
-          <%= esAdmin ? 'Tickets de soporte' : 'Mis tickets' %>
+          <%= veTodos ? 'Tickets de soporte' : 'Mis tickets' %>
         </h3>
         <p class="soporte-seccion__desc">
           <%= abiertos %> <%= abiertos === 1 ? 'ticket activo' : 'tickets activos' %> · <%= cerrados %> <%= cerrados === 1 ? 'cerrado' : 'cerrados' %>
@@ -100,7 +105,7 @@
       <div class="tickets-toolbar">
         <div class="tickets-search">
           <svg class="tickets-search__icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input type="search" id="ticketsBuscar" class="tickets-search__input" placeholder="Buscar por título, categoría<%= esAdmin ? ' o solicitante' : '' %>…" aria-label="Buscar tickets" autocomplete="off">
+          <input type="search" id="ticketsBuscar" class="tickets-search__input" placeholder="Buscar por título, categoría<%= veTodos ? ' o solicitante' : '' %>…" aria-label="Buscar tickets" autocomplete="off">
         </div>
 
         <div class="tickets-filtros" role="group" aria-label="Filtrar por estado">
@@ -131,7 +136,7 @@
              const opciones = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' };
              const strCreado = t.created_at ? new Date(t.created_at).toLocaleDateString(countryConfig.locale, opciones) : '—';
              const strUltima = t.fecha_ultima_respuesta ? new Date(t.fecha_ultima_respuesta).toLocaleDateString(countryConfig.locale, opciones) : '—';
-             const buscable = [t.title, ticketCategoryLabel(t.category), esAdmin ? t.requester_name : '', esAdmin ? t.requester_email : '', String(t.id)]
+             const buscable = [t.title, ticketCategoryLabel(t.category), veTodos ? t.requester_name : '', veTodos ? t.requester_email : '', String(t.id)]
                .filter(Boolean).join(' ').toLowerCase();
         %>
           <li class="ticket-item<%= esNoLeido ? ' ticket-item--nuevo' : '' %>"
@@ -153,7 +158,7 @@
 
                 <span class="ticket-item__meta">
                   <% if (t.category) { %><span class="ticket-item__categoria"><%= ticketCategoryLabel(t.category) %></span><% } %>
-                  <% if (esAdmin && t.requester_name) { %>
+                  <% if (veTodos && t.requester_name) { %>
                     <span class="ticket-item__dato" title="<%= t.requester_email %>"><%= t.requester_name %></span>
                   <% } %>
                   <span class="ticket-item__dato">Creado <%= strCreado %></span>
@@ -167,7 +172,7 @@
               </span>
 
               <span class="ticket-item__lado">
-                <% if (esAdmin) { %>
+                <% if (veTodos) { %>
                   <span class="ticket-item__asignado<%= t.assigned_to ? ' ticket-item__asignado--activo' : '' %>">
                     <%= t.assigned_to || 'Sin asignar' %>
                   </span>

@@ -37,7 +37,6 @@ const permisosRoutes = require("./routes/permisos");
 const impersonation = require("./services/permissions/impersonation");
 const { withQueryParam } = require("./utils/returnTo");
 const noticiasRoutes = require("./routes/noticias");
-const { normalizeRole, isAdministrador } = require("./constants/roles");
 const { formatPageTitle } = require("./utils/pageTitle");
 const { publicErrorMessage, isUserFacingError } = require("./utils/publicError");
 const { pageSkeletonFor } = require("./utils/pageSkeleton");
@@ -49,7 +48,6 @@ const { crossOriginProtection } = require("./middlewares/crossOriginProtection")
 const { securityHeaders, cspReportRouter } = require("./middlewares/securityHeaders");
 const { saveSessionBeforeRedirect } = require("./middlewares/saveSessionBeforeRedirect");
 const { getFeatures, isFeatureEnabled } = require("./config/features");
-const { canManageRrhh } = require("./services/access/staffAccess");
 const { checkSessionAccount } = require("./services/access/accountStatus");
 const { canAccessContent, classifyContentPath } = require("./services/access/contentAccess");
 const { veListadoDeCarpetas } = require("./services/documents/processAccess");
@@ -452,11 +450,8 @@ app.use("/content", async (req, res, next) => {
     // adjuntos de tickets sólo los descarga quien puede verlos en su página.
     // /content corre antes del middleware de sesión, así que los permisos se
     // resuelven aquí y sólo si el archivo no es de acceso abierto.
-    const contentKind = classifyContentPath(relativePath).kind;
-    let permitido = false;
-    if (contentKind === "open") {
-      permitido = true;
-    } else if (contentKind === "area_document") {
+    let permitido = true;
+    if (classifyContentPath(relativePath).kind !== "open") {
       const sessionUser = req.session.user;
       let perms;
       try {
@@ -466,9 +461,6 @@ app.use("/content", async (req, res, next) => {
         perms = emptyPermissions(getCatalog(), sessionUser.id);
       }
       permitido = await canAccessContent(sessionUser, relativePath, { perms });
-    } else {
-      // Gastos, tickets y admin_only: fases 7 y 8. Siguen con su regla actual.
-      permitido = await canAccessContent(req.session.user, relativePath);
     }
     if (!permitido) {
       return res.status(403).send("No tienes permiso para ver este archivo");
@@ -592,12 +584,6 @@ app.use(async (req, res, next) => {
       }
     }
 
-    const role = normalizeRole(user.role);
-    res.locals.userRole = role;
-    res.locals.isAdministrador = isAdministrador(role);
-    // Administración de RRHH y colaboradores: admins de RRHH o de Informática.
-    const gestionaRrhh = await canManageRrhh(user);
-    res.locals.canManageRrhh = gestionaRrhh;
     // Vacaciones (Gestión de Permisos): la bandeja de aprobación y la gestión
     // de RRHH se calculan más abajo, con req.perms.
 
@@ -618,7 +604,6 @@ app.use(async (req, res, next) => {
     res.locals.can = buildViewCan(req.perms);
     res.locals.unreadTickets = req.session.ticketNotifications?.count || 0;
   } else {
-    res.locals.canManageRrhh = false;
     res.locals.isAreaManager = false;
     res.locals.veGestionVacaciones = false;
     res.locals.canIssueBills = false;

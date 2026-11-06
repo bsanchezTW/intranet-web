@@ -313,6 +313,7 @@ async function renderSupportHome(req, res) {
       supportApps,
       appCatalog: APP_CATALOGS.SUPPORT,
       canManageTickets: puedeGestionar,
+      veTodosTickets: sobreTodos(req.perms, VER),
       user: user,
       ok: req.query.ok,
       extraCss: ["/css/apps.css?v=20261013b", "/css/tickets.css?v=20260916g"],
