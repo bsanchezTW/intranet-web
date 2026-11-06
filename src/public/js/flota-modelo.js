@@ -27,12 +27,15 @@ const COLORES = {
   dark: 0x2f343c,
   grille: 0x8c96a4,
   light: 0xf7efc4,
-  tail: 0xc0392b,
+  // Focos traseros en gris ahumado, no rojos: en el modelo el rojo es daño.
+  tail: 0x7a8392,
 };
 const COLOR_SELECCION = 0x2f6fe0;
 const COLOR_DANIO = 0xd64545;
 const COLOR_NUEVO = 0xe8930c;
 const COLOR_REPARADO = 0x2e9d5b;
+// Un poco de luz propia para que el daño se vea también del lado en sombra.
+const BRILLO_ESTADO = { danio: 0x4a0b0b, nuevo: 0x4a2c00 };
 
 // Los datos ponen el lado izquierdo en +z; en three.js (x adelante, y arriba)
 // +z es la derecha, así que las piezas se ubican con z invertida y el lado
@@ -160,7 +163,7 @@ function crearVisor(THREE, { datos, lienzo, etiqueta, zonas, estados, getSelecci
   function material(mat) {
     return new THREE.MeshStandardMaterial({
       color: COLORES[mat] ?? COLORES.body,
-      roughness: mat === "glass" ? 0.25 : 0.62,
+      roughness: mat === "glass" || mat === "tail" ? 0.25 : 0.62,
       metalness: mat === "glass" || mat === "grille" ? 0.35 : 0.08,
       emissive: mat === "light" ? 0x5c5530 : 0x000000,
     });
@@ -320,7 +323,13 @@ function crearVisor(THREE, { datos, lienzo, etiqueta, zonas, estados, getSelecci
         else if (estado === "reparado") color = COLOR_REPARADO;
         if (code === sel) color = COLOR_SELECCION;
         m.material.color.setHex(color);
-        m.material.emissive.setHex(code === encima && code !== sel ? 0x1c3d7a : m.userData.colorBase === COLORES.light ? 0x5c5530 : 0x000000);
+        // El brillo propio de los focos delanteros sólo sin estado: sobre
+        // el rojo del daño lo volvía naranjo.
+        let brillo = 0x000000;
+        if (code === encima && code !== sel) brillo = 0x1c3d7a;
+        else if (code !== sel && BRILLO_ESTADO[estado]) brillo = BRILLO_ESTADO[estado];
+        else if (!estado && m.userData.colorBase === COLORES.light) brillo = 0x5c5530;
+        m.material.emissive.setHex(brillo);
       }
     }
   }

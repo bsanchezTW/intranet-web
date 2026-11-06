@@ -1105,22 +1105,47 @@ button.logistica-icono-btn {
 .silueta .silueta__vidrio { fill: var(--color-surface); }
 .silueta .silueta__rueda { fill: var(--color-surface); }
 
+/*
+  Cada tarjeta ocupa cuatro filas de la grilla (subgrid): cabecera, datos,
+  acciones y el panel de revisiones. Así las tarjetas de una misma fila
+  alinean sus datos y sus botones, y al desplegar una sólo ella crece: el
+  fondo de las demás termina en la fila de acciones.
+*/
 .flota-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 18px;
+  column-gap: 18px;
+  row-gap: 0;
 }
 
 .flota-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px 20px;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  margin-bottom: 18px;
+}
+
+/* La tarjeta en sí (fondo, borde y sombra) es este fondo de tres filas; la
+   desplegada lo estira hasta su panel. */
+.flota-card::before {
+  content: "";
+  grid-column: 1;
+  grid-row: 1 / 4;
+  z-index: -1;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 18px;
   box-shadow: var(--shadow);
+  transition: border-color 0.15s ease;
 }
+
+.flota-card > .flota-card__head { grid-area: 1 / 1; padding: 18px 20px 14px; }
+.flota-card > .flota-card__datos { grid-area: 2 / 1; margin: 0 20px; }
+.flota-card > .flota-card__acciones { grid-area: 3 / 1; padding: 14px 20px 18px; }
+.flota-card > .flota-card__revisiones { grid-area: 4 / 1; }
 
 .flota-card.is-inactivo { opacity: 0.7; }
 
@@ -1199,8 +1224,8 @@ button.logistica-icono-btn {
 .flota-card__acciones {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  align-content: end;
   gap: 8px;
-  margin-top: auto;
 }
 
 .flota-accion {
@@ -1231,9 +1256,6 @@ button.logistica-icono-btn {
   color: var(--brand-deep, var(--brand));
 }
 
-/* Una tarjeta desplegada crece sola: las de su fila no se estiran. */
-.flota-grid { align-items: start; }
-
 .flota-accion__etiqueta {
   display: inline-flex;
   align-items: center;
@@ -1256,12 +1278,14 @@ button.logistica-icono-btn {
 
 .flota-accion--desplegar[aria-expanded="true"] .flota-accion__flecha { transform: rotate(180deg); color: var(--brand); }
 
-.flota-card.is-desplegada { border-color: var(--brand); }
+.flota-card.is-desplegada::before { grid-row: 1 / 5; border-color: var(--brand); }
 
+/* Dentro del borde de la tarjeta y con sus mismas esquinas abajo. */
 .flota-card__revisiones {
-  margin: 0 -20px -18px;
-  padding: 14px 20px 16px;
+  margin: 0 1px 1px;
+  padding: 14px 19px 16px;
   border-top: 1px solid var(--color-border);
+  border-radius: 0 0 17px 17px;
   background: var(--color-surface-muted);
 }
 

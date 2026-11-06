@@ -71,7 +71,7 @@ const FISICA = `${FLOTA}/fisica`;
 const DANIOS = `${FLOTA}/danios`;
 const FOTOS = `${FLOTA}/fotos`;
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261104c"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261106a"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
