@@ -9,7 +9,6 @@ const {
 const multer = require("multer");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
-const { normalizeRole } = require("../constants/roles");
 const { toTitleCase } = require("../utils/formatName");
 const { applyIdentityToSession } = require("../utils/monogram");
 const requirePermission = require("../middlewares/requirePermission");
@@ -66,7 +65,6 @@ router.get("/perfil", requirePermission("perfil.acceso"), async (req, res) => {
     usuario: {
       ...raw,
       photo: raw.photo ?? raw.foto,
-      role: normalizeRole(raw.role),
       birth_date_input: raw.birth_date
         ? new Date(raw.birth_date).toISOString().slice(0, 10)
         : "",

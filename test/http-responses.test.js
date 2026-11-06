@@ -94,23 +94,19 @@ describe("respuestas", () => {
 });
 
 describe("los middlewares responden igual", () => {
-  it("un fetch a /upload recibe JSON de requireRole y de requirePermission", async () => {
-    const requireRole = require(path.join(__dirname, "../src/middlewares/requireRole"));
+  it("un fetch a /upload recibe JSON de requirePermission", async () => {
     const requirePermission = require(path.join(__dirname, "../src/middlewares/requirePermission"));
     const { emptyPermissions } = require(path.join(__dirname, "../src/services/permissions/resolver"));
     const { getCatalog } = require(path.join(__dirname, "../src/services/permissions/catalog"));
     const fetchUpload = () => {
       const r = req({ url: "/RRHH/vacaciones/gestion/5/historial/upload", method: "POST" });
-      r.session.user = { id: 5, role: "Usuario" };
+      r.session.user = { id: 5, active: true };
       r.perms = emptyPermissions(getCatalog(), 5);
       return r;
     };
-    const a = res();
-    requireRole("admin")(fetchUpload(), a, () => {});
     const b = res();
     await requirePermission("noticias.noticia.crear")(fetchUpload(), b, () => {});
-    assert.equal(a.statusCode, 403);
     assert.equal(b.statusCode, 403);
-    assert.ok(a.body && b.body, "los dos respondieron JSON");
+    assert.ok(b.body, "respondió JSON");
   });
 });

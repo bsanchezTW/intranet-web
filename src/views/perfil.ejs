@@ -1,7 +1,6 @@
 <%
   const tieneFoto = Boolean(usuario.photo);
   const sinDato = '—';
-  const rolFmt = usuario.role || 'Usuario';
   const correoVerificado = Boolean(usuario.email_confirmed);
   const errorPerfil = typeof error !== 'undefined' ? error : null;
   const okPerfil = (typeof success !== 'undefined' && success) ? success : null;
@@ -155,13 +154,6 @@
             <div>
               <dt>Área de trabajo</dt>
               <dd><%= usuario.area || sinDato %></dd>
-            </div>
-          </div>
-          <div class="perfil-rrhh__dato">
-            <span class="perfil-rrhh__icono" aria-hidden="true"><%- include('partials/icon', { name: 'user-check' }) %></span>
-            <div>
-              <dt>Rol en intranet</dt>
-              <dd><%= rolFmt %></dd>
             </div>
           </div>
           <% if (documentoBloqueado) { %>

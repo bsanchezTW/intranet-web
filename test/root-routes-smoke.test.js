@@ -56,7 +56,7 @@ before(async () => {
   app.use(express.urlencoded({ extended: true }));
   app.use(express.json());
   app.use((req, res, next) => {
-    req.session = { user: { id: 1, role: "Administrador", email: "a@transworld.cl", nombre: "A" }, save: (cb) => cb && cb() };
+    req.session = { user: { id: 1, active: true, email: "a@transworld.cl", nombre: "A" }, save: (cb) => cb && cb() };
     req.perms = new EffectivePermissions({ userId: 1, superadmin: true, catalog: getCatalog() });
     res.locals.can = Object.assign(() => true, { field: () => true });
     // Las vistas necesitan más locals de los que hay aquí: no se renderiza.

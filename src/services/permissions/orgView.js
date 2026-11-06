@@ -15,7 +15,7 @@ function toId(value) {
 }
 
 function isActive(u) {
-  return Boolean(u) && !/^deshabilitado$/i.test(String(u.role || "").trim());
+  return Boolean(u) && u.active === true;
 }
 
 /** Jefes de la cadena desde `areaId` hacia arriba, sin repetir persona. */

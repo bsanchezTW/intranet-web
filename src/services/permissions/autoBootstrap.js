@@ -1,5 +1,9 @@
 const { planBootstrap } = require("./bootstrap");
 
+/** Personas para el plan: el rol antiguo sale de role_legacy (fase 11). */
+const USERS_SQL =
+  "SELECT id, first_name, last_name, active, role_legacy AS role, work_area_id, is_intranet_user FROM users";
+
 /**
  * Arranque de Gestión de Permisos: aplicar el plan (bootstrap.js) y, desde
  * que se quitó el modo sombra, hacerlo solo al iniciar la app si el país
@@ -97,7 +101,7 @@ async function ensureBootstrapped({ db, country, catalog, logger }) {
   if (rows[0] && rows[0].bootstrapped_at) return { applied: false };
 
   const [{ rows: users }, { rows: areas }] = await Promise.all([
-    db.query("SELECT id, first_name, last_name, role, work_area_id, is_intranet_user FROM users"),
+    db.query(USERS_SQL),
     db.query("SELECT id, area_name, parent_area_id, manager_user_id FROM work_areas"),
   ]);
   const plan = planBootstrap({ country, catalog, users, areas });

@@ -6,7 +6,6 @@ const crypto = require("crypto");
 const fileStorage = require("../services/fileStorage");
 const userPhotoStorage = require("../services/userPhotoStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
-const { ROLES, ALL_ROLES, isDeshabilitado, isAdministrador } = require("../constants/roles");
 const { publicErrorMessage } = require("../utils/publicError");
 const { hashPassword } = require("../services/auth/passwords");
 const {
@@ -26,9 +25,15 @@ function documentLabel() {
   return require("../config/country").getDocumentConfig().label;
 }
 
-function parseRoleFromForm(role) {
-  const value = String(role || "").trim();
-  return ALL_ROLES.includes(value) ? value : ROLES.USUARIO;
+/**
+ * Estado de la cuenta que pide el formulario. El campo oculto
+ * `estado_cuenta` dice que el interruptor venía en la ficha; sin él (cuenta
+ * propia, superadmin, correo sin verificar) se queda el que tenía.
+ */
+function activeFromForm(body, previo) {
+  if (!body || String(body.estado_cuenta || "") !== "1") return Boolean(previo);
+  const valor = Array.isArray(body.active) ? body.active[body.active.length - 1] : body.active;
+  return String(valor || "") === "1";
 }
 const requirePermission = require("../middlewares/requirePermission");
 const { requireAnyPermission } = require("../middlewares/requirePermission");
@@ -36,7 +41,6 @@ const requireFeature = require("../middlewares/requireFeature");
 const { decide } = require("../services/permissions/decide");
 const {
   rechazoEscalada,
-  rechazoNombreArea,
   clavesDeEdicion,
   cambiosDeFicha,
 } = require("../services/permissions/rrhhEscalada");
@@ -67,9 +71,25 @@ const {
 } = require("../utils/contactEmails");
 const balanceService = require("../services/vacations/vacationBalanceService");
 const profileService = require("../services/vacations/vacationProfileService");
-const { invalidateStaffAccess } = require("../services/access/staffAccess");
 const { invalidateAccountStatus } = require("../services/access/accountStatus");
-const { invalidatePermissions } = require("../services/permissions/permissionService");
+const permissionService = require("../services/permissions/permissionService");
+const { invalidatePermissions } = permissionService;
+
+/**
+ * ¿La persona `userId` tiene algún permiso que quien edita (req.perms) no
+ * tiene? Quedarse con su cuenta sería ganar esos permisos. Ante un error de
+ * BD responde que sí: se niega antes que abrir.
+ */
+async function tienePermisosQueNoTengo(req, userId) {
+  try {
+    const suyos = await permissionService.resolve({ id: Number(userId) });
+    if (suyos.superadmin) return true;
+    return suyos.keys().some((key) => !(req.perms && req.perms.can(key)));
+  } catch (err) {
+    console.error("[RRHH] permisos de la persona editada:", err);
+    return true;
+  }
+}
 const { isAreaManager, isAvailableApprover } = require("../services/expenses/areaManager");
 
 function parsePriorYearsCredited(value) {
@@ -249,29 +269,15 @@ function isUniqueViolation(err) {
 }
 
 /**
- * Cualquier cambio de área, de membresía, de rol o de personal invalida los
- * cachés que dependen de ellos, o el permiso queda desfasado hasta un minuto.
+ * Cualquier cambio de área, de membresía, de estado de la cuenta o de personal
+ * invalida los cachés que dependen de ellos, o el permiso queda desfasado.
  */
 function invalidarCachesDeArea() {
-  invalidateStaffAccess();
   invalidateAccountStatus();
-  // Área, jefatura y rol cambian quién recibe qué en Gestión de Permisos.
+  // Área, jefatura y estado cambian quién recibe qué en Gestión de Permisos.
   invalidatePermissions();
 }
 
-/**
- * ¿La persona es superadmin? La columna la crea permissionSchema al arrancar;
- * si todavía no existe, nadie lo es.
- */
-async function esSuperadmin(userId) {
-  try {
-    const { rows } = await db.query("SELECT is_superadmin FROM users WHERE id = $1", [userId]);
-    return Boolean(rows[0] && rows[0].is_superadmin);
-  } catch (err) {
-    if (err && err.code === "42703") return false;
-    throw err;
-  }
-}
 
 function negarPermiso(res) {
   return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
@@ -382,7 +388,7 @@ router.get("/personal", requirePermission("rrhh.directorio.ver"), async (req, re
       u.last_name,
       ${companyEmailSql("u")} AS email,
       ${accountUsesPersonalEmailSql("u")} AS cuenta_con_correo_personal,
-      u.role,
+      u.active,
       u.photo,
       u.birth_date,
       u.work_area_id,
@@ -399,7 +405,7 @@ router.get("/personal", requirePermission("rrhh.directorio.ver"), async (req, re
 
   try {
     const { rows: results } = await db.query(sql);
-    const mostrarColumnaRol = puede(req, "rrhh.colaborador.activar");
+    const mostrarColumnaCuenta = puede(req, "rrhh.colaborador.activar");
 
     const personasFormateadas = results.map((p) => {
       const birthDate = p.birth_date ?? p.fecha_nacimiento;
@@ -432,8 +438,8 @@ router.get("/personal", requirePermission("rrhh.directorio.ver"), async (req, re
         monogram: getMonogram(p),
       };
 
-      if (!mostrarColumnaRol) {
-        delete persona.role;
+      if (!mostrarColumnaCuenta) {
+        delete persona.active;
       }
 
       return persona;
@@ -462,7 +468,7 @@ router.get("/personal", requirePermission("rrhh.directorio.ver"), async (req, re
       areas,
       centrosCosto,
       maxCentrosCosto: costCenterService.MAX_COST_CENTERS_PER_USER,
-      mostrarColumnaRol,
+      mostrarColumnaCuenta,
       getWorkAreaPillClass,
       getWorkAreaPill,
       documentoConfig: nationalIdClientConfig(),
@@ -595,7 +601,7 @@ router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, r
 
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
-          (first_name, last_name, email, password_hash, password_salt, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id, work_phone, personal_email)
+          (first_name, last_name, email, password_hash, password_salt, active, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id, work_phone, personal_email)
         VALUES ($1, $2, $3, $4, $5, $6, FALSE, TRUE, $7, $8, $9, TRUE, FALSE, $10, $11, $12, $13, $14, $15, $16)
         RETURNING id`,
         [
@@ -604,7 +610,7 @@ router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, r
           emailClean,
           hashHex,
           saltHex,
-          ROLES.DESHABILITADO,
+          false, // inactiva hasta que verifique el correo
           areaId,
           fechaVal,
           contacto.personalPhone,
@@ -630,14 +636,14 @@ router.post("/crear", requirePermission("rrhh.colaborador.crear"), async (req, r
     } else {
       const { rows: inserted } = await db.queryRetryIdCollision(
         `INSERT INTO users
-          (first_name, last_name, email, role, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id, work_phone, personal_email)
+          (first_name, last_name, email, active, email_confirmed, must_change_password, work_area_id, birth_date, phone, is_intranet_user, hire_date, prior_years_credited, progressive_days_override, work_days_per_week, national_id, work_phone, personal_email)
         VALUES ($1, $2, $3, $4, FALSE, FALSE, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         RETURNING id`,
         [
           firstName,
           lastName,
           emailClean,
-          ROLES.DESHABILITADO,
+          false,
           areaId,
           fechaVal,
           contacto.personalPhone,
@@ -780,7 +786,6 @@ router.post(
     const {
       first_name,
       last_name,
-      role,
       work_area_id,
       birth_date,
       email,
@@ -877,7 +882,7 @@ router.post(
       }
 
       const { rows: prev } = await db.query(
-        `SELECT photo AS foto, password_hash, email_confirmed, role, email, hire_date,
+        `SELECT photo AS foto, password_hash, email_confirmed, active, is_superadmin, email, hire_date,
                 national_id, work_area_id, first_name, last_name, birth_date, phone,
                 personal_email, work_phone
            FROM users WHERE id = $1`,
@@ -897,9 +902,8 @@ router.post(
       }
       const previousUrl = prevUser.foto || null;
       const correoVerificado = Boolean(prevUser.email_confirmed);
-      const roleToSave = correoVerificado
-        ? parseRoleFromForm(role)
-        : ROLES.DESHABILITADO;
+      // Sin correo verificado la cuenta no puede quedar activa.
+      const activeToSave = correoVerificado && activeFromForm(req.body, prevUser.active);
       const shouldRemovePhoto =
         eliminar_foto === "1" || eliminar_foto === "true";
 
@@ -921,24 +925,29 @@ router.post(
         work_phone: contacto.workPhone,
         national_id: documentoVal,
         hire_date: hireVal,
-        role: roleToSave,
+        active: activeToSave,
         work_area_id: areaId,
         cambiaFoto: Boolean(req.file) || shouldRemovePhoto,
       });
+      const objetivoSuperadmin = Boolean(prevUser.is_superadmin);
+      const correoCambia =
+        String(prevUser.email || "").trim().toLowerCase() !== String(emailClean || "").trim().toLowerCase();
       const motivo = rechazoEscalada({
         superadmin: Boolean(req.perms && req.perms.superadmin),
         actorId: req.session.user && req.session.user.id,
         targetId: id,
-        antes: { role: prevUser.role, areaId: prevUser.work_area_id, email: prevUser.email },
-        despues: { role: roleToSave, areaId, email: emailClean },
+        antes: { active: Boolean(prevUser.active), areaId: prevUser.work_area_id, email: prevUser.email },
+        despues: { active: activeToSave, areaId, email: emailClean },
+        objetivoSuperadmin,
+        // Sólo se calcula si el correo cambia: resuelve los permisos de la persona.
         objetivoPrivilegiado:
-          isAdministrador(prevUser.role) || (await esSuperadmin(id)),
+          correoCambia && (objetivoSuperadmin || (await tienePermisosQueNoTengo(req, id))),
       });
       if (motivo === "correo-privilegiado") {
         return redirectPersonalEditarError(
           res,
           id,
-          "Sólo el superadmin puede cambiar el correo de un administrador.",
+          "Sólo el superadmin puede cambiar el correo de alguien con permisos que tú no tienes.",
         );
       }
       if (motivo) return negarPermiso(res);
@@ -962,7 +971,7 @@ router.post(
       const setClauses = [
         "first_name=$1",
         "last_name=$2",
-        "role=$3",
+        "active=$3",
         "work_area_id=$4",
         "birth_date=$5",
         "phone=$6",
@@ -975,7 +984,7 @@ router.post(
       const values = [
         firstName,
         lastName,
-        roleToSave,
+        activeToSave,
         areaId,
         fechaVal,
         contacto.personalPhone,
@@ -1095,7 +1104,7 @@ router.post("/enviar-clave/:id", requirePermission("rrhh.colaborador.enviar_clav
 
   try {
     const { rows } = await db.query(
-      "SELECT id, first_name, email, role, work_area_id FROM users WHERE id = $1",
+      "SELECT id, first_name, email, active, work_area_id FROM users WHERE id = $1",
       [id],
     );
     if (!rows.length) return responder(404, false, "Usuario no encontrado.");
@@ -1112,11 +1121,11 @@ router.post("/enviar-clave/:id", requirePermission("rrhh.colaborador.enviar_clav
         "El colaborador no tiene correo. Agrega uno y guarda la ficha antes de enviar la contraseña.",
       );
     }
-    if (!isDeshabilitado(u.role)) {
+    if (u.active) {
       return responder(
         400,
         false,
-        "Sólo se envía la contraseña temporal a usuarios deshabilitados.",
+        "Sólo se envía la contraseña temporal a cuentas inactivas.",
       );
     }
     if (u.work_area_id == null) {
@@ -1200,7 +1209,7 @@ async function cargarOrganigrama() {
               m.last_name  AS manager_last_name,
               m.photo      AS manager_photo,
               m.work_area_id AS manager_work_area_id,
-              m.role AS manager_role,
+              m.active AS manager_active,
               m.is_intranet_user AS manager_is_intranet_user
        FROM work_areas w
        LEFT JOIN users m ON m.id = w.manager_user_id
@@ -1208,7 +1217,7 @@ async function cargarOrganigrama() {
     ),
     db.query(
       `SELECT u.id, u.first_name, u.last_name, u.photo, u.work_area_id,
-              u.role, u.is_intranet_user,
+              u.active, u.is_intranet_user,
               at.area_name, at.color AS area_color
        FROM users u
        LEFT JOIN work_areas at ON at.id = u.work_area_id
@@ -1245,7 +1254,7 @@ async function cargarOrganigrama() {
       memberCount: members.length,
       managerName: managerName || null,
       managerAvailable: area.manager_user_id
-        ? isAvailableApprover({ role: area.manager_role, is_intranet_user: area.manager_is_intranet_user })
+        ? isAvailableApprover({ active: area.manager_active, is_intranet_user: area.manager_is_intranet_user })
         : null,
     };
   });
@@ -1375,9 +1384,6 @@ router.post("/areas", requirePermission("organigrama.area.crear"), async (req, r
     if (!parent.ok) return redirectAreasError(res, parent.error);
     const manager = await parseAreaManager(req.body.manager_user_id);
     if (!manager.ok) return redirectAreasError(res, manager.error);
-    if (rechazoNombreArea({ superadmin: Boolean(req.perms && req.perms.superadmin), despues: areaName })) {
-      return negarPermiso(res);
-    }
     if (manager.managerId != null) {
       if (!puede(req, "organigrama.area.designar_jefe")) return negarPermiso(res);
       const motivo = rechazoEscalada({
@@ -1388,7 +1394,6 @@ router.post("/areas", requirePermission("organigrama.area.crear"), async (req, r
           seDesignaJefe: Number(manager.managerId) === Number(req.session.user && req.session.user.id),
           designaJefe: true,
         },
-        areaNombre: areaName,
       });
       if (motivo) return negarPermiso(res);
     }
@@ -1441,13 +1446,6 @@ router.post("/areas/:id", requirePermission("organigrama.area.editar"), async (r
     if (!previa) {
       return redirectAreasError(res, "El área no existe.");
     }
-    if (rechazoNombreArea({
-      superadmin: Boolean(req.perms && req.perms.superadmin),
-      antes: previa.area_name,
-      despues: areaName,
-    })) {
-      return negarPermiso(res);
-    }
     const jefeAntes = previa.manager_user_id;
     const jefeNuevo = manager.managerId;
     const cambiaJefe = (jefeAntes == null) !== (jefeNuevo == null)
@@ -1463,13 +1461,6 @@ router.post("/areas/:id", requirePermission("organigrama.area.editar"), async (r
           seDesignaJefe: jefeNuevo != null && Number(jefeNuevo) === Number(actorId),
           designaJefe: true,
         },
-        areaNombre: areaName,
-      }) || rechazoEscalada({
-        superadmin: Boolean(req.perms && req.perms.superadmin),
-        actorId,
-        targetId: jefeNuevo,
-        despues: { designaJefe: true },
-        areaNombre: previa.area_name,
       });
       if (motivo) return negarPermiso(res);
     }

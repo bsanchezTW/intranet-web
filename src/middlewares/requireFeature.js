@@ -7,7 +7,7 @@ const { respondNotFound } = require("../utils/httpResponses");
  * Devuelve 404 y no 403 a propósito: en un país donde la funcionalidad no
  * existe, la ruta tampoco existe. Un 403 revelaría que hay algo detrás.
  *
- * Va antes de requireRole: primero "¿esto existe aquí?", después "¿este
+ * Va antes de requirePermission: primero "¿esto existe aquí?", después "¿este
  * usuario puede?". Son preguntas distintas y no deben mezclarse.
  */
 function requireFeature(feature) {

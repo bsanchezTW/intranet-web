@@ -9,26 +9,25 @@ const { reviewerStageFor } = require("../src/services/expenses/expenseRequestSer
 const { EXPENSE_STATUS } = require("../src/constants/expenseStatuses");
 
 describe("estado de la cuenta en cada petición", () => {
-  const sesion = { id: 7, role: "Administrador" };
+  const sesion = { id: 7 };
 
-  it("mantiene la sesión si la cuenta sigue igual", () => {
-    assert.deepEqual(sessionAccountState(sesion, { role: "Administrador" }), { action: "keep" });
+  it("mantiene la sesión si la cuenta sigue activa", () => {
+    assert.deepEqual(sessionAccountState(sesion, { active: true }), { action: "keep" });
   });
 
-  it("corrige el rol cuando se lo cambiaron", () => {
-    assert.deepEqual(sessionAccountState(sesion, { role: "Usuario" }), {
-      action: "update",
-      role: "Usuario",
-    });
+  it("la sesión ya no guarda un rol que corregir", () => {
+    // Antes la sesión llevaba el rol del login y se actualizaba si cambiaba;
+    // ahora los permisos se releen aparte y aquí sólo cuenta el estado.
+    assert.deepEqual(sessionAccountState({ ...sesion, role: "Administrador" }, { active: true }), { action: "keep" });
   });
 
   it("cierra la sesión de una cuenta deshabilitada o eliminada", () => {
-    assert.deepEqual(sessionAccountState(sesion, { role: "Deshabilitado" }), { action: "end" });
+    assert.deepEqual(sessionAccountState(sesion, { active: false }), { action: "end" });
     assert.deepEqual(sessionAccountState(sesion, undefined), { action: "end" });
   });
 
   it("una sesión con id 0 (el login de emergencia, que ya no existe) se cierra", () => {
-    assert.deepEqual(sessionAccountState({ id: 0, role: "Administrador" }, undefined), {
+    assert.deepEqual(sessionAccountState({ id: 0, active: true }, undefined), {
       action: "end",
     });
   });
@@ -82,14 +81,14 @@ describe("/content — lo que no calza con ningún registro", () => {
   // Antes lo abría el rol Administrador; ahora nadie (las carpetas de Procesos
   // se prueban con sus permisos en permissions-procesos).
   it("no se sirve a nadie, tampoco a quien antes era Administrador", async () => {
-    const exAdmin = { id: 7, role: "Administrador", is_superadmin: true };
+    const exAdmin = { id: 7, active: true, is_superadmin: true };
     assert.equal(await canAccessContent(exAdmin, "gastos/raro.pdf"), false);
     assert.equal(await canAccessContent(exAdmin, "tickets_adjuntos/raro.pdf"), false);
   });
 });
 
 describe("gastos — nadie resuelve lo propio", () => {
-  const admin = { id: 7, role: "Administrador" };
+  const admin = { id: 7, active: true };
   // Permisos que aprueban todo (como un superadmin) y ninguno.
   const todo = { can: () => true, canOnRecord: () => true };
   const nada = { can: () => false, canOnRecord: () => false };

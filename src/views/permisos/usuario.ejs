@@ -2,7 +2,7 @@
 const u = detail.user;
 const esYo = u.id === actorId;
 const volverA = '/permisos/usuarios/' + u.id;
-const deshabilitada = !u.role || /^deshabilitado$/i.test(String(u.role).trim());
+const deshabilitada = u.active !== true;
 const icono = (name) => include('../partials/icon', { name: name });
 const total = catalog.byKey.size;
 const pct = total ? Math.round((detail.grantedCount / total) * 100) : 0;

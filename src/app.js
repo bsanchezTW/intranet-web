@@ -339,9 +339,9 @@ app.use(
 );
 app.use(saveSessionBeforeRedirect);
 
-// La sesión se renueva sola en cada petición y guarda el rol del login: se
-// contrasta con la base para que deshabilitar, eliminar o cambiar el rol de
-// alguien valga en segundos y no cuando se le venza la sesión.
+// La sesión se renueva sola en cada petición: se contrasta con la base para
+// que desactivar o eliminar a alguien valga en segundos y no cuando se le
+// venza la sesión.
 app.use(async (req, res, next) => {
   const user = req.session && req.session.user;
   if (!user) return next();
@@ -352,7 +352,6 @@ app.use(async (req, res, next) => {
     logger.error("cuentas", err);
     return next();
   }
-  if (estado.action === "update") user.role = estado.role;
   if (estado.action !== "end") return next();
 
   // Deshabilitaron a la persona suplantada: el superadmin vuelve a su cuenta.
@@ -738,7 +737,7 @@ async function sincronizarUsuariosDeshabilitados() {
     if (actualizados > 0) {
       logger.info(
         "usuarios",
-        `${actualizados} colaborador(es) a Deshabilitado (sin correo o sin verificar)`,
+        `${actualizados} colaborador(es) deshabilitado(s) (sin correo o sin verificar)`,
       );
     }
   } catch (err) {

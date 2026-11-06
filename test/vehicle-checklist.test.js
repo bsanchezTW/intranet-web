@@ -331,7 +331,7 @@ describe("Gestión de flota — direcciones de la primera versión", () => {
     const app = express();
     // Sesión y permisos de prueba: las redirecciones no tocan la base.
     app.use((req, res, next) => {
-      req.session = { user: { id: 1, role: "Administrador" } };
+      req.session = { user: { id: 1, active: true } };
       req.perms = { mode: "aplicar", can: () => true, canOnRecord: () => true };
       next();
     });

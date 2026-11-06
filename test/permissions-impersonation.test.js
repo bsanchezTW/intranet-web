@@ -45,10 +45,10 @@ after(() => {
   else delete require.cache[dbId];
 });
 
-const BASTIAN = { id: 1, first_name: "Bastián", last_name: "Sánchez", email: "b@t.cl", role: "Administrador", is_superadmin: true };
-const ANA = { id: 5, first_name: "Ana", last_name: "Pérez", email: "a@t.cl", role: "Usuario", is_superadmin: false, work_area_id: 3, area_name: "Finanzas", area_color: "#0f0", last_login_at: null };
-const OTRO_SA = { id: 6, first_name: "Otro", last_name: "Admin", email: "o@t.cl", role: "Usuario", is_superadmin: true };
-const DESHABILITADA = { id: 7, first_name: "Luz", last_name: "", email: "l@t.cl", role: "Deshabilitado", is_superadmin: false };
+const BASTIAN = { id: 1, first_name: "Bastián", last_name: "Sánchez", email: "b@t.cl", active: true, is_superadmin: true };
+const ANA = { id: 5, first_name: "Ana", last_name: "Pérez", email: "a@t.cl", active: true, is_superadmin: false, work_area_id: 3, area_name: "Finanzas", area_color: "#0f0", last_login_at: null };
+const OTRO_SA = { id: 6, first_name: "Otro", last_name: "Admin", email: "o@t.cl", active: true, is_superadmin: true };
+const DESHABILITADA = { id: 7, first_name: "Luz", last_name: "", email: "l@t.cl", active: false, is_superadmin: false };
 
 function sessionFor(user) {
   return { user: { id: user.id, nombre: `${user.first_name} ${user.last_name}`.trim(), role: user.role }, ticketNotifications: { count: 3 } };

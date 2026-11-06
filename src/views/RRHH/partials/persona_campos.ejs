@@ -22,12 +22,13 @@ const parteLocal = (full) => String(full || '').startsWith(phonePrefix)
   : '';
 const fechaIso = (valor) => valor ? new Date(valor).toISOString().split('T')[0] : '';
 const telMaxLength = countryConfig.phone.nationalDigits + countryConfig.phone.groups.length - 1;
-const rolActual = p.role || 'Usuario';
+const cuentaActiva = p.active === true;
 const veDocumento = typeof can === 'function' && can.field('rrhh.colaborador.campo.documento_identidad');
 const veDatos = typeof can === 'function' && can.field('rrhh.colaborador.campo.datos_personales');
 const esSuper = typeof perms !== 'undefined' && perms && perms.superadmin;
 const esPropia = !esCrear && typeof usuario !== 'undefined' && usuario && Number(usuario.id) === Number(p.id);
-const bloqueaRol = !esCrear && !esSuper && (esPropia || rolActual === 'Administrador' || rolActual === 'admin');
+// Nadie (salvo el superadmin) cambia el estado de su propia cuenta ni el de un superadmin.
+const bloqueaEstado = !esCrear && !esSuper && (esPropia || Boolean(p.is_superadmin));
 %>
 
 <section class="modal-section">
@@ -144,28 +145,30 @@ const bloqueaRol = !esCrear && !esSuper && (esPropia || rolActual === 'Administr
     </div>
 
     <div class="campo-form">
+      <%# Interruptor de la cuenta. Sin el campo oculto «estado_cuenta» el servidor
+          deja el estado como estaba (bloqueado o sin correo verificado). %>
+      <span class="campo-form__label" id="<%= pre %>active_label">Cuenta de intranet</span>
       <% if (!esCrear && p.email_confirmed) { %>
-        <label for="role">Rol de intranet <span class="required-mark">*</span></label>
-        <% if (bloqueaRol) { %>
-          <input type="hidden" name="role" value="<%= rolActual %>">
-          <select id="role" disabled>
-            <option selected><%= rolActual %></option>
-          </select>
-          <p class="campo-form__ayuda"><%= esPropia ? 'No puedes cambiar tu propio rol ni tu estado.' : 'Sólo el superadmin asigna o quita el rol Administrador.' %></p>
-        <% } else { %>
-        <select id="role" name="role" required>
-          <option value="Usuario"       <%= (rolActual === 'Usuario' || rolActual === 'usuario') ? 'selected' : '' %>>Usuario</option>
-          <option value="Administrador" <%= (rolActual === 'Administrador' || rolActual === 'admin') ? 'selected' : '' %> <%= esSuper ? '' : 'disabled' %>>Administrador</option>
-          <option value="Deshabilitado" <%= (rolActual === 'Deshabilitado') ? 'selected' : '' %>>Deshabilitado</option>
-        </select>
-        <% if (!esSuper) { %><p class="campo-form__ayuda">Sólo el superadmin asigna o quita el rol Administrador.</p><% } %>
-        <% } %>
+        <% if (!bloqueaEstado) { %><input type="hidden" name="estado_cuenta" value="1"><% } %>
+        <div class="cuenta-switch__fila"><label class="cuenta-switch">
+          <input type="checkbox" id="active" name="active" value="1" role="switch"
+                 aria-labelledby="<%= pre %>active_label" aria-describedby="active_ayuda"
+                 <%= cuentaActiva ? 'checked' : '' %> <%= bloqueaEstado ? 'disabled' : '' %>>
+          <span class="cuenta-switch__pista" aria-hidden="true"></span>
+          <span class="cuenta-switch__texto cuenta-switch__texto--si">Activa</span>
+          <span class="cuenta-switch__texto cuenta-switch__texto--no">Inactiva</span>
+        </label></div>
+        <p class="campo-form__ayuda" id="active_ayuda"><%= bloqueaEstado && esPropia
+          ? 'No puedes desactivar tu propia cuenta.'
+          : (bloqueaEstado ? 'Sólo el superadmin activa o desactiva a otro superadmin.' : 'Inactiva: no puede iniciar sesión. Lo que puede hacer se define en Gestión de Permisos.') %></p>
       <% } else { %>
-        <label for="<%= pre %>role">Rol de intranet</label>
-        <select id="<%= pre %>role" disabled aria-describedby="<%= pre %>role_ayuda">
-          <option selected>Deshabilitado</option>
-        </select>
-        <span class="campo-form__ayuda" id="<%= pre %>role_ayuda">Se habilita al verificar el correo.</span>
+        <div class="cuenta-switch__fila"><label class="cuenta-switch">
+          <input type="checkbox" id="<%= pre %>active" role="switch" disabled
+                 aria-labelledby="<%= pre %>active_label" aria-describedby="<%= pre %>active_ayuda">
+          <span class="cuenta-switch__pista" aria-hidden="true"></span>
+          <span class="cuenta-switch__texto cuenta-switch__texto--no">Inactiva</span>
+        </label></div>
+        <span class="campo-form__ayuda" id="<%= pre %>active_ayuda">Se puede activar al verificar el correo.</span>
       <% } %>
     </div>
 

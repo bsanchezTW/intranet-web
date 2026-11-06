@@ -1,16 +1,8 @@
 <%
   const puedeEditar = typeof can === 'function' && (can('rrhh.colaborador.editar') || can('rrhh.colaborador.crear'));
   const veContactoPersonal = typeof can === 'function' && can.field('rrhh.directorio.campo.contacto_personal');
-  const mostrarRol = typeof mostrarColumnaRol !== 'undefined' ? mostrarColumnaRol : (typeof can === 'function' && can('rrhh.colaborador.activar'));
+  const mostrarCuenta = typeof mostrarColumnaCuenta !== 'undefined' ? mostrarColumnaCuenta : (typeof can === 'function' && can('rrhh.colaborador.activar'));
   const listado = personas || [];
-
-  function pillRol(rol) {
-    if (!rol) return 'pill pill-rol-deshabilitado';
-    const r = rol.toLowerCase();
-    if (r === 'administrador' || r === 'admin') return 'pill pill-rol-admin';
-    if (r === 'deshabilitado') return 'pill pill-rol-deshabilitado';
-    return 'pill pill-rol-usuario';
-  }
 
   // Solo se ofrecen como filtro las áreas que tienen a alguien: un chip que
   // siempre deja la tabla vacía es ruido.
@@ -22,7 +14,7 @@
   const errorMsg   = (typeof error   !== 'undefined' && error)   ? error   : null;
 %>
 
-<link rel="stylesheet" href="/css/personal.css?v=20261102a">
+<link rel="stylesheet" href="/css/personal.css?v=20261106b">
 <link rel="stylesheet" href="/css/phone.css?v=20260902">
 <% if (puedeEditar) { %>
 <link rel="stylesheet" href="/css/profile-photo-crop.css?v=20260916m">
@@ -97,9 +89,9 @@
             <th class="col-desktop" data-ordenable aria-sort="none">
               <button type="button">Cumpleaños</button>
             </th>
-            <% if (mostrarRol) { %>
+            <% if (mostrarCuenta) { %>
               <th class="col-desktop" data-ordenable aria-sort="none">
-                <button type="button">Rol</button>
+                <button type="button">Cuenta</button>
               </th>
             <% } %>
           </tr>
@@ -122,7 +114,7 @@
               const correo   = p.email    || '-';
               const telefono = p.work_phone || '-';
               const telefonoHref = p.telefonoHref || null;
-              const rol = p.role || 'Usuario';
+              const cuentaActiva = p.active === true;
               const cumpleSort = p.ordenCumple !== undefined ? p.ordenCumple : 9999;
               const cumpleFmt  = p.fechaCumpleFmt || '-';
               // El ticket va junto al correo con que se verificó la cuenta: el de
@@ -203,9 +195,9 @@
                 <% } %>
               </td>
 
-              <% if (mostrarRol) { %>
-                <td class="col-desktop" data-label="Rol">
-                  <span class="<%= pillRol(rol) %>"><%= rol %></span>
+              <% if (mostrarCuenta) { %>
+                <td class="col-desktop" data-label="Cuenta">
+                  <span class="pill <%= cuentaActiva ? 'pill-cuenta-activa' : 'pill-cuenta-inactiva' %>"><%= cuentaActiva ? 'Activa' : 'Inactiva' %></span>
                 </td>
               <% } %>
             </tr>

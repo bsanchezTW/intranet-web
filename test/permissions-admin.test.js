@@ -183,10 +183,10 @@ describe("las vistas renderizan con datos de prueba", () => {
     { id: 3, area_name: "Comercial", parent_area_id: 1, manager_user_id: null },
   ];
   const users = [
-    { id: 10, name: "Gustavo Valenzuela", first_name: "Gustavo", email: "g@x.cl", role: "Usuario", work_area_id: 1, is_superadmin: false },
-    { id: 20, name: "Freddy Payano", first_name: "Freddy", email: "f@x.cl", role: "Administrador", work_area_id: 2, is_superadmin: false },
-    { id: 31, name: "Astrid Ortiz", first_name: "Astrid", email: "a@x.cl", role: "Usuario", work_area_id: 2, is_superadmin: false },
-    { id: 40, name: "Bastián Sánchez", first_name: "Bastián", email: "b@x.cl", role: "Administrador", work_area_id: 3, is_superadmin: true },
+    { id: 10, name: "Gustavo Valenzuela", first_name: "Gustavo", email: "g@x.cl", active: true, work_area_id: 1, is_superadmin: false },
+    { id: 20, name: "Freddy Payano", first_name: "Freddy", email: "f@x.cl", active: true, work_area_id: 2, is_superadmin: false },
+    { id: 31, name: "Astrid Ortiz", first_name: "Astrid", email: "a@x.cl", active: true, work_area_id: 2, is_superadmin: false },
+    { id: 40, name: "Bastián Sánchez", first_name: "Bastián", email: "b@x.cl", active: true, work_area_id: 3, is_superadmin: true },
   ];
   const groups = [
     { id: 1, name: "Aprobadores", description: "Aprueban rendiciones", member_count: 2, assignment_count: 1 },
@@ -404,12 +404,12 @@ describe("organigrama dentro de Gestión de Permisos", () => {
     { id: 4, area_name: "Contabilidad", parent_area_id: 2, manager_user_id: null },
   ];
   const users = [
-    { id: 10, name: "Gustavo", role: "Usuario", work_area_id: 1 },
-    { id: 20, name: "Freddy", role: "Administrador", work_area_id: 2 },
-    { id: 31, name: "Astrid", role: "Usuario", work_area_id: 2 },
-    { id: 32, name: "Marco", role: "Usuario", work_area_id: 3 },
-    { id: 33, name: "Lucía", role: "Usuario", work_area_id: 4 },
-    { id: 34, name: "Ex", role: "Deshabilitado", work_area_id: 4 },
+    { id: 10, name: "Gustavo", active: true, work_area_id: 1 },
+    { id: 20, name: "Freddy", active: true, work_area_id: 2 },
+    { id: 31, name: "Astrid", active: true, work_area_id: 2 },
+    { id: 32, name: "Marco", active: true, work_area_id: 3 },
+    { id: 33, name: "Lucía", active: true, work_area_id: 4 },
+    { id: 34, name: "Ex", active: false, work_area_id: 4 },
   ];
   const refs = {
     areas,
@@ -473,9 +473,9 @@ describe("quitarle un permiso a una persona", () => {
     const catalog = getCatalog(getCurrentCountry());
     const areas = [{ id: 2, area_name: "Finanzas", parent_area_id: null, manager_user_id: null }];
     const users = [
-      { id: 20, name: "Freddy", role: "Administrador", work_area_id: 2, is_superadmin: false },
-      { id: 31, name: "Astrid", role: "Usuario", work_area_id: 2, is_superadmin: false },
-      { id: 40, name: "Bastián", role: "Administrador", work_area_id: 2, is_superadmin: true },
+      { id: 20, name: "Freddy", active: true, work_area_id: 2, is_superadmin: false },
+      { id: 31, name: "Astrid", active: true, work_area_id: 2, is_superadmin: false },
+      { id: 40, name: "Bastián", active: true, work_area_id: 2, is_superadmin: true },
     ];
     const refs = {
       areas,

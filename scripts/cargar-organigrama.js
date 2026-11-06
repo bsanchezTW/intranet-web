@@ -102,7 +102,7 @@ function nombreDe(u) {
 async function armarPlan() {
   const [{ rows: areas }, { rows: users }, { rows: docs }] = await Promise.all([
     db.query("SELECT id, area_name, color, parent_area_id, manager_user_id, sort_order FROM work_areas"),
-    db.query("SELECT id, first_name, last_name, role, work_area_id FROM users"),
+    db.query("SELECT id, first_name, last_name, active, work_area_id FROM users"),
     db.query("SELECT work_area_id, count(*)::int AS n FROM documents WHERE work_area_id IS NOT NULL GROUP BY work_area_id"),
   ]);
   const docsPorArea = new Map(docs.map((d) => [Number(d.work_area_id), d.n]));
@@ -261,7 +261,7 @@ function imprimirPlan({ plan, borrar, areaPorId, users }) {
   console.log("No figuran en el organigrama (se quedan donde están)");
   console.log("─".repeat(72));
   for (const u of fuera) {
-    console.log(`  ${nombreDe(u).padEnd(36)} ${nombreArea(u.work_area_id)}${u.role === "Deshabilitado" ? "  (deshabilitado)" : ""}`);
+    console.log(`  ${nombreDe(u).padEnd(36)} ${nombreArea(u.work_area_id)}${u.active ? "" : "  (deshabilitado)"}`);
   }
 
   return cambios + movidas;

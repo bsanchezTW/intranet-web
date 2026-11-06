@@ -1,18 +1,10 @@
 /**
- * Área responsable del centro de gastos.
+ * Área de Finanzas, por su nombre (con las áreas que dependen de ella en el
+ * organigrama: Contabilidad, Tesorería…).
  *
- * Aprobar en la etapa final de una rendición o una solicitud de fondos no es
- * competencia de cualquier administrador: exige pertenecer a Finanzas **y**
- * tener rol Administrador. El área sola no basta (un asistente de Finanzas
- * consulta pero no liquida) y el rol solo tampoco (un administrador de
- * Marketing no debe ver las rendiciones de toda la empresa).
- *
- * El doble requisito lo aplicaba services/expenses/financeTeam.js; aquí sólo
- * vive el nombre del área. Para sumar otra área a Finanzas basta agregarla.
- *
- * Las áreas que dependen de Finanzas en el organigrama (Contabilidad,
- * Tesorería…) también cuentan: separarlas en sub-áreas no debe quitarles la
- * etapa de Finanzas a sus administradores.
+ * Desde la fase 11 el nombre de un área no da permisos: aprobar o liquidar
+ * gastos sale de Gestión de Permisos. Sólo lo usa el arranque (bootstrap.js)
+ * para copiar a Finanzas en un país que todavía no lo corrió.
  */
 
 const { normalizeAreaName } = require("./workAreas");

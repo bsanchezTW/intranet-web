@@ -7,7 +7,6 @@ const db = require("../db");
 const multer = require("multer");
 const fileStorage = require("../services/fileStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
-const { ROLES } = require("../constants/roles");
 const requirePermission = require("../middlewares/requirePermission");
 const { scopeFilter } = require("../services/permissions/decide");
 const { safeReturnTo, withQueryParam } = require("../utils/returnTo");
@@ -634,7 +633,7 @@ function withoutEmail(rows) {
 
 router.get("/kpi-cursos", requirePermission("cursos.avance.ver"), async (req, res) => {
   try {
-    const alcance = kpiScope(req, 2);
+    const alcance = kpiScope(req, 1);
     const queryRanking = `
       SELECT 
         u.id AS usuario_id,
@@ -645,13 +644,12 @@ router.get("/kpi-cursos", requirePermission("cursos.avance.ver"), async (req, re
         COUNT(cu.course_id) FILTER (WHERE cu.status = 'in_progress') AS cursos_en_curso
       FROM users u
       LEFT JOIN user_course_progress cu ON cu.user_id = u.id
-      WHERE u.role IS DISTINCT FROM $1 AND ${alcance.clause}
+      WHERE u.active AND ${alcance.clause}
       GROUP BY u.id, u.first_name, u.last_name, u.email
       HAVING COUNT(cu.course_id) FILTER (WHERE cu.status = 'evaluated') > 0
       ORDER BY puntaje_total DESC, cursos_completados DESC, nombre_usuario ASC
     `;
     const { rows: rankingRows } = await db.query(queryRanking, [
-      ROLES.DESHABILITADO,
       ...alcance.params,
     ]);
     const todosLosRanking = kpiShowsEmail(res) ? rankingRows : withoutEmail(rankingRows);
@@ -728,14 +726,14 @@ router.get("/kpi-cursos/api/integrantes", requirePermission("cursos.avance.ver")
   try {
     // Sin permiso de ver correos tampoco se busca por correo.
     const conCorreo = kpiShowsEmail(res);
-    const alcance = kpiScope(req, 3);
+    const alcance = kpiScope(req, 2);
     const { rows } = await db.query(
       `SELECT
         u.id,
         TRIM(u.first_name || ' ' || COALESCE(u.last_name, '')) AS name,
         u.email
       FROM users u
-      WHERE u.role IS DISTINCT FROM $2
+      WHERE u.active
         AND ${alcance.clause}
         AND (
           u.first_name ILIKE $1
@@ -745,7 +743,7 @@ router.get("/kpi-cursos/api/integrantes", requirePermission("cursos.avance.ver")
         )
       ORDER BY name ASC
       LIMIT 12`,
-      [`%${q}%`, ROLES.DESHABILITADO, ...alcance.params],
+      [`%${q}%`, ...alcance.params],
     );
     res.json(conCorreo ? rows : withoutEmail(rows));
   } catch (err) {
@@ -759,16 +757,15 @@ router.get("/kpi-cursos/api/integrantes/:id", requirePermission("cursos.avance.v
   const userId = req.params.id;
 
   try {
-    const alcance = kpiScope(req, 3);
+    const alcance = kpiScope(req, 2);
     const { rows: userRows } = await db.query(
       `SELECT
         u.id,
         TRIM(u.first_name || ' ' || COALESCE(u.last_name, '')) AS name,
-        u.email,
-        u.role
+        u.email
       FROM users u
-      WHERE u.id = $1 AND u.role IS DISTINCT FROM $2 AND ${alcance.clause}`,
-      [userId, ROLES.DESHABILITADO, ...alcance.params],
+      WHERE u.id = $1 AND u.active AND ${alcance.clause}`,
+      [userId, ...alcance.params],
     );
     if (userRows.length === 0) {
       return res.status(404).json({ error: "Integrante no encontrado" });

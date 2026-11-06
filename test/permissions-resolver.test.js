@@ -29,16 +29,16 @@ const AREAS = [
 ];
 
 const USERS = [
-  { id: 100, role: "Administrador", work_area_id: 1 },
-  { id: 200, role: "Usuario", work_area_id: 2 },
-  { id: 201, role: "Usuario", work_area_id: 2 }, // Astrid, Finanzas, no es jefa
-  { id: 301, role: "Usuario", work_area_id: 3 },
-  { id: 400, role: "Usuario", work_area_id: 4 },
-  { id: 401, role: "Usuario", work_area_id: 4 }, // Juan, Comercial
-  { id: 402, role: "Usuario", work_area_id: 4 },
-  { id: 500, role: "Usuario", work_area_id: null },
-  { id: 900, role: "Usuario", work_area_id: 2, is_superadmin: true },
-  { id: 999, role: "Deshabilitado", work_area_id: 4 },
+  { id: 100, active: true, work_area_id: 1 },
+  { id: 200, active: true, work_area_id: 2 },
+  { id: 201, active: true, work_area_id: 2 }, // Astrid, Finanzas, no es jefa
+  { id: 301, active: true, work_area_id: 3 },
+  { id: 400, active: true, work_area_id: 4 },
+  { id: 401, active: true, work_area_id: 4 }, // Juan, Comercial
+  { id: 402, active: true, work_area_id: 4 },
+  { id: 500, active: true, work_area_id: null },
+  { id: 900, active: true, work_area_id: 2, is_superadmin: true },
+  { id: 999, active: false, work_area_id: 4 },
 ];
 
 let nextId = 1;
@@ -374,7 +374,7 @@ describe("requirePermission", () => {
 
   it("un rol Administrador sin el permiso no pasa", async () => {
     const mw = requirePermission("noticias.noticia.crear");
-    const admin = await correr(mw, { session: { user: { id: 401, role: "Administrador" } }, perms: permisos(s, 401) });
+    const admin = await correr(mw, { session: { user: { id: 401, active: true } }, perms: permisos(s, 401) });
     assert.equal(admin.status, 403);
   });
 

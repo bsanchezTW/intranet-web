@@ -5,7 +5,6 @@ const db = require("../db");
 const multer = require("multer");
 const fileStorage = require("../services/fileStorage");
 const { UPLOAD_LIMITS_BYTES } = require("../config/uploadLimits");
-const { ROLES } = require("../constants/roles");
 const {
   APP_CATALOGS,
   normalizeAppCatalog,
@@ -322,8 +321,7 @@ router.post("/apps/notificar/:id", requirePermission("apps.app.notificar"), asyn
 
     const { rows: usuarios } = await db.query(
       `SELECT email FROM users
-       WHERE role IN ($1, $2) AND email IS NOT NULL AND TRIM(email) <> ''`,
-      [ROLES.USUARIO, ROLES.ADMINISTRADOR],
+       WHERE active AND email IS NOT NULL AND TRIM(email) <> ''`,
     );
     const listaCorreos = usuarios.map((u) => u.email);
 

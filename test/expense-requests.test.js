@@ -876,10 +876,10 @@ describe("expenseRequestService — comprobantes por ítem", () => {
 
 describe("areaManager — jefe disponible para aprobar", () => {
   it("un jefe deshabilitado o fuera de la intranet no puede atender solicitudes", () => {
-    assert.equal(isAvailableApprover({ role: "Administrador", is_intranet_user: true }), true);
-    assert.equal(isAvailableApprover({ role: "Usuario", is_intranet_user: true }), true);
-    assert.equal(isAvailableApprover({ role: "Deshabilitado", is_intranet_user: true }), false);
-    assert.equal(isAvailableApprover({ role: "Usuario", is_intranet_user: false }), false);
+    assert.equal(isAvailableApprover({ active: true, is_intranet_user: true }), true);
+    assert.equal(isAvailableApprover({ active: true, is_intranet_user: true }), true);
+    assert.equal(isAvailableApprover({ active: false, is_intranet_user: true }), false);
+    assert.equal(isAvailableApprover({ active: true, is_intranet_user: false }), false);
     assert.equal(isAvailableApprover(null), false);
   });
 });

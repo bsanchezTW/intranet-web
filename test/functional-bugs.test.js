@@ -87,9 +87,9 @@ describe("tickets: agentes con rol Usuario y dueños en otras mayúsculas", () =
   const stubbed = [];
   let server;
   let base;
-  const AGENTE = { id: 20, role: "Usuario", email: "soporte@transworld.cl", nombre: "Sofía Soporte" };
-  const DUENA = { id: 5, role: "Usuario", email: "ana@transworld.cl", nombre: "Ana" };
-  const OTRO = { id: 6, role: "Usuario", email: "beto@transworld.cl", nombre: "Beto" };
+  const AGENTE = { id: 20, active: true, email: "soporte@transworld.cl", nombre: "Sofía Soporte" };
+  const DUENA = { id: 5, active: true, email: "ana@transworld.cl", nombre: "Ana" };
+  const OTRO = { id: 6, active: true, email: "beto@transworld.cl", nombre: "Beto" };
   const TICKETS = [
     { id: 9, title: "Impresora", requester_email: "Ana@Transworld.cl", requester_name: "Ana" },
     { id: 10, title: "VPN", requester_email: "beto@transworld.cl", requester_name: "Beto" },
@@ -180,7 +180,7 @@ describe("tickets: agentes con rol Usuario y dueños en otras mayúsculas", () =
       }
     }
     const snapshot = {
-      users: new Map([AGENTE, DUENA, OTRO].map((u) => [u.id, { id: u.id, role: "Usuario", work_area_id: null }])),
+      users: new Map([AGENTE, DUENA, OTRO].map((u) => [u.id, { id: u.id, active: true, work_area_id: null }])),
       areas: [],
       assignments,
     };

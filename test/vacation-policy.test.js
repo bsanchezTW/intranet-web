@@ -28,7 +28,7 @@ const USERS = [
   { id: 40, work_area_id: 2 },
   { id: 50, work_area_id: 2 },
   { id: 60, work_area_id: 2, is_superadmin: true },
-].map((u) => ({ role: "Usuario", ...u }));
+].map((u) => ({ active: true, ...u }));
 
 let n = 0;
 const a = (fields) => ({ id: ++n, scope_area_ids: [], effect: "concede", ...fields });

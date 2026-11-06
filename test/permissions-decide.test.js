@@ -17,7 +17,7 @@ const CL = getCatalog("CL");
 
 function perms({ userId = 8, grants = [] } = {}) {
   const snapshot = {
-    users: new Map([[userId, { id: userId, role: "Administrador", work_area_id: 1 }]]),
+    users: new Map([[userId, { id: userId, active: true, work_area_id: 1 }]]),
     areas: [{ id: 1, parent_area_id: null, manager_user_id: null }],
     sets: new Map(),
     assignments: grants.map((g, i) => ({

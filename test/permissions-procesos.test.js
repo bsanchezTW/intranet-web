@@ -35,10 +35,10 @@ const AREAS = [
 ];
 
 const USERS = [
-  { id: 100, role: "Administrador", work_area_id: 1 },
-  { id: 200, role: "Usuario", work_area_id: 2 },
-  { id: 201, role: "Usuario", work_area_id: 2 },
-  { id: 401, role: "Usuario", work_area_id: 4 },
+  { id: 100, active: true, work_area_id: 1 },
+  { id: 200, active: true, work_area_id: 2 },
+  { id: 201, active: true, work_area_id: 2 },
+  { id: 401, active: true, work_area_id: 4 },
 ];
 
 let nextId = 1;
@@ -140,7 +140,7 @@ describe("Procesos con los permisos de cada perfil", () => {
   });
 
   it("el superadmin ve el listado de carpetas", () => {
-    const sa = computePermissions({ ...foto([]), users: new Map([[100, { id: 100, role: "Usuario", work_area_id: 1, is_superadmin: true }]]) }, { id: 100 }, { catalog: CL });
+    const sa = computePermissions({ ...foto([]), users: new Map([[100, { id: 100, active: true, work_area_id: 1, is_superadmin: true }]]) }, { id: 100 }, { catalog: CL });
     assert.equal(veListadoDeCarpetas(sa), true);
   });
 });
@@ -331,7 +331,7 @@ describe("vistas de Procesos y del directorio", () => {
       pillClass: "pill",
       fechaCumpleFmt: "-",
       ordenCumple: 9999,
-      role: "Usuario",
+      active: true,
     };
     const datos = {
       titulo: "Personal",

@@ -181,13 +181,12 @@ describe("POST /claude/api/chat con cupo", () => {
         return { text: "hola", usage: { input_tokens: 10, output_tokens: 2 }, rounds: 1 };
       },
     });
-    stubModule("services/access/staffAccess.js", { canManageRrhh: async () => false });
     const claudeRoutes = require(path.join(SRC, "routes/claude"));
     const app = express();
     app.use(express.json());
     app.use(session({ secret: "t", resave: false, saveUninitialized: true }));
     app.use((req, res, next) => {
-      req.session.user = { id: 7, role: "Usuario", email: "ana@transworld.cl" };
+      req.session.user = { id: 7, active: true, email: "ana@transworld.cl" };
       res.locals.features = { supportTickets: false, expenseRequests: false };
       next();
     });

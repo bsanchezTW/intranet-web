@@ -57,7 +57,7 @@ async function buildTeamReport({ referenceDate = null, search = null, allow = nu
 
   const { rows: todos } = await db.query(
     `SELECT u.id, u.first_name, u.last_name, u.email, u.national_id,
-            u.hire_date, u.role, w.area_name, u.work_area_id
+            u.hire_date, w.area_name, u.work_area_id
        FROM users u
        LEFT JOIN work_areas w ON w.id = u.work_area_id
        ${filter}

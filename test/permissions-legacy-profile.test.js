@@ -1,13 +1,13 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
-// staffAccess resuelve RRHH con el país de la instancia (process.env.COUNTRY),
-// igual que en el servidor. node --test corre cada archivo en su propio
-// proceso: sin esto no hay país y el permiso sale siempre en false.
+// El área de RRHH se resuelve con el país de la instancia (process.env.COUNTRY).
+// Desde la fase 11 este perfil (rol antiguo + nombre de área) sólo lo usa el
+// arranque de Gestión de Permisos para un país que todavía no lo corrió.
 process.env.COUNTRY = process.env.COUNTRY || "CL";
 
 const { isRrhhAreaName } = require("../src/constants/rrhhArea");
-const { accessProfile, canManageRrhh, isInformaticaAdmin } = require("../src/services/access/staffAccess");
+const { accessProfile } = require("../src/services/permissions/bootstrap");
 
 describe("área de RRHH", () => {
   it("reconoce RRHH y Recursos Humanos escritos de distintas formas", () => {
@@ -32,7 +32,7 @@ describe("área de RRHH", () => {
   });
 });
 
-describe("staffAccess — permisos por área y rol", () => {
+describe("arranque — perfil de antes por área y rol", () => {
   it("un administrador de Informática tiene acceso total", () => {
     const profile = accessProfile({ role: "Administrador", area_name: "Informática" }, "CL");
     assert.equal(profile.informaticaAdmin, true);
@@ -67,32 +67,5 @@ describe("staffAccess — permisos por área y rol", () => {
       accessProfile({ role: "Administrador", area_name: "Ventas", managed_area_names: ["Sales Leader"] }, "PE").canManageRrhh,
       false,
     );
-  });
-
-  it("id 0 con rol Administrador (el login de emergencia que ya no existe) no tiene acceso", async () => {
-    // staffAccess con una base que no tiene a nadie con id 0.
-    const dbId = require.resolve("../src/db");
-    const staffId = require.resolve("../src/services/access/staffAccess");
-    const prevDb = require.cache[dbId];
-    const prevStaff = require.cache[staffId];
-    require.cache[dbId] = {
-      id: dbId,
-      filename: dbId,
-      loaded: true,
-      exports: { query: async () => ({ rows: [{ id: 5, role: "Administrador", area_name: "Informática", managed_area_names: [] }] }) },
-    };
-    delete require.cache[staffId];
-    try {
-      const fresh = require("../src/services/access/staffAccess");
-      const master = { id: 0, role: "Administrador" };
-      assert.equal(await fresh.canManageRrhh(master), false);
-      assert.equal(await fresh.isInformaticaAdmin(master), false);
-      assert.equal(await fresh.canManageRrhh({ id: 5, role: "Administrador" }), true);
-      assert.equal(await fresh.canManageRrhh(null), false);
-    } finally {
-      if (prevDb) require.cache[dbId] = prevDb;
-      else delete require.cache[dbId];
-      require.cache[staffId] = prevStaff;
-    }
   });
 });

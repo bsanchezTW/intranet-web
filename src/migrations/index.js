@@ -8,4 +8,5 @@ module.exports = [
   require("./003_news_featured"),
   require("./004_applications_columns"),
   require("./005_users_email_unique_index"),
+  require("./006_users_active"),
 ];

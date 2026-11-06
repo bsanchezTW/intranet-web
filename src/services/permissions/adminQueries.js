@@ -23,7 +23,7 @@ async function loadReferences() {
          FROM work_areas w ORDER BY w.area_name`,
     ),
     db.query(
-      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.work_area_id,
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.active, u.work_area_id,
               COALESCE(u.is_superadmin, FALSE) AS is_superadmin
          FROM users u
         ORDER BY u.first_name NULLS LAST, u.last_name NULLS LAST`,

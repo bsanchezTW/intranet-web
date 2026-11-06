@@ -142,7 +142,7 @@ async function listDrivers() {
   const { rows } = await db.query(
     `SELECT id, NULLIF(TRIM(CONCAT_WS(' ', first_name, last_name)), '') AS name
        FROM users
-      WHERE COALESCE(LOWER(TRIM(role)), '') NOT IN ('deshabilitado', 'disabled')
+      WHERE active
         AND NULLIF(TRIM(CONCAT_WS(' ', first_name, last_name)), '') IS NOT NULL
       ORDER BY first_name, last_name`,
   );

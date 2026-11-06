@@ -25,12 +25,12 @@ const AREAS = [
   { id: 3, parent_area_id: 2, manager_user_id: null },
 ];
 const USERS = [
-  { id: 10, role: "Usuario", work_area_id: 1 },
-  { id: 20, role: "Usuario", work_area_id: 2 },
-  { id: 31, role: "Usuario", work_area_id: 3 },
-  { id: 32, role: "Usuario", work_area_id: 3 },
-  { id: 33, role: "Usuario", work_area_id: 2 },
-  { id: 40, role: "Deshabilitado", work_area_id: 2 },
+  { id: 10, active: true, work_area_id: 1 },
+  { id: 20, active: true, work_area_id: 2 },
+  { id: 31, active: true, work_area_id: 3 },
+  { id: 32, active: true, work_area_id: 3 },
+  { id: 33, active: true, work_area_id: 2 },
+  { id: 40, active: false, work_area_id: 2 },
 ];
 
 const SETS = new Map([

@@ -15,7 +15,6 @@ const { getCountryConfig } = require("../src/config/country");
 const { getFeatures } = require("../src/config/features");
 const {
   rechazoEscalada,
-  rechazoNombreArea,
   clavesDeEdicion,
   cambiosDeFicha,
 } = require("../src/services/permissions/rrhhEscalada");
@@ -27,8 +26,8 @@ const AREAS = [
   { id: 4, parent_area_id: null, manager_user_id: null },
 ];
 const USERS = [
-  { id: 20, role: "Administrador", work_area_id: 2 },
-  { id: 31, role: "Usuario", work_area_id: 4 },
+  { id: 20, active: true, work_area_id: 2 },
+  { id: 31, active: true, work_area_id: 4 },
 ];
 
 let nextId = 1;
@@ -74,7 +73,7 @@ const vacio = () => computePermissions({
 }, { id: 31 }, { catalog: CL });
 
 describe("RRHH sin permisos", () => {
-  it("un rol Administrador ya no basta: sin asignaciones no hay nada", () => {
+  it("una cuenta activa sin asignaciones no tiene nada", () => {
     const admin = computePermissions({
       users: new Map(USERS.map((u) => [u.id, u])), areas: AREAS, sets: new Map(), assignments: [],
     }, { id: 20 }, { catalog: CL });
@@ -111,7 +110,7 @@ describe("POST /editar separa las claves", () => {
     first_name: "Ana",
     last_name: "Pérez",
     email: "ana@transworld.cl",
-    role: "Usuario",
+    active: true,
     work_area_id: 4,
     birth_date: "1990-01-01",
     phone: "",
@@ -126,8 +125,8 @@ describe("POST /editar separa las claves", () => {
     assert.deepEqual(clavesDeEdicion(cambios), ["rrhh.colaborador.editar"]);
   });
 
-  it("el rol exige activar y el área exige mover miembros", () => {
-    assert.deepEqual(clavesDeEdicion(cambiosDeFicha(base, { ...base, role: "Deshabilitado" })), [
+  it("el estado exige activar y el área exige mover miembros", () => {
+    assert.deepEqual(clavesDeEdicion(cambiosDeFicha(base, { ...base, active: false })), [
       "rrhh.colaborador.activar",
     ]);
     assert.deepEqual(clavesDeEdicion(cambiosDeFicha(base, { ...base, work_area_id: 2 })), [
@@ -139,15 +138,15 @@ describe("POST /editar separa las claves", () => {
 describe("escalada de RRHH", () => {
   const actor = 20;
 
-  it("un no-superadmin no se cambia rol, estado, área ni se designa jefe", () => {
+  it("un no-superadmin no se cambia el estado ni el área, ni se designa jefe", () => {
     assert.equal(rechazoEscalada({
       actorId: actor, targetId: actor,
-      antes: { role: "Usuario" }, despues: { role: "Administrador" },
-    }), "propio-rol");
+      antes: { active: true }, despues: { active: false },
+    }), "propio-estado");
     assert.equal(rechazoEscalada({
       actorId: actor, targetId: actor,
-      antes: { role: "Usuario" }, despues: { role: "Deshabilitado" },
-    }), "propio-rol");
+      antes: { active: true }, despues: { active: true },
+    }), null, "sin cambio de estado no hay nada que negar");
     assert.equal(rechazoEscalada({
       actorId: actor, targetId: actor,
       antes: { areaId: 2 }, despues: { areaId: 4 },
@@ -158,27 +157,30 @@ describe("escalada de RRHH", () => {
     }), "propio-jefe");
   });
 
-  it("sólo el superadmin asigna Administrador y designa jefe de Informática", () => {
+  it("activar y desactivar a otros sigue en RRHH, salvo a un superadmin", () => {
     assert.equal(rechazoEscalada({
       actorId: actor, targetId: 31,
-      antes: { role: "Usuario" }, despues: { role: "Administrador" },
-    }), "rol-administrador");
+      antes: { active: true }, despues: { active: false },
+    }), null);
     assert.equal(rechazoEscalada({
-      actorId: actor, targetId: 31,
-      antes: { role: "Administrador" }, despues: { role: "Usuario" },
-    }), "rol-administrador");
+      actorId: actor, targetId: 31, objetivoSuperadmin: true,
+      antes: { active: true }, despues: { active: false },
+    }), "estado-superadmin");
+    assert.equal(rechazoEscalada({
+      superadmin: true, actorId: actor, targetId: 31, objetivoSuperadmin: true,
+      antes: { active: true }, despues: { active: false },
+    }), null);
+  });
+
+  it("ningún nombre de área ni jefatura da permisos por sí sola", () => {
     assert.equal(rechazoEscalada({
       actorId: actor, targetId: 31,
       despues: { designaJefe: true },
       areaNombre: "Informática",
-    }), "jefe-informatica");
-    assert.equal(rechazoEscalada({
-      actorId: actor, targetId: 31,
-      antes: { role: "Usuario" }, despues: { role: "Deshabilitado" },
-    }), null, "habilitar sigue en RRHH");
+    }), null, "designar jefe de Informática ya no da acceso total");
   });
 
-  it("sólo el superadmin cambia el correo de un administrador o superadmin", () => {
+  it("sólo el superadmin cambia el correo de quien tiene más permisos", () => {
     const cambio = { antes: { email: "ana@transworld.cl" }, despues: { email: "otra@gmail.com" } };
     assert.equal(
       rechazoEscalada({ actorId: actor, targetId: 31, objetivoPrivilegiado: true, ...cambio }),
@@ -191,7 +193,7 @@ describe("escalada de RRHH", () => {
     assert.equal(
       rechazoEscalada({ actorId: actor, targetId: 31, objetivoPrivilegiado: false, ...cambio }),
       null,
-      "el correo de un usuario común lo corrige RRHH",
+      "el correo de quien no tiene más permisos lo corrige RRHH",
     );
     assert.equal(
       rechazoEscalada({ actorId: actor, targetId: actor, objetivoPrivilegiado: true, ...cambio }),
@@ -211,29 +213,16 @@ describe("escalada de RRHH", () => {
     );
   });
 
-  it("renombrar o crear un área con nombre que da permisos es del superadmin", () => {
-    assert.equal(rechazoNombreArea({ antes: "Comercial", despues: "Informática" }), "nombre-area-sensible");
-    assert.equal(rechazoNombreArea({ antes: "TI", despues: "Comercial" }), "nombre-area-sensible");
-    assert.equal(rechazoNombreArea({ antes: "Comercial", despues: "RRHH" }), "nombre-area-sensible");
-    assert.equal(rechazoNombreArea({ despues: "Recursos Humanos" }), "nombre-area-sensible", "crear");
-    assert.equal(rechazoNombreArea({ antes: "Comercial", despues: "Ventas" }), null);
-    assert.equal(rechazoNombreArea({ antes: "Informática", despues: "Informatica" }), null, "corregir el acento no cambia nada");
-    assert.equal(rechazoNombreArea({ superadmin: true, antes: "Comercial", despues: "TI" }), null);
-  });
-
   it("el superadmin puede los tres", () => {
     const base = { superadmin: true, actorId: actor, targetId: actor };
-    assert.equal(rechazoEscalada({ ...base, antes: { role: "Usuario" }, despues: { role: "Administrador" } }), null);
+    assert.equal(rechazoEscalada({ ...base, antes: { active: true }, despues: { active: false } }), null);
     assert.equal(rechazoEscalada({ ...base, antes: { areaId: 2 }, despues: { areaId: 4 } }), null);
-    assert.equal(rechazoEscalada({
-      superadmin: true, actorId: actor, targetId: 31,
-      despues: { designaJefe: true }, areaNombre: "TI",
-    }), null);
+    assert.equal(rechazoEscalada({ ...base, despues: { seDesignaJefe: true } }), null);
   });
 
   it("queda anotado en el arranque", () => {
-    assert.ok(CAMBIOS.some((linea) => /superadmin asigna o quita el rol Administrador/.test(linea)));
-    assert.ok(CAMBIOS.some((linea) => /jefe de Informática/.test(linea)));
+    assert.ok(CAMBIOS.some((linea) => /rol Administrador desaparece/.test(linea)));
+    assert.ok(CAMBIOS.some((linea) => /nombre de un área/.test(linea)));
   });
 });
 
@@ -245,7 +234,7 @@ describe("vistas de la ficha", () => {
     email: "ana@transworld.cl",
     correo_empresa: "ana@transworld.cl",
     email_confirmed: true,
-    role: "Usuario",
+    active: true,
     work_area_id: 4,
     documento: "12.345.678-5",
     national_id: "12345678-5",
@@ -282,12 +271,25 @@ describe("vistas de la ficha", () => {
     assert.equal(html.includes("56912345678"), false);
   });
 
-  it("con el permiso el documento se muestra y el rol Administrador queda deshabilitado", async () => {
+  it("con el permiso el documento se muestra; la cuenta es un interruptor", async () => {
     const items = ["rrhh.colaborador.campo.documento_identidad", "rrhh.colaborador.campo.datos_personales"]
       .map((permission_key) => ({ permission_key }));
     const html = await render(buildViewCan(aplicando(31, items)));
     assert.match(html, /12\.345\.678-5/);
-    assert.match(html, /value="Administrador"[^>]*disabled/);
+    assert.doesNotMatch(html, /Administrador/);
+    assert.match(html, /role="switch"[^>]*checked/);
+    assert.match(html, /name="estado_cuenta" value="1"/);
+  });
+
+  it("el interruptor de un superadmin queda bloqueado para quien no lo es", async () => {
+    persona.is_superadmin = true;
+    try {
+      const html = await render(buildViewCan(aplicando(31, [])));
+      assert.match(html, /role="switch"[^>]*disabled/);
+      assert.doesNotMatch(html, /name="estado_cuenta"/);
+    } finally {
+      delete persona.is_superadmin;
+    }
   });
 });
 

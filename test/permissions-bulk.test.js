@@ -138,7 +138,7 @@ describe("vista: Asignar varios en la pestaña Permisos", () => {
     const catalog = getCatalog(country);
     const current = catalog.modules.find((m) => m.permissions.some((p) => p.scopes)) || catalog.modules[0];
     const areas = [{ id: 1, area_name: "Gerencia", parent_area_id: null, manager_user_id: null }];
-    const users = [{ id: 10, name: "Gustavo", role: "Usuario", work_area_id: 1, is_superadmin: false }];
+    const users = [{ id: 10, name: "Gustavo", active: true, work_area_id: 1, is_superadmin: false }];
     const groups = [{ id: 20, name: "Aprobadores", member_count: 2 }];
     const html = await ejs.renderFile(path.join(SRC, "views", "permisos", "modulos.ejs"), {
       country, countryConfig: getCountryConfig(country), features: getFeatures(country), catalog,

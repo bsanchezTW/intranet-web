@@ -1,6 +1,5 @@
 const db = require("../../db");
 const { resolveApproverFromChain } = require("../workAreaTree");
-const { isDeshabilitado } = require("../../constants/roles");
 
 /**
  * Jefatura de área: quién aprueba en la primera etapa de fondos y vacaciones.
@@ -40,7 +39,7 @@ async function loadAreaNodes() {
  * solicitud asignada a él quedaría pendiente para siempre.
  */
 function isAvailableApprover(row) {
-  return Boolean(row) && row.is_intranet_user !== false && !isDeshabilitado(row.role);
+  return Boolean(row) && row.is_intranet_user !== false && row.active === true;
 }
 
 function unavailableError(name) {
@@ -49,7 +48,7 @@ function unavailableError(name) {
 
 async function getUserSummary(userId) {
   const { rows } = await db.query(
-    "SELECT id, first_name, last_name, email, role, is_intranet_user FROM users WHERE id = $1",
+    "SELECT id, first_name, last_name, email, active, is_intranet_user FROM users WHERE id = $1",
     [userId],
   );
   if (!rows.length) return null;

@@ -24,7 +24,7 @@ const CL = getCatalog("CL");
 
 function permisos(keys) {
   const snapshot = {
-    users: new Map([[8, { id: 8, role: "Usuario", work_area_id: 1 }]]),
+    users: new Map([[8, { id: 8, active: true, work_area_id: 1 }]]),
     areas: [{ id: 1, parent_area_id: null, manager_user_id: null }],
     assignments: keys.map((key, i) => ({ id: i + 1, principal_type: "user", user_id: 8, permission_key: key, scope_area_ids: [], effect: "concede" })),
   };

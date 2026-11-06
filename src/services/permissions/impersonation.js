@@ -1,6 +1,5 @@
 const db = require("../../db");
 const logger = require("../../utils/logger");
-const { canLogin, normalizeRole } = require("../../constants/roles");
 const { buildSessionUser } = require("../session/sessionUser");
 const { wantsJson } = require("../../utils/httpResponses");
 
@@ -57,7 +56,7 @@ async function audit({ actorId, action, targetId, note = null, newValue = null }
 
 async function loadTarget(targetId) {
   const { rows } = await db.query(
-    `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.photo, u.must_change_password,
+    `SELECT u.id, u.first_name, u.last_name, u.email, u.active, u.photo, u.must_change_password,
             u.home_tutorial_seen, u.last_login_at, u.work_area_id, u.is_superadmin,
             at.area_name, at.color AS area_color
        FROM users u
@@ -78,7 +77,7 @@ function impersonationRefusal({ actor, actorIsSuperadmin, alreadyImpersonating, 
   if (!target) return "La persona ya no existe.";
   if (Number(target.id) === Number(actor.id)) return "Ya estás en tu propia cuenta.";
   if (target.is_superadmin) return "No se puede iniciar sesión como otro superadmin.";
-  if (!canLogin(normalizeRole(target.role))) return "La cuenta está deshabilitada: no puede iniciar sesión.";
+  if (!target.active) return "La cuenta está deshabilitada: no puede iniciar sesión.";
   return null;
 }
 
@@ -162,13 +161,13 @@ function impersonationGuard({ cookieName }) {
 
     let original;
     try {
-      const { rows } = await db.query("SELECT is_superadmin, role FROM users WHERE id = $1", [s.original.id]);
+      const { rows } = await db.query("SELECT is_superadmin, active FROM users WHERE id = $1", [s.original.id]);
       original = rows[0];
     } catch (err) {
       logger.error("suplantacion", err);
       return next(err);
     }
-    if (!original || !original.is_superadmin || !canLogin(normalizeRole(original.role))) {
+    if (!original || !original.is_superadmin || !original.active) {
       return destroySession(req, res, cookieName);
     }
 

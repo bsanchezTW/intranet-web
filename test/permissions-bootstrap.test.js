@@ -21,14 +21,14 @@ const AREAS_PE = [
   { id: 4, area_name: "Informática", parent_area_id: 1, manager_user_id: 40 },
 ];
 const USERS_PE = [
-  { id: 10, first_name: "Gustavo", last_name: "Valenzuela", role: "Usuario", work_area_id: 1 },
-  { id: 20, first_name: "Patricia", last_name: "Portillo", role: "Administrador", work_area_id: 2 },
-  { id: 21, first_name: "Rocio", last_name: "Rivera", role: "Usuario", work_area_id: 2 },
-  { id: 30, first_name: "Freddy", last_name: "Payano", role: "Administrador", work_area_id: 3 },
-  { id: 31, first_name: "Astrid", last_name: "Ortiz", role: "Usuario", work_area_id: 3 },
-  { id: 40, first_name: "Bastián", last_name: "Sánchez", role: "Administrador", work_area_id: 4 },
-  { id: 41, first_name: "Bastián", last_name: "Dummy", role: "Usuario", work_area_id: 4 },
-  { id: 50, first_name: "Ex", last_name: "Colaborador", role: "Deshabilitado", work_area_id: 3 },
+  { id: 10, first_name: "Gustavo", last_name: "Valenzuela", active: true, role: "Usuario", work_area_id: 1 },
+  { id: 20, first_name: "Patricia", last_name: "Portillo", active: true, role: "Administrador", work_area_id: 2 },
+  { id: 21, first_name: "Rocio", last_name: "Rivera", active: true, role: "Usuario", work_area_id: 2 },
+  { id: 30, first_name: "Freddy", last_name: "Payano", active: true, role: "Administrador", work_area_id: 3 },
+  { id: 31, first_name: "Astrid", last_name: "Ortiz", active: true, role: "Usuario", work_area_id: 3 },
+  { id: 40, first_name: "Bastián", last_name: "Sánchez", active: true, role: "Administrador", work_area_id: 4 },
+  { id: 41, first_name: "Bastián", last_name: "Dummy", active: true, role: "Usuario", work_area_id: 4 },
+  { id: 50, first_name: "Ex", last_name: "Colaborador", active: false, role: "Deshabilitado", work_area_id: 3 },
 ];
 
 /*
@@ -47,13 +47,13 @@ const AREAS_CL = [
   { id: 5, area_name: "Marketing", parent_area_id: 1, manager_user_id: null },
 ];
 const USERS_CL = [
-  { id: 100, first_name: "Gerente", last_name: "General", role: "Usuario", work_area_id: 1 },
-  { id: 200, first_name: "Jefa", last_name: "Finanzas", role: "Administrador", work_area_id: 2 },
-  { id: 201, first_name: "Asistente", last_name: "Finanzas", role: "Usuario", work_area_id: 2 },
-  { id: 300, first_name: "Jefa", last_name: "Personas", role: "Administrador", work_area_id: 3 },
-  { id: 400, first_name: "Bastián", last_name: "Sánchez", role: "Administrador", work_area_id: 4 },
-  { id: 401, first_name: "Técnico", last_name: "Soporte", role: "Usuario", work_area_id: 4 },
-  { id: 500, first_name: "Admin", last_name: "Marketing", role: "Administrador", work_area_id: 5 },
+  { id: 100, first_name: "Gerente", last_name: "General", active: true, role: "Usuario", work_area_id: 1 },
+  { id: 200, first_name: "Jefa", last_name: "Finanzas", active: true, role: "Administrador", work_area_id: 2 },
+  { id: 201, first_name: "Asistente", last_name: "Finanzas", active: true, role: "Usuario", work_area_id: 2 },
+  { id: 300, first_name: "Jefa", last_name: "Personas", active: true, role: "Administrador", work_area_id: 3 },
+  { id: 400, first_name: "Bastián", last_name: "Sánchez", active: true, role: "Administrador", work_area_id: 4 },
+  { id: 401, first_name: "Técnico", last_name: "Soporte", active: true, role: "Usuario", work_area_id: 4 },
+  { id: 500, first_name: "Admin", last_name: "Marketing", active: true, role: "Administrador", work_area_id: 5 },
 ];
 
 function planDe(country) {

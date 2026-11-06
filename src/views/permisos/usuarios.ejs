@@ -27,7 +27,7 @@ const iniciales = (nombre) => String(nombre || '?').split(/\s+/).slice(0, 2).map
         <tbody>
           <% list.forEach(function (u) { %>
             <% const area = u.work_area_id ? refs.areaById.get(Number(u.work_area_id)) : null; %>
-            <% const deshabilitada = /^deshabilitado$/i.test(String(u.role || '').trim()) || !u.role; %>
+            <% const deshabilitada = u.active !== true; %>
             <tr>
               <td>
                 <span class="perm-persona">

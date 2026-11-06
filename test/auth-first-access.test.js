@@ -106,8 +106,8 @@ const fakePool = {
         email_confirmed: true,
         confirm_token: null,
         confirm_expires: null,
-        role: params[1],
-        is_intranet_user: params[2],
+        active: params[1],
+        is_intranet_user: params[1],
       });
       return { rows: [] };
     }
@@ -154,9 +154,6 @@ before(async () => {
       mails.push(msg);
     },
   });
-  stubModule("services/access/staffAccess.js", {
-    canManageRrhh: async (user) => user && user.role === "Administrador",
-  });
 
   const authRoutes = require(path.join(SRC, "routes/auth"));
   const rrhhRoutes = require(path.join(SRC, "routes/RRHH"));
@@ -178,10 +175,10 @@ before(async () => {
         scope: p.scopes ? (p.scopes.includes("todo") ? "todo" : p.scopes[0]) : null,
         scope_area_ids: [], effect: "concede",
       }));
-      const users = new Map([[userId, { id: userId, role: "Usuario", work_area_id: 3 }]]);
+      const users = new Map([[userId, { id: userId, active: true, work_area_id: 3 }]]);
       return computePermissions({ users, areas: [], sets: new Map(), assignments }, { id: userId }, { catalog });
     };
-    req.perms = user.role === "Administrador" ? conTodo(user.id) : emptyPermissions(getCatalog(), user.id);
+    req.perms = user.rrhh ? conTodo(user.id) : emptyPermissions(getCatalog(), user.id);
     next();
   });
   app.set("views", path.join(SRC, "views"));
@@ -195,7 +192,7 @@ before(async () => {
     next();
   });
   app.post("/__test/as-admin", (req, res) => {
-    req.session.user = { id: 99, role: "Administrador" };
+    req.session.user = { id: 99, rrhh: true };
     res.end();
   });
   app.use("/", authRoutes);
@@ -244,7 +241,7 @@ function seedUser(overrides = {}) {
     first_name: "Ana",
     last_name: "Pérez",
     email: "ana@transworld.cl",
-    role: "Deshabilitado",
+    active: false,
     email_confirmed: false,
     password_salt: salt,
     password_hash: pbkdf2Hash("temporal1", salt),
@@ -286,7 +283,7 @@ describe("primer acceso con contraseña temporal", () => {
     res = await request("POST", "/verify-email", { code });
     assert.equal(res.status, 302);
     assert.equal(res.headers.get("location"), "/reset-password?confirmed=1");
-    assert.equal(users.get(5).role, "Usuario");
+    assert.equal(users.get(5).active, true);
 
     res = await request("POST", "/reset-password", {
       new_password: "NuevaClave#2026",
@@ -316,7 +313,7 @@ describe("primer acceso con contraseña temporal", () => {
 
 describe("recuperar contraseña", () => {
   it("arma el correo con usuario + dominio, como el login", async () => {
-    const { password_hash: original } = seedUser({ role: "Usuario", email_confirmed: true });
+    const { password_hash: original } = seedUser({ active: true, email_confirmed: true });
     const request = browser();
     const res = await request("POST", "/forgot-password", {
       username: "ana",
@@ -330,7 +327,7 @@ describe("recuperar contraseña", () => {
   });
 
   it("rechaza el dominio del otro país", async () => {
-    seedUser({ role: "Usuario", email_confirmed: true });
+    seedUser({ active: true, email_confirmed: true });
     const request = browser();
     const res = await request("POST", "/forgot-password", {
       username: "ana",
@@ -392,7 +389,7 @@ describe("RRHH · enviar contraseña temporal", () => {
     const request = browser();
     await request("POST", "/__test/as-admin");
 
-    seedUser({ role: "Usuario", email_confirmed: true });
+    seedUser({ active: true, email_confirmed: true });
     let res = await request("POST", "/RRHH/enviar-clave/5");
     assert.equal(res.status, 400);
 

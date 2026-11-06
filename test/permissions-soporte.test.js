@@ -15,10 +15,10 @@ const dbId = require.resolve(path.join(SRC, "db"));
 const prevDb = require.cache[dbId];
 
 const USERS = [
-  { id: 1, role: "Usuario", work_area_id: 10, is_superadmin: true, first_name: "Bastián", last_name: "S", email: "b@t.cl" },
-  { id: 2, role: "Usuario", work_area_id: 10, is_superadmin: false, first_name: "Sofía", last_name: "Soporte", email: "sofia@t.cl" },
-  { id: 3, role: "Administrador", work_area_id: 20, is_superadmin: false, first_name: "Marta", last_name: "Marketing", email: "marta@t.cl" },
-  { id: 4, role: "Deshabilitado", work_area_id: 10, is_superadmin: false, first_name: "Ex", last_name: "TI", email: "ex@t.cl" },
+  { id: 1, active: true, work_area_id: 10, is_superadmin: true, first_name: "Bastián", last_name: "S", email: "b@t.cl" },
+  { id: 2, active: true, work_area_id: 10, is_superadmin: false, first_name: "Sofía", last_name: "Soporte", email: "sofia@t.cl" },
+  { id: 3, active: true, work_area_id: 20, is_superadmin: false, first_name: "Marta", last_name: "Marketing", email: "marta@t.cl" },
+  { id: 4, active: false, work_area_id: 10, is_superadmin: false, first_name: "Ex", last_name: "TI", email: "ex@t.cl" },
 ];
 const ASSIGNMENTS = [
   // Mesa de ayuda: el área 10 (Informática).
@@ -33,7 +33,7 @@ require.cache[dbId] = {
   exports: {
     async query(sql, params = []) {
       if (/SELECT version FROM perm_meta/.test(sql)) return { rows: [{ version: 1 }] };
-      if (/SELECT id, role, work_area_id, is_superadmin FROM users/.test(sql)) return { rows: USERS };
+      if (/SELECT id, active, work_area_id, is_superadmin FROM users/.test(sql)) return { rows: USERS };
       if (/FROM work_areas/.test(sql)) return { rows: [{ id: 10, parent_area_id: null, manager_user_id: null }, { id: 20, parent_area_id: null, manager_user_id: null }] };
       if (/FROM perm_group_members/.test(sql)) return { rows: [] };
       if (/FROM perm_assignments/.test(sql)) return { rows: ASSIGNMENTS };

@@ -42,11 +42,11 @@ async function fetchVersion() {
 
 async function fetchUsers() {
   try {
-    const { rows } = await db.query("SELECT id, role, work_area_id, is_superadmin FROM users");
+    const { rows } = await db.query("SELECT id, active, work_area_id, is_superadmin FROM users");
     return rows;
   } catch (err) {
     if (!isMissingRelation(err)) throw err;
-    const { rows } = await db.query("SELECT id, role, work_area_id FROM users");
+    const { rows } = await db.query("SELECT id, active, work_area_id FROM users");
     return rows.map((r) => ({ ...r, is_superadmin: false }));
   }
 }

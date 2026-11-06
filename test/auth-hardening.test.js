@@ -86,7 +86,8 @@ const fakePool = {
         confirm_token: null,
         confirm_expires: null,
         confirm_attempts: 0,
-        role: params[1],
+        active: params[1],
+        is_intranet_user: params[1],
       });
       return { rows: [] };
     }
@@ -194,7 +195,7 @@ function seedUser(overrides = {}) {
     first_name: "Ana",
     last_name: "Pérez",
     email: "ana@transworld.cl",
-    role: "Usuario",
+    active: true,
     email_confirmed: true,
     password_salt: salt,
     password_hash: pbkdf2Hash("Clave#Vieja2026", salt),
@@ -217,7 +218,7 @@ function seedUser(overrides = {}) {
 /** Cuenta con código vigente, como queda tras registrarse. */
 function seedPending(code = "123456") {
   return seedUser({
-    role: "Deshabilitado",
+    active: false,
     email_confirmed: false,
     must_change_password: true,
     confirm_token: code,

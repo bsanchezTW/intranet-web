@@ -16,11 +16,6 @@ const {
 } = require("../utils/passwordStrength");
 const { validateMobilePhone } = require("../utils/phone");
 const userPhotoStorage = require("../services/userPhotoStorage");
-const {
-  ROLES,
-  isDeshabilitado,
-  canLogin,
-} = require("../constants/roles");
 const linkedinService = require("../services/linkedinService");
 const { mapCompletedCourseForView } = require("../utils/schemaMappers");
 const {
@@ -185,7 +180,7 @@ function needsAdminAuthorization(user) {
   return (
     isExternalDomainEmail(user.email) &&
     user.email_confirmed &&
-    isDeshabilitado(user.role)
+    user.active === false
   );
 }
 
@@ -200,7 +195,7 @@ async function notifyTIAdminsNewUser(firstName, lastName, email, isTransworld) {
   }
 
   const pendingText = isTransworld
-    ? `El usuario tiene rol "${ROLES.USUARIO}" y está pendiente de asignación de área de trabajo en RRHH.`
+    ? `La cuenta quedó activa y está pendiente de asignación de área de trabajo en RRHH.`
     : `El correo es de un dominio externo: el usuario quedará deshabilitado hasta que un administrador lo autorice y le asigne área de trabajo.`;
 
   const subject = "Nuevo usuario registrado en Intranet";
@@ -315,7 +310,7 @@ const uploadProfilePhoto = multer({
 async function findLoginRows(column, value) {
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.email_confirmed,
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.active, u.email_confirmed,
               u.password_hash, u.password_salt, u.photo, u.must_change_password,
               u.confirm_token, u.confirm_expires, u.home_tutorial_seen, u.last_login_at,
               u.work_area_id, at.area_name, at.color AS area_color
@@ -328,7 +323,7 @@ async function findLoginRows(column, value) {
   } catch (queryErr) {
     if (queryErr.code !== "42703") throw queryErr;
     const { rows } = await pool.query(
-      `SELECT u.id, u.first_name, u.last_name, u.email, u.role, u.email_confirmed,
+      `SELECT u.id, u.first_name, u.last_name, u.email, u.active, u.email_confirmed,
               u.password_hash, u.password_salt, u.photo, u.must_change_password,
               u.confirm_token, u.confirm_expires
        FROM users u WHERE ${column} = $1 LIMIT 1`,
@@ -463,14 +458,10 @@ router.post("/login", limitByIp("login"), async (req, res) => {
       );
     }
 
-    if (!canLogin(u.role)) {
-      let errorMsg = "Tu cuenta no tiene permiso para ingresar. Contacta a un administrador.";
-      if (needsAdminAuthorization(u)) {
-        errorMsg = EXTERNAL_DOMAIN_PENDING_MSG;
-      } else if (isDeshabilitado(u.role)) {
-        errorMsg =
-          "Usuario deshabilitado, póngase en contacto con el administrador";
-      }
+    if (!u.active) {
+      const errorMsg = needsAdminAuthorization(u)
+        ? EXTERNAL_DOMAIN_PENDING_MSG
+        : "Usuario deshabilitado, póngase en contacto con el administrador";
       return fail(403, errorMsg);
     }
 
@@ -607,13 +598,12 @@ router.post(
       const expires = new Date(Date.now() + OTP_EXPIRES_MS);
 
       const isTransworld = isTransworldEmail(email);
-      const roleOnRegister = isTransworld
-        ? ROLES.USUARIO
-        : ROLES.DESHABILITADO;
+      // Un correo externo queda inactivo hasta que un administrador lo autorice.
+      const activeOnRegister = isTransworld;
 
       const { rows: inserted } = await pool.queryRetryIdCollision(
         `INSERT INTO users
-        (first_name, last_name, email, password_hash, password_salt, role, email_confirmed, confirm_token, confirm_expires, photo, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen)
+        (first_name, last_name, email, password_hash, password_salt, active, email_confirmed, confirm_token, confirm_expires, photo, must_change_password, work_area_id, birth_date, phone, is_intranet_user, home_tutorial_seen)
        VALUES ($1, $2, $3, $4, $5, $6, FALSE, $7, $8, NULL, FALSE, NULL, $9, $10, TRUE, FALSE)
        RETURNING id`,
         [
@@ -622,7 +612,7 @@ router.post(
           email,
           hashHex,
           saltHex,
-          roleOnRegister,
+          activeOnRegister,
           verificationCode,
           expires,
           fechaNacimiento,
@@ -700,13 +690,13 @@ router.get("/verify-email", async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      "SELECT email_confirmed, role FROM users WHERE email = $1 LIMIT 1",
+      "SELECT email_confirmed, active FROM users WHERE email = $1 LIMIT 1",
       [email],
     );
     if (rows.length && rows[0].email_confirmed) {
       delete req.session.pendingEmailVerification;
       if (
-        needsAdminAuthorization({ email, email_confirmed: true, role: rows[0].role })
+        needsAdminAuthorization({ email, email_confirmed: true, active: rows[0].active })
       ) {
         return renderAuthPage(res, "verify", {
           email,
@@ -746,7 +736,7 @@ router.post("/verify-email", limitByIp("verify"), async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, first_name, email, email_confirmed, confirm_token, confirm_expires, role, work_area_id, must_change_password
+      `SELECT id, first_name, email, email_confirmed, confirm_token, confirm_expires, active, work_area_id, must_change_password
        FROM users WHERE email = $1 LIMIT 1`,
       [email],
     );
@@ -833,10 +823,7 @@ router.post("/verify-email", limitByIp("verify"), async (req, res) => {
     // y le asignó un área de trabajo, por lo que se le permite ingresar aunque
     // su correo sea de un dominio externo.
     const createdByAdmin = u.work_area_id != null;
-    const roleOnVerify =
-      isExternalDomainEmail(u.email) && !createdByAdmin
-        ? ROLES.DESHABILITADO
-        : ROLES.USUARIO;
+    const activeOnVerify = !(isExternalDomainEmail(u.email) && !createdByAdmin);
 
     await pool.query(
       `UPDATE users
@@ -844,10 +831,10 @@ router.post("/verify-email", limitByIp("verify"), async (req, res) => {
            confirm_token = NULL,
            confirm_expires = NULL,
            confirm_attempts = 0,
-           role = $2,
-           is_intranet_user = $3
+           active = $2,
+           is_intranet_user = $2
        WHERE id = $1`,
-      [u.id, roleOnVerify, roleOnVerify === ROLES.USUARIO],
+      [u.id, activeOnVerify],
     );
 
     delete req.session.pendingEmailVerification;
@@ -900,7 +887,7 @@ router.post("/verify-email/resend", limitByIp("verify"), async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      "SELECT id, first_name, email, email_confirmed, role FROM users WHERE email = $1 LIMIT 1",
+      "SELECT id, first_name, email, email_confirmed, active FROM users WHERE email = $1 LIMIT 1",
       [email],
     );
 
@@ -1184,7 +1171,7 @@ router.post("/reset-password", limitByIp("reset"), async (req, res) => {
       delete req.session.pendingPasswordReset;
       const rows = await findLoginRows("u.id", userId);
       const u = rows[0];
-      if (!u || !u.email_confirmed || !canLogin(u.role)) {
+      if (!u || !u.email_confirmed || !u.active) {
         return res.redirect("/login?changed=1");
       }
       u.must_change_password = false;

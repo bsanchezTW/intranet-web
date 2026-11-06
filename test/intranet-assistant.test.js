@@ -49,7 +49,7 @@ function permisos(keys, { todo = [] } = {}) {
     return scopes.includes("mi_area") ? "mi_area" : null;
   };
   const snapshot = {
-    users: new Map([[8, { id: 8, role: "Usuario", work_area_id: 7 }]]),
+    users: new Map([[8, { id: 8, active: true, work_area_id: 7 }]]),
     areas: [{ id: 7, parent_area_id: null, manager_user_id: null }],
     assignments: lista.map((key, i) => ({
       id: i + 1, principal_type: "user", user_id: 8, permission_key: key,
@@ -314,7 +314,7 @@ describe("directorySearch — lo que viaja al modelo", () => {
       area_name: "TI",
       national_id: "12345678-5",
       birth_date: "1990-01-01",
-      role: "Administrador",
+      active: true,
     });
     assert.deepEqual(Object.keys(person).sort(), ["area", "correo_empresa", "nombre", "telefono_empresa"]);
     assert.equal(person.nombre, "Ana Pérez");

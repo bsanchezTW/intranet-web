@@ -189,9 +189,9 @@ async function sembrar() {
   for (const persona of ELENCO) {
     const { rows } = await db.queryRetryIdCollision(
       `INSERT INTO users
-         (first_name, last_name, email, role, email_confirmed, is_intranet_user,
+         (first_name, last_name, email, active, email_confirmed, is_intranet_user,
           must_change_password, work_area_id, hire_date, national_id, work_days_per_week)
-       VALUES ($1, $2, $3, 'Usuario', false, true, true, $4, $5, $6, 5)
+       VALUES ($1, $2, $3, true, false, true, true, $4, $5, $6, 5)
        RETURNING id`,
       [
         persona.nombre,

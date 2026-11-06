@@ -1,6 +1,5 @@
 const { chainFrom, descendantIds } = require("../workAreaTree");
 const { SCOPE } = require("./scopes");
-const { canLogin, normalizeRole } = require("../../constants/roles");
 
 /**
  * Permisos efectivos de una persona. Funciones puras sobre una foto de la
@@ -260,7 +259,7 @@ function emptyPermissions(catalog, userId = null) {
 }
 
 /**
- * Permisos efectivos de `user` ({ id, role?, work_area_id? }) con la foto
+ * Permisos efectivos de `user` ({ id, work_area_id? }) con la foto
  * `snapshot` ({ users: Map, areas, groupMembers: Map, assignments }) y el catálogo
  * del país. `now` en ms (para las vigencias).
  */
@@ -269,7 +268,7 @@ function computePermissions(snapshot, user, { catalog, now = Date.now() } = {}) 
   if (userId == null) return emptyPermissions(catalog);
 
   const row = snapshot.users && snapshot.users.get(userId);
-  if (!row || !canLogin(normalizeRole(row.role))) return emptyPermissions(catalog, userId);
+  if (!row || row.active !== true) return emptyPermissions(catalog, userId);
   if (row.is_superadmin) {
     return new EffectivePermissions({ userId, superadmin: true, catalog, ownAreaId: toId(row.work_area_id) });
   }

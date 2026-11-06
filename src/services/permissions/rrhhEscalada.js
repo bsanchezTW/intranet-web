@@ -1,11 +1,10 @@
-const { isAdministrador, normalizeRole } = require("../../constants/roles");
-const { isSupportAreaName } = require("../../constants/supportArea");
-const { isRrhhAreaName } = require("../../constants/rrhhArea");
-
 /**
- * Cierra la escalada de RRHH-M (hallazgo A.4.4).
- * `isSupportAreaName` es temporal: la jefatura de Informática deja de dar
- * acceso total en la fase 11, y este caso se va con ella.
+ * Cierra la escalada de RRHH-M (hallazgo A.4.4): quien edita personas no se
+ * da más acceso del que tiene.
+ *
+ * Desde la fase 11 no hay rol ni nombres de área que den permisos: lo que se
+ * vigila es la cuenta propia (estado, área, jefatura), el estado de un
+ * superadmin y el correo de una cuenta con más permisos que quien edita.
  *
  * Devuelve null si la acción puede seguir, o un código si hay que rechazarla
  * como un permiso denegado.
@@ -17,31 +16,23 @@ function mismoId(a, b) {
   return Number(a) === Number(b);
 }
 
-/**
- * Mientras exista la regla antigua, el NOMBRE del área da permisos: un
- * administrador de "Informática" tiene acceso total y uno de "RRHH" gestiona
- * personas. Renombrar un área hacia o desde esos nombres (o crear una con
- * ellos) es entonces repartir permisos, y sólo lo hace el superadmin.
- * Se va en la fase 11, con staffAccess.
- */
-function areaSensible(nombre) {
-  return Boolean(nombre) && (isSupportAreaName(nombre) || isRrhhAreaName(nombre));
-}
-
-function rechazoNombreArea({ superadmin = false, antes = null, despues = null } = {}) {
-  if (superadmin) return null;
-  return areaSensible(antes) !== areaSensible(despues) ? "nombre-area-sensible" : null;
-}
-
 function normCorreo(value) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+/** ¿Cambia el estado de la cuenta? (sólo si los dos lados lo traen). */
+function cambiaEstado(antes, despues) {
+  return typeof antes.active === "boolean" && typeof despues.active === "boolean" && antes.active !== despues.active;
+}
+
 /**
- * `objetivoPrivilegiado`: la persona editada es Administrador o superadmin.
- * Su correo es la llave de la cuenta (login y «Olvidé mi contraseña»):
- * quien lo cambia por uno propio se queda con la cuenta. Sólo el superadmin
- * lo cambia; cada uno sí puede corregir el suyo.
+ * `objetivoSuperadmin`: la persona editada es superadmin. Nadie más le cambia
+ * el estado: desactivarlo sería sacar al único que administra los permisos.
+ *
+ * `objetivoPrivilegiado`: la persona editada es superadmin o tiene algún
+ * permiso que quien edita no tiene. Su correo es la llave de la cuenta (login
+ * y «Olvidé mi contraseña»): quien lo cambia por uno propio se queda con esos
+ * permisos. Sólo el superadmin lo cambia; cada uno sí puede corregir el suyo.
  */
 function rechazoEscalada({
   superadmin = false,
@@ -49,28 +40,20 @@ function rechazoEscalada({
   targetId = null,
   antes = {},
   despues = {},
-  areaNombre = null,
+  objetivoSuperadmin = false,
   objetivoPrivilegiado = false,
 } = {}) {
   if (superadmin) return null;
 
   const propio = targetId != null && mismoId(actorId, targetId);
-  if (propio && antes.role != null && despues.role != null
-      && normalizeRole(antes.role) !== normalizeRole(despues.role)) {
-    return "propio-rol";
-  }
+  if (propio && cambiaEstado(antes, despues)) return "propio-estado";
   if (propio && antes.areaId !== undefined && despues.areaId !== undefined
       && !mismoId(antes.areaId, despues.areaId)) {
     return "propio-area";
   }
   if (propio && despues.seDesignaJefe) return "propio-jefe";
 
-  if (antes.role != null && despues.role != null
-      && isAdministrador(antes.role) !== isAdministrador(despues.role)) {
-    return "rol-administrador";
-  }
-
-  if (despues.designaJefe && isSupportAreaName(areaNombre)) return "jefe-informatica";
+  if (objetivoSuperadmin && cambiaEstado(antes, despues)) return "estado-superadmin";
 
   if (!propio && objetivoPrivilegiado && antes.email !== undefined && despues.email !== undefined
       && normCorreo(antes.email) !== normCorreo(despues.email)) {
@@ -80,10 +63,10 @@ function rechazoEscalada({
 }
 
 /** Qué permiso exige cada parte de POST /editar/:id. Compara contra lo guardado. */
-function clavesDeEdicion({ datos = false, rol = false, area = false } = {}) {
+function clavesDeEdicion({ datos = false, estado = false, area = false } = {}) {
   const claves = [];
   if (datos) claves.push("rrhh.colaborador.editar");
-  if (rol) claves.push("rrhh.colaborador.activar");
+  if (estado) claves.push("rrhh.colaborador.activar");
   if (area) claves.push("organigrama.area.editar_miembros");
   return claves;
 }
@@ -107,14 +90,13 @@ function cambiosDeFicha(prev, next) {
     || Boolean(next.cambiaFoto);
   return {
     datos,
-    rol: normalizeRole(prev.role) !== normalizeRole(next.role),
+    estado: typeof next.active === "boolean" && Boolean(prev.active) !== next.active,
     area: !mismoId(prev.work_area_id, next.work_area_id),
   };
 }
 
 module.exports = {
   rechazoEscalada,
-  rechazoNombreArea,
   clavesDeEdicion,
   cambiosDeFicha,
   mismoId,

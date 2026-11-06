@@ -1,4 +1,3 @@
-const { canLogin, normalizeRole } = require("../../constants/roles");
 
 /**
  * Recuperación de acceso: marcar (o quitar) a un superadmin por correo desde
@@ -16,14 +15,14 @@ async function markSuperadminByEmail({ db, store, email, remove = false }) {
     throw new Error("Indica el correo de la cuenta.");
   }
   const { rows } = await db.query(
-    `SELECT id, first_name, last_name, email, role
+    `SELECT id, first_name, last_name, email, active
        FROM users
       WHERE LOWER(TRIM(email)) = $1`,
     [clean],
   );
   if (!rows.length) throw new Error(`No hay una cuenta con el correo ${clean}.`);
   const user = rows[0];
-  if (!remove && !canLogin(normalizeRole(user.role))) {
+  if (!remove && !user.active) {
     throw new Error(`La cuenta ${clean} está deshabilitada: habilítala antes de hacerla superadmin.`);
   }
   await store.setSuperadmin(user.id, !remove, null);

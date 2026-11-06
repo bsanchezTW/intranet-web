@@ -26,7 +26,7 @@ function fakes(users) {
   };
 }
 
-const ANA = { id: 5, first_name: "Ana", last_name: "Pérez", email: "Ana@Transworld.cl", role: "Usuario" };
+const ANA = { id: 5, first_name: "Ana", last_name: "Pérez", email: "Ana@Transworld.cl", active: true };
 
 describe("markSuperadminByEmail", () => {
   it("marca a la cuenta por correo, sin importar mayúsculas, con actor vacío (el servidor)", async () => {
@@ -43,7 +43,7 @@ describe("markSuperadminByEmail", () => {
   });
 
   it("no marca una cuenta deshabilitada ni una que no existe", async () => {
-    const { db, store, calls } = fakes([{ ...ANA, role: "Deshabilitado" }]);
+    const { db, store, calls } = fakes([{ ...ANA, active: false }]);
     await assert.rejects(markSuperadminByEmail({ db, store, email: "ana@transworld.cl" }), /deshabilitada/);
     await assert.rejects(markSuperadminByEmail({ db, store, email: "nadie@transworld.cl" }), /No hay una cuenta/);
     await assert.rejects(markSuperadminByEmail({ db, store, email: "" }), /Indica el correo/);

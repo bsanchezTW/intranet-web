@@ -70,7 +70,12 @@ CREATE TABLE IF NOT EXISTS chile.users (
   email character varying(150),
   password_hash character varying(255),
   password_salt character varying(255),
-  role character varying(50),
+  -- Cuenta activa (puede iniciar sesión) o inactiva. Los permisos salen de
+  -- Gestión de Permisos (perm_*), no de un rol.
+  active boolean NOT NULL DEFAULT false,
+  -- El rol de antes (Usuario/Administrador/Deshabilitado), sin uso: sólo lo
+  -- lee el arranque de permisos de un país que nunca lo corrió.
+  role_legacy character varying(50),
   email_confirmed boolean DEFAULT false,
   confirm_token character varying(255),
   confirm_expires timestamp without time zone,

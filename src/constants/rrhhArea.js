@@ -1,13 +1,9 @@
 /**
- * Área de Recursos Humanos.
+ * Área de Recursos Humanos, por su nombre ("RRHH", "Recursos Humanos").
  *
- * La sección Administración de RRHH (áreas, centros de costo, feriados,
- * gestión de vacaciones) y el alta o edición de colaboradores son de los
- * administradores de esta área, además de los de Informática. La regla vive
- * en services/access/staffAccess.js; aquí sólo el nombre, que en la base se
- * escribe a mano ("RRHH", "Recursos Humanos").
- *
- * Se borra en la fase 11, junto con la regla antigua de staffAccess.
+ * Desde la fase 11 el nombre de un área no da permisos: sólo lo usa el
+ * arranque de Gestión de Permisos (bootstrap.js) para copiar quién gestionaba
+ * RRHH en un país que todavía no lo corrió.
  */
 
 const { normalizeAreaName } = require("./workAreas");

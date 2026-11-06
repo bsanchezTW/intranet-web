@@ -1,9 +1,9 @@
 /**
- * Área responsable de la mesa de ayuda.
+ * Área de Informática (mesa de ayuda), por su nombre.
  *
- * Administrar tickets (asignar, responder como Soporte, cambiar prioridad o
- * cerrar) no depende del rol sino del área: sólo quien pertenece a Informática
- * gestiona. El rol sigue decidiendo el resto de la intranet.
+ * Desde la fase 11 el nombre de un área no da permisos: la mesa de ayuda es
+ * quien tiene «soporte.ticket.gestionar». Sólo lo usa el arranque de Gestión
+ * de Permisos (bootstrap.js) para un país que todavía no lo corrió.
  *
  * La normalización de nombres vive en constants/workAreas porque es una
  * propiedad de las áreas, no de la mesa de ayuda: `area_name` se escribe a mano

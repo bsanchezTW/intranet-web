@@ -62,7 +62,7 @@ async function yaAplicado() {
 
 async function cargarDatos() {
   const [{ rows: users }, { rows: areas }] = await Promise.all([
-    db.query("SELECT id, first_name, last_name, role, work_area_id, is_intranet_user FROM users"),
+    db.query("SELECT id, first_name, last_name, active, role_legacy AS role, work_area_id, is_intranet_user FROM users"),
     db.query("SELECT id, area_name, parent_area_id, manager_user_id FROM work_areas"),
   ]);
   return { users, areas };

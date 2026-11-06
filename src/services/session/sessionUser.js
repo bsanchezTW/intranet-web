@@ -1,5 +1,3 @@
-const { normalizeRole } = require("../../constants/roles");
-
 /**
  * Lo que guarda la sesión de una persona, a partir de su fila de `users`
  * (con `area_name` y `area_color` de su área). Lo usan el login y la
@@ -12,7 +10,6 @@ function buildSessionUser(u) {
     id: u.id,
     username: u.email,
     email: u.email,
-    role: normalizeRole(u.role),
     nombre: u.first_name + (u.last_name ? " " + u.last_name : ""),
     first_name: u.first_name,
     last_name: u.last_name,

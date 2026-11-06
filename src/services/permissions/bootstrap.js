@@ -1,8 +1,7 @@
-const { canLogin, isAdministrador, normalizeRole } = require("../../constants/roles");
 const { normalizeAreaName } = require("../../constants/workAreas");
 const { isSupportAreaName } = require("../../constants/supportArea");
 const { isFinanceAreaName, financeAreaIds } = require("../../constants/financeArea");
-const { accessProfile } = require("../access/staffAccess");
+const { isRrhhAreaName } = require("../../constants/rrhhArea");
 const { SCOPE } = require("./scopes");
 
 /**
@@ -12,6 +11,11 @@ const { SCOPE } = require("./scopes");
  * áreas y catálogo, y devuelve el plan; scripts/permisos-arranque.js lo
  * muestra y lo aplica.
  *
+ * Desde la fase 11 el rol ya no existe en la app: se lee de `users.role_legacy`
+ * (la columna vieja, renombrada) sólo para que un país que nunca corrió el
+ * arranque reciba la misma copia. Las reglas de abajo (rol + nombre de área)
+ * son las que tenía el código antes de Gestión de Permisos y sólo viven aquí.
+ *
  * Lo que la auditoría marcó como indebido NO se copia (ver CAMBIOS):
  * cualquier administrador viendo y aprobando cualquier gasto, la
  * autoaprobación, RRHH aprobando vacaciones por encima del jefe y el área
@@ -20,6 +24,24 @@ const { SCOPE } = require("./scopes");
  */
 
 const { PROPIO, MI_AREA, A_CARGO, TODO } = SCOPE;
+
+/** ¿El rol antiguo era de administrador? ("admin" o "Administrador"). */
+function eraAdministrador(role) {
+  const r = String(role ?? "").trim().toLowerCase();
+  return r === "admin" || r === "administrador";
+}
+
+/**
+ * Perfil de acceso de antes (services/access/staffAccess, ya borrado):
+ * administrador de Informática = acceso total; administrador de RRHH, o que
+ * dirige RRHH, = gestiona personas. Pura.
+ */
+function accessProfile({ role, area_name: areaName, managed_area_names: managed } = {}, countryCode) {
+  if (!eraAdministrador(role)) return { informaticaAdmin: false, rrhhAdmin: false, canManageRrhh: false };
+  const informaticaAdmin = isSupportAreaName(areaName);
+  const rrhhAdmin = [areaName, ...(managed || [])].some((name) => isRrhhAreaName(name, countryCode));
+  return { informaticaAdmin, rrhhAdmin, canManageRrhh: informaticaAdmin || rrhhAdmin };
+}
 
 const item = (permission_key, scope = null) => ({ permission_key, scope });
 
@@ -225,8 +247,8 @@ const CAMBIOS = [
   "Los jefes ven las carpetas de procedimientos y protocolos de las áreas a su cargo; hoy sólo ven la de su área de trabajo.",
   "El correo y el teléfono personales del directorio (hoy enmascarados para todos) quedan en quien tenga el permiso; el conjunto Básico no lo trae.",
   "Nadie salvo el superadmin se cambia el rol, el estado o el área desde RRHH, ni se designa jefe de un área.",
-  "Sólo el superadmin asigna o quita el rol Administrador. RRHH sigue pudiendo habilitar y deshabilitar cuentas.",
-  "Sólo el superadmin designa jefe de Informática: esa jefatura sigue dando acceso total mientras exista la regla antigua (fase 11).",
+  "El rol Administrador desaparece: lo que daba queda en conjuntos asignados a cada persona y la cuenta sólo se activa o desactiva. RRHH sigue pudiendo hacerlo.",
+  "El nombre de un área (Informática, RRHH) ya no da permisos por sí solo: cuenta sólo para esta copia inicial.",
 ];
 
 function displayName(u) {
@@ -261,7 +283,7 @@ function setsForCountry(catalog) {
 
 /**
  * Plan de arranque.
- *   users: [{ id, first_name, last_name, role, work_area_id, is_intranet_user }]
+ *   users: [{ id, first_name, last_name, active, role (el de role_legacy), work_area_id, is_intranet_user }]
  *   areas: [{ id, area_name, parent_area_id, manager_user_id }]
  * Devuelve { sets, assignments, superadmins, problems, changes, warnings }.
  */
@@ -272,7 +294,7 @@ function planBootstrap({ country, catalog, users, areas, superadminName = "Basti
   const hasSet = new Set(sets.map((s) => s.code));
 
   const areaById = new Map(areas.map((a) => [Number(a.id), a]));
-  const active = users.filter((u) => canLogin(normalizeRole(u.role)));
+  const active = users.filter((u) => u.active === true);
   const intranet = active.filter((u) => u.is_intranet_user !== false);
 
   const superadmins = findUsersByName(active, superadminName);
@@ -310,7 +332,7 @@ function planBootstrap({ country, catalog, users, areas, superadminName = "Basti
   const inSupportArea = (u) => isSupportAreaName(areaById.get(Number(u.work_area_id))?.area_name);
 
   for (const u of intranet) {
-    const admin = isAdministrador(normalizeRole(u.role));
+    const admin = eraAdministrador(u.role);
     const profile = profileOf(u);
     if (admin) {
       for (const code of [
@@ -368,6 +390,7 @@ function planBootstrap({ country, catalog, users, areas, superadminName = "Basti
 }
 
 module.exports = {
+  accessProfile,
   SYSTEM_SETS,
   CAMBIOS,
   findUsersByName,

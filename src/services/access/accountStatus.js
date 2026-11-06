@@ -1,14 +1,12 @@
 const db = require("../../db");
 const logger = require("../../utils/logger");
-const { canLogin, normalizeRole } = require("../../constants/roles");
 
 /**
  * Estado vigente de la cuenta de quien tiene sesión.
  *
- * La sesión guarda el rol del momento del login y se renueva sola en cada
- * petición: sin esta revisión, alguien deshabilitado, eliminado o al que se
- * le quitó el rol de administrador seguía operando con lo que tenía mientras
- * no cerrara la sesión. Aquí se relee la tabla `users` (chica: una consulta
+ * La sesión se renueva sola en cada petición: sin esta revisión, alguien
+ * deshabilitado o eliminado seguía operando mientras no cerrara la sesión
+ * (los permisos se releen aparte, en Gestión de Permisos). Aquí se relee la tabla `users` (chica: una consulta
  * para todos, cacheada unos segundos) y la sesión se corrige o se cierra.
  */
 
@@ -18,11 +16,11 @@ let cache = { expiresAt: 0, byUserId: null };
 let inflight = null;
 
 async function fetchAccounts() {
-  const { rows } = await db.query("SELECT id, role, work_area_id FROM users");
+  const { rows } = await db.query("SELECT id, active, work_area_id FROM users");
   const byUserId = new Map();
   for (const row of rows) {
     byUserId.set(Number(row.id), {
-      role: normalizeRole(row.role),
+      active: row.active === true,
       workAreaId: row.work_area_id == null ? null : Number(row.work_area_id),
     });
   }
@@ -56,9 +54,8 @@ async function loadAccounts() {
 /**
  * Qué hacer con la sesión de `sessionUser` dada su fila actual. Pura.
  *
- *   { action: "keep" }                 → nada cambió.
- *   { action: "update", role }         → sigue activa con otro rol.
- *   { action: "end" }                  → deshabilitada o eliminada.
+ *   { action: "keep" } → sigue activa.
+ *   { action: "end" }  → deshabilitada o eliminada.
  *
  * Toda sesión corresponde a una fila de `users`. El antiguo login de
  * emergencia (id 0, AUTH_USER/AUTH_PASS) ya no existe: una sesión que lo
@@ -66,10 +63,7 @@ async function loadAccounts() {
  */
 function sessionAccountState(sessionUser, account) {
   if (!sessionUser) return { action: "keep" };
-  if (!account || !canLogin(account.role)) return { action: "end" };
-  if (account.role !== normalizeRole(sessionUser.role)) {
-    return { action: "update", role: account.role };
-  }
+  if (!account || !account.active) return { action: "end" };
   return { action: "keep" };
 }
 

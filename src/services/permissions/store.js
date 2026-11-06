@@ -540,7 +540,7 @@ async function setSuperadmin(userId, value, actorId) {
   }
   return inTransaction(async (client) => {
     const { rows } = await client.query(
-      "SELECT id, first_name, last_name, role, is_superadmin FROM users WHERE id = $1 FOR UPDATE",
+      "SELECT id, first_name, last_name, active, is_superadmin FROM users WHERE id = $1 FOR UPDATE",
       [id],
     );
     if (!rows.length) throw new PermissionInputError("La persona ya no existe.");
@@ -549,7 +549,7 @@ async function setSuperadmin(userId, value, actorId) {
     if (!desired) {
       const { rows: others } = await client.query(
         `SELECT count(*)::int AS n FROM users
-          WHERE is_superadmin AND id <> $1 AND COALESCE(role, '') NOT ILIKE 'deshabilitado'`,
+          WHERE is_superadmin AND id <> $1 AND active`,
         [id],
       );
       if (others[0].n === 0) throw new PermissionInputError("Tiene que quedar al menos un superadmin activo.");

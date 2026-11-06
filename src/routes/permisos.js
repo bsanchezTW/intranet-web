@@ -71,7 +71,7 @@ async function baseContext(req) {
     refs,
     scopeLabels: SCOPE_LABELS,
     areaTree: buildTree(refs.areas),
-    activeUsers: refs.users.filter((u) => !/^deshabilitado$/i.test(String(u.role || "").trim())),
+    activeUsers: refs.users.filter((u) => u.active === true),
     actorId: actorId(req),
     extraCss: CSS,
     extraJs: JS,

@@ -60,7 +60,7 @@ async function searchPeople(query) {
        FROM users u
        LEFT JOIN work_areas at ON at.id = u.work_area_id
       WHERE ${conditions.join(" AND ")}
-        AND COALESCE(LOWER(u.role), '') NOT IN ('deshabilitado', 'disabled')
+        AND u.active
       ORDER BY u.last_name ASC NULLS LAST, u.first_name ASC
       LIMIT ${MAX_PEOPLE}`,
     terms.map(likePattern),
