@@ -229,21 +229,23 @@ describe("billOfExchangePdf — impresión", () => {
     assert.equal(pages.length, 3);
   });
 
-  it("imprime en A4 vertical una letra de 21 × 11,6 cm", async () => {
-    assert.equal((FORM_WIDTH / 72) * 2.54, 21);
-    assert.ok(Math.abs((FORM_HEIGHT / 72) * 2.54 - 11.6) < 1e-9);
+  it("imprime en carta horizontal, a tamaño real, una letra de 22 × 11 cm", async () => {
+    assert.ok(Math.abs((FORM_WIDTH / 72) * 2.54 - 22) < 1e-9);
+    assert.ok(Math.abs((FORM_HEIGHT / 72) * 2.54 - 11) < 1e-9);
     const pdf = await renderBillsPdf([
       toPrintable(
         { issue_date: "2026-04-15", issue_place: "Lima", acceptor_name: "X", acceptor_doc: "20606218762", acceptor_address: "Y" },
         { number: "LT-00001-2026", due_date: "2026-05-15", amount: "10", status: "issued" },
       ),
     ]);
-    assert.match(pdf.toString("latin1"), /\/MediaBox \[0 0 595\.28 841\.89\]/);
+    const raw = pdf.toString("latin1");
+    assert.match(raw, /\/MediaBox \[0 0 792 612\]/);
+    assert.match(raw, /\/PrintScaling \/None/);
   });
 
-  it("lleva el DNI del representante legal", () => {
-    assert.equal(BILL_DRAWER.representativeDoc, "DNI N.° 08232345");
-    assert.equal(BILL_DRAWER.representative, "JORGE ALEJANDRO MARTIN MASSON PAZOS");
+  it("deja en blanco los datos del representante legal", () => {
+    assert.equal(BILL_DRAWER.representative, undefined);
+    assert.equal(BILL_DRAWER.representativeDoc, undefined);
   });
 });
 

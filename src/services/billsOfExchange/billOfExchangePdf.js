@@ -9,23 +9,26 @@ const {
 const { formatDisplay } = require("../../utils/vacationDateUtils");
 
 /**
- * PDF de letras de cambio: una letra por hoja A4 vertical, en hoja blanca.
+ * PDF de letras de cambio: una letra por hoja carta horizontal, en hoja blanca.
  *
  * Dibuja el formulario completo del talonario de Transworld (no sólo los
  * datos), siguiendo la distribución de la letra física: cláusulas especiales
  * en vertical a la izquierda, dos columnas de firma del aceptante, tabla de
  * número / fechas / importe, monto en letras, recuadros de aceptante, aval y
- * cuenta de cargo, y el recuadro de firma del representante legal.
+ * cuenta de cargo, y el recuadro de firma del girador.
  *
- * La letra mide exactamente 21 × 11,6 cm y ocupa el borde superior de la hoja:
- * el A4 vertical ya mide 21 cm de ancho, así que basta un corte horizontal en
- * la línea punteada. Hay que imprimirla a tamaño real (100 %, sin "ajustar a
- * la página").
+ * La letra mide exactamente 22 × 11 cm: un recuadro azul prepicado marca sus
+ * bordes y parte de la esquina superior izquierda de la hoja, así que basta
+ * cortar por la derecha y por abajo. Como 22 cm no caben a lo ancho de una
+ * hoja vertical, la hoja es horizontal. La página es carta, la que más se usa;
+ * en A4 u oficio la letra cabe igual. El PDF pide imprimirse a tamaño real
+ * (PrintScaling /None) para que "ajustar a la página" no la achique: sea cual
+ * sea el papel, mide 22 × 11 cm.
  *
  * El diseño se dibuja en unidades lógicas (las del talonario apaisado
  * original, 794 de ancho) y se lleva al tamaño real con una escala uniforme
- * DESIGN_SCALE. Como la letra es proporcionalmente más alta que el diseño, las
- * posiciones verticales se estiran con SY (Y() y V()); los textos no se
+ * DESIGN_SCALE. Las posiciones verticales se ajustan con SY (Y() y V()) para
+ * que el contenido llene justo el alto del recuadro; los textos no se
  * deforman.
  */
 
@@ -35,25 +38,35 @@ const BLUE = "#26388f";
 const INK = "#111111";
 const VOID_RED = "#c62828";
 
-const PAGE = { size: "A4", layout: "portrait" };
+const PAGE = { size: "LETTER", layout: "landscape" };
 
 // --- Tamaño real (puntos PDF) ------------------------------------------------
 const CM = 72 / 2.54;
-const FORM_WIDTH = 21 * CM;
-const FORM_HEIGHT = 11.6 * CM;
-/** Aire alrededor del contenido: lo que la mayoría de impresoras no alcanza. */
-const PRINT_MARGIN = 0.6 * CM;
+/** Recuadro prepicado de la letra: 22 × 11 cm exactos, desde la esquina (0, 0). */
+const FORM_WIDTH = 22 * CM;
+const FORM_HEIGHT = 11 * CM;
+/**
+ * Aire entre el recuadro y el contenido. Arriba y a la izquierda el recuadro
+ * coincide con el borde del papel, donde las impresoras no alcanzan a
+ * imprimir (unos 4-5 mm): el contenido empieza después de ese margen.
+ */
+const FORM_PADDING = 0.5 * CM;
 
 // --- Diseño (unidades lógicas) ----------------------------------------------
 const W = 794;
 /** El contenido va de X0 + 8 a X0 + W - 8. */
 const CONTENT_INSET = 8;
-const DESIGN_SCALE = (FORM_WIDTH - 2 * PRINT_MARGIN) / (W - 2 * CONTENT_INSET);
-const X0 = PRINT_MARGIN / DESIGN_SCALE - CONTENT_INSET;
-/** Estiramiento vertical de las posiciones (no de los textos). */
-const SY = 1.2;
-/** El contenido empieza en la cota 6 del diseño. */
-const Y0 = PRINT_MARGIN / DESIGN_SCALE - 6 * SY;
+const DESIGN_SCALE = (FORM_WIDTH - 2 * FORM_PADDING) / (W - 2 * CONTENT_INSET);
+const X0 = FORM_PADDING / DESIGN_SCALE - CONTENT_INSET;
+/** El contenido empieza en la cota 6 del diseño y termina en la regla del pie. */
+const CONTENT_TOP = 6;
+const FOOTER_RULE = 332;
+/** Lo que baja el texto del pie bajo su regla: 4 de aire + una línea de 7. */
+const FOOTER_TEXT_DEPTH = 4 + 7 * 0.925;
+/** Escala de las posiciones verticales (no de los textos): llena el alto útil. */
+const SY = ((FORM_HEIGHT - 2 * FORM_PADDING) / DESIGN_SCALE - FOOTER_TEXT_DEPTH)
+  / (FOOTER_RULE - CONTENT_TOP);
+const Y0 = FORM_PADDING / DESIGN_SCALE - CONTENT_TOP * SY;
 
 /** Cota vertical del diseño → posición en la hoja (unidades lógicas). */
 function Y(n) {
@@ -197,22 +210,23 @@ function verticalText(doc, x, y, length, draw) {
 // ---------------------------------------------------------------------------
 
 /**
- * Guía de corte a 11,6 cm del borde superior, en puntos reales (se dibuja
- * fuera de la escala del diseño).
+ * Recuadro azul prepicado de 22 × 11 cm desde la esquina superior izquierda,
+ * en puntos reales (fuera de la escala del diseño). El eje del trazo cae justo
+ * sobre la medida; los lados de arriba y de la izquierda coinciden con el
+ * borde del papel.
  */
-function drawCutGuide(doc) {
-  const pageWidth = doc.page.width;
+function drawPerforation(doc) {
   doc.save()
-    .lineWidth(0.4)
-    .strokeColor("#9e9e9e")
-    .dash(3, { space: 3 })
-    .moveTo(0, FORM_HEIGHT)
-    .lineTo(pageWidth, FORM_HEIGHT)
+    .lineWidth(0.8)
+    .strokeColor(BLUE)
+    .dash(2.5, { space: 2 })
+    .rect(0, 0, FORM_WIDTH, FORM_HEIGHT)
     .stroke()
     .undash()
     .restore();
   doc.font(FONT).fontSize(6).fillColor("#9e9e9e")
-    .text("Cortar por la línea punteada · letra de 21 × 11,6 cm", PRINT_MARGIN, FORM_HEIGHT + 4, { lineBreak: false });
+    .text("Cortar por el recuadro prepicado · letra de 22 × 11 cm · imprimir a tamaño real (100 %)",
+      FORM_PADDING, FORM_HEIGHT + 5, { lineBreak: false });
 }
 
 function drawClauses(doc) {
@@ -489,8 +503,8 @@ function labelledLine(doc, text, x, y, right, value = "") {
 
 /**
  * Recuadro del girador, como en el talonario: la razón social la pone el
- * sello de la empresa (cae en el espacio libre del medio) y la firma va a
- * mano. El nombre y el DNI del representante legal salen impresos.
+ * sello de la empresa (cae en el espacio libre del medio), y la firma, el
+ * nombre y el D.O.I. del representante legal van a mano en sus renglones.
  */
 function drawDrawerSignature(doc) {
   const y = Y(206);
@@ -501,15 +515,15 @@ function drawDrawerSignature(doc) {
 
   labelledLine(doc, "Nombre o Razón Social del Girador", left, y + V(10), right);
 
-  const signY = y + V(72);
+  // Los renglones del representante se apoyan en el borde inferior.
+  const repY = y + height - 37;
+  const signY = repY - 21;
   line(doc, left, signY, right, signY, 0.6);
   fitText(doc, "Firma", left, signY + 3, right - left, { size: 6.5, color: BLUE, align: "center" });
 
-  const repY = y + V(86);
   label(doc, "Nombre del Representante Legal:", left, repY, 7);
-  fitText(doc, BILL_DRAWER.representative, left + 2, repY + 9.5, right - left - 4, { font: FONT_BOLD, size: 8 });
   underline(doc, left, right, repY + 18);
-  labelledLine(doc, "D.O.I.", left, repY + 22, right, BILL_DRAWER.representativeDoc);
+  labelledLine(doc, "D.O.I.", left, repY + 22, right);
 }
 
 function drawFooterRule(doc) {
@@ -532,7 +546,7 @@ function drawVoidStamp(doc) {
 
 function drawBill(doc, bill) {
   doc.addPage({ ...PAGE, margin: 0 });
-  drawCutGuide(doc);
+  drawPerforation(doc);
   doc.save();
   doc.scale(DESIGN_SCALE);
   drawClauses(doc);
@@ -561,6 +575,9 @@ function renderBillsPdf(bills, { title = "Letras de cambio" } = {}) {
       autoFirstPage: false,
       info: { Title: title, Author: BILL_DRAWER.name, Creator: "Intranet Transworld" },
     });
+    // Que el visor imprima a tamaño real y no "ajuste a la página", y que la
+    // impresora tome la bandeja del tamaño de la página si puede elegir.
+    doc._root.data.ViewerPreferences = doc.ref({ PrintScaling: "None", PickTrayByPDFSize: true });
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
