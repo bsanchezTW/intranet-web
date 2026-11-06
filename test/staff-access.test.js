@@ -1,6 +1,11 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 
+// staffAccess resuelve RRHH con el país de la instancia (process.env.COUNTRY),
+// igual que en el servidor. node --test corre cada archivo en su propio
+// proceso: sin esto no hay país y el permiso sale siempre en false.
+process.env.COUNTRY = process.env.COUNTRY || "CL";
+
 const { isRrhhAreaName } = require("../src/constants/rrhhArea");
 const { accessProfile, canManageRrhh, isInformaticaAdmin } = require("../src/services/access/staffAccess");
 

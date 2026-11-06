@@ -132,7 +132,8 @@ describe("guardar la sesión antes de redirigir", () => {
   });
 
   it("la app lo monta justo después de la sesión", () => {
-    const fuente = fs.readFileSync(path.join(__dirname, "..", "src", "app.js"), "utf8");
+    // Sin \r: en Windows con core.autocrlf la copia de trabajo queda en CRLF.
+    const fuente = fs.readFileSync(path.join(__dirname, "..", "src", "app.js"), "utf8").replace(/\r\n/g, "\n");
     const sesion = fuente.indexOf("session({");
     const middleware = fuente.indexOf("app.use(saveSessionBeforeRedirect)");
     const siguiente = fuente.indexOf("app.use(", fuente.indexOf("}),\n);", sesion));

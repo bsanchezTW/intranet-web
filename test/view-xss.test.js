@@ -49,7 +49,7 @@ describe("XSS · datos dentro de <script>", () => {
     });
     assert.ok(!html.includes(PAYLOAD), "el payload sale literal en el HTML");
     // El mensaje sigue llegando intacto al modal.
-    const literal = html.match(/initialError: (.*),\n/)[1];
+    const literal = html.match(/initialError: (.*),\r?\n/)[1];
     assert.equal(JSON.parse(literal), PAYLOAD);
   });
 
@@ -63,7 +63,8 @@ describe("XSS · datos dentro de <script>", () => {
       stats: {},
     });
     assert.ok(!html.includes(PAYLOAD), "el payload sale literal en el HTML");
-    const literal = html.match(/const top10Data = (.*);\n/)[1];
+    // \r?: en Windows con core.autocrlf la vista queda en CRLF.
+    const literal = html.match(/const top10Data = (.*);\r?\n/)[1];
     assert.equal(JSON.parse(literal)[0].nombre_usuario, PAYLOAD);
   });
 
