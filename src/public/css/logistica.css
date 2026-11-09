@@ -2807,6 +2807,31 @@ a.fisica-zona__danio-tipo:hover { color: var(--brand); text-decoration: underlin
 
 .hr-nueva, .hr-cierre { margin-bottom: 18px; scroll-margin-top: 90px; }
 
+/* Revisión mecánica del día: informa, no impide abrir ni completar. */
+.hr-revision {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.hr-revision a { color: var(--brand); font-weight: 700; }
+.hr-revision__icono { margin-top: 2px; font-size: 1.05rem; }
+.hr-revision--apto .hr-revision__icono { color: var(--green-ink); }
+.hr-revision--falta,
+.hr-revision--observado { background: rgba(214, 150, 32, 0.1); border-color: rgba(214, 150, 32, 0.4); }
+.hr-revision--falta .hr-revision__icono,
+.hr-revision--observado .hr-revision__icono { color: #b07400; }
+.hr-revision--no_apto { background: rgba(208, 92, 92, 0.08); border-color: rgba(208, 92, 92, 0.35); }
+.hr-revision--no_apto .hr-revision__icono { color: var(--down); }
+
 /* En el teléfono el listado pasa a tarjetas: cada celda con su etiqueta. */
 @media (max-width: 720px) {
   .hr-tabla thead { display: none; }

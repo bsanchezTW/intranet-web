@@ -29,12 +29,12 @@
     <div class="campos-grid">
       <div class="campo-form<%= inv('client_name') %>">
         <label for="<%= id('client_name') %>">Cliente <span class="required-mark">*</span></label>
-        <input type="text" id="<%= id('client_name') %>" name="client_name" value="<%= val.client_name || '' %>" maxlength="120" autocomplete="off" required>
+        <input type="text" id="<%= id('client_name') %>" name="client_name" value="<%= val.client_name || '' %>" maxlength="120" autocomplete="off" list="hrClientes" data-cliente required>
         <% msg('client_name') %>
       </div>
       <div class="campo-form<%= inv('locality') %>">
         <label for="<%= id('locality') %>"><%= localidad %> <span class="required-mark">*</span></label>
-        <input type="text" id="<%= id('locality') %>" name="locality" value="<%= val.locality || '' %>" maxlength="80" autocomplete="off" required>
+        <input type="text" id="<%= id('locality') %>" name="locality" value="<%= val.locality || '' %>" maxlength="80" autocomplete="off" list="hrComunas" data-localidad required>
         <% msg('locality') %>
       </div>
       <div class="campo-form">
@@ -112,6 +112,24 @@
       <span>
         <strong>Hoja anulada</strong> el <%= cuando(h.voided_at) %><% if (h.voided_by_name) { %> por <%= h.voided_by_name %><% } %>.
         Motivo: <%= h.void_reason %>
+      </span>
+    </div>
+  <% } %>
+
+  <% if (abierta) {
+       const rv = revisionDelDia;
+       const tono = !rv ? 'falta' : rv.result === 'no_apto' ? 'no_apto' : rv.result === 'observado' ? 'observado' : 'apto'; %>
+    <div class="hr-revision hr-revision--<%= tono %>" role="note">
+      <span class="hr-revision__icono" aria-hidden="true"><%- icono(rv && rv.result === 'apto' ? 'check-circle' : 'alert-triangle') %></span>
+      <span>
+        <% if (!rv) { %>
+          <strong><%= h.vehicle_plate %> no tiene revisión mecánica registrada el <%= formatDate(h.route_date) %>.</strong>
+          Conviene hacerla antes de salir.
+          <% if (puedeRevisar) { %><a href="<%= MECANICA %>/nueva?vehiculo=<%= h.vehicle_id %>">Registrar revisión mecánica</a><% } %>
+        <% } else { %>
+          Revisión mecánica del día: <a href="<%= MECANICA %>/<%= rv.id %>"><%= rv.number %></a> · <strong><%= resultLabel(rv.result) %></strong>.
+          <% if (rv.result === 'no_apto') { %>El vehículo no debería salir hasta que se resuelva.<% } %>
+        <% } %>
       </span>
     </div>
   <% } %>
@@ -196,6 +214,14 @@
   </section>
 
   <% if (puedeEditar) { %>
+    <%# Sugerencias: lo escrito antes. Al elegir un cliente conocido se completa su comuna (hojas-ruta.js). %>
+    <datalist id="hrClientes">
+      <% (sugerencias.clients || []).forEach((cl) => { %><option value="<%= cl.name %>" data-localidad="<%= cl.locality %>"></option><% }) %>
+    </datalist>
+    <datalist id="hrComunas">
+      <% (sugerencias.localities || []).forEach((lo) => { %><option value="<%= lo %>"></option><% }) %>
+    </datalist>
+
     <section class="logistica-panel hr-nueva" id="parada-nueva" aria-labelledby="det-nueva">
       <h3 class="logistica-panel__titulo" id="det-nueva"><%- icono('plus') %> Agregar parada <%= paradas.length + 1 %></h3>
       <% if (enLlena) { %>

@@ -6,7 +6,7 @@ const {
   localityWithArticle,
   parseTime,
 } = require("../../constants/routeSheet");
-const { formatKm } = require("../../constants/vehicleChecklist");
+const { formatKm, formatChecklistNumber } = require("../../constants/vehicleChecklist");
 const { cleanText, cleanMultiline, parseOptionalInt, isValidIsoDate, parseId } = require("./inputs");
 const { vehicleLabel } = require("./vehicleService");
 const { DRIVER_OTHER } = require("./checklistService");
@@ -592,6 +592,75 @@ async function getRouteSheet(sheetId) {
   return { ...withNumber(rows[0]), stops: stops.map((s) => ({ ...s, id: Number(s.id) })) };
 }
 
+// ---------------------------------------------------------------------------
+// Base de datos: ayudas del formulario
+// ---------------------------------------------------------------------------
+
+const SUGGESTION_DAYS = 365;
+
+/**
+ * Lo escrito antes, para sugerirlo al agregar una parada: los clientes del
+ * último año (los más visitados primero) con la comuna de su última visita,
+ * y las comunas por uso. Las hojas anuladas no cuentan. Un cliente escrito
+ * de varias formas ("Cliente Uno", "cliente uno") se sugiere con la más
+ * usada; si empatan, con la primera.
+ */
+async function stopSuggestions() {
+  const [clientes, comunas] = await Promise.all([
+    db.query(
+      `WITH s AS (
+         SELECT s.id, s.client_name, s.locality, s.created_at, LOWER(s.client_name) AS k
+           FROM route_sheet_stops s
+           JOIN route_sheets h ON h.id = s.sheet_id
+          WHERE h.status <> 'voided' AND s.created_at > NOW() - make_interval(days => $1)
+       ),
+       visitas AS (SELECT k, COUNT(*) AS n FROM s GROUP BY k),
+       nombre AS (
+         SELECT DISTINCT ON (k) k, client_name
+           FROM s GROUP BY k, client_name
+          ORDER BY k, COUNT(*) DESC, MIN(created_at)
+       ),
+       ultima AS (SELECT DISTINCT ON (k) k, locality FROM s ORDER BY k, created_at DESC, id DESC)
+       SELECT nombre.client_name, ultima.locality
+         FROM visitas JOIN nombre USING (k) JOIN ultima USING (k)
+        ORDER BY visitas.n DESC, nombre.client_name
+        LIMIT 300`,
+      [SUGGESTION_DAYS],
+    ),
+    db.query(
+      `SELECT MIN(s.locality) AS locality
+         FROM route_sheet_stops s
+         JOIN route_sheets h ON h.id = s.sheet_id
+        WHERE h.status <> 'voided' AND s.created_at > NOW() - make_interval(days => $1)
+        GROUP BY LOWER(s.locality)
+        ORDER BY COUNT(*) DESC, MIN(s.locality)
+        LIMIT 150`,
+      [SUGGESTION_DAYS],
+    ),
+  ]);
+  return {
+    clients: clientes.rows.map((r) => ({ name: r.client_name, locality: r.locality })),
+    localities: comunas.rows.map((r) => r.locality),
+  };
+}
+
+/**
+ * La revisión mecánica del vehículo en la fecha de la hoja (la última si
+ * hubo varias), o null. Sólo para avisar: la hoja se abre igual.
+ */
+async function dailyChecklist(vehicleId, routeDate) {
+  const { rows } = await db.query(
+    `SELECT id, number_year, number_seq, inspection_kind, result
+       FROM vehicle_checklists
+      WHERE vehicle_id = $1 AND inspection_date = $2::date AND status = 'registered'
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1`,
+    [vehicleId, routeDate],
+  );
+  const r = rows[0];
+  return r ? { id: Number(r.id), number: formatChecklistNumber(r.number_year, r.number_seq), kind: r.inspection_kind, result: r.result } : null;
+}
+
 module.exports = {
   DRIVER_OTHER,
   HELPER_NONE,
@@ -610,4 +679,6 @@ module.exports = {
   voidRouteSheet,
   listRouteSheets,
   getRouteSheet,
+  stopSuggestions,
+  dailyChecklist,
 };
