@@ -33,17 +33,14 @@ module.exports = {
     {
       key: "logistica.hoja_ruta.crear",
       label: "Abrir hojas de ruta y completar las propias",
-      sinEfecto: "Las pantallas para abrir y completar hojas de ruta están en construcción.",
     },
     {
       key: "logistica.hoja_ruta.administrar",
       label: "Completar y cerrar las hojas de ruta de cualquier conductor",
-      sinEfecto: "Las pantallas para abrir y completar hojas de ruta están en construcción.",
     },
     {
       key: "logistica.hoja_ruta.anular",
       label: "Anular hojas de ruta",
-      sinEfecto: "Las pantallas para abrir y completar hojas de ruta están en construcción.",
     },
     {
       key: "logistica.checklist.ver",

@@ -8,7 +8,8 @@
   // Letras de cambio: sólo el personal de Finanzas, en las instancias que las emiten.
   const puedeLetras = features.billsOfExchange && typeof canIssueBills !== 'undefined' && canIssueBills;
   // Logística: cada tarjeta con su permiso; la sección sólo si queda alguna.
-  const veHojasRuta = features.logistics && can('logistica.acceso') && can('logistica.hoja_ruta.ver');
+  const veHojasRuta = features.logistics && can('logistica.acceso')
+    && (can('logistica.hoja_ruta.ver') || can('logistica.hoja_ruta.crear') || can('logistica.hoja_ruta.administrar'));
   // A Gestión de flota llega quien ve la flota o quien registra o ve revisiones.
   const veFlota = features.logistics && can('logistica.acceso')
     && (can('logistica.vehiculo.ver') || can('logistica.checklist.ver') || can('logistica.checklist.crear'));
@@ -193,10 +194,7 @@
           <span class="procesos-card__tile" aria-hidden="true"><%- include('../partials/icon', { name: 'map' }) %></span>
           <div class="procesos-card__cuerpo">
             <h4 class="procesos-card__titulo">Hojas de ruta</h4>
-            <p class="procesos-card__desc">Registra cada salida con su conductor, kilometraje y destinos, y consulta o imprime las anteriores.</p>
-            <div class="procesos-card__meta">
-              <span class="procesos-card__badge">En construcción</span>
-            </div>
+            <p class="procesos-card__desc">La jornada de cada vehículo: conductor, peoneta, kilometraje y las entregas del día.</p>
           </div>
         </a>
       <% } %>

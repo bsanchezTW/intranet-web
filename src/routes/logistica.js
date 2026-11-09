@@ -27,7 +27,16 @@ const {
   physicalReviewAlert,
   formatPhysicalNumber,
 } = require("../constants/vehiclePhysical");
-const { parseId } = require("../services/logistics/inputs");
+const routeSheets = require("../services/logistics/routeSheetService");
+const hrAccess = require("../services/logistics/routeSheetAccess");
+const {
+  STATUSES: HR_STATUSES,
+  MAX_STOPS,
+  statusLabel: hrStatusLabel,
+  localityLabel,
+  formatTime,
+} = require("../constants/routeSheet");
+const { parseId, cleanText } = require("../services/logistics/inputs");
 const {
   INSPECTION_KINDS,
   ANSWERS,
@@ -43,8 +52,10 @@ const { GROUPS: ZONE_GROUPS, modelFor } = require("../constants/vehicleZones");
 const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
 
 /**
- * Logística: Gestión de flota y, pronto, hojas de ruta.
+ * Logística: Gestión de flota y hojas de ruta.
  *
+ *   /logistica/hojas-de-ruta               hojas de ruta: listado y abrir
+ *   /logistica/hojas-de-ruta/:id           una hoja: paradas, cierre, anular
  *   /logistica/flota                       vehículos con sus botones
  *   /logistica/flota/:id/revisiones        revisiones de un vehículo (también
  *                                          se despliegan en su tarjeta)
@@ -70,8 +81,9 @@ const ITEMS = `${MECANICA}/items`;
 const FISICA = `${FLOTA}/fisica`;
 const DANIOS = `${FLOTA}/danios`;
 const FOTOS = `${FLOTA}/fotos`;
+const HOJAS = "/logistica/hojas-de-ruta";
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261106a"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261109a"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -168,14 +180,370 @@ router.get("/flota/:id/historial", (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Hojas de ruta (en construcción)
+// Hojas de ruta: se abren en la mañana, se completan durante el día y se
+// cierran con el km final. Quién ve y quién completa cada una lo decide
+// routeSheetAccess.js.
 // ---------------------------------------------------------------------------
 
-router.get("/hojas-de-ruta", requirePermission("logistica.hoja_ruta.ver"), (req, res) => {
-  res.render("logistica/hojas_ruta/index", {
-    titulo: "Hojas de ruta",
+const HR_VIEW = {
+  HOJAS,
+  HR_STATUSES,
+  MAX_STOPS,
+  hrStatusLabel,
+  formatTime,
+  driverOther: routeSheets.DRIVER_OTHER,
+};
+
+const entrarHojas = requireAnyPermission(...hrAccess.ENTRAR);
+const abrirHojas = requireAnyPermission(hrAccess.KEYS.CREAR, hrAccess.KEYS.ADMINISTRAR);
+const userIdOf = (req) => req.session.user.id;
+
+function forbidden(res) {
+  return res.status(403).render("acceso_no_permitido", { titulo: "Acceso no permitido" });
+}
+
+const HR_ESTADOS = ["open", "closed", "voided"];
+
+router.get("/hojas-de-ruta", entrarHojas, async (req, res) => {
+  try {
+    const filtros = {
+      q: cleanText(req.query.q, 80),
+      estado: HR_ESTADOS.includes(req.query.estado) ? req.query.estado : "",
+      desde: cleanText(req.query.desde, 10),
+      hasta: cleanText(req.query.hasta, 10),
+      vehiculo: parseId(req.query.vehiculo),
+    };
+    const [hojas, flota] = await Promise.all([
+      routeSheets.listRouteSheets({ ...filtros, scope: hrAccess.listScope(req.perms, userIdOf(req)) }),
+      vehicles.listVehicles(),
+    ]);
+    res.render("logistica/hojas_ruta/index", {
+      titulo: "Hojas de ruta",
+      hojas,
+      flota,
+      filtros,
+      limite: routeSheets.LIST_LIMIT,
+      ...hrAccess.accessFor(req.perms),
+      ...flashFrom(req),
+      ...VIEW_HELPERS,
+      ...HR_VIEW,
+      extraCss: EXTRA_CSS,
+    });
+  } catch (err) {
+    console.error("[Logística] Error listando las hojas de ruta:", err);
+    res.status(500).send("Error cargando las hojas de ruta");
+  }
+});
+
+async function headerContext() {
+  const [flota, personas] = await Promise.all([
+    vehicles.listVehicles({ includeInactive: false }),
+    checklists.listDrivers(),
+  ]);
+  return { flota, personas };
+}
+
+async function renderHeaderForm(req, res, { values, errors = {}, hoja = null, status = 200, ctx = null }) {
+  const context = ctx || (await headerContext());
+  res.status(status).render("logistica/hojas_ruta/form", {
+    titulo: hoja ? `Editar ${hoja.number}` : "Abrir hoja de ruta",
+    values,
+    errors,
+    hoja,
+    ...context,
+    today: todayInCountry(),
+    localidad: localityLabel(),
+    puedeFlota: decide(req.perms, ADMIN_FLOTA),
+    ...VIEW_HELPERS,
+    ...HR_VIEW,
     extraCss: EXTRA_CSS,
+    extraJs: ["/js/hojas-ruta.js?v=20261109a"],
   });
+}
+
+router.get("/hojas-de-ruta/nueva", abrirHojas, async (req, res) => {
+  try {
+    const ctx = await headerContext();
+    const yo = String(userIdOf(req));
+    await renderHeaderForm(req, res, {
+      ctx,
+      values: {
+        route_date: todayInCountry(),
+        vehicle_id: parseId(req.query.vehiculo) || "",
+        driver_choice: ctx.personas.some((p) => String(p.id) === yo) ? yo : "",
+        helper_choice: routeSheets.HELPER_NONE,
+      },
+    });
+  } catch (err) {
+    console.error("[Logística] Error abriendo el formulario de hoja de ruta:", err);
+    res.status(500).send("Error cargando el formulario");
+  }
+});
+
+router.post("/hojas-de-ruta", abrirHojas, async (req, res) => {
+  try {
+    const ctx = await headerContext();
+    const { values, errors, ok } = routeSheets.normalizeHeaderInput(req.body, {
+      vehicles: ctx.flota,
+      drivers: ctx.personas,
+      today: todayInCountry(),
+    });
+    if (!ok) return await renderHeaderForm(req, res, { values, errors, status: 422, ctx });
+    let abierta;
+    try {
+      abierta = await routeSheets.openRouteSheet(values, userIdOf(req));
+    } catch (err) {
+      if (err instanceof routeSheets.RouteSheetError) {
+        return await renderHeaderForm(req, res, { values, errors: { general: err.message }, status: 409, ctx });
+      }
+      throw err;
+    }
+    const link = `${HOJAS}/${abierta.id}`;
+    await logChange(userIdOf(req), `abrió la hoja de ruta ${abierta.number}`, link);
+    res.redirect(withFlash(`${link}#parada-nueva`, { ok: `Hoja ${abierta.number} abierta: agrega las paradas del día` }));
+  } catch (err) {
+    console.error("[Logística] Error abriendo la hoja de ruta:", err);
+    res.status(500).send("Error abriendo la hoja de ruta");
+  }
+});
+
+/** La hoja de :id si la persona puede verla; si no, responde y devuelve null. */
+async function loadHoja(req, res) {
+  const id = parseId(req.params.id);
+  const hoja = id ? await routeSheets.getRouteSheet(id) : null;
+  if (!hoja) {
+    notFound(res);
+    return null;
+  }
+  if (!hrAccess.canView(req.perms, userIdOf(req), hoja)) {
+    forbidden(res);
+    return null;
+  }
+  return hoja;
+}
+
+/**
+ * Como loadHoja, para cambiarla: cerrada o anulada vuelve a la hoja con el
+ * aviso; sin permiso para completarla, 403.
+ */
+async function loadEditable(req, res) {
+  const hoja = await loadHoja(req, res);
+  if (!hoja) return null;
+  if (hoja.status !== "open") {
+    res.redirect(withFlash(`${HOJAS}/${hoja.id}`, { error: "La hoja ya está cerrada o anulada: no se puede cambiar" }));
+    return null;
+  }
+  if (!hrAccess.canEdit(req.perms, userIdOf(req), hoja)) {
+    forbidden(res);
+    return null;
+  }
+  return hoja;
+}
+
+/**
+ * Detalle de la hoja. Abierta y con permiso, trae los formularios de cada
+ * parada, el de una nueva y el de cierre. `parada` y `cierre` traen lo
+ * enviado y sus errores cuando hay que volver a mostrarlos.
+ */
+function renderHoja(req, res, hoja, { parada = null, cierre = null, status = 200, flash = null } = {}) {
+  const uid = userIdOf(req);
+  res.status(status).render("logistica/hojas_ruta/detalle", {
+    titulo: `Hoja de ruta ${hoja.number}`,
+    hoja,
+    parada,
+    cierre,
+    puedeEditar: hrAccess.canEdit(req.perms, uid, hoja),
+    puedeAnular: hrAccess.canVoid(req.perms, uid, hoja),
+    localidad: localityLabel(),
+    ...(flash || flashFrom(req)),
+    ...VIEW_HELPERS,
+    ...HR_VIEW,
+    extraCss: EXTRA_CSS,
+    extraJs: ["/js/hojas-ruta.js?v=20261109a"],
+  });
+}
+
+router.get("/hojas-de-ruta/:id", entrarHojas, async (req, res) => {
+  try {
+    const hoja = await loadHoja(req, res);
+    if (hoja) renderHoja(req, res, hoja);
+  } catch (err) {
+    console.error("[Logística] Error cargando la hoja de ruta:", err);
+    res.status(500).send("Error cargando la hoja de ruta");
+  }
+});
+
+router.get("/hojas-de-ruta/:id/editar", entrarHojas, async (req, res) => {
+  try {
+    const hoja = await loadEditable(req, res);
+    if (!hoja) return;
+    const choice = (userId, name) => (userId != null ? String(userId) : name ? routeSheets.DRIVER_OTHER : "");
+    await renderHeaderForm(req, res, {
+      hoja,
+      values: {
+        route_date: hoja.route_date,
+        vehicle_id: hoja.vehicle_id,
+        km_start: hoja.km_start,
+        driver_choice: choice(hoja.driver_user_id, hoja.driver_name),
+        driver_name_other: hoja.driver_user_id == null ? hoja.driver_name : "",
+        helper_choice: choice(hoja.helper_user_id, hoja.helper_name),
+        helper_name_other: hoja.helper_user_id == null ? hoja.helper_name || "" : "",
+        observations: hoja.observations || "",
+      },
+    });
+  } catch (err) {
+    console.error("[Logística] Error abriendo la edición de la hoja de ruta:", err);
+    res.status(500).send("Error cargando el formulario");
+  }
+});
+
+router.post("/hojas-de-ruta/:id", entrarHojas, async (req, res) => {
+  try {
+    const hoja = await loadEditable(req, res);
+    if (!hoja) return;
+    const ctx = await headerContext();
+    const { values, errors, ok } = routeSheets.normalizeHeaderInput(req.body, {
+      vehicles: ctx.flota,
+      drivers: ctx.personas,
+      today: todayInCountry(),
+      current: hoja,
+    });
+    if (!ok) return await renderHeaderForm(req, res, { values, errors, hoja, status: 422, ctx });
+    try {
+      await routeSheets.updateRouteSheet(hoja.id, values);
+    } catch (err) {
+      if (err instanceof routeSheets.RouteSheetError) {
+        return await renderHeaderForm(req, res, { values, errors: { general: err.message }, hoja, status: 409, ctx });
+      }
+      throw err;
+    }
+    res.redirect(withFlash(`${HOJAS}/${hoja.id}`, { ok: "Hoja actualizada" }));
+  } catch (err) {
+    console.error("[Logística] Error editando la hoja de ruta:", err);
+    res.status(500).send("Error guardando la hoja de ruta");
+  }
+});
+
+// --- Paradas -----------------------------------------------------------------
+
+router.post("/hojas-de-ruta/:id/paradas", entrarHojas, async (req, res) => {
+  try {
+    const hoja = await loadEditable(req, res);
+    if (!hoja) return;
+    const { values, errors, ok } = routeSheets.normalizeStopInput(req.body);
+    if (!ok) return renderHoja(req, res, hoja, { parada: { target: "nueva", values, errors }, status: 422 });
+    let agregada;
+    try {
+      agregada = await routeSheets.addStop(hoja.id, values, userIdOf(req));
+    } catch (err) {
+      if (err instanceof routeSheets.RouteSheetError) {
+        return renderHoja(req, res, hoja, { parada: { target: "nueva", values, errors: { general: err.message } }, status: 409 });
+      }
+      throw err;
+    }
+    res.redirect(withFlash(`${HOJAS}/${hoja.id}#parada-nueva`, { ok: `Parada ${agregada.position} agregada` }));
+  } catch (err) {
+    console.error("[Logística] Error agregando la parada:", err);
+    res.status(500).send("Error guardando la parada");
+  }
+});
+
+router.post("/hojas-de-ruta/:id/paradas/:parada", entrarHojas, async (req, res) => {
+  const paradaId = parseId(req.params.parada);
+  if (!paradaId) return notFound(res);
+  try {
+    const hoja = await loadEditable(req, res);
+    if (!hoja) return;
+    const { values, errors, ok } = routeSheets.normalizeStopInput(req.body);
+    if (!ok) return renderHoja(req, res, hoja, { parada: { target: paradaId, values, errors }, status: 422 });
+    if (!(await routeSheets.updateStop(hoja.id, paradaId, values))) return notFound(res);
+    res.redirect(withFlash(`${HOJAS}/${hoja.id}#parada-${paradaId}`, { ok: "Parada actualizada" }));
+  } catch (err) {
+    console.error("[Logística] Error editando la parada:", err);
+    res.status(500).send("Error guardando la parada");
+  }
+});
+
+router.post("/hojas-de-ruta/:id/paradas/:parada/eliminar", entrarHojas, async (req, res) => {
+  const paradaId = parseId(req.params.parada);
+  if (!paradaId) return notFound(res);
+  try {
+    const hoja = await loadEditable(req, res);
+    if (!hoja) return;
+    const quitada = await routeSheets.removeStop(hoja.id, paradaId);
+    const link = `${HOJAS}/${hoja.id}`;
+    res.redirect(withFlash(link, quitada ? { ok: "Parada quitada" } : { error: "La parada ya no existe" }));
+  } catch (err) {
+    console.error("[Logística] Error quitando la parada:", err);
+    res.status(500).send("Error quitando la parada");
+  }
+});
+
+router.post("/hojas-de-ruta/:id/paradas/:parada/mover", entrarHojas, async (req, res) => {
+  const paradaId = parseId(req.params.parada);
+  if (!paradaId) return notFound(res);
+  try {
+    const hoja = await loadEditable(req, res);
+    if (!hoja) return;
+    await routeSheets.moveStop(hoja.id, paradaId, req.body.direccion === "subir" ? -1 : 1);
+    res.redirect(`${HOJAS}/${hoja.id}#parada-${paradaId}`);
+  } catch (err) {
+    console.error("[Logística] Error moviendo la parada:", err);
+    res.status(500).send("Error moviendo la parada");
+  }
+});
+
+// --- Cerrar y anular ---------------------------------------------------------
+
+router.post("/hojas-de-ruta/:id/cerrar", entrarHojas, async (req, res) => {
+  try {
+    const hoja = await loadEditable(req, res);
+    if (!hoja) return;
+    const { values, errors, ok } = routeSheets.normalizeCloseInput(req.body, {
+      sheet: hoja,
+      stopCount: hoja.stops.length,
+    });
+    if (!ok) return renderHoja(req, res, hoja, { cierre: { values, errors }, status: 422 });
+    let cerrada;
+    try {
+      cerrada = await routeSheets.closeRouteSheet(hoja.id, values, userIdOf(req));
+    } catch (err) {
+      if (err instanceof routeSheets.RouteSheetError) {
+        return renderHoja(req, res, hoja, { cierre: { values, errors: { general: err.message } }, status: 409 });
+      }
+      throw err;
+    }
+    const link = `${HOJAS}/${hoja.id}`;
+    await logChange(userIdOf(req), `cerró la hoja de ruta ${cerrada.number}`, link);
+    res.redirect(withFlash(link, { ok: `Hoja ${cerrada.number} cerrada` }));
+  } catch (err) {
+    console.error("[Logística] Error cerrando la hoja de ruta:", err);
+    res.status(500).send("Error cerrando la hoja de ruta");
+  }
+});
+
+router.post("/hojas-de-ruta/:id/anular", requirePermission(hrAccess.KEYS.ANULAR), async (req, res) => {
+  try {
+    const hoja = await loadHoja(req, res);
+    if (!hoja) return;
+    const link = `${HOJAS}/${hoja.id}`;
+    if (!hrAccess.canVoid(req.perms, userIdOf(req), hoja)) {
+      return res.redirect(withFlash(link, { error: "La hoja ya estaba anulada" }));
+    }
+    let anulada;
+    try {
+      anulada = await routeSheets.voidRouteSheet(hoja.id, req.body.motivo, userIdOf(req));
+    } catch (err) {
+      if (err instanceof routeSheets.RouteSheetError) return res.redirect(withFlash(link, { error: err.message }));
+      throw err;
+    }
+    if (!anulada) return res.redirect(withFlash(link, { error: "La hoja ya estaba anulada" }));
+    await logChange(userIdOf(req), `anuló la hoja de ruta ${anulada.number}`, link);
+    res.redirect(withFlash(link, { ok: `Hoja ${anulada.number} anulada` }));
+  } catch (err) {
+    console.error("[Logística] Error anulando la hoja de ruta:", err);
+    res.status(500).send("Error anulando la hoja de ruta");
+  }
 });
 
 // ---------------------------------------------------------------------------

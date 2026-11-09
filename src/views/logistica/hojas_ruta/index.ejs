@@ -1,3 +1,17 @@
+<%
+  const lista = Array.isArray(hojas) ? hojas : [];
+  const vehiculos = Array.isArray(flota) ? flota : [];
+  const ESTADOS = [
+    ['', 'Todas'],
+    ['open', 'En ruta'],
+    ['closed', 'Cerradas'],
+    ['voided', 'Anuladas'],
+  ];
+  const hayFiltro = !!(filtros.q || filtros.estado || filtros.desde || filtros.hasta || filtros.vehiculo);
+  const enRuta = lista.filter((h) => h.status === 'open').length;
+  const recorrido = (h) => (h.km_end != null ? Number(h.km_end) - Number(h.km_start) : null);
+%>
+
 <div class="contenedor">
 
   <div class="page-header">
@@ -8,14 +22,118 @@
         <span>Logística</span>
       </nav>
       <h2 class="page-title">Hojas de ruta</h2>
-      <p class="page-description">Registro de salidas de vehículos: conductor, kilometraje, destinos y entregas de cada jornada.</p>
+      <p class="page-description">
+        La jornada de cada vehículo: conductor, peoneta, kilometraje y las entregas del día.
+        <%= veTodas ? '' : 'Ves las hojas que abriste y en las que vas de conductor o peoneta.' %>
+      </p>
     </div>
+    <% if (puedeAbrir) { %>
+      <div class="page-header-actions">
+        <a href="<%= HOJAS %>/nueva" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Abrir hoja de ruta</a>
+      </div>
+    <% } %>
   </div>
 
-  <div class="logistica-vacio">
-    <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'truck' }) %></span>
-    <p class="logistica-vacio__titulo">Módulo en construcción</p>
-    <p>Aquí quedarán las hojas de ruta que hoy se llevan en Excel, guardadas con su número correlativo y listas para consultar o imprimir.</p>
-  </div>
+  <% if (success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (error) { %>
+    <div hidden data-toast="<%= error %>" data-toast-tone="error"></div>
+  <% } %>
 
+  <form class="logistica-filtros" method="get" action="<%= HOJAS %>" role="search">
+    <label class="logistica-filtros__buscar">
+      <span class="sr-only">Buscar</span>
+      <%- include('../../partials/icon', { name: 'search' }) %>
+      <input type="search" name="q" value="<%= filtros.q %>" placeholder="Número, patente, conductor, cliente o guía" maxlength="80">
+    </label>
+    <label class="logistica-filtros__campo">
+      <span>Vehículo</span>
+      <select name="vehiculo">
+        <option value="">Todos</option>
+        <% vehiculos.forEach((v) => { %>
+          <option value="<%= v.id %>"<%= Number(filtros.vehiculo) === Number(v.id) ? ' selected' : '' %>><%= v.plate %><%= v.active ? '' : ' (de baja)' %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label class="logistica-filtros__campo">
+      <span>Desde</span>
+      <input type="date" name="desde" value="<%= filtros.desde %>">
+    </label>
+    <label class="logistica-filtros__campo">
+      <span>Hasta</span>
+      <input type="date" name="hasta" value="<%= filtros.hasta %>">
+    </label>
+    <button type="submit" class="logistica-chip">Filtrar</button>
+    <% if (hayFiltro) { %><a href="<%= HOJAS %>" class="logistica-filtros__limpiar">Limpiar</a><% } %>
+    <div class="logistica-filtros__estados" role="group" aria-label="Estado">
+      <% ESTADOS.forEach(([valor, texto]) => { %>
+        <button type="submit" name="estado" value="<%= valor %>" class="logistica-chip<%= filtros.estado === valor ? ' is-active' : '' %>"<%= filtros.estado === valor ? ' aria-pressed="true"' : '' %>><%= texto %></button>
+      <% }) %>
+    </div>
+  </form>
+
+  <% if (!lista.length) { %>
+    <div class="logistica-vacio">
+      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'map' }) %></span>
+      <% if (hayFiltro) { %>
+        <p>Ninguna hoja de ruta coincide con la búsqueda.</p>
+        <a href="<%= HOJAS %>">Ver todas</a>
+      <% } else { %>
+        <p class="logistica-vacio__titulo">Todavía no hay hojas de ruta</p>
+        <p>Cada hoja se abre en la mañana con el vehículo y el km inicial, se le agregan las entregas durante el día y se cierra con el km final.</p>
+        <% if (puedeAbrir) { %>
+          <a href="<%= HOJAS %>/nueva" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Abrir la primera</a>
+        <% } %>
+      <% } %>
+    </div>
+  <% } else { %>
+    <% if (enRuta && !filtros.estado) { %>
+      <p class="hr-aviso-ruta"><%- include('../../partials/icon', { name: 'truck' }) %> <%= enRuta === 1 ? '1 hoja sigue en ruta' : `${enRuta} hojas siguen en ruta` %>: van primero.</p>
+    <% } %>
+    <div class="logistica-tabla-wrap">
+      <table class="logistica-tabla hr-tabla">
+        <thead>
+          <tr>
+            <th scope="col">Número</th>
+            <th scope="col">Fecha</th>
+            <th scope="col">Vehículo</th>
+            <th scope="col">Conductor</th>
+            <th scope="col" class="num">Paradas</th>
+            <th scope="col" class="num">Recorrido</th>
+            <th scope="col">Estado</th>
+            <th scope="col"><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% lista.forEach((h) => { const anulada = h.status === 'voided'; const km = recorrido(h); %>
+            <tr class="<%= anulada ? 'is-anulado' : '' %><%= h.status === 'open' ? ' is-en-ruta' : '' %>">
+              <td data-label="Número"><a class="logistica-numero" href="<%= HOJAS %>/<%= h.id %>"><%= h.number %></a></td>
+              <td data-label="Fecha"><%= formatDate(h.route_date) %></td>
+              <td data-label="Vehículo">
+                <span class="logistica-patente"><%= h.vehicle_plate %></span>
+                <% if (h.vehicle_label) { %><span class="logistica-sub"><%= h.vehicle_label %></span><% } %>
+              </td>
+              <td data-label="Conductor">
+                <%= h.driver_name %>
+                <% if (h.helper_name) { %><span class="logistica-sub">Peoneta: <%= h.helper_name %></span><% } %>
+              </td>
+              <td data-label="Paradas" class="num"><%= h.stop_count %></td>
+              <td data-label="Recorrido" class="num">
+                <%= km == null ? '—' : formatKm(km) %>
+                <span class="logistica-sub">Desde <%= formatKm(h.km_start) %></span>
+              </td>
+              <td data-label="Estado"><span class="logistica-estado hr-estado--<%= h.status %>"><%= hrStatusLabel(h.status) %></span></td>
+              <td class="logistica-tabla__acciones">
+                <a href="<%= HOJAS %>/<%= h.id %>" class="logistica-icono-btn" title="<%= h.status === 'open' ? 'Completar' : 'Ver' %> <%= h.number %>" aria-label="<%= h.status === 'open' ? 'Completar' : 'Ver' %> <%= h.number %>"><%- include('../../partials/icon', { name: h.status === 'open' ? 'edit' : 'file-text' }) %></a>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <% if (lista.length >= limite) { %>
+      <p class="logistica-nota">Se muestran las <%= limite %> hojas más recientes. Usa los filtros para encontrar las anteriores.</p>
+    <% } %>
+  <% } %>
 </div>

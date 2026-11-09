@@ -1,0 +1,251 @@
+<%
+  const h = hoja;
+  const paradas = Array.isArray(h.stops) ? h.stops : [];
+  const abierta = h.status === 'open';
+  const anulada = h.status === 'voided';
+  const enLlena = paradas.length >= MAX_STOPS;
+  const cuando = (d) => new Date(d).toLocaleString(countryConfig.locale, { dateStyle: 'short', timeStyle: 'short', timeZone: countryConfig.timezone });
+  const recorrido = h.km_end != null ? Number(h.km_end) - Number(h.km_start) : null;
+  const p = parada || {};
+  const c = cierre || { values: {}, errors: {} };
+  const icono = (name) => include('../../partials/icon', { name });
+  const horas = (s) => {
+    if (s.arrived_at && s.left_at) return `${formatTime(s.arrived_at)} – ${formatTime(s.left_at)}`;
+    if (s.arrived_at) return `Llegó ${formatTime(s.arrived_at)}`;
+    if (s.left_at) return `Salió ${formatTime(s.left_at)}`;
+    return '';
+  };
+%>
+
+<%# Formulario de una parada: la nueva o la que se edita. `clave` hace únicos los id. %>
+<% function formParada(accion, clave, valores, errores, textoBoton) {
+     const val = valores || {};
+     const e = errores || {};
+     const id = (campo) => `${campo}-${clave}`;
+     const inv = (campo) => (e[campo] ? ' is-invalid' : '');
+     function msg(campo) { if (e[campo]) { %><span class="campo-form__error"><%= e[campo] %></span><% } } %>
+  <form method="post" action="<%= accion %>" class="hr-parada-form" novalidate>
+    <% if (e.general) { %><p class="campo-form__error" role="alert"><%= e.general %></p><% } %>
+    <div class="campos-grid">
+      <div class="campo-form<%= inv('client_name') %>">
+        <label for="<%= id('client_name') %>">Cliente <span class="required-mark">*</span></label>
+        <input type="text" id="<%= id('client_name') %>" name="client_name" value="<%= val.client_name || '' %>" maxlength="120" autocomplete="off" required>
+        <% msg('client_name') %>
+      </div>
+      <div class="campo-form<%= inv('locality') %>">
+        <label for="<%= id('locality') %>"><%= localidad %> <span class="required-mark">*</span></label>
+        <input type="text" id="<%= id('locality') %>" name="locality" value="<%= val.locality || '' %>" maxlength="80" autocomplete="off" required>
+        <% msg('locality') %>
+      </div>
+      <div class="campo-form">
+        <label for="<%= id('dispatch_guide') %>">Guía de despacho</label>
+        <input type="text" id="<%= id('dispatch_guide') %>" name="dispatch_guide" value="<%= val.dispatch_guide || '' %>" maxlength="30" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="campo-form">
+        <label for="<%= id('sales_note') %>">Nota de venta</label>
+        <input type="text" id="<%= id('sales_note') %>" name="sales_note" value="<%= val.sales_note || '' %>" maxlength="30" inputmode="numeric" autocomplete="off">
+      </div>
+      <div class="campo-form<%= inv('arrived_at') %>">
+        <label for="<%= id('arrived_at') %>">Hora de llegada</label>
+        <div class="hr-hora">
+          <input type="time" id="<%= id('arrived_at') %>" name="arrived_at" value="<%= val.arrived_at ? formatTime(val.arrived_at) : '' %>" step="60">
+          <button type="button" class="logistica-chip" data-ahora="<%= id('arrived_at') %>">Ahora</button>
+        </div>
+        <% msg('arrived_at') %>
+      </div>
+      <div class="campo-form<%= inv('left_at') %>">
+        <label for="<%= id('left_at') %>">Hora de salida</label>
+        <div class="hr-hora">
+          <input type="time" id="<%= id('left_at') %>" name="left_at" value="<%= val.left_at ? formatTime(val.left_at) : '' %>" step="60">
+          <button type="button" class="logistica-chip" data-ahora="<%= id('left_at') %>">Ahora</button>
+        </div>
+        <% msg('left_at') %>
+      </div>
+      <div class="campo-form campo-form--ancho">
+        <label for="<%= id('observations') %>">Observaciones</label>
+        <input type="text" id="<%= id('observations') %>" name="observations" value="<%= val.observations || '' %>" maxlength="300" placeholder="Opcional: «Sin observaciones», quién recibió, un problema…">
+      </div>
+    </div>
+    <div class="hr-parada-form__acciones">
+      <button type="submit" class="page-header-btn"><%- icono('check') %> <span><%= textoBoton %></span></button>
+    </div>
+  </form>
+<% } %>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- icono('map') %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="<%= HOJAS %>">Hojas de ruta</a> <span aria-hidden="true">/</span>
+        <span><%= h.number %></span>
+      </nav>
+      <h2 class="page-title">
+        Hoja de ruta <%= h.number %>
+        <span class="logistica-estado hr-estado--<%= h.status %>"><%= hrStatusLabel(h.status) %></span>
+      </h2>
+      <p class="page-description">
+        <%= h.vehicle_plate %><% if (h.vehicle_label) { %> · <%= h.vehicle_label %><% } %> · <%= formatDate(h.route_date) %>
+      </p>
+    </div>
+    <% if (puedeEditar) { %>
+      <div class="page-header-actions">
+        <a href="<%= HOJAS %>/<%= h.id %>/editar" class="page-header-btn page-header-btn--secundario"><%- icono('edit') %> Editar salida</a>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (success) { %>
+    <div hidden data-toast="<%= success %>"></div>
+  <% } %>
+  <% if (error) { %>
+    <div hidden data-toast="<%= error %>" data-toast-tone="error"></div>
+  <% } %>
+
+  <% if (anulada) { %>
+    <div class="logistica-anulado" role="note">
+      <span class="logistica-anulado__icono" aria-hidden="true"><%- icono('x-circle') %></span>
+      <span>
+        <strong>Hoja anulada</strong> el <%= cuando(h.voided_at) %><% if (h.voided_by_name) { %> por <%= h.voided_by_name %><% } %>.
+        Motivo: <%= h.void_reason %>
+      </span>
+    </div>
+  <% } %>
+
+  <div class="logistica-detalle">
+    <section class="logistica-panel" aria-labelledby="det-salida">
+      <h3 class="logistica-panel__titulo" id="det-salida">Vehículo y personas</h3>
+      <dl class="logistica-datos">
+        <div><dt>Patente</dt><dd><span class="logistica-patente"><%= h.vehicle_plate %></span></dd></div>
+        <div><dt>Vehículo</dt><dd><%= h.vehicle_label || '—' %></dd></div>
+        <div><dt>Conductor</dt><dd><%= h.driver_name %></dd></div>
+        <div><dt>Peoneta</dt><dd><%= h.helper_name || '—' %></dd></div>
+      </dl>
+    </section>
+
+    <section class="logistica-panel" aria-labelledby="det-km">
+      <h3 class="logistica-panel__titulo" id="det-km">Kilometraje y registro</h3>
+      <dl class="logistica-datos">
+        <div><dt>Km inicial</dt><dd><%= formatKm(h.km_start) %></dd></div>
+        <div><dt>Km final</dt><dd><%= h.km_end == null ? (abierta ? 'Al cerrar' : '—') : formatKm(h.km_end) %></dd></div>
+        <div><dt>Recorrido</dt><dd><%= recorrido == null ? '—' : formatKm(recorrido) %></dd></div>
+        <div><dt>Abrió</dt><dd><%= h.created_by_name %><span class="logistica-sub"><%= cuando(h.created_at) %></span></dd></div>
+        <% if (h.closed_at) { %>
+          <div><dt>Cerró</dt><dd><%= h.closed_by_name || '—' %><span class="logistica-sub"><%= cuando(h.closed_at) %></span></dd></div>
+        <% } %>
+        <% if (h.observations) { %>
+          <div class="logistica-datos--ancho"><dt>Observaciones</dt><dd><%= h.observations %></dd></div>
+        <% } %>
+      </dl>
+    </section>
+  </div>
+
+  <section class="logistica-panel hr-paradas" aria-labelledby="det-paradas">
+    <h3 class="logistica-panel__titulo" id="det-paradas">
+      Paradas
+      <span class="logistica-panel__extra"><%= paradas.length === 1 ? '1 parada' : `${paradas.length} paradas` %></span>
+    </h3>
+
+    <% if (!paradas.length) { %>
+      <p class="logistica-panel__desc"><%= abierta ? 'Todavía no hay paradas. Agrega cada entrega a medida que se hace.' : 'La hoja no tiene paradas.' %></p>
+    <% } else { %>
+      <ol class="hr-lista">
+        <% paradas.forEach((s, i) => {
+             const editandoEsta = p.target != null && String(p.target) === String(s.id);
+             const docs = [s.dispatch_guide ? `GD ${s.dispatch_guide}` : '', s.sales_note ? `NV ${s.sales_note}` : ''].filter(Boolean).join(' · '); %>
+          <li class="hr-parada" id="parada-<%= s.id %>">
+            <span class="hr-parada__num" aria-hidden="true"><%= s.position %></span>
+            <div class="hr-parada__cuerpo">
+              <p class="hr-parada__cliente"><%= s.client_name %> <span class="hr-parada__lugar"><%= s.locality %></span></p>
+              <p class="hr-parada__meta">
+                <% if (docs) { %><span><%= docs %></span><% } %>
+                <% if (horas(s)) { %><span><%- icono('clock') %> <%= horas(s) %></span><% } %>
+              </p>
+              <% if (s.observations) { %><p class="hr-parada__obs"><%= s.observations %></p><% } %>
+
+              <% if (puedeEditar) { %>
+                <details class="hr-parada__editar"<%= editandoEsta ? ' open' : '' %>>
+                  <summary><%- icono('edit') %> Editar</summary>
+                  <% formParada(`${HOJAS}/${h.id}/paradas/${s.id}#parada-${s.id}`, s.id, editandoEsta ? p.values : s, editandoEsta ? p.errors : null, 'Guardar parada') %>
+                </details>
+              <% } %>
+            </div>
+            <% if (puedeEditar) { %>
+              <div class="hr-parada__acciones">
+                <form method="post" action="<%= HOJAS %>/<%= h.id %>/paradas/<%= s.id %>/mover">
+                  <button type="submit" name="direccion" value="subir" class="logistica-icono-btn" title="Subir" aria-label="Subir la parada <%= s.position %>"<%= i === 0 ? ' disabled' : '' %>><%- icono('chevron-up') %></button>
+                </form>
+                <form method="post" action="<%= HOJAS %>/<%= h.id %>/paradas/<%= s.id %>/mover">
+                  <button type="submit" name="direccion" value="bajar" class="logistica-icono-btn" title="Bajar" aria-label="Bajar la parada <%= s.position %>"<%= i === paradas.length - 1 ? ' disabled' : '' %>><%- icono('chevron-down') %></button>
+                </form>
+                <form method="post" action="<%= HOJAS %>/<%= h.id %>/paradas/<%= s.id %>/eliminar"
+                      data-confirm="Se quita la parada <%= s.position %> (<%= s.client_name %>) y las siguientes suben un lugar."
+                      data-confirm-title="¿Quitar la parada?" data-confirm-accept="Quitar" data-confirm-tone="peligro">
+                  <button type="submit" class="logistica-icono-btn logistica-icono-btn--peligro" title="Quitar" aria-label="Quitar la parada <%= s.position %>"><%- icono('trash') %></button>
+                </form>
+              </div>
+            <% } %>
+          </li>
+        <% }) %>
+      </ol>
+    <% } %>
+  </section>
+
+  <% if (puedeEditar) { %>
+    <section class="logistica-panel hr-nueva" id="parada-nueva" aria-labelledby="det-nueva">
+      <h3 class="logistica-panel__titulo" id="det-nueva"><%- icono('plus') %> Agregar parada <%= paradas.length + 1 %></h3>
+      <% if (enLlena) { %>
+        <p class="logistica-panel__desc">La hoja llegó a <%= MAX_STOPS %> paradas. Ciérrala y abre otra para seguir.</p>
+      <% } else { %>
+        <p class="logistica-panel__desc">Cliente y <%= localidad.toLowerCase() %> son obligatorios. Las horas se pueden completar después, al editar la parada.</p>
+        <% formParada(`${HOJAS}/${h.id}/paradas#parada-nueva`, 'nueva', p.target === 'nueva' ? p.values : {}, p.target === 'nueva' ? p.errors : null, 'Agregar parada') %>
+      <% } %>
+    </section>
+
+    <section class="logistica-panel hr-cierre" id="cerrar" aria-labelledby="det-cierre">
+      <h3 class="logistica-panel__titulo" id="det-cierre"><%- icono('check-circle') %> Cerrar la hoja</h3>
+      <p class="logistica-panel__desc">Al volver, con el km final del tablero. Cerrada ya no se puede modificar y el kilometraje de la flota queda al día.</p>
+      <% if (c.errors.general || c.errors.stops) { %>
+        <p class="campo-form__error" role="alert"><%= c.errors.general || c.errors.stops %></p>
+      <% } %>
+      <form method="post" action="<%= HOJAS %>/<%= h.id %>/cerrar#cerrar" novalidate
+            data-confirm="La hoja <%= h.number %> quedará cerrada con sus <%= paradas.length %> paradas y ya no se podrá modificar."
+            data-confirm-title="¿Cerrar la hoja de ruta?" data-confirm-accept="Cerrar hoja">
+        <div class="campos-grid">
+          <div class="campo-form<%= c.errors.km_end ? ' is-invalid' : '' %>">
+            <label for="km_end">Km final <span class="required-mark">*</span></label>
+            <input type="text" id="km_end" name="km_end" value="<%= c.values.km_end ?? '' %>" inputmode="numeric" maxlength="9" autocomplete="off" required>
+            <% if (c.errors.km_end) { %><span class="campo-form__error"><%= c.errors.km_end %></span><% } %>
+            <span class="campo-form__ayuda">Salió con <%= formatKm(h.km_start) %>.</span>
+          </div>
+          <div class="campo-form campo-form--ancho">
+            <label for="cierre_observations">Observaciones de la jornada</label>
+            <textarea id="cierre_observations" name="observations" rows="2" maxlength="1000"><%= c.values.observations ?? (h.observations || '') %></textarea>
+          </div>
+        </div>
+        <div class="hr-parada-form__acciones">
+          <button type="submit" class="page-header-btn"<%= paradas.length ? '' : ' disabled' %>><%- icono('check') %> <span>Cerrar hoja</span></button>
+        </div>
+      </form>
+    </section>
+  <% } %>
+
+  <% if (puedeAnular) { %>
+    <details class="logistica-anular">
+      <summary><%- icono('x-circle') %> Anular esta hoja</summary>
+      <form method="post" action="<%= HOJAS %>/<%= h.id %>/anular"
+            data-confirm="La hoja <%= h.number %> quedará anulada. Seguirá en el registro, pero ya no cuenta como válida."
+            data-confirm-title="¿Anular la hoja de ruta?" data-confirm-accept="Anular" data-confirm-tone="peligro">
+        <div class="campo-form">
+          <label for="motivo">Motivo <span class="required-mark">*</span></label>
+          <textarea id="motivo" name="motivo" rows="2" maxlength="300" minlength="5" required placeholder="Por ejemplo: se abrió con la patente equivocada."></textarea>
+        </div>
+        <div>
+          <button type="submit" class="page-header-btn page-header-btn--secundario"><%- icono('x-circle') %> Anular</button>
+        </div>
+      </form>
+    </details>
+  <% } %>
+</div>

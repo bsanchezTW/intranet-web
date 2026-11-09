@@ -246,3 +246,72 @@ describe("hojas de ruta — schema, permisos y migración", () => {
     assert.equal(calls.length, 1);
   });
 });
+
+describe("hojas de ruta — quién ve, completa y anula", () => {
+  const access = require("../src/services/logistics/routeSheetAccess");
+  const { KEYS } = access;
+
+  // Permisos de prueba: `keys` las que tiene y `todo` si ver alcanza a todas.
+  function perms(keys, { todo = false } = {}) {
+    const set = new Set(keys);
+    return {
+      can: (key) => set.has(key),
+      canOnRecord: (key) => set.has(key),
+      coverage: (key) => (key === KEYS.VER && set.has(key) ? { all: todo, own: !todo, areaIds: [] } : null),
+    };
+  }
+  const YO = 10;
+  const ajena = { id: 1, status: "open", created_by: 99, driver_user_id: 98, helper_user_id: null };
+  const comoConductor = { ...ajena, driver_user_id: YO };
+  const comoPeoneta = { ...ajena, helper_user_id: YO };
+  const abiertaPorMi = { ...ajena, created_by: YO };
+
+  it("lo propio es lo que abrí o donde voy de conductor o peoneta", () => {
+    assert.equal(access.esPropia(ajena, YO), false);
+    assert.equal(access.esPropia(comoConductor, YO), true);
+    assert.equal(access.esPropia(comoPeoneta, String(YO)), true);
+    assert.equal(access.esPropia(abiertaPorMi, YO), true);
+  });
+
+  it("ver lo propio no muestra las ajenas; ver todo o administrar, sí", () => {
+    const propio = perms([KEYS.VER]);
+    assert.equal(access.canView(propio, YO, ajena), false);
+    assert.equal(access.canView(propio, YO, comoPeoneta), true);
+    assert.equal(access.canView(perms([KEYS.VER], { todo: true }), YO, ajena), true);
+    assert.equal(access.canView(perms([KEYS.ADMINISTRAR]), YO, ajena), true);
+    assert.equal(access.canView(perms([]), YO, comoConductor), false);
+  });
+
+  it("el listado filtra por las tres columnas de lo propio", () => {
+    const propio = access.listScope(perms([KEYS.CREAR]), YO);
+    assert.match(propio.clause, /h\.created_by = \$1 OR h\.driver_user_id = \$1 OR h\.helper_user_id = \$1/);
+    assert.deepEqual(propio.params, [YO]);
+    assert.deepEqual(access.listScope(perms([KEYS.ADMINISTRAR]), YO), { clause: "TRUE", params: [] });
+    assert.deepEqual(access.listScope(perms([KEYS.VER], { todo: true }), YO), { clause: "TRUE", params: [] });
+    assert.equal(access.listScope(perms([KEYS.ANULAR]), YO).clause, "FALSE");
+  });
+
+  it("crear completa las propias abiertas; administrar, cualquiera abierta", () => {
+    const crear = perms([KEYS.CREAR]);
+    assert.equal(access.canEdit(crear, YO, comoConductor), true);
+    assert.equal(access.canEdit(crear, YO, ajena), false);
+    assert.equal(access.canEdit(perms([KEYS.VER], { todo: true }), YO, comoConductor), false, "ver no completa");
+    assert.equal(access.canEdit(perms([KEYS.ADMINISTRAR]), YO, ajena), true);
+    assert.equal(access.canEdit(perms([KEYS.ADMINISTRAR]), YO, { ...ajena, status: "closed" }), false);
+  });
+
+  it("anular pide el permiso y poder ver la hoja; una anulada no se vuelve a anular", () => {
+    assert.equal(access.canVoid(perms([KEYS.ANULAR, KEYS.VER], { todo: true }), YO, { ...ajena, status: "closed" }), true);
+    assert.equal(access.canVoid(perms([KEYS.ANULAR]), YO, ajena), false);
+    assert.equal(access.canVoid(perms([KEYS.ANULAR, KEYS.CREAR]), YO, abiertaPorMi), true);
+    assert.equal(access.canVoid(perms([KEYS.ANULAR, KEYS.ADMINISTRAR]), YO, { ...ajena, status: "voided" }), false);
+  });
+
+  it("botones del módulo según los permisos", () => {
+    assert.deepEqual(access.accessFor(perms([KEYS.VER])), {
+      entra: true, veTodas: false, puedeAbrir: false, puedeAdministrar: false, puedeAnular: false,
+    });
+    assert.equal(access.accessFor(perms([KEYS.CREAR])).puedeAbrir, true);
+    assert.equal(access.accessFor(perms([KEYS.ANULAR])).entra, false);
+  });
+});

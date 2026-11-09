@@ -2681,3 +2681,156 @@ a.fisica-zona__danio-tipo:hover { color: var(--brand); text-decoration: underlin
   .ficha-cambios::before { left: 14px; }
   .km-grafico { padding: 12px 8px 8px; }
 }
+
+/* ── Hojas de ruta ───────────────────────────────────────────────────────── */
+
+.hr-estado--open { background: var(--brand-soft); color: var(--brand-deep); }
+.hr-estado--closed { background: var(--green-soft); color: var(--green-ink); }
+.hr-estado--voided { background: var(--color-surface-muted); color: var(--color-text-subtle); }
+
+.page-title .logistica-estado { margin-left: 8px; vertical-align: 4px; }
+
+.hr-aviso-ruta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 10px;
+  color: var(--brand-deep);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.logistica-tabla tr.is-en-ruta td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+
+/* Paradas: una tarjeta por entrega, numeradas como las filas del papel. */
+.hr-paradas { padding-bottom: 18px; margin-bottom: 18px; }
+
+.hr-lista {
+  display: grid;
+  gap: 0;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hr-parada {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border);
+  scroll-margin-top: 90px;
+}
+
+.hr-parada:target { background: var(--brand-soft); border-radius: 10px; }
+
+.hr-parada__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-heading);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.hr-parada__cuerpo { min-width: 0; }
+
+.hr-parada__cliente {
+  margin: 3px 0 2px;
+  color: var(--color-heading);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.hr-parada__lugar {
+  margin-left: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.hr-parada__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hr-parada__meta span { display: inline-flex; align-items: center; gap: 5px; }
+
+.hr-parada__obs {
+  margin: 4px 0 0;
+  color: var(--color-text-subtle);
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.hr-parada__acciones { display: flex; gap: 6px; }
+.hr-parada__acciones form { margin: 0; }
+.hr-parada__acciones button:disabled { opacity: 0.35; cursor: default; }
+
+.hr-parada__editar { margin-top: 6px; }
+
+.hr-parada__editar > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--brand);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.hr-parada__editar > summary::-webkit-details-marker { display: none; }
+.hr-parada__editar[open] > summary { margin-bottom: 10px; }
+
+.hr-parada-form [hidden] { display: none !important; }
+
+.hr-parada-form__acciones {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 14px;
+}
+
+.hr-hora { display: flex; gap: 8px; align-items: center; }
+.hr-hora input { flex: 1; min-width: 0; }
+.hr-hora .logistica-chip { flex: none; }
+
+.hr-nueva, .hr-cierre { margin-bottom: 18px; scroll-margin-top: 90px; }
+
+/* En el teléfono el listado pasa a tarjetas: cada celda con su etiqueta. */
+@media (max-width: 720px) {
+  .hr-tabla thead { display: none; }
+  .hr-tabla, .hr-tabla tbody, .hr-tabla tr, .hr-tabla td { display: block; width: 100%; box-sizing: border-box; }
+  .hr-tabla tr { position: relative; padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
+  .hr-tabla tbody tr:last-child { border-bottom: 0; }
+  .hr-tabla td { padding: 3px 0; border-bottom: 0; text-align: left; }
+  .hr-tabla td.num { text-align: left; }
+  .hr-tabla td[data-label]::before {
+    content: attr(data-label);
+    display: inline-block;
+    min-width: 92px;
+    color: var(--color-text-subtle);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .hr-tabla td .logistica-sub { display: inline; margin-left: 6px; }
+  .hr-tabla td.logistica-tabla__acciones { position: absolute; top: 10px; right: 14px; width: auto; padding: 0; }
+  .logistica-tabla.hr-tabla tr.is-en-ruta td:first-child { box-shadow: none; }
+  .hr-tabla tr.is-en-ruta { box-shadow: inset 3px 0 0 var(--brand); }
+
+  .hr-parada { grid-template-columns: 28px minmax(0, 1fr); }
+  .hr-parada__acciones { grid-column: 2; }
+  .page-title .logistica-estado { display: inline-flex; margin: 6px 0 0; }
+}

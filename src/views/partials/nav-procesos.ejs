@@ -30,7 +30,8 @@
 </div>
 <% } %>
 <%
-  const hojasRutaNav = features.logistics && can('logistica.acceso') && can('logistica.hoja_ruta.ver');
+  const hojasRutaNav = features.logistics && can('logistica.acceso')
+    && (can('logistica.hoja_ruta.ver') || can('logistica.hoja_ruta.crear') || can('logistica.hoja_ruta.administrar'));
   const flotaNav = features.logistics && can('logistica.acceso')
     && (can('logistica.vehiculo.ver') || can('logistica.checklist.ver') || can('logistica.checklist.crear'));
 %>

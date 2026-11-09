@@ -1,0 +1,134 @@
+<%
+  const v = values || {};
+  const err = errors || {};
+  const hayErrores = Object.keys(err).length > 0;
+  const vehiculos = Array.isArray(flota) ? flota : [];
+  const gente = Array.isArray(personas) ? personas : [];
+  const editando = !!hoja;
+  const vehiculoElegido = vehiculos.find((x) => String(x.id) === String(v.vehicle_id)) || null;
+  const accion = editando ? `${HOJAS}/${hoja.id}` : HOJAS;
+  const volver = editando ? `${HOJAS}/${hoja.id}` : HOJAS;
+
+  function invalido(campo) { return err[campo] ? ' is-invalid' : ''; }
+%>
+
+<% function mensaje(campo) { if (err[campo]) { %><span class="campo-form__error" id="err-<%= campo %>"><%= err[campo] %></span><% } } %>
+
+<% function persona(prefijo, etiqueta, { opcional }) {
+     const elegida = String(v[`${prefijo}_choice`] ?? '');
+     const otra = elegida === driverOther; %>
+  <div class="campo-form<%= invalido(`${prefijo}_user_id`) %>">
+    <label for="<%= prefijo %>_user_id"><%= etiqueta %><% if (!opcional) { %> <span class="required-mark">*</span><% } %></label>
+    <select id="<%= prefijo %>_user_id" name="<%= prefijo %>_user_id" data-persona="<%= prefijo %>"<%= opcional ? '' : ' required' %>>
+      <option value=""><%= opcional ? 'Sin peoneta' : 'Elige al conductor' %></option>
+      <% gente.forEach((p) => { %>
+        <option value="<%= p.id %>"<%= elegida === String(p.id) ? ' selected' : '' %>><%= p.name %></option>
+      <% }) %>
+      <option value="<%= driverOther %>"<%= otra ? ' selected' : '' %>>Otra persona (escribir nombre)</option>
+    </select>
+    <% mensaje(`${prefijo}_user_id`) %>
+  </div>
+  <div class="campo-form<%= invalido(`${prefijo}_name_other`) %>" data-persona-otra="<%= prefijo %>"<%= otra ? '' : ' hidden' %>>
+    <label for="<%= prefijo %>_name_other">Nombre <%= opcional ? 'de la peoneta' : 'del conductor' %> <span class="required-mark">*</span></label>
+    <input type="text" id="<%= prefijo %>_name_other" name="<%= prefijo %>_name_other" value="<%= v[`${prefijo}_name_other`] || '' %>" maxlength="160" autocomplete="off">
+    <% mensaje(`${prefijo}_name_other`) %>
+  </div>
+<% } %>
+
+<div class="contenedor">
+
+  <div class="page-header">
+    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'map' }) %></span>
+    <div class="page-header__text">
+      <nav class="page-header__migas" aria-label="Ruta de navegación">
+        <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
+        <a href="<%= HOJAS %>">Hojas de ruta</a> <span aria-hidden="true">/</span>
+        <% if (editando) { %>
+          <a href="<%= HOJAS %>/<%= hoja.id %>"><%= hoja.number %></a> <span aria-hidden="true">/</span>
+          <span>Editar</span>
+        <% } else { %>
+          <span>Abrir</span>
+        <% } %>
+      </nav>
+      <h2 class="page-title"><%= editando ? `Editar ${hoja.number}` : 'Abrir hoja de ruta' %></h2>
+      <p class="page-description">
+        <%= editando
+          ? 'Corrige los datos de la salida. El número no cambia.'
+          : 'La salida del vehículo. Al abrirla recibe su número; las entregas se agregan después, durante el día.' %>
+      </p>
+    </div>
+  </div>
+
+  <% if (hayErrores) { %>
+    <div class="flash-msg flash-msg--error" role="alert">
+      <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
+      <span><%= err.general || 'Revisa los campos marcados antes de guardar.' %></span>
+    </div>
+  <% } %>
+
+  <% if (!vehiculos.length) { %>
+    <div class="logistica-vacio">
+      <span class="logistica-vacio__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'truck' }) %></span>
+      <p class="logistica-vacio__titulo">No hay vehículos activos en la flota</p>
+      <p>Agrega al menos un vehículo antes de abrir una hoja de ruta.</p>
+      <% if (puedeFlota) { %><a href="<%= FLOTA %>/nuevo" class="page-header-btn"><%- include('../../partials/icon', { name: 'plus' }) %> Agregar vehículo</a><% } %>
+    </div>
+  <% } else { %>
+
+  <form method="post" action="<%= accion %>" class="logistica-form" id="hojaForm" novalidate>
+    <section class="logistica-panel" aria-labelledby="panel-salida">
+      <h3 class="logistica-panel__titulo" id="panel-salida">
+        <span class="logistica-panel__num" aria-hidden="true">1</span> Vehículo y kilometraje
+      </h3>
+      <p class="logistica-panel__desc">Un vehículo tiene una sola hoja abierta a la vez.</p>
+
+      <div class="campos-grid">
+        <div class="campo-form<%= invalido('route_date') %>">
+          <label for="route_date">Fecha <span class="required-mark">*</span></label>
+          <input type="date" id="route_date" name="route_date" value="<%= v.route_date || today %>" max="<%= today %>" required>
+          <% mensaje('route_date') %>
+        </div>
+        <div class="campo-form<%= invalido('vehicle_id') %>">
+          <label for="vehicle_id">Patente <span class="required-mark">*</span></label>
+          <select id="vehicle_id" name="vehicle_id" required data-vehiculo>
+            <option value="">Elige la patente</option>
+            <% vehiculos.forEach((x) => { %>
+              <option value="<%= x.id %>" data-km-texto="<%= x.odometer_km == null ? '' : formatKm(x.odometer_km) %>"<%= String(v.vehicle_id) === String(x.id) ? ' selected' : '' %>>
+                <%= x.plate %><%= vehicleLabel(x) ? ` · ${vehicleLabel(x)}` : '' %>
+              </option>
+            <% }) %>
+          </select>
+          <% mensaje('vehicle_id') %>
+        </div>
+        <div class="campo-form<%= invalido('km_start') %>">
+          <label for="km_start">Km inicial <span class="required-mark">*</span></label>
+          <input type="text" id="km_start" name="km_start" value="<%= v.km_start ?? '' %>" inputmode="numeric" maxlength="9" autocomplete="off" required>
+          <% mensaje('km_start') %>
+          <span class="campo-form__ayuda" data-km-ayuda><%= vehiculoElegido && vehiculoElegido.odometer_km != null ? `Último registrado: ${formatKm(vehiculoElegido.odometer_km)}` : 'El que marca el tablero al salir, sin decimales.' %></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="logistica-panel" aria-labelledby="panel-personas">
+      <h3 class="logistica-panel__titulo" id="panel-personas">
+        <span class="logistica-panel__num" aria-hidden="true">2</span> Conductor y peoneta
+      </h3>
+      <p class="logistica-panel__desc">Quien va de conductor o peoneta ve la hoja y, si puede registrar hojas de ruta, la completa desde su celular.</p>
+
+      <div class="campos-grid">
+        <% persona('driver', 'Conductor', { opcional: false }) %>
+        <% persona('helper', 'Peoneta', { opcional: true }) %>
+        <div class="campo-form campo-form--ancho">
+          <label for="observations">Observaciones</label>
+          <textarea id="observations" name="observations" rows="2" maxlength="1000" placeholder="Opcional: algo que deba saberse de la salida."><%= v.observations || '' %></textarea>
+        </div>
+      </div>
+    </section>
+
+    <div class="logistica-form__acciones">
+      <a href="<%= volver %>" class="page-header-btn page-header-btn--secundario">Cancelar</a>
+      <button type="submit" class="page-header-btn"><%- include('../../partials/icon', { name: 'check' }) %> <span><%= editando ? 'Guardar cambios' : 'Abrir hoja' %></span></button>
+    </div>
+  </form>
+  <% } %>
+</div>
