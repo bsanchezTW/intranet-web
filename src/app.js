@@ -102,6 +102,7 @@ const {
   ensureCostCenterSchema,
 } = require("./services/costCenters/costCenterSchema");
 const { runMigrations } = require("./services/schema/migrator");
+const { createStartupGate } = require("./middlewares/startupGate");
 const migrations = require("./migrations");
 const { wantsJson, denyUnauthenticated } = require("./utils/httpResponses");
 const {
@@ -170,6 +171,12 @@ const staticOptions = { maxAge: "1d", etag: true };
 app.use(express.static(path.join(__dirname, "public"), staticOptions));
 // FIX: Servir archivos estáticos desde <root>/public (donde vive public/uploads unificado)
 app.use(express.static(path.join(__dirname, "..", "public"), staticOptions));
+
+// Hasta que terminan las migraciones y las ensure*Schema del arranque, 503
+// «La intranet se está actualizando» (los estáticos de arriba se sirven
+// igual). Se abre en runStartupDbTasks; ver middlewares/startupGate.js.
+const startupGate = createStartupGate({ logger });
+app.use(startupGate.middleware);
 
 function setStorageHeaders(res, file, fallbackContentType) {
   const contentType =
@@ -882,12 +889,18 @@ async function runStartupDbTasks() {
   for (const step of steps) {
     await step();
   }
+  startupGate.open();
 
   if (inProcessJobsEnabled()) jobRunner.startInterval();
 }
 
 function startBackgroundJobs() {
-  runStartupDbTasks().catch((err) => logger.error("db", err));
+  startupGate.arm();
+  runStartupDbTasks().catch((err) => {
+    logger.error("db", err);
+    // Sin base (warmPool falló) igual se atiende: cada página muestra su error.
+    startupGate.open("el arranque de la base falló");
+  });
   // Datos de la portada (indicadores, clima, LinkedIn, eventos).
   indexRoutes.startHomeBackgroundJobs();
 }
