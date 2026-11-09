@@ -315,3 +315,58 @@ describe("hojas de ruta — quién ve, completa y anula", () => {
     assert.equal(access.accessFor(perms([KEYS.ANULAR])).entra, false);
   });
 });
+
+describe("hojas de ruta — PDF", () => {
+  const { renderRouteSheetPdf } = require("../src/services/logistics/routeSheetPdf");
+  const paginas = (pdf) => (pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length;
+  const parada = (i) => ({
+    id: i,
+    position: i,
+    client_name: `Cliente ${i}`,
+    locality: i % 2 ? "Renca" : "Maipú",
+    dispatch_guide: String(52760 + i),
+    sales_note: String(21860 + i),
+    arrived_at: "10:10",
+    left_at: "10:30",
+    observations: i === 3 ? "Recibió portería; dejar la guía firmada en la oficina de bodega del cliente." : "Sin observaciones",
+  });
+  const hoja = {
+    number: "HR-00001-2026",
+    route_date: TODAY,
+    vehicle_plate: "ABCD12",
+    vehicle_label: "Chevrolet NPR 2020",
+    driver_name: "Bastián Dummy",
+    helper_name: "Peoneta Dummy",
+    km_start: 98376,
+    km_end: 98530,
+    observations: "Sin novedades.",
+    status: "closed",
+    created_by_name: "Bastián Dummy",
+    created_at: new Date("2026-10-30T11:00:00Z"),
+    closed_by_name: "Bastián Dummy",
+    closed_at: new Date("2026-10-30T20:00:00Z"),
+    stops: [1, 2, 3, 4, 5, 6].map(parada),
+  };
+
+  it("una jornada como la del papel cabe en una hoja", async () => {
+    const pdf = await renderRouteSheetPdf(hoja);
+    assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+    assert.equal(paginas(pdf), 1);
+  });
+
+  it("abierta y sin paradas, sale con las filas en blanco para anotar a mano", async () => {
+    const pdf = await renderRouteSheetPdf({ ...hoja, status: "open", km_end: null, closed_at: null, helper_name: null, stops: [] });
+    assert.equal(paginas(pdf), 1);
+  });
+
+  it("anulada y con el máximo de paradas también se imprime", async () => {
+    const pdf = await renderRouteSheetPdf({
+      ...hoja,
+      status: "voided",
+      void_reason: "Se abrió dos veces",
+      voided_at: new Date(),
+      stops: Array.from({ length: MAX_STOPS }, (_, i) => parada(i + 1)),
+    });
+    assert.ok(paginas(pdf) >= 2);
+  });
+});

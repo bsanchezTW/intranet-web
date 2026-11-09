@@ -90,11 +90,13 @@
         <%= h.vehicle_plate %><% if (h.vehicle_label) { %> · <%= h.vehicle_label %><% } %> · <%= formatDate(h.route_date) %>
       </p>
     </div>
-    <% if (puedeEditar) { %>
-      <div class="page-header-actions">
+    <div class="page-header-actions">
+      <% if (puedeEditar) { %>
         <a href="<%= HOJAS %>/<%= h.id %>/editar" class="page-header-btn page-header-btn--secundario"><%- icono('edit') %> Editar salida</a>
-      </div>
-    <% } %>
+      <% } %>
+      <a href="<%= HOJAS %>/<%= h.id %>/pdf" target="_blank" rel="noopener" class="page-header-btn"
+         title="<%= abierta ? 'Sale con filas en blanco para anotar a mano lo que falte' : '' %>"><%- icono('printer') %> Imprimir</a>
+    </div>
   </div>
 
   <% if (success) { %>

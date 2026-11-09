@@ -15,6 +15,7 @@ const { renderChecklistPdf } = require("../services/logistics/checklistPdf");
 const physical = require("../services/logistics/physicalService");
 const damagePhotos = require("../services/logistics/damagePhotos");
 const { renderPhysicalPdf } = require("../services/logistics/physicalPdf");
+const { renderRouteSheetPdf } = require("../services/logistics/routeSheetPdf");
 const {
   REVIEW_REASONS,
   DAMAGE_TYPES,
@@ -56,6 +57,7 @@ const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
  *
  *   /logistica/hojas-de-ruta               hojas de ruta: listado y abrir
  *   /logistica/hojas-de-ruta/:id           una hoja: paradas, cierre, anular
+ *   /logistica/hojas-de-ruta/:id/pdf       la hoja para imprimir
  *   /logistica/flota                       vehículos con sus botones
  *   /logistica/flota/:id/revisiones        revisiones de un vehículo (también
  *                                          se despliegan en su tarjeta)
@@ -370,6 +372,22 @@ router.get("/hojas-de-ruta/:id", entrarHojas, async (req, res) => {
   } catch (err) {
     console.error("[Logística] Error cargando la hoja de ruta:", err);
     res.status(500).send("Error cargando la hoja de ruta");
+  }
+});
+
+// Abierta también se imprime: sale con las filas en blanco del papel.
+router.get("/hojas-de-ruta/:id/pdf", entrarHojas, async (req, res) => {
+  try {
+    const hoja = await loadHoja(req, res);
+    if (!hoja) return;
+    const buffer = await renderRouteSheetPdf(hoja);
+    res.set("Content-Type", "application/pdf");
+    res.set("Content-Disposition", `inline; filename="${hoja.number}.pdf"`);
+    res.set("Cache-Control", "private, no-store");
+    res.send(buffer);
+  } catch (err) {
+    console.error("[Logística] Error generando el PDF de la hoja de ruta:", err);
+    res.status(500).send("Error generando el PDF");
   }
 });
 

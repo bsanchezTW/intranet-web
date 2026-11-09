@@ -126,6 +126,7 @@
               <td data-label="Estado"><span class="logistica-estado hr-estado--<%= h.status %>"><%= hrStatusLabel(h.status) %></span></td>
               <td class="logistica-tabla__acciones">
                 <a href="<%= HOJAS %>/<%= h.id %>" class="logistica-icono-btn" title="<%= h.status === 'open' ? 'Completar' : 'Ver' %> <%= h.number %>" aria-label="<%= h.status === 'open' ? 'Completar' : 'Ver' %> <%= h.number %>"><%- include('../../partials/icon', { name: h.status === 'open' ? 'edit' : 'file-text' }) %></a>
+                <a href="<%= HOJAS %>/<%= h.id %>/pdf" target="_blank" rel="noopener" class="logistica-icono-btn" title="Imprimir <%= h.number %>" aria-label="Imprimir <%= h.number %>"><%- include('../../partials/icon', { name: 'printer' }) %></a>
               </td>
             </tr>
           <% }) %>

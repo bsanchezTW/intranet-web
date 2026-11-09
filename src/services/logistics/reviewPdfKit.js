@@ -93,12 +93,13 @@ function renderPdf(title, draw) {
 
 /**
  * Encabezado de cada hoja: logo a la izquierda; a la derecha el área, el
- * título del documento y su número. `ctx`: { title, number }.
+ * título del documento y su número. `ctx`: { title, number, area? }; sin
+ * `area` dice «Logística · Gestión de flota».
  */
 function drawHeader(doc, ctx) {
   if (fs.existsSync(LOGO_PATH)) doc.image(LOGO_PATH, MARGIN, MARGIN + 8, { height: 22 });
   doc.font(FONT_BOLD).fontSize(6.5).fillColor(C.muted)
-    .text("LOGÍSTICA · GESTIÓN DE FLOTA", MARGIN, MARGIN, { width: CONTENT_W, align: "right", characterSpacing: 0.8, lineBreak: false });
+    .text(ctx.area || "LOGÍSTICA · GESTIÓN DE FLOTA", MARGIN, MARGIN, { width: CONTENT_W, align: "right", characterSpacing: 0.8, lineBreak: false });
   doc.font(FONT_BOLD).fontSize(16).fillColor(C.brand)
     .text(ctx.title, MARGIN, MARGIN + 10, { width: CONTENT_W, align: "right", lineBreak: false });
   doc.font(FONT).fontSize(8.5).fillColor(C.muted)
