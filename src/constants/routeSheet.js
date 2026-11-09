@@ -14,6 +14,22 @@ const STATUSES = Object.freeze({
 
 const MAX_SEQ = 99999;
 
+/**
+ * Firmas electrónicas de la hoja cerrada, en el orden en que se muestran.
+ * La peoneta firma sólo si la hoja la tiene.
+ */
+const SIGNATURE_ROLES = Object.freeze([
+  { role: "conductor", label: "Conductor" },
+  { role: "peoneta", label: "Peoneta" },
+  { role: "logistica", label: "Revisión de Logística" },
+]);
+
+/** "7F3A-91C2": los primeros 8 caracteres de la huella, para leerla rápido. */
+function formatSignatureCode(hash) {
+  const h = String(hash || "").toUpperCase();
+  return h ? `${h.slice(0, 4)}-${h.slice(4, 8)}` : "";
+}
+
 // La hoja en papel trae 10 filas; en la intranet caben más, con un tope para
 // que la hoja siga entrando en el PDF.
 const MAX_STOPS = 30;
@@ -62,6 +78,8 @@ module.exports = {
   STATUSES,
   MAX_SEQ,
   MAX_STOPS,
+  SIGNATURE_ROLES,
+  formatSignatureCode,
   formatRouteSheetNumber,
   statusLabel,
   localityLabel,

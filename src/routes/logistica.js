@@ -8,6 +8,7 @@ const db = require("../db");
 const requirePermission = require("../middlewares/requirePermission");
 const { requireAnyPermission } = require("../middlewares/requirePermission");
 const { decide } = require("../services/permissions/decide");
+const { activeImpersonation } = require("../services/permissions/impersonation");
 const vehicles = require("../services/logistics/vehicleService");
 const checklists = require("../services/logistics/checklistService");
 const template = require("../services/logistics/templateService");
@@ -58,6 +59,7 @@ const { todayInCountry, formatDisplay } = require("../utils/vacationDateUtils");
  *   /logistica/hojas-de-ruta               hojas de ruta: listado y abrir
  *   /logistica/hojas-de-ruta/:id           una hoja: paradas, cierre, anular
  *   /logistica/hojas-de-ruta/:id/pdf       la hoja para imprimir
+ *   /logistica/hojas-de-ruta/:id/firmar    firma electrónica de la hoja cerrada
  *   /logistica/flota                       vehículos con sus botones
  *   /logistica/flota/:id/revisiones        revisiones de un vehículo (también
  *                                          se despliegan en su tarjeta)
@@ -85,7 +87,7 @@ const DANIOS = `${FLOTA}/danios`;
 const FOTOS = `${FLOTA}/fotos`;
 const HOJAS = "/logistica/hojas-de-ruta";
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261109d"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261109e"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -347,6 +349,24 @@ async function loadEditable(req, res) {
  * parada, el de una nueva y el de cierre. `parada` y `cierre` traen lo
  * enviado y sus errores cuando hay que volver a mostrarlos.
  */
+/**
+ * Firmas de la hoja para la vista: cada rol con su estado, lo que la persona
+ * puede firmar ahora y si la huella de cada firma calza con la hoja de hoy.
+ */
+function firmasDe(req, hoja) {
+  const slots = routeSheets.signatureSlots(hoja);
+  const huella = routeSheets.contentHash(hoja);
+  const suplantando = Boolean(activeImpersonation(req.session));
+  return {
+    firmas: slots.map((slot) => ({
+      ...slot,
+      intacta: slot.signature ? slot.signature.content_hash === huella : null,
+    })),
+    puedeFirmar: suplantando ? [] : hrAccess.signableRoles(req.perms, userIdOf(req), hoja, slots),
+    suplantando,
+  };
+}
+
 async function renderHoja(req, res, hoja, { parada = null, cierre = null, status = 200, flash = null } = {}) {
   const uid = userIdOf(req);
   const puedeEditar = hrAccess.canEdit(req.perms, uid, hoja);
@@ -366,6 +386,7 @@ async function renderHoja(req, res, hoja, { parada = null, cierre = null, status
     revisionDelDia,
     puedeRevisar: decide(req.perms, CREAR),
     sugerencias,
+    ...firmasDe(req, hoja),
     localidad: localityLabel(),
     ...(flash || flashFrom(req)),
     ...VIEW_HELPERS,
@@ -543,10 +564,42 @@ router.post("/hojas-de-ruta/:id/cerrar", entrarHojas, async (req, res) => {
     }
     const link = `${HOJAS}/${hoja.id}`;
     await logChange(userIdOf(req), `cerró la hoja de ruta ${cerrada.number}`, link);
-    res.redirect(withFlash(link, { ok: `Hoja ${cerrada.number} cerrada` }));
+    res.redirect(withFlash(`${link}#firmas`, { ok: `Hoja ${cerrada.number} cerrada: falta firmarla` }));
   } catch (err) {
     console.error("[Logística] Error cerrando la hoja de ruta:", err);
     res.status(500).send("Error cerrando la hoja de ruta");
+  }
+});
+
+// Firma electrónica: la persona, con su cuenta, firma su rol en la hoja
+// cerrada. No mientras se inicia sesión como otra persona.
+router.post("/hojas-de-ruta/:id/firmar", entrarHojas, async (req, res) => {
+  try {
+    const hoja = await loadHoja(req, res);
+    if (!hoja) return;
+    const link = `${HOJAS}/${hoja.id}#firmas`;
+    if (activeImpersonation(req.session)) {
+      return res.redirect(withFlash(link, { error: "Mientras inicias sesión como otra persona no se puede firmar" }));
+    }
+    const rol = String(req.body.rol || "");
+    const posibles = hrAccess.signableRoles(req.perms, userIdOf(req), hoja, routeSheets.signatureSlots(hoja));
+    if (!posibles.includes(rol)) return forbidden(res);
+    let firma;
+    try {
+      firma = await routeSheets.signRouteSheet(hoja.id, rol, {
+        userId: userIdOf(req),
+        ip: req.ip,
+        userAgent: req.get("User-Agent"),
+      });
+    } catch (err) {
+      if (err instanceof routeSheets.RouteSheetError) return res.redirect(withFlash(link, { error: err.message }));
+      throw err;
+    }
+    await logChange(userIdOf(req), `firmó la hoja de ruta ${firma.number} (${firma.label.toLowerCase()})`, `${HOJAS}/${hoja.id}`);
+    res.redirect(withFlash(link, { ok: `Firmaste la hoja ${firma.number} · código ${firma.code}` }));
+  } catch (err) {
+    console.error("[Logística] Error firmando la hoja de ruta:", err);
+    res.status(500).send("Error firmando la hoja de ruta");
   }
 });
 

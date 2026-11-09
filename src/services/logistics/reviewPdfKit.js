@@ -243,7 +243,8 @@ function drawImage(doc, buffer, x, y, w, h, missing = "Imagen no disponible", { 
 
 /**
  * Observaciones, la línea de quién registró y las firmas.
- * `notes`: [{ title, text }]; `signers`: [[rol, nombre], …].
+ * `notes`: [{ title, text }]; `signers`: [[rol, nombre], …], o vacío para
+ * no dibujar líneas de firma (la hoja de ruta lleva firmas electrónicas).
  */
 function drawClosing(doc, ctx, y, { notes, registered, signers }) {
   const lineas = notes.length ? notes : [{ title: "", text: "Sin observaciones." }];
@@ -253,8 +254,8 @@ function drawClosing(doc, ctx, y, { notes, registered, signers }) {
   const cajaH = altoNotas + 12;
   doc.fontSize(7.5);
   const altoRegistro = doc.heightOfString(registered, { width: CONTENT_W });
-  const SIGN_GAP = 26;
-  const needed = 19 + cajaH + 8 + altoRegistro + SIGN_GAP + 26;
+  const SIGN_GAP = signers.length ? 26 : 0;
+  const needed = 19 + cajaH + 8 + altoRegistro + SIGN_GAP + (signers.length ? 26 : 0);
   y = ensure(doc, ctx, y + 4, needed);
 
   y = drawSection(doc, y, "Observaciones");
@@ -273,6 +274,7 @@ function drawClosing(doc, ctx, y, { notes, registered, signers }) {
 
   doc.font(FONT).fontSize(7.5).fillColor(C.muted).text(registered, MARGIN, y, { width: CONTENT_W });
   y += altoRegistro + SIGN_GAP;
+  if (!signers.length) return y;
 
   const sigGap = 36;
   const sigW = (CONTENT_W - sigGap * (signers.length - 1)) / signers.length;

@@ -389,3 +389,74 @@ describe("hojas de ruta — PDF", () => {
     assert.ok(paginas(pdf) >= 2);
   });
 });
+
+describe("hojas de ruta — firma electrónica", () => {
+  const { contentHash, signatureSlots } = require("../src/services/logistics/routeSheetService");
+  const access = require("../src/services/logistics/routeSheetAccess");
+  const { renderRouteSheetPdf } = require("../src/services/logistics/routeSheetPdf");
+  const { KEYS } = access;
+  const perms = (keys) => ({ can: (k) => keys.includes(k), canOnRecord: (k) => keys.includes(k), coverage: () => null });
+
+  const cerrada = {
+    id: 1,
+    number: "HR-00001-2026",
+    route_date: TODAY,
+    vehicle_plate: "ABCD12",
+    vehicle_label: "Chevrolet NPR 2020",
+    driver_user_id: 10,
+    driver_name: "Conductor Dummy",
+    helper_user_id: 11,
+    helper_name: "Peoneta Dummy",
+    km_start: 98376,
+    km_end: 98530,
+    observations: "",
+    status: "closed",
+    created_by_name: "Logística Dummy",
+    created_at: new Date("2026-10-30T11:00:00Z"),
+    closed_at: new Date("2026-10-30T20:00:00Z"),
+    stops: [{ position: 1, client_name: "Cliente Uno", locality: "Renca", departed_at: "09:40", arrived_at: "10:10" }],
+    signatures: [],
+  };
+
+  it("la huella cambia si cambia el contenido firmado, no si cambia otra cosa", () => {
+    const h = contentHash(cerrada);
+    assert.match(h, /^[0-9a-f]{64}$/);
+    assert.equal(contentHash({ ...cerrada, signatures: [{ role: "conductor" }], closed_by_name: "Otra" }), h);
+    assert.notEqual(contentHash({ ...cerrada, km_end: 98531 }), h);
+    assert.notEqual(contentHash({ ...cerrada, stops: [{ ...cerrada.stops[0], arrived_at: "10:11" }] }), h);
+  });
+
+  it("firman conductor, peoneta (si va) y Logística; sin cuenta no se puede", () => {
+    assert.deepEqual(signatureSlots(cerrada).map((s) => s.role), ["conductor", "peoneta", "logistica"]);
+    assert.deepEqual(signatureSlots({ ...cerrada, helper_name: null, helper_user_id: null }).map((s) => s.role), ["conductor", "logistica"]);
+    const aMano = signatureSlots({ ...cerrada, driver_user_id: null })[0];
+    assert.match(aMano.blocked, /no tiene cuenta/);
+  });
+
+  it("cada persona firma sólo su rol, y sólo con la hoja cerrada", () => {
+    const slots = signatureSlots(cerrada);
+    assert.deepEqual(access.signableRoles(perms([KEYS.CREAR]), 10, cerrada, slots), ["conductor"]);
+    assert.deepEqual(access.signableRoles(perms([KEYS.CREAR]), 11, cerrada, slots), ["peoneta"]);
+    assert.deepEqual(access.signableRoles(perms([KEYS.ADMINISTRAR]), 50, cerrada, slots), ["logistica"]);
+    // Quien va en la hoja no se revisa a sí mismo como Logística.
+    assert.deepEqual(access.signableRoles(perms([KEYS.ADMINISTRAR]), 10, cerrada, slots), ["conductor"]);
+    assert.deepEqual(access.signableRoles(perms([KEYS.ADMINISTRAR]), 50, { ...cerrada, status: "open" }, slots), []);
+    assert.deepEqual(access.signableRoles(perms([KEYS.ADMINISTRAR]), 50, { ...cerrada, status: "voided" }, slots), []);
+  });
+
+  it("lo ya firmado no se vuelve a firmar", () => {
+    const firmada = { ...cerrada, signatures: [{ role: "conductor", content_hash: contentHash(cerrada), signer_name: "Conductor Dummy" }] };
+    assert.deepEqual(access.signableRoles(perms([KEYS.CREAR]), 10, firmada, signatureSlots(firmada)), []);
+  });
+
+  it("el PDF lleva los sellos de firma y la hoja sigue en una página", async () => {
+    const firmada = {
+      ...cerrada,
+      signatures: [
+        { role: "conductor", content_hash: contentHash(cerrada), signer_name: "Conductor Dummy", signed_at: new Date(), code: "ABCD-1234" },
+      ],
+    };
+    const pdf = await renderRouteSheetPdf(firmada);
+    assert.equal((pdf.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 1);
+  });
+});

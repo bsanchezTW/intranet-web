@@ -2834,6 +2834,54 @@ a.fisica-zona__danio-tipo:hover { color: var(--brand); text-decoration: underlin
 
 .hr-nueva, .hr-cierre { margin-bottom: 18px; scroll-margin-top: 90px; }
 
+/* Firmas electrónicas: una tarjeta por rol. */
+.hr-firmas { padding-bottom: 18px; margin-bottom: 18px; scroll-margin-top: 90px; }
+
+.hr-firmas__lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.hr-firma {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 14px 16px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+
+.hr-firma p { margin: 0; }
+
+.hr-firma__rol {
+  color: var(--color-text-subtle);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.hr-firma__nombre {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-heading);
+  font-weight: 700;
+}
+
+.hr-firma__meta { color: var(--color-text-muted); font-size: 0.82rem; }
+.hr-firma form { margin-top: 6px; }
+
+.hr-firma.is-firmada { border-style: solid; border-color: rgba(31, 122, 58, 0.35); background: var(--green-soft); }
+.hr-firma.is-firmada .hr-firma__nombre { color: var(--green-ink); }
+.hr-firma.is-alterada { border-style: solid; border-color: rgba(208, 92, 92, 0.4); background: rgba(208, 92, 92, 0.08); }
+.hr-firma.is-alterada .hr-firma__nombre { color: var(--down); }
+.hr-firma.is-bloqueada { background: var(--color-surface-muted); }
+
+.logistica-sub.hr-firmada { color: var(--green-ink); font-weight: 700; }
+
 /* Revisión mecánica del día: informa, no impide abrir ni completar. */
 .hr-revision {
   display: flex;

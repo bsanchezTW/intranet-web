@@ -219,6 +219,49 @@
     <% } %>
   </section>
 
+  <% if (!abierta) {
+       const rolDe = (slot) => (slot.role === 'logistica' ? 'Logística' : slot.label.toLowerCase());
+       const botonDe = (slot) => (slot.role === 'logistica' ? 'Firmar la revisión' : `Firmar como ${slot.label.toLowerCase()}`); %>
+    <section class="logistica-panel hr-firmas" id="firmas" aria-labelledby="det-firmas">
+      <h3 class="logistica-panel__titulo" id="det-firmas">
+        <%- icono('check-circle') %> Firmas electrónicas
+        <span class="logistica-panel__extra"><%= firmas.filter((f) => f.signature).length %> de <%= firmas.length %></span>
+      </h3>
+      <p class="logistica-panel__desc">
+        Cada persona firma con su cuenta de la intranet. Queda registrado quién, cuándo y desde qué equipo, junto con una huella del contenido: si la hoja cambiara después, la firma lo muestra.
+      </p>
+      <% if (suplantando) { %>
+        <p class="campo-form__error" role="note">Estás iniciando sesión como otra persona: no puedes firmar por ella.</p>
+      <% } %>
+      <div class="hr-firmas__lista">
+        <% firmas.forEach((f) => { const g = f.signature; %>
+          <div class="hr-firma<%= g ? (f.intacta ? ' is-firmada' : ' is-alterada') : f.blocked ? ' is-bloqueada' : '' %>">
+            <p class="hr-firma__rol"><%= f.label %></p>
+            <% if (g) { %>
+              <p class="hr-firma__nombre"><%- icono(f.intacta ? 'check-circle' : 'alert-triangle') %> <%= g.signer_name %></p>
+              <p class="hr-firma__meta">Firmado electrónicamente el <%= cuando(g.signed_at) %></p>
+              <p class="hr-firma__meta">Código <strong><%= g.code %></strong> ·
+                <%= f.intacta ? 'el contenido no cambió desde la firma' : 'el contenido cambió después de la firma' %></p>
+            <% } else if (f.blocked) { %>
+              <p class="hr-firma__nombre"><%= f.expectedName %></p>
+              <p class="hr-firma__meta"><%= f.blocked %></p>
+            <% } else if (!anulada && puedeFirmar.includes(f.role)) { %>
+              <p class="hr-firma__nombre"><%= f.role === 'logistica' ? 'Pendiente de tu revisión' : `${f.expectedName} (tú)` %></p>
+              <form method="post" action="<%= HOJAS %>/<%= h.id %>/firmar#firmas"
+                    data-confirm="Firmas la hoja <%= h.number %> como <%= rolDe(f) %>: declaras que la revisaste y que su información es correcta. La firma queda a tu nombre, con la fecha y la hora."
+                    data-confirm-title="¿Firmar la hoja de ruta?" data-confirm-accept="Firmar">
+                <button type="submit" name="rol" value="<%= f.role %>" class="page-header-btn"><%- icono('edit') %> <span><%= botonDe(f) %></span></button>
+              </form>
+            <% } else { %>
+              <p class="hr-firma__nombre"><%= f.role === 'logistica' ? 'Logística' : f.expectedName %></p>
+              <p class="hr-firma__meta"><%= anulada ? 'Sin firmar (la hoja está anulada)' : 'Pendiente de firma' %></p>
+            <% } %>
+          </div>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
   <% if (puedeEditar) { %>
     <%# Sugerencias: lo escrito antes. Al elegir un cliente conocido se completa su comuna (hojas-ruta.js). %>
     <datalist id="hrClientes">

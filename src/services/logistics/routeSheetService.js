@@ -1,8 +1,11 @@
+const crypto = require("crypto");
 const db = require("../../db");
 const {
   MAX_SEQ,
   MAX_STOPS,
   formatRouteSheetNumber,
+  SIGNATURE_ROLES,
+  formatSignatureCode,
   localityWithArticle,
   parseTime,
 } = require("../../constants/routeSheet");
@@ -216,6 +219,9 @@ async function inTransaction(fn) {
     await client.query("ROLLBACK").catch(() => {});
     if (err.code === "23505" && /uq_route_sheets_open_vehicle/.test(err.constraint || err.message)) {
       throw new RouteSheetError("Ese vehículo ya tiene una hoja abierta.", "ROUTE_SHEET_OPEN_VEHICLE");
+    }
+    if (err.code === "23505" && /route_sheet_signatures/.test(err.constraint || err.message)) {
+      throw new RouteSheetError("Esa firma ya está registrada.", "ROUTE_SHEET_SIGNED");
     }
     if (err.code === "23505") {
       throw new RouteSheetError("Ese número acaba de usarse. Vuelve a intentarlo.", "ROUTE_SHEET_NUMBER");
@@ -582,7 +588,8 @@ async function listRouteSheets({ q = "", estado = "", desde = "", hasta = "", ve
 
   const { rows } = await db.query(
     `SELECT ${COLUMNS},
-            (SELECT COUNT(*)::int FROM route_sheet_stops s WHERE s.sheet_id = h.id) AS stop_count
+            (SELECT COUNT(*)::int FROM route_sheet_stops s WHERE s.sheet_id = h.id) AS stop_count,
+            (SELECT COUNT(*)::int FROM route_sheet_signatures g WHERE g.sheet_id = h.id) AS signature_count
        FROM route_sheets h
        ${JOINS}
       WHERE ${where.length ? where.join(" AND ") : "TRUE"}
@@ -593,14 +600,17 @@ async function listRouteSheets({ q = "", estado = "", desde = "", hasta = "", ve
   return rows.map(withNumber);
 }
 
-/** La hoja con sus paradas en orden; null si no existe. */
-async function getRouteSheet(sheetId) {
-  const { rows } = await db.query(
+/**
+ * La hoja con sus paradas en orden y sus firmas; null si no existe.
+ * `queryable` permite leerla dentro de una transacción.
+ */
+async function getRouteSheet(sheetId, queryable = db) {
+  const { rows } = await queryable.query(
     `SELECT ${COLUMNS} FROM route_sheets h ${JOINS} WHERE h.id = $1`,
     [sheetId],
   );
   if (!rows[0]) return null;
-  const { rows: stops } = await db.query(
+  const { rows: stops } = await queryable.query(
     `SELECT id, position, client_name, locality, dispatch_guide, sales_note,
             to_char(departed_at, 'HH24:MI') AS departed_at, to_char(arrived_at, 'HH24:MI') AS arrived_at,
             observations
@@ -609,7 +619,119 @@ async function getRouteSheet(sheetId) {
       ORDER BY position`,
     [sheetId],
   );
-  return { ...withNumber(rows[0]), stops: stops.map((s) => ({ ...s, id: Number(s.id) })) };
+  const { rows: signatures } = await queryable.query(
+    `SELECT role, user_id, signer_name, content_hash, signed_at
+       FROM route_sheet_signatures
+      WHERE sheet_id = $1
+      ORDER BY signed_at`,
+    [sheetId],
+  );
+  return {
+    ...withNumber(rows[0]),
+    stops: stops.map((s) => ({ ...s, id: Number(s.id) })),
+    signatures: signatures.map((g) => ({ ...g, code: formatSignatureCode(g.content_hash) })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Firma electrónica
+// ---------------------------------------------------------------------------
+
+/**
+ * Huella (SHA-256) de lo que se firma: la hoja cerrada con sus datos y
+ * paradas, en un texto fijo. Cerrada no cambia; si cambiara (alguien edita
+ * la base), la huella de las firmas ya no calza con la de la hoja.
+ */
+function contentHash(sheet) {
+  const contenido = {
+    number: sheet.number,
+    route_date: sheet.route_date,
+    vehicle_plate: sheet.vehicle_plate,
+    vehicle_label: sheet.vehicle_label || "",
+    driver_name: sheet.driver_name,
+    helper_name: sheet.helper_name || "",
+    km_start: Number(sheet.km_start),
+    km_end: sheet.km_end == null ? null : Number(sheet.km_end),
+    observations: sheet.observations || "",
+    stops: (sheet.stops || []).map((s) => [
+      Number(s.position),
+      s.client_name,
+      s.locality,
+      s.dispatch_guide || "",
+      s.sales_note || "",
+      s.departed_at || "",
+      s.arrived_at || "",
+      s.observations || "",
+    ]),
+  };
+  return crypto.createHash("sha256").update(JSON.stringify(contenido)).digest("hex");
+}
+
+/**
+ * Las firmas que lleva la hoja, por rol: quién debería firmar, si firmó y,
+ * si no puede, por qué. La peoneta sólo si la hoja la tiene. Puro.
+ *
+ *   { role, label, expectedUserId, expectedName, signature, blocked }
+ */
+function signatureSlots(sheet) {
+  const firmas = new Map((sheet.signatures || []).map((g) => [g.role, g]));
+  const slots = [];
+  for (const { role, label } of SIGNATURE_ROLES) {
+    if (role === "peoneta" && !sheet.helper_name) continue;
+    const persona = role === "conductor"
+      ? { id: sheet.driver_user_id, name: sheet.driver_name }
+      : role === "peoneta"
+        ? { id: sheet.helper_user_id, name: sheet.helper_name }
+        : { id: null, name: "" };
+    const signature = firmas.get(role) || null;
+    let blocked = null;
+    if (!signature && role !== "logistica" && persona.id == null) {
+      blocked = "Se escribió a mano y no tiene cuenta en la intranet: no puede firmar electrónicamente.";
+    }
+    slots.push({
+      role,
+      label,
+      expectedUserId: persona.id == null ? null : Number(persona.id),
+      expectedName: persona.name || "",
+      signature,
+      blocked,
+    });
+  }
+  return slots;
+}
+
+/**
+ * Registra la firma de `role` en una hoja cerrada. Quién puede firmar cada
+ * rol lo deciden las rutas (routeSheetAccess); aquí se vuelve a exigir que
+ * el conductor y la peoneta sean la persona de la hoja. Devuelve la firma.
+ */
+async function signRouteSheet(sheetId, role, { userId, ip = null, userAgent = null }) {
+  if (!SIGNATURE_ROLES.some((r) => r.role === role)) {
+    throw new RouteSheetError("Esa firma no existe.", "ROUTE_SHEET_SIGN");
+  }
+  return inTransaction(async (client) => {
+    const { rows: lock } = await client.query("SELECT status FROM route_sheets WHERE id = $1 FOR UPDATE", [sheetId]);
+    if (!lock[0]) throw new RouteSheetError("La hoja de ruta no existe.", "ROUTE_SHEET_NOT_FOUND");
+    if (lock[0].status !== "closed") {
+      throw new RouteSheetError("Sólo se firma una hoja cerrada.", "ROUTE_SHEET_SIGN");
+    }
+    const sheet = await getRouteSheet(sheetId, client);
+    const slot = signatureSlots(sheet).find((s) => s.role === role);
+    if (!slot) throw new RouteSheetError("Esta hoja no lleva esa firma.", "ROUTE_SHEET_SIGN");
+    if (slot.signature) throw new RouteSheetError(`La firma de ${slot.label.toLowerCase()} ya está.`, "ROUTE_SHEET_SIGNED");
+    if (role !== "logistica" && Number(slot.expectedUserId) !== Number(userId)) {
+      throw new RouteSheetError(`Sólo ${slot.expectedName} puede firmar como ${slot.label.toLowerCase()}.`, "ROUTE_SHEET_SIGN");
+    }
+    const hash = contentHash(sheet);
+    const name = await userDisplayName(client, userId);
+    const { rows } = await client.query(
+      `INSERT INTO route_sheet_signatures (sheet_id, role, user_id, signer_name, content_hash, ip, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING role, signer_name, content_hash, signed_at`,
+      [sheet.id, role, userId, name, hash, cleanText(ip, 64) || null, cleanText(userAgent, 300) || null],
+    );
+    return { ...rows[0], code: formatSignatureCode(hash), number: sheet.number, label: slot.label };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -701,4 +823,7 @@ module.exports = {
   getRouteSheet,
   stopSuggestions,
   dailyChecklist,
+  contentHash,
+  signatureSlots,
+  signRouteSheet,
 };

@@ -1,6 +1,7 @@
 const { formatKm } = require("../../constants/vehicleChecklist");
 const { localityLabel, formatTime, statusLabel } = require("../../constants/routeSheet");
 const K = require("./reviewPdfKit");
+const { signatureSlots, contentHash } = require("./routeSheetService");
 
 const { C, FONT, FONT_BOLD, MARGIN, CONTENT_W, BOTTOM } = K;
 
@@ -11,6 +12,9 @@ const { C, FONT, FONT_BOLD, MARGIN, CONTENT_W, BOTTOM } = K;
  * (Cliente · Comuna · GD · Nota de venta · Observaciones), con la hora de
  * inicio y la de llegada a destino en 24 horas.
  * A4 vertical.
+ *
+ * Al pie, las firmas electrónicas (conductor, peoneta y Logística) con su
+ * código y la huella del contenido; no hay líneas para firmar a mano.
  *
  * Una hoja abierta se imprime con filas en blanco hasta completar las 10 del
  * papel, para llevarla en el vehículo y anotar a mano lo que falte. Si las
@@ -149,6 +153,55 @@ function drawStops(doc, ctx, sheet, startY) {
   return bottom;
 }
 
+// --- Firmas electrónicas ------------------------------------------------------
+
+const SIGN_H = 76;
+const SIGN_GAP = 10;
+
+/**
+ * Un sello por firma: quién firmó, cuándo y el código de la huella; si
+ * falta, «Pendiente de firma». Abajo, la huella completa del contenido para
+ * comprobarla contra la intranet.
+ */
+function drawSignatures(doc, ctx, startY, sheet) {
+  const slots = signatureSlots(sheet);
+  const huella = contentHash(sheet);
+  const firmadas = slots.filter((s) => s.signature).length;
+  let y = K.ensure(doc, ctx, startY, 19 + SIGN_H + 30);
+  y = K.drawSection(doc, y, "Firmas electrónicas", `${firmadas} de ${slots.length}`);
+
+  const w = (CONTENT_W - SIGN_GAP * (slots.length - 1)) / slots.length;
+  slots.forEach((slot, i) => {
+    const x = MARGIN + i * (w + SIGN_GAP);
+    const g = slot.signature;
+    const intacta = g && g.content_hash === huella;
+    const [tinta, fondo] = !g ? [C.muted, C.soft] : intacta ? [C.green, C.greenSoft] : [C.red, C.redSoft];
+    doc.roundedRect(x, y, w, SIGN_H, 8).fill(fondo);
+    if (!g) doc.roundedRect(x, y, w, SIGN_H, 8).dash(3, { space: 2 }).lineWidth(0.7).strokeColor(C.line).stroke().undash();
+
+    const tx = x + 11;
+    const tw = w - 22;
+    doc.font(FONT_BOLD).fontSize(6.3).fillColor(C.muted)
+      .text(slot.label.toUpperCase(), tx, y + 9, { width: tw, characterSpacing: 0.5, lineBreak: false, ellipsis: true });
+    const nombre = g ? g.signer_name : slot.role === "logistica" ? "Logística" : slot.expectedName;
+    doc.font(FONT_BOLD).fontSize(9.5).fillColor(g ? tinta : C.ink)
+      .text(nombre || "—", tx, y + 20, { width: tw, lineBreak: false, ellipsis: true });
+    const lineas = g
+      ? ["Firmado electrónicamente", `el ${K.fmtDateTime(g.signed_at)}`, `Código ${g.code}${intacta ? "" : " · el contenido cambió"}`]
+      : slot.blocked
+        ? ["Sin cuenta en la intranet:", "no firma electrónicamente."]
+        : ["Pendiente de firma"];
+    doc.font(FONT).fontSize(7.3).fillColor(g ? C.text : C.muted);
+    lineas.forEach((t, n) => doc.text(t, tx, y + 35 + n * 11, { width: tw, lineBreak: false, ellipsis: true }));
+  });
+  y += SIGN_H + 8;
+
+  doc.font(FONT).fontSize(6.5).fillColor(C.faint)
+    .text(`Firma electrónica simple con la cuenta de cada persona en la intranet. Huella SHA-256 del contenido: ${huella}`,
+      MARGIN, y, { width: CONTENT_W });
+  return doc.y;
+}
+
 function drawRouteSheet(doc, sheet) {
   const ctx = { title: TITLE, number: sheet.number, area: AREA };
   let y = K.startDoc(doc, ctx);
@@ -184,14 +237,13 @@ function drawRouteSheet(doc, sheet) {
 
   const registro = [`Abierta en la intranet por ${sheet.created_by_name} el ${K.fmtDateTime(sheet.created_at)}`];
   if (sheet.closed_at) registro.push(`cerrada por ${sheet.closed_by_name || "—"} el ${K.fmtDateTime(sheet.closed_at)}`);
-  const firmas = [["Firma del conductor", sheet.driver_name]];
-  if (sheet.helper_name) firmas.push(["Firma de la peoneta", sheet.helper_name]);
-  K.drawClosing(doc, ctx, y + 4, {
+  y = K.drawClosing(doc, ctx, y + 4, {
     notes: sheet.observations ? [{ title: "", text: sheet.observations }] : [],
     // La fecha termina en «p. m.»: no se le suma otro punto.
     registered: `${registro.join("; ").replace(/\.?$/, ".")}${abierta ? " Sin cerrar: el km final y las paradas que falten se anotan a mano." : ""}`,
-    signers: firmas,
+    signers: [],
   });
+  drawSignatures(doc, ctx, y + 10, sheet);
 
   K.finishDoc(doc, ctx, { voidStamp: anulada ? "ANULADA" : null });
 }

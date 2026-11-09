@@ -123,7 +123,12 @@
                 <%= km == null ? '—' : formatKm(km) %>
                 <span class="logistica-sub">Desde <%= formatKm(h.km_start) %></span>
               </td>
-              <td data-label="Estado"><span class="logistica-estado hr-estado--<%= h.status %>"><%= hrStatusLabel(h.status) %></span></td>
+              <td data-label="Estado">
+                <span class="logistica-estado hr-estado--<%= h.status %>"><%= hrStatusLabel(h.status) %></span>
+                <% if (h.status === 'closed') { const requeridas = h.helper_name ? 3 : 2; %>
+                  <span class="logistica-sub<%= h.signature_count >= requeridas ? ' hr-firmada' : '' %>">Firmas <%= h.signature_count %> de <%= requeridas %></span>
+                <% } %>
+              </td>
               <td class="logistica-tabla__acciones">
                 <a href="<%= HOJAS %>/<%= h.id %>" class="logistica-icono-btn" title="<%= h.status === 'open' ? 'Completar' : 'Ver' %> <%= h.number %>" aria-label="<%= h.status === 'open' ? 'Completar' : 'Ver' %> <%= h.number %>"><%- include('../../partials/icon', { name: h.status === 'open' ? 'edit' : 'file-text' }) %></a>
                 <a href="<%= HOJAS %>/<%= h.id %>/pdf" target="_blank" rel="noopener" class="logistica-icono-btn" title="Imprimir <%= h.number %>" aria-label="Imprimir <%= h.number %>"><%- include('../../partials/icon', { name: 'printer' }) %></a>

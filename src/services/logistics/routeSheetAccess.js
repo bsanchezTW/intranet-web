@@ -12,6 +12,10 @@ const { decide } = require("../permissions/decide");
  *   crear                abrir hojas y completar las propias (y verlas)
  *   administrar          completar y cerrar cualquiera (y verlas todas)
  *   anular               anular las que puede ver
+ *
+ * Firmas (hoja cerrada): el conductor y la peoneta firman la suya, sólo si
+ * son la persona de la hoja; la revisión de Logística la firma quien puede
+ * administrar, siempre que no vaya en esa hoja.
  */
 const KEYS = Object.freeze({
   VER: "logistica.hoja_ruta.ver",
@@ -75,4 +79,22 @@ function canVoid(perms, userId, sheet) {
   return decide(perms, KEYS.ANULAR) && canView(perms, userId, sheet);
 }
 
-module.exports = { KEYS, ENTRAR, esPropia, accessFor, listScope, canView, canEdit, canVoid };
+/**
+ * Roles que la persona puede firmar ahora. `slots` es signatureSlots(hoja).
+ * Mientras se inicia sesión como otra persona no se firma: la firma es de
+ * quien la hace (lo revisa la ruta).
+ */
+function signableRoles(perms, userId, sheet, slots) {
+  if (!sheet || sheet.status !== "closed") return [];
+  const id = Number(userId);
+  const vaEnLaHoja = [sheet.driver_user_id, sheet.helper_user_id].some((v) => v != null && Number(v) === id);
+  return (slots || [])
+    .filter((slot) => {
+      if (slot.signature || slot.blocked) return false;
+      if (slot.role === "logistica") return decide(perms, KEYS.ADMINISTRAR) && !vaEnLaHoja;
+      return slot.expectedUserId != null && slot.expectedUserId === id;
+    })
+    .map((slot) => slot.role);
+}
+
+module.exports = { KEYS, ENTRAR, esPropia, accessFor, listScope, canView, canEdit, canVoid, signableRoles };
