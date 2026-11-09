@@ -62,6 +62,8 @@ const COUNTRY_CONFIGS = {
       // Fijos (2 Santiago, 32–75 regiones): sólo en el teléfono de empresa.
       landline: { pattern: "^[2-7]\\d{8}$", groups: [1, 4, 4] },
     },
+    // Cómo se llama la división donde queda una dirección (hojas de ruta).
+    locality: { label: "Comuna", article: "la" },
     corporateSite: "https://www.transworld.cl/",
     weather: {
       latitude: -33.3742,
@@ -126,6 +128,7 @@ const COUNTRY_CONFIGS = {
       // Fijos (1 Lima, 41–84 provincias): sólo en el teléfono de empresa.
       landline: { pattern: "^[1-8]\\d{7}$", groups: [1, 3, 4] },
     },
+    locality: { label: "Distrito", article: "el" },
     corporateSite: "https://transworld.pe/",
     weather: {
       latitude: -12.0464,

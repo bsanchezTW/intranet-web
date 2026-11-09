@@ -12,6 +12,10 @@ const { SCOPE_SETS } = require("../scopes");
  * asignaciones. "Lo propio" es lo que la persona registró: quien sólo
  * registra ve lo suyo, y Logística lo de toda la flota. La revisión física
  * sigue la misma regla con sus claves `fisica.*`; reparar un daño es aparte.
+ *
+ * En las hojas de ruta "lo propio" es además la hoja donde la persona va de
+ * conductor o peoneta: Logística puede abrirla por el conductor. Completar
+ * lo propio es `crear`; completar y cerrar la de otros, `administrar`.
  */
 module.exports = {
   module: "logistica",
@@ -21,7 +25,26 @@ module.exports = {
     { key: "logistica.acceso", label: "Entrar a Logística" },
     { key: "logistica.vehiculo.ver", label: "Ver Gestión de flota" },
     { key: "logistica.vehiculo.administrar", label: "Agregar, editar y dar de baja vehículos" },
-    { key: "logistica.hoja_ruta.ver", label: "Ver hojas de ruta" },
+    {
+      key: "logistica.hoja_ruta.ver",
+      label: "Ver e imprimir hojas de ruta",
+      scopes: SCOPE_SETS.PROPIO_O_TODO,
+    },
+    {
+      key: "logistica.hoja_ruta.crear",
+      label: "Abrir hojas de ruta y completar las propias",
+      sinEfecto: "Las pantallas para abrir y completar hojas de ruta están en construcción.",
+    },
+    {
+      key: "logistica.hoja_ruta.administrar",
+      label: "Completar y cerrar las hojas de ruta de cualquier conductor",
+      sinEfecto: "Las pantallas para abrir y completar hojas de ruta están en construcción.",
+    },
+    {
+      key: "logistica.hoja_ruta.anular",
+      label: "Anular hojas de ruta",
+      sinEfecto: "Las pantallas para abrir y completar hojas de ruta están en construcción.",
+    },
     {
       key: "logistica.checklist.ver",
       label: "Ver e imprimir revisiones mecánicas",

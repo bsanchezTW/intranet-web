@@ -9,4 +9,5 @@ module.exports = [
   require("./004_applications_columns"),
   require("./005_users_email_unique_index"),
   require("./006_users_active"),
+  require("./007_route_sheet_view_scope"),
 ];
