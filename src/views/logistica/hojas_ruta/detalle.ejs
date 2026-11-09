@@ -9,12 +9,11 @@
   const p = parada || {};
   const c = cierre || { values: {}, errors: {} };
   const icono = (name) => include('../../partials/icon', { name });
-  const horas = (s) => {
-    if (s.arrived_at && s.left_at) return `${formatTime(s.arrived_at)} – ${formatTime(s.left_at)}`;
-    if (s.arrived_at) return `Llegó ${formatTime(s.arrived_at)}`;
-    if (s.left_at) return `Salió ${formatTime(s.left_at)}`;
-    return '';
-  };
+  const horas = (s) => [
+    s.departed_at ? `Inicio ${formatTime(s.departed_at)}` : '',
+    s.arrived_at ? `Llegada ${formatTime(s.arrived_at)}` : '',
+  ].filter(Boolean).join(' → ');
+  const dos = (n) => String(n).padStart(2, '0');
 %>
 
 <%# Formulario de una parada: la nueva o la que se edita. `clave` hace únicos los id. %>
@@ -23,10 +22,33 @@
      const e = errores || {};
      const id = (campo) => `${campo}-${clave}`;
      const inv = (campo) => (e[campo] ? ' is-invalid' : '');
-     function msg(campo) { if (e[campo]) { %><span class="campo-form__error"><%= e[campo] %></span><% } } %>
+     function msg(campo) { if (e[campo]) { %><span class="campo-form__error"><%= e[campo] %></span><% } }
+     // Hora en 24 horas: una lista de horas (00–23) y otra de minutos (00–59).
+     function hora(campo, etiqueta) {
+       const [hh, mm] = (val[campo] ? formatTime(val[campo]) : '').split(':'); %>
+      <div class="campo-form hr-campo-hora<%= inv(campo) %>">
+        <label for="<%= id(campo) %>_h"><%= etiqueta %></label>
+        <div class="hr-hora" data-hora="<%= id(campo) %>" role="group" aria-label="<%= etiqueta %>">
+          <select id="<%= id(campo) %>_h" name="<%= campo %>_h" aria-label="Hora (24 horas)">
+            <option value="">--</option>
+            <% for (let i = 0; i < 24; i += 1) { %><option value="<%= dos(i) %>"<%= hh === dos(i) ? ' selected' : '' %>><%= dos(i) %></option><% } %>
+          </select>
+          <span class="hr-hora__sep" aria-hidden="true">:</span>
+          <select id="<%= id(campo) %>_m" name="<%= campo %>_m" aria-label="Minutos">
+            <option value="">--</option>
+            <% for (let i = 0; i < 60; i += 1) { %><option value="<%= dos(i) %>"<%= mm === dos(i) ? ' selected' : '' %>><%= dos(i) %></option><% } %>
+          </select>
+          <button type="button" class="logistica-chip" data-ahora="<%= id(campo) %>">Ahora</button>
+          <button type="button" class="hr-hora__borrar" data-borrar-hora="<%= id(campo) %>" aria-label="Borrar <%= etiqueta.toLowerCase() %>"><%- icono('x') %></button>
+        </div>
+        <% msg(campo) %>
+      </div>
+<%   } %>
   <form method="post" action="<%= accion %>" class="hr-parada-form" novalidate>
     <% if (e.general) { %><p class="campo-form__error" role="alert"><%= e.general %></p><% } %>
     <div class="campos-grid">
+      <% hora('departed_at', 'Hora de Inicio a Destino') %>
+      <% hora('arrived_at', 'Hora de Llegada a Destino') %>
       <div class="campo-form<%= inv('client_name') %>">
         <label for="<%= id('client_name') %>">Cliente <span class="required-mark">*</span></label>
         <input type="text" id="<%= id('client_name') %>" name="client_name" value="<%= val.client_name || '' %>" maxlength="120" autocomplete="off" list="hrClientes" data-cliente required>
@@ -44,22 +66,6 @@
       <div class="campo-form">
         <label for="<%= id('sales_note') %>">Nota de venta</label>
         <input type="text" id="<%= id('sales_note') %>" name="sales_note" value="<%= val.sales_note || '' %>" maxlength="30" inputmode="numeric" autocomplete="off">
-      </div>
-      <div class="campo-form<%= inv('arrived_at') %>">
-        <label for="<%= id('arrived_at') %>">Hora de llegada</label>
-        <div class="hr-hora">
-          <input type="time" id="<%= id('arrived_at') %>" name="arrived_at" value="<%= val.arrived_at ? formatTime(val.arrived_at) : '' %>" step="60">
-          <button type="button" class="logistica-chip" data-ahora="<%= id('arrived_at') %>">Ahora</button>
-        </div>
-        <% msg('arrived_at') %>
-      </div>
-      <div class="campo-form<%= inv('left_at') %>">
-        <label for="<%= id('left_at') %>">Hora de salida</label>
-        <div class="hr-hora">
-          <input type="time" id="<%= id('left_at') %>" name="left_at" value="<%= val.left_at ? formatTime(val.left_at) : '' %>" step="60">
-          <button type="button" class="logistica-chip" data-ahora="<%= id('left_at') %>">Ahora</button>
-        </div>
-        <% msg('left_at') %>
       </div>
       <div class="campo-form campo-form--ancho">
         <label for="<%= id('observations') %>">Observaciones</label>

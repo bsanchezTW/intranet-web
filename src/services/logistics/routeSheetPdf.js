@@ -8,7 +8,8 @@ const { C, FONT, FONT_BOLD, MARGIN, CONTENT_W, BOTTOM } = K;
  * PDF de la hoja de ruta (HR-00001-2026), con el lenguaje de los PDF de
  * Logística (reviewPdfKit): la franja con la patente y el estado, los datos
  * de la salida y la tabla de paradas con las columnas de la hoja en papel
- * (Cliente · Comuna · GD · Nota de venta · Llegada · Salida · Observaciones).
+ * (Cliente · Comuna · GD · Nota de venta · Observaciones), con la hora de
+ * inicio y la de llegada a destino en 24 horas.
  * A4 vertical.
  *
  * Una hoja abierta se imprime con filas en blanco hasta completar las 10 del
@@ -36,8 +37,8 @@ function columns() {
     { key: "locality", title: localityLabel(), w: 72 },
     { key: "dispatch_guide", title: "GD", w: 44 },
     { key: "sales_note", title: "Nota venta", w: 56 },
+    { key: "departed_at", title: "Inicio", w: 44, align: "center", time: true },
     { key: "arrived_at", title: "Llegada", w: 44, align: "center", time: true },
-    { key: "left_at", title: "Salida", w: 44, align: "center", time: true },
     { key: "observations", title: "Observaciones", flex: 0.55 },
   ];
   const libre = CONTENT_W - fijas.reduce((s, c) => s + (c.w || 0), 0);

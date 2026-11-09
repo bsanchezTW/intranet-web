@@ -2801,9 +2801,36 @@ a.fisica-zona__danio-tipo:hover { color: var(--brand); text-decoration: underlin
   padding: 4px 0 14px;
 }
 
-.hr-hora { display: flex; gap: 8px; align-items: center; }
-.hr-hora input { flex: 1; min-width: 0; }
-.hr-hora .logistica-chip { flex: none; }
+/* Hora en 24 horas: [HH] : [MM] Ahora ✕. Cada una ocupa dos columnas para
+   que quepa en una línea. */
+@media (min-width: 720px) {
+  .hr-parada-form .hr-campo-hora { grid-column: span 2; }
+}
+/* Hora en 24 horas: [HH] : [MM] Ahora ✕ */
+.hr-hora { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hr-hora select {
+  width: 4.6rem;
+  min-width: 0;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.hr-hora__sep { color: var(--color-text-muted); font-weight: 800; }
+.hr-hora .logistica-chip { flex: none; height: 38px; margin-left: 4px; }
+.hr-hora__borrar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+}
+.hr-hora__borrar:hover { background: var(--color-surface-muted); color: var(--down); }
 
 .hr-nueva, .hr-cierre { margin-bottom: 18px; scroll-margin-top: 90px; }
 

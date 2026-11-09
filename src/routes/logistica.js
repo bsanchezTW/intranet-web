@@ -85,7 +85,7 @@ const DANIOS = `${FLOTA}/danios`;
 const FOTOS = `${FLOTA}/fotos`;
 const HOJAS = "/logistica/hojas-de-ruta";
 
-const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261109b"];
+const EXTRA_CSS = ["/css/procesos.css?v=20260916m", "/css/logistica.css?v=20261109d"];
 
 const VIEW_HELPERS = {
   INSPECTION_KINDS,
@@ -259,7 +259,7 @@ async function renderHeaderForm(req, res, { values, errors = {}, hoja = null, st
     ...VIEW_HELPERS,
     ...HR_VIEW,
     extraCss: EXTRA_CSS,
-    extraJs: ["/js/hojas-ruta.js?v=20261109b"],
+    extraJs: ["/js/hojas-ruta.js?v=20261109c"],
   });
 }
 
@@ -371,7 +371,7 @@ async function renderHoja(req, res, hoja, { parada = null, cierre = null, status
     ...VIEW_HELPERS,
     ...HR_VIEW,
     extraCss: EXTRA_CSS,
-    extraJs: ["/js/hojas-ruta.js?v=20261109b"],
+    extraJs: ["/js/hojas-ruta.js?v=20261109c"],
   });
 }
 

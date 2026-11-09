@@ -1,8 +1,8 @@
 /**
  * Hojas de ruta: el nombre a mano del conductor o la peoneta ("Otra
  * persona"), el último km del vehículo elegido, la comuna de un cliente
- * conocido y los botones «Ahora» de las horas de cada parada. Sin JS todo
- * funciona igual: el servidor valida.
+ * conocido y los botones «Ahora» y borrar de las horas de cada parada. Sin
+ * JS todo funciona igual: el servidor valida.
  */
 (function () {
   // Conductor y peoneta: "Otra persona" abre el campo del nombre.
@@ -50,15 +50,36 @@
     });
   }
 
-  // «Ahora» llena la hora con la del teléfono o el computador.
+  // Horas de cada parada: dos listas (hora 00–23 y minutos) por campo.
+  // «Ahora» las llena con la hora del teléfono o el computador; la ✕ las
+  // deja vacías.
+  function listasDe(id) {
+    return [document.getElementById(id + "_h"), document.getElementById(id + "_m")];
+  }
   document.addEventListener("click", function (event) {
-    const boton = event.target.closest("[data-ahora]");
-    if (!boton) return;
-    const input = document.getElementById(boton.dataset.ahora);
-    if (!input) return;
-    const ahora = new Date();
-    const dos = function (n) { return String(n).padStart(2, "0"); };
-    input.value = dos(ahora.getHours()) + ":" + dos(ahora.getMinutes());
-    input.dispatchEvent(new Event("change", { bubbles: true }));
+    const ahora = event.target.closest("[data-ahora]");
+    const borrar = event.target.closest("[data-borrar-hora]");
+    if (!ahora && !borrar) return;
+    const [hora, minutos] = listasDe((ahora || borrar).dataset[ahora ? "ahora" : "borrarHora"]);
+    if (!hora || !minutos) return;
+    if (ahora) {
+      const d = new Date();
+      const dos = function (n) { return String(n).padStart(2, "0"); };
+      hora.value = dos(d.getHours());
+      minutos.value = dos(d.getMinutes());
+    } else {
+      hora.value = "";
+      minutos.value = "";
+    }
+    hora.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
+  // Elegir sólo la hora deja los minutos en 00: es lo más común y evita el
+  // error «Elige los minutos».
+  document.addEventListener("change", function (event) {
+    const hora = event.target.closest("select[id$='_h']");
+    if (!hora || !hora.closest("[data-hora]")) return;
+    const minutos = document.getElementById(hora.id.replace(/_h$/, "_m"));
+    if (minutos && hora.value && !minutos.value) minutos.value = "00";
   });
 })();

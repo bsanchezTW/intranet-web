@@ -115,9 +115,30 @@ function normalizeHeaderInput(body = {}, { vehicles = [], drivers = [], today, c
 }
 
 /**
+ * Hora de una parada: el formulario la manda en dos listas (<campo>_h y
+ * <campo>_m, 24 horas); también se acepta "HH:MM" en <campo>. Devuelve
+ * { value, error }; sin hora ni minutos, value es "".
+ */
+function readStopTime(body, field) {
+  const h = cleanText(body[`${field}_h`], 2);
+  const m = cleanText(body[`${field}_m`], 2);
+  if (h || m) {
+    if (!h) return { value: "", error: "Elige la hora." };
+    if (!m) return { value: "", error: "Elige los minutos." };
+    const time = parseTime(`${h}:${m}`);
+    return time ? { value: time, error: null } : { value: "", error: "Elige una hora válida." };
+  }
+  const raw = cleanText(body[field], 8);
+  if (!raw) return { value: "", error: null };
+  const time = parseTime(raw);
+  return time ? { value: time, error: null } : { value: raw, error: "Usa el formato 24 horas, por ejemplo 14:30." };
+}
+
+/**
  * Una parada: cliente y comuna obligatorios; guía, nota de venta, horas y
- * observación opcionales (no toda parada lleva documentos). Si están las
- * dos horas, la salida no puede ser antes de la llegada.
+ * observación opcionales (no toda parada lleva documentos). Las horas son
+ * la de inicio hacia el destino y la de llegada; si están las dos, la
+ * llegada no puede ser antes del inicio.
  */
 function normalizeStopInput(body = {}) {
   const errors = {};
@@ -132,14 +153,13 @@ function normalizeStopInput(body = {}) {
   values.dispatch_guide = cleanText(body.dispatch_guide, 30);
   values.sales_note = cleanText(body.sales_note, 30);
 
-  for (const field of ["arrived_at", "left_at"]) {
-    const raw = cleanText(body[field], 8);
-    const time = parseTime(raw);
-    values[field] = time || raw;
-    if (raw && !time) errors[field] = "Usa el formato 24 horas, por ejemplo 14:30.";
+  for (const field of ["departed_at", "arrived_at"]) {
+    const { value, error } = readStopTime(body, field);
+    values[field] = value;
+    if (error) errors[field] = error;
   }
-  if (!errors.arrived_at && !errors.left_at && values.arrived_at && values.left_at && values.left_at < values.arrived_at) {
-    errors.left_at = "La salida no puede ser antes de la llegada.";
+  if (!errors.departed_at && !errors.arrived_at && values.departed_at && values.arrived_at && values.arrived_at < values.departed_at) {
+    errors.arrived_at = "La llegada no puede ser antes del inicio.";
   }
 
   values.observations = cleanText(body.observations, 300);
@@ -340,8 +360,8 @@ function stopParams(values) {
     values.locality,
     values.dispatch_guide || null,
     values.sales_note || null,
+    values.departed_at || null,
     values.arrived_at || null,
-    values.left_at || null,
     values.observations || null,
   ];
 }
@@ -365,7 +385,7 @@ async function addStop(sheetId, values, userId) {
     const { rows } = await client.query(
       `INSERT INTO route_sheet_stops (
          sheet_id, position, client_name, locality, dispatch_guide, sales_note,
-         arrived_at, left_at, observations, created_by
+         departed_at, arrived_at, observations, created_by
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id`,
       [sheet.id, n + 1, ...stopParams(values), userId ?? null],
@@ -382,7 +402,7 @@ async function updateStop(sheetId, stopId, values) {
     const { rowCount } = await client.query(
       `UPDATE route_sheet_stops
           SET client_name = $3, locality = $4, dispatch_guide = $5, sales_note = $6,
-              arrived_at = $7, left_at = $8, observations = $9, updated_at = NOW()
+              departed_at = $7, arrived_at = $8, observations = $9, updated_at = NOW()
         WHERE id = $2 AND sheet_id = $1`,
       [sheet.id, stopId, ...stopParams(values)],
     );
@@ -582,7 +602,7 @@ async function getRouteSheet(sheetId) {
   if (!rows[0]) return null;
   const { rows: stops } = await db.query(
     `SELECT id, position, client_name, locality, dispatch_guide, sales_note,
-            to_char(arrived_at, 'HH24:MI') AS arrived_at, to_char(left_at, 'HH24:MI') AS left_at,
+            to_char(departed_at, 'HH24:MI') AS departed_at, to_char(arrived_at, 'HH24:MI') AS arrived_at,
             observations
        FROM route_sheet_stops
       WHERE sheet_id = $1

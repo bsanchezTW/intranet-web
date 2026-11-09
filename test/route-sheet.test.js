@@ -146,24 +146,43 @@ describe("hojas de ruta — paradas", () => {
     assert.equal(vacia.errors.locality, "Escribe la comuna.");
   });
 
-  it("normaliza las horas y la salida no va antes de la llegada", () => {
+  const base = { client_name: "Cliente", locality: "Renca" };
+
+  it("lee las horas de las listas de 24 horas: inicio y llegada a destino", () => {
     const r = normalizeStopInput({
-      client_name: "Cliente Uno",
-      locality: "Maipú",
+      ...base,
       dispatch_guide: " 52763 ",
       sales_note: "21866",
-      arrived_at: "9:55",
-      left_at: "1030",
+      departed_at_h: "09", departed_at_m: "55",
+      arrived_at_h: "10", arrived_at_m: "30",
     });
     assert.equal(r.ok, true, JSON.stringify(r.errors));
-    assert.equal(r.values.arrived_at, "09:55");
-    assert.equal(r.values.left_at, "10:30");
+    assert.equal(r.values.departed_at, "09:55");
+    assert.equal(r.values.arrived_at, "10:30");
     assert.equal(r.values.dispatch_guide, "52763");
+    // Tarde: 24 horas, sin a. m. / p. m.
+    assert.equal(normalizeStopInput({ ...base, arrived_at_h: "23", arrived_at_m: "05" }).values.arrived_at, "23:05");
+  });
 
-    assert.ok(normalizeStopInput({ client_name: "Cliente", locality: "Renca", arrived_at: "14:30", left_at: "14:00" }).errors.left_at);
-    assert.ok(normalizeStopInput({ client_name: "Cliente", locality: "Renca", arrived_at: "25:00" }).errors.arrived_at);
-    // Llegada sin salida (la última parada del papel) es válida.
-    assert.equal(normalizeStopInput({ client_name: "Cliente", locality: "Renca", arrived_at: "15:20" }).ok, true);
+  it("la llegada no va antes del inicio; cada hora puede ir sola", () => {
+    const mal = normalizeStopInput({ ...base, departed_at_h: "14", departed_at_m: "30", arrived_at_h: "14", arrived_at_m: "00" });
+    assert.equal(mal.errors.arrived_at, "La llegada no puede ser antes del inicio.");
+    assert.equal(normalizeStopInput({ ...base, departed_at_h: "15", departed_at_m: "20" }).ok, true);
+    assert.equal(normalizeStopInput({ ...base, arrived_at_h: "15", arrived_at_m: "20" }).ok, true);
+  });
+
+  it("hora sin minutos (o al revés) y valores imposibles se rechazan", () => {
+    assert.equal(normalizeStopInput({ ...base, departed_at_h: "10" }).errors.departed_at, "Elige los minutos.");
+    assert.equal(normalizeStopInput({ ...base, departed_at_m: "15" }).errors.departed_at, "Elige la hora.");
+    assert.ok(normalizeStopInput({ ...base, arrived_at_h: "24", arrived_at_m: "00" }).errors.arrived_at);
+    assert.ok(normalizeStopInput({ ...base, arrived_at_h: "10", arrived_at_m: "60" }).errors.arrived_at);
+  });
+
+  it("también acepta la hora escrita (HH:MM)", () => {
+    const r = normalizeStopInput({ ...base, departed_at: "9:05", arrived_at: "0930" });
+    assert.equal(r.values.departed_at, "09:05");
+    assert.equal(r.values.arrived_at, "09:30");
+    assert.ok(normalizeStopInput({ ...base, arrived_at: "25:00" }).errors.arrived_at);
   });
 });
 
@@ -326,8 +345,8 @@ describe("hojas de ruta — PDF", () => {
     locality: i % 2 ? "Renca" : "Maipú",
     dispatch_guide: String(52760 + i),
     sales_note: String(21860 + i),
-    arrived_at: "10:10",
-    left_at: "10:30",
+    departed_at: "10:10",
+    arrived_at: "10:30",
     observations: i === 3 ? "Recibió portería; dejar la guía firmada en la oficina de bodega del cliente." : "Sin observaciones",
   });
   const hoja = {
