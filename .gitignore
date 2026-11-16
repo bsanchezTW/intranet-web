@@ -50,3 +50,6 @@ desktop.ini
 
 # Datos de prueba generados por scripts/demo-vacaciones.js
 DEMO-*.xlsx
+
+# Temporales del CLI de Supabase
+supabase/.temp/
