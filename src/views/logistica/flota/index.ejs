@@ -5,16 +5,17 @@
   const conVencidos = activos.filter((x) => documentAlerts(x, today).some((a) => a.state === 'vencido')).length;
   const revisadosHoy = activos.filter((x) => x.last_checklist_date === today).length;
   const sinTipo = activos.filter((x) => !isVehicleKind(x.kind)).length;
-  const fisicaPendiente = activos.filter((x) => isVehicleKind(x.kind) && physicalReviewAlert(x.last_physical_date, today)).length;
-  const daniosAbiertos = activos.reduce((n, x) => n + (Number(x.open_damages) || 0), 0);
+  //~ REVISIÓN FÍSICA DESHABILITADA (docs/REACTIVAR-REVISION-FISICA.md)
+  //~ const fisicaPendiente = activos.filter((x) => isVehicleKind(x.kind) && physicalReviewAlert(x.last_physical_date, today)).length;
+  //~ const daniosAbiertos = activos.reduce((n, x) => n + (Number(x.open_damages) || 0), 0);
 %>
 
 <% function tarjeta(x) {
      const alertas = documentAlerts(x, today);
      const tieneDocs = documentsFor(country).some((d) => x[d.field]) || x.next_maintenance_km != null;
      const tipoOk = isVehicleKind(x.kind);
-     const avisoFisica = x.active && tipoOk ? physicalReviewAlert(x.last_physical_date, today) : null;
-     const abiertos = Number(x.open_damages) || 0;
+     //~ const avisoFisica = x.active && tipoOk ? physicalReviewAlert(x.last_physical_date, today) : null;
+     //~ const abiertos = Number(x.open_damages) || 0;
 %>
   <article class="flota-card<%= x.active ? '' : ' is-inactivo' %>" aria-labelledby="vehiculo-<%= x.id %>">
     <div class="flota-card__head">
@@ -53,29 +54,31 @@
           <% } %>
         </dd>
       </div>
+<%# REVISIÓN FÍSICA DESHABILITADA
       <div>
         <dt>Revisión física</dt>
         <dd>
-          <% if (x.last_physical_date) { %>
-            <%= formatDate(x.last_physical_date) %>
-          <% } else { %>
+          <_% if (x.last_physical_date) { %_>
+            <_%= formatDate(x.last_physical_date) %_>
+          <_% } else { %_>
             <span class="logistica-sub">Sin revisiones</span>
-          <% } %>
-          <% if (avisoFisica) { %>
-            <span class="logistica-alerta logistica-alerta--por_vencer" title="Revisión física pendiente: <%= avisoFisica.detail %>">Pendiente</span>
-          <% } %>
+          <_% } %_>
+          <_% if (avisoFisica) { %_>
+            <span class="logistica-alerta logistica-alerta--por_vencer" title="Revisión física pendiente: <_%= avisoFisica.detail %_>">Pendiente</span>
+          <_% } %_>
         </dd>
       </div>
       <div>
         <dt>Daños</dt>
         <dd>
-          <% if (abiertos) { %>
-            <a class="logistica-alerta logistica-alerta--vencido flota-card__danios" href="<%= FLOTA %>/<%= x.id %>/revision-fisica"><%= abiertos %> <%= abiertos === 1 ? 'abierto' : 'abiertos' %></a>
-          <% } else { %>
+          <_% if (abiertos) { %_>
+            <a class="logistica-alerta logistica-alerta--vencido flota-card__danios" href="<_%= FLOTA %_>/<_%= x.id %_>/revision-fisica"><_%= abiertos %_> <_%= abiertos === 1 ? 'abierto' : 'abiertos' %_></a>
+          <_% } else { %_>
             <span class="logistica-sub">Ninguno abierto</span>
-          <% } %>
+          <_% } %_>
         </dd>
       </div>
+%>
       <div class="flota-card__docs">
         <dt>Documentos</dt>
         <dd>
@@ -98,9 +101,9 @@
       <% if (x.active && puedeRevisar) { %>
         <a href="<%= MECANICA %>/nueva?vehiculo=<%= x.id %>" class="flota-accion"><%- include('../../partials/icon', { name: 'clipboard-check' }) %><span>Revisión mecánica</span></a>
       <% } %>
-      <% if (x.active) { %>
-        <a href="<%= FLOTA %>/<%= x.id %>/revision-fisica" class="flota-accion"><%- include('../../partials/icon', { name: 'camera' }) %><span>Revisión física</span></a>
-      <% } %>
+      <%# REVISIÓN FÍSICA DESHABILITADA       
+        <a href="<_%= FLOTA %_>/<_%= x.id %_>/revision-fisica" class="flota-accion"><_%- include('../../partials/icon', { name: 'camera' }) %_><span>Revisión física</span></a>
+      <_% } %_> %>
       <%# Sin JS es un enlace a la página de revisiones; con JS se despliega aquí. %>
       <a href="<%= FLOTA %>/<%= x.id %>/revisiones" class="flota-accion flota-accion--desplegar"
          data-revisiones="<%= FLOTA %>/<%= x.id %>/revisiones?parcial=1" aria-expanded="false" aria-controls="revisiones-<%= x.id %>">
@@ -122,7 +125,7 @@
         <a href="/procesos#seccion-logistica">Logística</a>
       </nav>
       <h2 class="page-title">Gestión de flota</h2>
-      <p class="page-description">Cada vehículo con su revisión mecánica, su revisión física y sus revisiones anteriores.</p>
+      <p class="page-description">Cada vehículo con su revisión mecánica y sus revisiones anteriores.</p>
     </div>
     <div class="page-header-actions">
       <% if (puedePlantilla) { %>
@@ -164,22 +167,24 @@
         <span class="logistica-resumen__label">Con documentos vencidos</span>
         <strong class="<%= conVencidos ? 'is-alerta' : '' %>"><%= conVencidos %></strong>
       </div>
+      <%# REVISIÓN FÍSICA DESHABILITADA       
       <div class="logistica-resumen__dato">
         <span class="logistica-resumen__label">Revisión física pendiente</span>
-        <strong class="<%= fisicaPendiente ? 'is-alerta' : '' %>"><%= fisicaPendiente %></strong>
+        <strong class="<_%= fisicaPendiente ? 'is-alerta' : '' %_>"><_%= fisicaPendiente %_></strong>
       </div>
       <div class="logistica-resumen__dato">
         <span class="logistica-resumen__label">Daños abiertos</span>
-        <strong class="<%= daniosAbiertos ? 'is-alerta' : '' %>"><%= daniosAbiertos %></strong>
+        <strong class="<_%= daniosAbiertos ? 'is-alerta' : '' %_>"><_%= daniosAbiertos %_></strong>
       </div>
+      <_% } %_> %>
     </div>
 
-    <% if (sinTipo && puedeAdministrar) { %>
+    <%# REVISIÓN FÍSICA DESHABILITADA (aviso de tipo sin definir; el tipo sólo se usaba en la revisión física)    
       <div class="procesos-aviso" style="margin-bottom: 18px;">
-        <span class="procesos-aviso__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'info' }) %></span>
-        <span><%= sinTipo === 1 ? 'Un vehículo no tiene' : `${sinTipo} vehículos no tienen` %> tipo (minivan, camioneta pickup o camión). Edítalo para elegirlo: de eso depende su revisión física.</span>
+        <span class="procesos-aviso__icono" aria-hidden="true"><_%- include('../../partials/icon', { name: 'info' }) %_></span>
+        <span><_%= sinTipo === 1 ? 'Un vehículo no tiene' : `${sinTipo} vehículos no tienen` %_> tipo (minivan, camioneta pickup o camión). Edítalo para elegirlo: de eso depende su revisión física.</span>
       </div>
-    <% } %>
+    <_% } %_> %>
 
     <% if (activos.length) { %>
       <div class="flota-grid">

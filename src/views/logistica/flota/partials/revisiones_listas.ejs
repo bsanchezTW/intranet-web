@@ -18,21 +18,21 @@
       fecha: (c) => c.inspection_date,
       estado: (c) => ({ clase: c.result, texto: resultLabel(c.result) }),
     },
-    {
-      clave: 'fisicas',
-      titulo: 'Físicas',
-      icono: 'camera',
-      vacia: 'Todavía no tiene revisiones físicas.',
-      todas: Array.isArray(typeof fisicas !== 'undefined' ? fisicas : null) ? fisicas : [],
-      enlace: (c) => `${FISICA}/${c.id}`,
-      fecha: (c) => c.review_date,
-      estado: (c) => (c.danios
-        ? { clase: 'no_apto', texto: `${c.danios} ${c.danios === 1 ? 'daño nuevo' : 'daños nuevos'}` }
-        : { clase: 'apto', texto: 'Sin daños nuevos' }),
-    },
+    //~ {
+    //~ clave: 'fisicas',
+    //~ titulo: 'Físicas',
+    //~ icono: 'camera',
+    //~ vacia: 'Todavía no tiene revisiones físicas.',
+    //~ todas: Array.isArray(typeof fisicas !== 'undefined' ? fisicas : null) ? fisicas : [],
+    //~ enlace: (c) => `${FISICA}/${c.id}`,
+    //~ fecha: (c) => c.review_date,
+    //~ estado: (c) => (c.danios
+    //~ ? { clase: 'no_apto', texto: `${c.danios} ${c.danios === 1 ? 'daño nuevo' : 'daños nuevos'}` }
+    //~ : { clase: 'apto', texto: 'Sin daños nuevos' }),
+    //~ },
   ];
-  const listaDanios = Array.isArray(typeof danios !== 'undefined' ? danios : null) ? danios : [];
-  const abiertos = listaDanios.filter((d) => d.status === 'abierto');
+  //~ const listaDanios = Array.isArray(typeof danios !== 'undefined' ? danios : null) ? danios : [];
+  //~ const abiertos = listaDanios.filter((d) => d.status === 'abierto');
 %>
 <div class="rev-listas<%= esCompacto ? ' rev-listas--compacto' : '' %>">
   <% listas.forEach((l) => { const mostradas = esCompacto ? l.todas.slice(0, MAX_COMPACTO) : l.todas; %>
@@ -68,10 +68,11 @@
     </section>
   <% }) %>
 
-  <% if (esCompacto && abiertos.length) { %>
-    <a class="rev-danios-aviso" href="<%= FLOTA %>/<%= x.id %>/revision-fisica">
-      <%- include('../../../partials/icon', { name: 'alert-triangle' }) %>
-      <span><strong><%= abiertos.length %> <%= abiertos.length === 1 ? 'daño abierto' : 'daños abiertos' %></strong> · ver en el modelo</span>
+  <%# REVISIÓN FÍSICA DESHABILITADA (aviso de daños abiertos)
+    <a class="rev-danios-aviso" href="<_%= FLOTA %_>/<_%= x.id %_>/revision-fisica">
+      <_%- include('../../../partials/icon', { name: 'alert-triangle' }) %_>
+      <span><strong><_%= abiertos.length %_> <_%= abiertos.length === 1 ? 'daño abierto' : 'daños abiertos' %_></strong> · ver en el modelo</span>
     </a>
-  <% } %>
+  <_% } %_>
+%>
 </div>

@@ -50,13 +50,16 @@ module.exports = {
     { key: "logistica.checklist.crear", label: "Registrar revisiones mecánicas" },
     { key: "logistica.checklist.anular", label: "Anular revisiones mecánicas" },
     { key: "logistica.plantilla.administrar", label: "Editar los ítems de la revisión mecánica" },
-    {
-      key: "logistica.fisica.ver",
-      label: "Ver e imprimir revisiones físicas",
-      scopes: SCOPE_SETS.PROPIO_O_TODO,
-    },
-    { key: "logistica.fisica.crear", label: "Registrar revisiones físicas y sus daños" },
-    { key: "logistica.fisica.anular", label: "Anular revisiones físicas" },
-    { key: "logistica.danio.reparar", label: "Marcar daños como reparados" },
+    // Revisión física y daños DESHABILITADOS (2026-11-10): sin estas claves no
+    // aparecen en Gestión de permisos. Para reactivarlos, descomentar y poner
+    // FISICA_ACTIVA = true en routes/logistica.js.
+    // {
+    //   key: "logistica.fisica.ver",
+    //   label: "Ver e imprimir revisiones físicas",
+    //   scopes: SCOPE_SETS.PROPIO_O_TODO,
+    // },
+    // { key: "logistica.fisica.crear", label: "Registrar revisiones físicas y sus daños" },
+    // { key: "logistica.fisica.anular", label: "Anular revisiones físicas" },
+    // { key: "logistica.danio.reparar", label: "Marcar daños como reparados" },
   ],
 };

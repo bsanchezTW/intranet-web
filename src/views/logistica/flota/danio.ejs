@@ -1,133 +1,136 @@
-<%
+<%# REVISIÓN FÍSICA DESHABILITADA (2026-11-10). Ver docs/REACTIVAR-REVISION-FISICA.md
+<_%
   const d = damage;
   const v = values || {};
   const err = errors || {};
   const ESTADO_CLASE = { abierto: 'no_apto', reparado: 'apto', anulado: 'anulado' };
   const reparadoEl = d.repaired_at ? new Date(d.repaired_at).toLocaleString(countryConfig.locale, { dateStyle: 'short', timeStyle: 'short', timeZone: countryConfig.timezone }) : '';
-%>
+%_>
 
-<% function mensaje(campo) { %><span class="campo-form__error" data-error-for="<%= campo %>"<%= err[campo] ? '' : ' hidden' %>><%= err[campo] || '' %></span><% } %>
+<_% function mensaje(campo) { %_><span class="campo-form__error" data-error-for="<_%= campo %_>"<_%= err[campo] ? '' : ' hidden' %_>><_%= err[campo] || '' %_></span><_% } %_>
 
-<% function galeria(fotos, titulo) { if (!fotos.length) return; %>
-  <ul class="danio-galeria" aria-label="<%= titulo %>">
-    <% fotos.forEach((p, i) => { %>
+<_% function galeria(fotos, titulo) { if (!fotos.length) return; %_>
+  <ul class="danio-galeria" aria-label="<_%= titulo %_>">
+    <_% fotos.forEach((p, i) => { %_>
       <li>
-        <a href="<%= FOTOS %>/<%= p.id %>" target="_blank" rel="noopener" class="danio-galeria__foto">
-          <img src="<%= FOTOS %>/<%= p.id %>" alt="<%= titulo %>, foto <%= i + 1 %>" loading="lazy" decoding="async"<% if (p.width && p.height) { %> width="<%= p.width %>" height="<%= p.height %>"<% } %>>
+        <a href="<_%= FOTOS %_>/<_%= p.id %_>" target="_blank" rel="noopener" class="danio-galeria__foto">
+          <img src="<_%= FOTOS %_>/<_%= p.id %_>" alt="<_%= titulo %_>, foto <_%= i + 1 %_>" loading="lazy" decoding="async"<_% if (p.width && p.height) { %_> width="<_%= p.width %_>" height="<_%= p.height %_>"<_% } %_>>
         </a>
       </li>
-    <% }) %>
+    <_% }) %_>
   </ul>
-<% } %>
+<_% } %_>
 
 <div class="contenedor">
 
   <div class="page-header">
-    <span class="page-header__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'camera' }) %></span>
+    <span class="page-header__icono" aria-hidden="true"><_%- include('../../partials/icon', { name: 'camera' }) %_></span>
     <div class="page-header__text">
       <nav class="page-header__migas" aria-label="Ruta de navegación">
         <a href="/procesos">Procesos y documentos</a> <span aria-hidden="true">/</span>
-        <a href="<%= FLOTA %>">Gestión de flota</a> <span aria-hidden="true">/</span>
-        <a href="<%= FLOTA %>/<%= d.vehicle_id %>/revisiones?ver=danios">Historial de <%= d.vehicle_plate %></a> <span aria-hidden="true">/</span>
+        <a href="<_%= FLOTA %_>">Gestión de flota</a> <span aria-hidden="true">/</span>
+        <a href="<_%= FLOTA %_>/<_%= d.vehicle_id %_>/revisiones?ver=danios">Historial de <_%= d.vehicle_plate %_></a> <span aria-hidden="true">/</span>
         <span>Daño</span>
       </nav>
-      <h2 class="page-title"><%= damageTypeLabel(d.damage_type) %> en <%= d.zone_label.charAt(0).toLowerCase() + d.zone_label.slice(1) %></h2>
-      <p class="page-description"><%= d.vehicle_plate %> · registrado en <%= d.review_number %> el <%= formatDate(d.review_date) %></p>
+      <h2 class="page-title"><_%= damageTypeLabel(d.damage_type) %_> en <_%= d.zone_label.charAt(0).toLowerCase() + d.zone_label.slice(1) %_></h2>
+      <p class="page-description"><_%= d.vehicle_plate %_> · registrado en <_%= d.review_number %_> el <_%= formatDate(d.review_date) %_></p>
     </div>
     <div class="page-header-actions">
-      <% if (puedeVerSuRevision) { %>
-        <a href="<%= FISICA %>/<%= d.review_id %>" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'file-text' }) %> Ver <%= d.review_number %></a>
-      <% } %>
-      <a href="<%= FLOTA %>/<%= d.vehicle_id %>/revision-fisica" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'truck' }) %> Ver en el modelo</a>
+      <_% if (puedeVerSuRevision) { %_>
+        <a href="<_%= FISICA %_>/<_%= d.review_id %_>" class="page-header-btn page-header-btn--secundario"><_%- include('../../partials/icon', { name: 'file-text' }) %_> Ver <_%= d.review_number %_></a>
+      <_% } %_>
+      <a href="<_%= FLOTA %_>/<_%= d.vehicle_id %_>/revision-fisica" class="page-header-btn page-header-btn--secundario"><_%- include('../../partials/icon', { name: 'truck' }) %_> Ver en el modelo</a>
     </div>
   </div>
 
-  <% if (success) { %><div hidden data-toast="<%= success %>"></div><% } %>
-  <% if (error) { %><div hidden data-toast="<%= error %>" data-toast-tone="error"></div><% } %>
+  <_% if (success) { %_><div hidden data-toast="<_%= success %_>"></div><_% } %_>
+  <_% if (error) { %_><div hidden data-toast="<_%= error %_>" data-toast-tone="error"></div><_% } %_>
 
-  <% if (d.status === 'anulado') { %>
+  <_% if (d.status === 'anulado') { %_>
     <div class="logistica-anulado" role="note">
-      <span class="logistica-anulado__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'x-circle' }) %></span>
-      <span><strong>Daño anulado</strong> junto con la revisión <%= d.review_number %>. No cuenta como daño del vehículo.</span>
+      <span class="logistica-anulado__icono" aria-hidden="true"><_%- include('../../partials/icon', { name: 'x-circle' }) %_></span>
+      <span><strong>Daño anulado</strong> junto con la revisión <_%= d.review_number %_>. No cuenta como daño del vehículo.</span>
     </div>
-  <% } %>
+  <_% } %_>
 
   <div class="danio-detalle">
     <section class="logistica-panel" aria-labelledby="danio-titulo">
       <h3 class="logistica-panel__titulo" id="danio-titulo">
         Daño
-        <span class="logistica-estado logistica-estado--<%= ESTADO_CLASE[d.status] %>"><%= damageStateLabel(d.status) %></span>
+        <span class="logistica-estado logistica-estado--<_%= ESTADO_CLASE[d.status] %_>"><_%= damageStateLabel(d.status) %_></span>
       </h3>
       <dl class="logistica-datos">
-        <div><dt>Zona</dt><dd><%= d.zone_label %></dd></div>
-        <div><dt>Tipo</dt><dd><%= damageTypeLabel(d.damage_type) %></dd></div>
-        <div><dt>Registrado en</dt><dd><%= d.review_number %> · <%= formatDate(d.review_date) %></dd></div>
-        <div><dt>Registró</dt><dd><%= d.reported_by_name %></dd></div>
-        <div class="logistica-datos--ancho"><dt>Observación</dt><dd class="danio-detalle__texto"><%= d.description %></dd></div>
+        <div><dt>Zona</dt><dd><_%= d.zone_label %_></dd></div>
+        <div><dt>Tipo</dt><dd><_%= damageTypeLabel(d.damage_type) %_></dd></div>
+        <div><dt>Registrado en</dt><dd><_%= d.review_number %_> · <_%= formatDate(d.review_date) %_></dd></div>
+        <div><dt>Registró</dt><dd><_%= d.reported_by_name %_></dd></div>
+        <div class="logistica-datos--ancho"><dt>Observación</dt><dd class="danio-detalle__texto"><_%= d.description %_></dd></div>
       </dl>
-      <% galeria(d.damage_photos, 'Daño') %>
+      <_% galeria(d.damage_photos, 'Daño') %_>
     </section>
 
-    <% if (d.status === 'reparado') { %>
+    <_% if (d.status === 'reparado') { %_>
       <section class="logistica-panel danio-reparacion" aria-labelledby="reparacion-titulo">
         <h3 class="logistica-panel__titulo" id="reparacion-titulo">
-          <%- include('../../partials/icon', { name: 'check-circle' }) %> Reparación
+          <_%- include('../../partials/icon', { name: 'check-circle' }) %_> Reparación
         </h3>
         <dl class="logistica-datos">
-          <div><dt>Fecha de la reparación</dt><dd><%= formatDate(d.repaired_on) %></dd></div>
-          <div><dt>Registró</dt><dd><%= d.repaired_by_name || '—' %><% if (reparadoEl) { %> · <%= reparadoEl %><% } %></dd></div>
-          <div class="logistica-datos--ancho"><dt>Qué se hizo</dt><dd class="danio-detalle__texto"><%= d.repair_note %></dd></div>
+          <div><dt>Fecha de la reparación</dt><dd><_%= formatDate(d.repaired_on) %_></dd></div>
+          <div><dt>Registró</dt><dd><_%= d.repaired_by_name || '—' %_><_% if (reparadoEl) { %_> · <_%= reparadoEl %_><_% } %_></dd></div>
+          <div class="logistica-datos--ancho"><dt>Qué se hizo</dt><dd class="danio-detalle__texto"><_%= d.repair_note %_></dd></div>
         </dl>
-        <% galeria(d.repair_photos, 'Reparación') %>
+        <_% galeria(d.repair_photos, 'Reparación') %_>
       </section>
-    <% } else if (d.status === 'abierto' && puedeReparar) { %>
-      <form class="logistica-panel logistica-form danio-reparar" method="post" action="<%= DANIOS %>/<%= d.id %>/reparar" enctype="multipart/form-data" data-reparar-form novalidate aria-labelledby="reparar-titulo">
+    <_% } else if (d.status === 'abierto' && puedeReparar) { %_>
+      <form class="logistica-panel logistica-form danio-reparar" method="post" action="<_%= DANIOS %_>/<_%= d.id %_>/reparar" enctype="multipart/form-data" data-reparar-form novalidate aria-labelledby="reparar-titulo">
         <h3 class="logistica-panel__titulo" id="reparar-titulo">
-          <%- include('../../partials/icon', { name: 'check-circle' }) %> Marcar como reparado
+          <_%- include('../../partials/icon', { name: 'check-circle' }) %_> Marcar como reparado
         </h3>
         <p class="logistica-panel__desc">El daño deja de estar abierto y queda en el historial del vehículo con la reparación.</p>
 
-        <div class="flash-msg flash-msg--error" data-form-error<%= err.general ? '' : ' hidden' %> role="alert">
-          <span class="flash-msg__icono" aria-hidden="true"><%- include('../../partials/icon', { name: 'alert-triangle' }) %></span>
-          <span data-form-error-texto><%= err.general || '' %></span>
+        <div class="flash-msg flash-msg--error" data-form-error<_%= err.general ? '' : ' hidden' %_> role="alert">
+          <span class="flash-msg__icono" aria-hidden="true"><_%- include('../../partials/icon', { name: 'alert-triangle' }) %_></span>
+          <span data-form-error-texto><_%= err.general || '' %_></span>
         </div>
 
         <div class="campos-grid">
-          <div class="campo-form<%= err.repaired_on ? ' is-invalid' : '' %>">
+          <div class="campo-form<_%= err.repaired_on ? ' is-invalid' : '' %_>">
             <label for="repaired_on">Fecha de la reparación <span class="required-mark">*</span></label>
-            <input type="date" id="repaired_on" name="repaired_on" value="<%= v.repaired_on || today %>" min="<%= d.review_date %>" max="<%= today %>" required>
-            <% mensaje('repaired_on') %>
+            <input type="date" id="repaired_on" name="repaired_on" value="<_%= v.repaired_on || today %_>" min="<_%= d.review_date %_>" max="<_%= today %_>" required>
+            <_% mensaje('repaired_on') %_>
           </div>
-          <div class="campo-form campo-form--ancho<%= err.repair_note ? ' is-invalid' : '' %>">
+          <div class="campo-form campo-form--ancho<_%= err.repair_note ? ' is-invalid' : '' %_>">
             <label for="repair_note">Qué se hizo <span class="required-mark">*</span></label>
-            <textarea id="repair_note" name="repair_note" rows="2" maxlength="500" required placeholder="Por ejemplo: desabollado y pintura en taller Pérez, factura 1234."><%= v.repair_note || '' %></textarea>
-            <% mensaje('repair_note') %>
+            <textarea id="repair_note" name="repair_note" rows="2" maxlength="500" required placeholder="Por ejemplo: desabollado y pintura en taller Pérez, factura 1234."><_%= v.repair_note || '' %_></textarea>
+            <_% mensaje('repair_note') %_>
           </div>
         </div>
 
-        <div class="fisica-fotos" data-fotos data-max="<%= MAX_PHOTOS %>">
+        <div class="fisica-fotos" data-fotos data-max="<_%= MAX_PHOTOS %_>">
           <div class="fisica-fotos__head">
             <span class="fisica-fotos__titulo">Fotos de la reparación <span class="required-mark">*</span></span>
-            <span class="fisica-fotos__conteo" data-fotos-conteo>De 1 a <%= MAX_PHOTOS %></span>
+            <span class="fisica-fotos__conteo" data-fotos-conteo>De 1 a <_%= MAX_PHOTOS %_></span>
           </div>
           <ul class="fisica-fotos__lista" data-fotos-lista aria-label="Fotos de la reparación"></ul>
           <div class="fisica-fotos__botones" data-fotos-botones>
             <label class="page-header-btn page-header-btn--secundario fisica-fotos__boton">
-              <%- include('../../partials/icon', { name: 'camera' }) %> Sacar foto
+              <_%- include('../../partials/icon', { name: 'camera' }) %_> Sacar foto
               <input type="file" accept="image/*" capture="environment" data-fotos-input class="sr-only">
             </label>
             <label class="page-header-btn page-header-btn--secundario fisica-fotos__boton">
-              <%- include('../../partials/icon', { name: 'image' }) %> Elegir fotos
+              <_%- include('../../partials/icon', { name: 'image' }) %_> Elegir fotos
               <input type="file" name="fotos" accept="image/*" multiple required data-fotos-input class="sr-only">
             </label>
           </div>
-          <% mensaje('fotos') %>
+          <_% mensaje('fotos') %_>
         </div>
 
         <div class="logistica-form__acciones">
-          <button type="submit" class="page-header-btn"><%- include('../../partials/icon', { name: 'check' }) %> Marcar reparado</button>
+          <button type="submit" class="page-header-btn"><_%- include('../../partials/icon', { name: 'check' }) %_> Marcar reparado</button>
         </div>
       </form>
-    <% } %>
+    <_% } %_>
   </div>
 </div>
+
+%>

@@ -153,11 +153,13 @@ async function listVehicles({ includeInactive = true } = {}) {
             ult.number_year AS last_checklist_year,
             ult.number_seq AS last_checklist_seq,
             (SELECT COUNT(*)::int FROM vehicle_checklists c
-              WHERE c.vehicle_id = v.id AND c.status = 'registered') AS checklists_count,
-            (SELECT MAX(r.review_date)::text FROM vehicle_physical_reviews r
+              WHERE c.vehicle_id = v.id AND c.status = 'registered') AS checklists_count
+            /*~ REVISIÓN FÍSICA DESHABILITADA: al reactivar, poner coma tras checklists_count y descomentar
+            ,(SELECT MAX(r.review_date)::text FROM vehicle_physical_reviews r
               WHERE r.vehicle_id = v.id AND r.status = 'registered') AS last_physical_date,
             (SELECT COUNT(*)::int FROM vehicle_damages d
               WHERE d.vehicle_id = v.id AND d.status = 'abierto') AS open_damages
+            ~*/
        FROM logistics_vehicles v
        LEFT JOIN LATERAL (
          SELECT c.id, c.inspection_date, c.result, c.number_year, c.number_seq
@@ -392,10 +394,12 @@ async function listKmReadings(vehicleId) {
             id AS ref_id, number_year AS year, number_seq AS seq, created_at AS at
        FROM vehicle_checklists
       WHERE vehicle_id = $1 AND status = 'registered'
+     /*~ REVISIÓN FÍSICA DESHABILITADA: lecturas de km de las revisiones físicas
      UNION ALL
      SELECT review_date::text, odometer_km, 'fisica', id, number_year, number_seq, created_at
        FROM vehicle_physical_reviews
       WHERE vehicle_id = $1 AND status = 'registered'
+     ~*/
      UNION ALL
      SELECT (c.changed_at AT TIME ZONE $2)::date::text, (ch->>'to')::int, CASE c.action WHEN 'creado' THEN 'alta' ELSE 'ficha' END, c.id, NULL, NULL, c.changed_at
        FROM logistics_vehicle_changes c

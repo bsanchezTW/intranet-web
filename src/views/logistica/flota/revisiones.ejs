@@ -2,14 +2,14 @@
   const x = vehiculo;
   const alertas = documentAlerts(x, today);
   const tipoOk = isVehicleKind(x.kind);
-  const listaDanios = Array.isArray(danios) ? danios : [];
-  const abiertos = listaDanios.filter((d) => d.status === 'abierto');
-  const reparados = listaDanios.filter((d) => d.status === 'reparado');
-  const anulados = listaDanios.filter((d) => d.status === 'anulado');
+  //~ const listaDanios = Array.isArray(danios) ? danios : [];
+  //~ const abiertos = listaDanios.filter((d) => d.status === 'abierto');
+  //~ const reparados = listaDanios.filter((d) => d.status === 'reparado');
+  //~ const anulados = listaDanios.filter((d) => d.status === 'anulado');
   const TABS = {
     mecanicas: { label: 'Mecánicas', icono: 'clipboard-check', cuenta: mecanicas.length },
-    fisicas: { label: 'Físicas', icono: 'camera', cuenta: fisicas.length },
-    danios: { label: 'Daños', icono: 'alert-triangle', cuenta: abiertos.length, alerta: abiertos.length > 0, titulo: `${abiertos.length} abiertos` },
+    //~ fisicas: { label: 'Físicas', icono: 'camera', cuenta: fisicas.length },
+    //~ danios: { label: 'Daños', icono: 'alert-triangle', cuenta: abiertos.length, alerta: abiertos.length > 0, titulo: `${abiertos.length} abiertos` },
     kilometraje: { label: 'Kilometraje', icono: 'chart', cuenta: lecturas.length },
     ficha: { label: 'Cambios en la ficha', icono: 'edit', cuenta: cambiosTotal },
   };
@@ -43,24 +43,20 @@
     baja: { texto: 'Dio de baja el vehículo', icono: 'ban', clase: 'baja' },
     reactivado: { texto: 'Reactivó el vehículo', icono: 'repeat', clase: 'reactivado' },
   };
-  const FUENTES = { mecanica: 'Revisión mecánica', fisica: 'Revisión física', ficha: 'Corrección en la ficha', alta: 'Alta del vehículo' };
+  const FUENTES = { mecanica: 'Revisión mecánica', /*~ fisica: 'Revisión física', */ ficha: 'Corrección en la ficha', alta: 'Alta del vehículo' };
 %>
 
 <% function filasRevision(lista, tipo) { %>
-  <% porAnio(lista, (c) => tipo === 'mecanica' ? c.inspection_date : c.review_date).forEach((g) => { %>
+  <% porAnio(lista, (c) => c.inspection_date).forEach((g) => { %>
     <div class="historial-anio">
       <h4 class="historial-anio__titulo"><span><%= g.anio %></span> <span class="historial-anio__cuenta"><%= g.filas.length %> <%= g.filas.length === 1 ? 'revisión' : 'revisiones' %></span></h4>
       <ul class="rev-filas">
         <% g.filas.forEach((c) => {
              const anulada = c.status === 'voided';
-             const enlace = tipo === 'mecanica' ? `${MECANICA}/${c.id}` : `${FISICA}/${c.id}`;
-             const fecha = tipo === 'mecanica' ? c.inspection_date : c.review_date;
-             const estado = tipo === 'mecanica'
-               ? { clase: c.result, texto: resultLabel(c.result) }
-               : (c.danios ? { clase: 'no_apto', texto: `${c.danios} ${c.danios === 1 ? 'daño nuevo' : 'daños nuevos'}` } : { clase: 'apto', texto: 'Sin daños nuevos' });
-             const detalle = tipo === 'mecanica'
-               ? `${labelFrom(INSPECTION_KINDS, c.inspection_kind)}${c.fallas ? ` · ${c.fallas} ${c.fallas === 1 ? 'ítem no operativo' : 'ítems no operativos'}` : ''}`
-               : reasonLabel(c.reason);
+             const enlace = `${MECANICA}/${c.id}`; //~ (original) tipo === 'mecanica' ? ... : `${FISICA}/${c.id}`
+             const fecha = c.inspection_date;
+             const estado = { clase: c.result, texto: resultLabel(c.result) };
+             const detalle = `${labelFrom(INSPECTION_KINDS, c.inspection_kind)}${c.fallas ? ` · ${c.fallas} ${c.fallas === 1 ? 'ítem no operativo' : 'ítems no operativos'}` : ''}`;
         %>
           <li class="rev-fila<%= anulada ? ' is-anulada' : '' %>">
             <a class="rev-fila__enlace" href="<%= enlace %>">
@@ -107,7 +103,10 @@
         <a href="<%= FLOTA %>/<%= x.id %>/editar" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'edit' }) %> Editar</a>
       <% } %>
       <% if (x.active) { %>
-        <a href="<%= FLOTA %>/<%= x.id %>/revision-fisica" class="page-header-btn page-header-btn--secundario"><%- include('../../partials/icon', { name: 'camera' }) %> Revisión física</a>
+        <%# REVISIÓN FÍSICA DESHABILITADA         
+          <a href="<_%= FLOTA %_>/<_%= x.id %_>/revision-fisica" class="page-header-btn page-header-btn--secundario"><_%- include('../../partials/icon', { name: 'camera' }) %_> Revisión física</a>
+        <_% } %_>
+%>
         <% if (puedeRevisar) { %>
           <a href="<%= MECANICA %>/nueva?vehiculo=<%= x.id %>" class="page-header-btn"><%- include('../../partials/icon', { name: 'clipboard-check' }) %> Revisión mecánica</a>
         <% } %>
@@ -160,47 +159,48 @@
         <% filasRevision(mecanicas, 'mecanica') %>
       <% } %>
 
-    <% } else if (ver === 'fisicas') { %>
+    <%# REVISIÓN FÍSICA DESHABILITADA (pestañas Físicas y Daños)
       <h3 class="logistica-panel__titulo" id="historial-titulo">Revisiones físicas</h3>
-      <% if (!fisicas.length) { %>
+      <_% if (!fisicas.length) { %_>
         <div class="historial-vacio">
-          <p>Todavía no tiene revisiones físicas<%= puedeVerFisicas ? '' : ' registradas por ti' %>.</p>
-          <% if (x.active && puedeRevisarFisica && tipoOk) { %><a href="<%= FLOTA %>/<%= x.id %>/revision-fisica" class="page-header-btn"><%- include('../../partials/icon', { name: 'camera' }) %> Hacer la primera</a><% } %>
+          <p>Todavía no tiene revisiones físicas<_%= puedeVerFisicas ? '' : ' registradas por ti' %_>.</p>
+          <_% if (x.active && puedeRevisarFisica && tipoOk) { %_><a href="<_%= FLOTA %_>/<_%= x.id %_>/revision-fisica" class="page-header-btn"><_%- include('../../partials/icon', { name: 'camera' }) %_> Hacer la primera</a><_% } %_>
         </div>
-      <% } else { %>
-        <% const validas = fisicas.filter((c) => c.status !== 'voided');
+      <_% } else { %_>
+        <_% const validas = fisicas.filter((c) => c.status !== 'voided');
            const aviso = x.active && tipoOk ? physicalReviewAlert(validas[0] && validas[0].review_date, today) : null;
            resumen([
              ['revisiones', validas.length],
              ['con daños nuevos', validas.filter((c) => c.danios).length, 'no_apto'],
              ['sin daños nuevos', validas.filter((c) => !c.danios).length, 'apto'],
              ['anuladas', fisicas.length - validas.length],
-           ]); %>
-        <% if (aviso) { %>
-          <p class="historial-aviso"><%- include('../../partials/icon', { name: 'clock' }) %> Revisión física pendiente: <%= aviso.detail %>.</p>
-        <% } %>
-        <% filasRevision(fisicas, 'fisica') %>
-      <% } %>
+           ]); %_>
+        <_% if (aviso) { %_>
+          <p class="historial-aviso"><_%- include('../../partials/icon', { name: 'clock' }) %_> Revisión física pendiente: <_%= aviso.detail %_>.</p>
+        <_% } %_>
+        <_% filasRevision(fisicas, 'fisica') %_>
+      <_% } %_>
 
-    <% } else if (ver === 'danios') { %>
+    <_% } else if (ver === 'danios') { %_>
       <h3 class="logistica-panel__titulo" id="historial-titulo">Daños</h3>
-      <% if (!listaDanios.length) { %>
+      <_% if (!listaDanios.length) { %_>
         <div class="historial-vacio"><p>No tiene daños registrados.</p></div>
-      <% } else { %>
-        <% resumen([
+      <_% } else { %_>
+        <_% resumen([
              ['abiertos', abiertos.length, abiertos.length ? 'no_apto' : ''],
              ['reparados', reparados.length, 'apto'],
              ['anulados', anulados.length],
-           ]); %>
-        <% [['Abiertos', abiertos, 'Siguen así hasta que Logística los marque reparados.'], ['Reparados', reparados, ''], ['Anulados', anulados, 'Se anularon junto con su revisión: no cuentan como daños del vehículo.']].forEach(([titulo, lista, nota]) => { if (!lista.length) return; %>
+           ]); %_>
+        <_% [['Abiertos', abiertos, 'Siguen así hasta que Logística los marque reparados.'], ['Reparados', reparados, ''], ['Anulados', anulados, 'Se anularon junto con su revisión: no cuentan como daños del vehículo.']].forEach(([titulo, lista, nota]) => { if (!lista.length) return; %_>
           <div class="historial-anio">
-            <h4 class="historial-anio__titulo"><span><%= titulo %></span> <span class="historial-anio__cuenta"><%= lista.length %></span></h4>
-            <% if (nota) { %><p class="historial-nota"><%= nota %></p><% } %>
-            <%- include('partials/danios_lista', { danios: lista }) %>
+            <h4 class="historial-anio__titulo"><span><_%= titulo %_></span> <span class="historial-anio__cuenta"><_%= lista.length %_></span></h4>
+            <_% if (nota) { %_><p class="historial-nota"><_%= nota %_></p><_% } %_>
+            <_%- include('partials/danios_lista', { danios: lista }) %_>
           </div>
-        <% }) %>
-      <% } %>
+        <_% }) %_>
+      <_% } %_>
 
+%>
     <% } else if (ver === 'kilometraje') { %>
       <h3 class="logistica-panel__titulo" id="historial-titulo">Kilometraje</h3>
       <% if (!lecturas.length) { %>
@@ -222,7 +222,7 @@
         </figure>
         <script type="application/json" id="kmDatos"><%- JSON.stringify(lecturas.map((l) => ({
           fecha: l.date, km: l.km, fuente: l.source, texto: FUENTES[l.source],
-          numero: l.source === 'mecanica' ? formatChecklistNumber(l.year, l.seq) : l.source === 'fisica' ? formatPhysicalNumber(l.year, l.seq) : null,
+          numero: l.source === 'mecanica' ? formatChecklistNumber(l.year, l.seq) : null, //~ (original) ... : l.source === 'fisica' ? formatPhysicalNumber(l.year, l.seq) : null,
           fechaTexto: formatDate(l.date), kmTexto: formatKm(l.km),
         }))).replace(/</g, '\\u003c') %></script>
         <div class="logistica-tabla-wrap km-tabla">
@@ -237,7 +237,7 @@
                   <td data-label="Diferencia" class="num<%= dif != null && dif < 0 ? ' is-negativo' : '' %>"><%= dif == null ? '—' : `${dif >= 0 ? '+' : '−'}${formatKm(Math.abs(dif))}` %></td>
                   <td data-label="Origen" class="km-tabla__origen">
                     <% if (l.source === 'mecanica') { %><a href="<%= MECANICA %>/<%= l.ref_id %>"><%= FUENTES.mecanica %> <%= formatChecklistNumber(l.year, l.seq) %></a>
-                    <% } else if (l.source === 'fisica') { %><a href="<%= FISICA %>/<%= l.ref_id %>"><%= FUENTES.fisica %> <%= formatPhysicalNumber(l.year, l.seq) %></a>
+                    <%# (física deshabilitada) la fuente 'fisica' ya no llega: listKmReadings no la incluye %>
                     <% } else { %><%= FUENTES[l.source] %><% } %>
                   </td>
                 </tr>

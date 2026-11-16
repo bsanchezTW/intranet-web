@@ -1,4 +1,5 @@
-<%
+<%# REVISIÓN FÍSICA DESHABILITADA (2026-11-10). Ver docs/REACTIVAR-REVISION-FISICA.md
+<_%
   /*
     Lista de daños: miniatura, zona, tipo, observación y estado, con enlace
     al daño (donde se ven las fotos y se marca reparado).
@@ -10,40 +11,42 @@
   const verZona = typeof conZona !== 'undefined' && conZona;
   const ocultarOrigen = typeof sinOrigen !== 'undefined' && sinOrigen;
   const ESTADO_CLASE = { abierto: 'no_apto', reparado: 'apto', anulado: 'anulado' };
-%>
+%_>
 <ul class="danios">
-  <% lista.forEach((d) => { const foto = (d.damage_photos || [])[0]; const fotoRep = (d.repair_photos || [])[0]; %>
-    <li class="danio-fila is-<%= d.status %>">
-      <a class="danio-fila__foto" href="<%= DANIOS %>/<%= d.id %>" tabindex="-1" aria-hidden="true">
-        <% if (foto) { %>
-          <img src="<%= FOTOS %>/<%= (d.status === 'reparado' && fotoRep ? fotoRep : foto).id %>" alt="" loading="lazy" decoding="async">
-        <% } else { %>
-          <%- include('../../../partials/icon', { name: 'image' }) %>
-        <% } %>
-        <% if ((d.damage_photos || []).length > 1) { %><span class="danio-fila__mas">+<%= d.damage_photos.length - 1 %></span><% } %>
+  <_% lista.forEach((d) => { const foto = (d.damage_photos || [])[0]; const fotoRep = (d.repair_photos || [])[0]; %_>
+    <li class="danio-fila is-<_%= d.status %_>">
+      <a class="danio-fila__foto" href="<_%= DANIOS %_>/<_%= d.id %_>" tabindex="-1" aria-hidden="true">
+        <_% if (foto) { %_>
+          <img src="<_%= FOTOS %_>/<_%= (d.status === 'reparado' && fotoRep ? fotoRep : foto).id %_>" alt="" loading="lazy" decoding="async">
+        <_% } else { %_>
+          <_%- include('../../../partials/icon', { name: 'image' }) %_>
+        <_% } %_>
+        <_% if ((d.damage_photos || []).length > 1) { %_><span class="danio-fila__mas">+<_%= d.damage_photos.length - 1 %_></span><_% } %_>
       </a>
       <div class="danio-fila__texto">
-        <a class="danio-fila__zona" href="<%= DANIOS %>/<%= d.id %>"><%= d.zone_label %></a>
-        <span class="danio-fila__tipo"><%= damageTypeLabel(d.damage_type) %></span>
-        <p class="danio-fila__desc"><%= d.description %></p>
+        <a class="danio-fila__zona" href="<_%= DANIOS %_>/<_%= d.id %_>"><_%= d.zone_label %_></a>
+        <span class="danio-fila__tipo"><_%= damageTypeLabel(d.damage_type) %_></span>
+        <p class="danio-fila__desc"><_%= d.description %_></p>
         <p class="danio-fila__meta">
-          <% if (d.status === 'reparado') { %>
-            Reparado el <%= formatDate(d.repaired_on) %><% if (d.repaired_by_name) { %> · <%= d.repaired_by_name %><% } %>
-          <% } else if (!ocultarOrigen) { %>
-            Desde <%= d.review_number %> · <%= formatDate(d.review_date) %>
-          <% } else if (d.status === 'anulado') { %>
+          <_% if (d.status === 'reparado') { %_>
+            Reparado el <_%= formatDate(d.repaired_on) %_><_% if (d.repaired_by_name) { %_> · <_%= d.repaired_by_name %_><_% } %_>
+          <_% } else if (!ocultarOrigen) { %_>
+            Desde <_%= d.review_number %_> · <_%= formatDate(d.review_date) %_>
+          <_% } else if (d.status === 'anulado') { %_>
             Anulado con la revisión
-          <% } else { %>
+          <_% } else { %_>
             Abierto
-          <% } %>
+          <_% } %_>
         </p>
       </div>
       <div class="danio-fila__acciones">
-        <span class="logistica-estado logistica-estado--<%= ESTADO_CLASE[d.status] || 'anulado' %>"><%= damageStateLabel(d.status) %></span>
-        <% if (verZona) { %>
-          <button type="button" class="cfg-icono" data-zona="<%= d.zone_code %>" title="Ver en el modelo" aria-label="Ver <%= d.zone_label %> en el modelo"><%- include('../../../partials/icon', { name: 'search' }) %></button>
-        <% } %>
+        <span class="logistica-estado logistica-estado--<_%= ESTADO_CLASE[d.status] || 'anulado' %_>"><_%= damageStateLabel(d.status) %_></span>
+        <_% if (verZona) { %_>
+          <button type="button" class="cfg-icono" data-zona="<_%= d.zone_code %_>" title="Ver en el modelo" aria-label="Ver <_%= d.zone_label %_> en el modelo"><_%- include('../../../partials/icon', { name: 'search' }) %_></button>
+        <_% } %_>
       </div>
     </li>
-  <% }) %>
+  <_% }) %_>
 </ul>
+
+%>
