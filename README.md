@@ -12,13 +12,20 @@ Intranet corporativa de Transworld. Un mismo código se despliega como dos insta
 
 | Módulo | Chile | Perú |
 |--------|:-----:|:----:|
-| Noticias, Academy, RRHH, vacaciones, procesos, perfil | sí | sí |
+| Noticias, Academy, RRHH, procesos, perfil, marketing, documentos | sí | sí |
 | Aplicaciones | sí | sí |
+| Gestión de permisos (`/permisos`, solo el superadmin) | sí | sí |
+| Logística: hojas de ruta y revisión mecánica de la flota | sí | sí |
 | Asistente IA | sí | sí |
+| Vacaciones en la intranet | no (se piden en Rex+) | sí |
+| Letras de cambio | no | sí |
+| Centros de costo, rendiciones y solicitudes de fondos | sí | no |
 | Soporte TI | sí | no |
-| Contenido de portada (feed, indicadores, menú) | sí | no |
+| Contenido de portada (feed de LinkedIn, indicador UF, menú del casino, portales RRHH) | sí | no |
 
-Vacaciones comparte pantallas entre países, con las reglas legales de cada uno.
+Qué existe en cada país lo decide la matriz de `src/config/features.js`; una capacidad apagada también bloquea su ruta y su operación de backend (`requireFeature`). Vacaciones usa las reglas legales de cada país. Logística está en desarrollo: sin permisos asignados no aparece a nadie, y la revisión física de la flota (modelo 3D y captura de daños) está deshabilitada a propósito; para reactivarla ver `docs/REACTIVAR-REVISION-FISICA.md`.
+
+Los permisos se conceden por módulo desde Gestión de permisos (catálogo en `src/services/permissions/catalog/`); no hay roles fijos.
 
 ## Stack
 
@@ -49,16 +56,22 @@ El lanzador fija `COUNTRY`, el puerto y la configuración propia del país. Ning
 | `npm test` | Suite de pruebas |
 | `npm run demo:pe` / `demo:pe:estado` / `demo:pe:limpiar` | Datos ficticios para probar vacaciones de Perú |
 | `npm run email-listener` | Ingreso opcional de tickets por correo |
+| `node scripts/migrar.js --pais CL` | Aplica las migraciones pendientes antes de desplegar |
+| `node scripts/tareas.js --pais CL` | Corre las tareas programadas una vez (ver más abajo) |
+| `node scripts/permisos-arranque.js --pais CL` | Arranque único de Gestión de permisos en un país (sin `--aplicar` solo muestra el plan) |
+| `node scripts/superadmin.js --pais CL --correo <correo>` | Marca a una persona como superadmin |
+| `node scripts/vaciar-galerias.js` | Vacía las galerías de eventos en Storage para liberar cuota (sin `--confirmar` solo muestra lo que borraría) |
 
 Los datos de demostración usan correos `@demo.invalid` y el comando de limpieza borra sólo lo que creó.
 
 ## Estructura
 
 ```text
-src/           app, rutas, servicios, vistas
-supabase/      SQL de referencia por país y compartido
-scripts/       lanzador por país y utilidades
-test/
+src/           app, config (país y features), middlewares, migraciones, rutas, servicios, vistas EJS
+supabase/      SQL de referencia: chile/, peru/ y shared/ (incluye galeria_web.sql y vaciar_galerias.sql)
+scripts/       lanzador por país, migraciones, tareas, permisos, demo y utilidades
+docs/          notas operativas (REACTIVAR-REVISION-FISICA.md)
+test/          pruebas con node:test
 ```
 
 **Tareas programadas** (cierre de tickets, limpieza de historial, purga de gastos, vacaciones): la app las revisa cada 5 minutos y `<schema>.job_runs` decide que corran una sola vez por periodo. Para no depender de que Passenger mantenga vivo el proceso, programa en cPanel → Cron Jobs, cada 15 minutos y por país, `node scripts/tareas.js --pais CL` (y `--pais PE`), y define `IN_PROCESS_JOBS=false` en la app.
